@@ -22,3 +22,10 @@ backend/tmp/
 frontend/.wrangler/
 *.log
 coverage/
+
+# TypeScript build artifacts
+frontend/*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts
+frontend/vitest.config.js
+frontend/vitest.config.d.ts

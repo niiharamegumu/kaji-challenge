@@ -87,6 +87,8 @@ Cloud Run の初期設定:
 
 ```bash
 cd frontend && npm ci
+cd ..
+lefthook install
 ```
 
-`lefthook` を使う場合は、必要に応じてインストールしてフックを有効化してください。
+`lefthook` 未インストールの場合は、先にインストールしてください（例: `brew install lefthook`）。
