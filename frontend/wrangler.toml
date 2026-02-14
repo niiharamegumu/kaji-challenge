@@ -1,0 +1,8 @@
+name = "kaji-frontend"
+main = "worker/index.ts"
+compatibility_date = "2026-02-14"
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"

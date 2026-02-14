@@ -1,0 +1,9 @@
+pre-commit:
+  parallel: false
+  commands:
+    gen:
+      run: make gen
+    lint:
+      run: make lint
+    diff:
+      run: git diff --exit-code
