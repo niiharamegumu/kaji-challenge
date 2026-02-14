@@ -1,0 +1,52 @@
+name: Deploy Backend to Cloud Run
+
+on:
+  # NOTE: 開発中のため自動デプロイは一時停止中。再開時に push トリガーを有効化する。
+  workflow_dispatch:
+  # push:
+  #   branches: ["main"]
+  #   paths:
+  #     - "backend/**"
+  #     - "api/**"
+  #     - ".github/workflows/deploy-backend-cloud-run.yml"
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  SERVICE: kaji-backend
+  REGION: us-central1
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker auth
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+
+      - name: Build and push image
+        run: |
+          IMAGE="us-central1-docker.pkg.dev/${PROJECT_ID}/kaji/kaji-backend:${GITHUB_SHA}"
+          docker build -t "$IMAGE" backend
+          docker push "$IMAGE"
+          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy "$SERVICE" \
+            --image "$IMAGE" \
+            --region "$REGION" \
+            --platform managed \
+            --allow-unauthenticated

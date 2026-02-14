@@ -1,0 +1,24 @@
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Go
+backend/bin/
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Codex
+.codex/specs/
+!.codex/config.toml
+
+# OS
+.DS_Store
+
+# Runtime artifacts
+backend/tmp/
+frontend/.wrangler/
+*.log
+coverage/

@@ -1,0 +1,78 @@
+openapi: 3.0.3
+info:
+  title: Kaji Challenge API
+  version: 0.1.0
+servers:
+  - url: http://localhost:8080
+paths:
+  /health:
+    get:
+      operationId: Health
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /v1/me:
+    get:
+      operationId: GetMe
+      summary: Current user (stub)
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeResponse'
+  /v1/home/summary:
+    get:
+      operationId: GetHomeSummary
+      summary: Home summary (stub)
+      responses:
+        '200':
+          description: Home summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HomeSummaryResponse'
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          example: ok
+    MeResponse:
+      type: object
+      required: [userId, teamId, displayName]
+      properties:
+        userId:
+          type: string
+          example: user_stub
+        teamId:
+          type: string
+          example: team_stub
+        displayName:
+          type: string
+          example: Taro
+    HomeSummaryResponse:
+      type: object
+      required: [month, monthlyPenaltyTotal, dailyOpenCount, weeklyOpenCount]
+      properties:
+        month:
+          type: string
+          example: 2026-02
+        monthlyPenaltyTotal:
+          type: integer
+          example: 0
+        dailyOpenCount:
+          type: integer
+          example: 0
+        weeklyOpenCount:
+          type: integer
+          example: 0

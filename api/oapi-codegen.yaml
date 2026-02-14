@@ -1,0 +1,5 @@
+package: generated
+generate:
+  models: true
+  gin-server: true
+output: generated/openapi.gen.go
