@@ -1,13 +1,14 @@
 name: Deploy Backend to Cloud Run
 
 on:
+  # NOTE: 開発中のため自動デプロイは一時停止中。再開時に push トリガーを有効化する。
   workflow_dispatch:
-  push:
-    branches: ["main"]
-    paths:
-      - "backend/**"
-      - "api/**"
-      - ".github/workflows/deploy-backend-cloud-run.yml"
+  # push:
+  #   branches: ["main"]
+  #   paths:
+  #     - "backend/**"
+  #     - "api/**"
+  #     - ".github/workflows/deploy-backend-cloud-run.yml"
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}

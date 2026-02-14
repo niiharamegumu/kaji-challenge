@@ -1,9 +1,11 @@
 name: CI
 
 on:
-  push:
-    branches: ["main"]
-  pull_request:
+  # NOTE: 開発中のため自動実行は一時停止中。再開時に push / pull_request を有効化する。
+  workflow_dispatch:
+  # push:
+  #   branches: ["main"]
+  # pull_request:
 
 jobs:
   check:
