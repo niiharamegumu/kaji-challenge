@@ -90,6 +90,24 @@ A task is complete only when all applicable items are satisfied:
 - Avoid executing untrusted scripts blindly.
 - For auth/security-sensitive changes, explicitly document risks and mitigations.
 
+## MCP Usage Policy
+Use the following MCP tools in this repository:
+
+- `context7`
+  - Use for up-to-date official docs, API references, and framework/library behavior checks.
+  - Prefer primary sources and cite links when decisions depend on external specifications.
+- `serena`
+  - Use for codebase exploration, symbol-aware navigation, and precise impact analysis before edits.
+  - Prefer `serena` lookups over broad text scans when tracing definitions/references.
+
+### MCP Operating Rules
+- Discovery first: identify available MCP tools and choose the smallest set needed.
+- Tool order: use `serena` for local code understanding, then `context7` for external/official validation.
+- Minimize scope: request only the context needed for the current task; avoid bulk retrieval.
+- Verification: for behavior that may change over time, confirm with `context7` before finalizing.
+- Security: never send secrets, tokens, or sensitive local data to MCP tools.
+- Fallback: if MCP is unavailable, continue with local analysis and explicitly note reduced confidence.
+
 ## Collaboration Output Format
 When reporting completion, include:
 - Files changed
