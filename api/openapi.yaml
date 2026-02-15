@@ -1,13 +1,16 @@
 openapi: 3.0.3
 info:
   title: Kaji Challenge API
-  version: 0.1.0
+  version: 0.2.0
 servers:
   - url: http://localhost:8080
+security:
+  - bearerAuth: []
 paths:
   /health:
     get:
-      operationId: Health
+      operationId: health
+      security: []
       summary: Health check
       responses:
         '200':
@@ -16,10 +19,30 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HealthResponse'
+
+  /v1/auth/oidc/google/callback:
+    post:
+      operationId: postAuthOidcGoogleCallback
+      security: []
+      summary: Authenticate by Google OIDC callback payload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OidcCallbackRequest'
+      responses:
+        '200':
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSessionResponse'
+
   /v1/me:
     get:
-      operationId: GetMe
-      summary: Current user (stub)
+      operationId: getMe
+      summary: Current user
       responses:
         '200':
           description: Current user
@@ -27,19 +50,294 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MeResponse'
-  /v1/home/summary:
-    get:
-      operationId: GetHomeSummary
-      summary: Home summary (stub)
+
+  /v1/teams/invites:
+    post:
+      operationId: postTeamInvite
+      summary: Create invite code
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInviteRequest'
       responses:
-        '200':
-          description: Home summary
+        '201':
+          description: Invite created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/HomeSummaryResponse'
+                $ref: '#/components/schemas/InviteCodeResponse'
+
+  /v1/teams/join:
+    post:
+      operationId: postTeamJoin
+      summary: Join team by invite code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JoinTeamRequest'
+      responses:
+        '200':
+          description: Joined
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JoinTeamResponse'
+
+  /v1/tasks:
+    get:
+      operationId: listTasks
+      summary: List tasks in current team
+      parameters:
+        - name: type
+          in: query
+          schema:
+            $ref: '#/components/schemas/TaskType'
+      responses:
+        '200':
+          description: List tasks
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Task'
+    post:
+      operationId: postTask
+      summary: Create task
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTaskRequest'
+      responses:
+        '201':
+          description: Task created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+
+  /v1/tasks/{taskId}:
+    patch:
+      operationId: patchTask
+      summary: Update task
+      parameters:
+        - in: path
+          name: taskId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTaskRequest'
+      responses:
+        '200':
+          description: Task updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+    delete:
+      operationId: deleteTask
+      summary: Delete task
+      parameters:
+        - in: path
+          name: taskId
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Task deleted
+
+  /v1/tasks/{taskId}/completions/toggle:
+    post:
+      operationId: postTaskCompletionToggle
+      summary: Toggle task completion in target period
+      parameters:
+        - in: path
+          name: taskId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ToggleTaskCompletionRequest'
+      responses:
+        '200':
+          description: Completion toggled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskCompletionResponse'
+
+  /v1/penalty-rules:
+    get:
+      operationId: listPenaltyRules
+      summary: List penalty rules in current team
+      responses:
+        '200':
+          description: Penalty rules
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PenaltyRule'
+    post:
+      operationId: postPenaltyRule
+      summary: Create penalty rule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePenaltyRuleRequest'
+      responses:
+        '201':
+          description: Penalty rule created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PenaltyRule'
+
+  /v1/penalty-rules/{ruleId}:
+    patch:
+      operationId: patchPenaltyRule
+      summary: Update penalty rule
+      parameters:
+        - in: path
+          name: ruleId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePenaltyRuleRequest'
+      responses:
+        '200':
+          description: Penalty rule updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PenaltyRule'
+    delete:
+      operationId: deletePenaltyRule
+      summary: Delete penalty rule
+      parameters:
+        - in: path
+          name: ruleId
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Penalty rule deleted
+
+  /v1/home:
+    get:
+      operationId: getHome
+      summary: Home payload for dashboard
+      responses:
+        '200':
+          description: Home payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HomeResponse'
+
+  /v1/penalty-summaries/monthly:
+    get:
+      operationId: getPenaltySummaryMonthly
+      summary: Monthly penalty summary
+      parameters:
+        - name: month
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: '^\\d{4}-\\d{2}$'
+      responses:
+        '200':
+          description: Monthly summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MonthlyPenaltySummary'
+
+  /v1/admin/close-day:
+    post:
+      operationId: postAdminCloseDay
+      summary: Run day close now
+      responses:
+        '200':
+          description: Closed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CloseResponse'
+
+  /v1/admin/close-week:
+    post:
+      operationId: postAdminCloseWeek
+      summary: Run week close now
+      responses:
+        '200':
+          description: Closed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CloseResponse'
+
+  /v1/admin/close-month:
+    post:
+      operationId: postAdminCloseMonth
+      summary: Run month close now
+      responses:
+        '200':
+          description: Closed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CloseResponse'
+
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: session-token
+
   schemas:
+    ErrorResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+
     HealthResponse:
       type: object
       required: [status]
@@ -47,32 +345,375 @@ components:
         status:
           type: string
           example: ok
-    MeResponse:
+
+    OidcCallbackRequest:
       type: object
-      required: [userId, teamId, displayName]
+      required: [email, displayName]
       properties:
-        userId:
+        email:
           type: string
-          example: user_stub
-        teamId:
-          type: string
-          example: team_stub
+          format: email
         displayName:
           type: string
-          example: Taro
-    HomeSummaryResponse:
+          minLength: 1
+          maxLength: 100
+        googleSubject:
+          type: string
+          minLength: 1
+          maxLength: 200
+
+    AuthSessionResponse:
       type: object
-      required: [month, monthlyPenaltyTotal, dailyOpenCount, weeklyOpenCount]
+      required: [accessToken, user]
+      properties:
+        accessToken:
+          type: string
+        user:
+          $ref: '#/components/schemas/User'
+
+    User:
+      type: object
+      required: [id, email, displayName, createdAt]
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        displayName:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    MeResponse:
+      type: object
+      required: [user, memberships]
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        memberships:
+          type: array
+          items:
+            $ref: '#/components/schemas/TeamMembership'
+
+    TeamMembership:
+      type: object
+      required: [teamId, role]
+      properties:
+        teamId:
+          type: string
+        role:
+          type: string
+          enum: [owner, member]
+
+    CreateInviteRequest:
+      type: object
+      properties:
+        expiresInHours:
+          type: integer
+          minimum: 1
+          maximum: 720
+          default: 72
+        maxUses:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 1
+
+    InviteCodeResponse:
+      type: object
+      required: [code, teamId, expiresAt, maxUses, usedCount]
+      properties:
+        code:
+          type: string
+        teamId:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        maxUses:
+          type: integer
+        usedCount:
+          type: integer
+
+    JoinTeamRequest:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+          minLength: 6
+          maxLength: 64
+
+    JoinTeamResponse:
+      type: object
+      required: [teamId]
+      properties:
+        teamId:
+          type: string
+
+    TaskType:
+      type: string
+      enum: [daily, weekly]
+
+    Task:
+      type: object
+      required:
+        [
+          id,
+          teamId,
+          title,
+          type,
+          penaltyPoints,
+          isActive,
+          requiredCompletionsPerWeek,
+          createdAt,
+          updatedAt,
+        ]
+      properties:
+        id:
+          type: string
+        teamId:
+          type: string
+        title:
+          type: string
+        notes:
+          type: string
+        type:
+          $ref: '#/components/schemas/TaskType'
+        penaltyPoints:
+          type: integer
+          minimum: 0
+          maximum: 1000
+        assigneeUserId:
+          type: string
+        isActive:
+          type: boolean
+        requiredCompletionsPerWeek:
+          type: integer
+          minimum: 1
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateTaskRequest:
+      type: object
+      required: [title, type, penaltyPoints]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 100
+        notes:
+          type: string
+          maxLength: 500
+        type:
+          $ref: '#/components/schemas/TaskType'
+        penaltyPoints:
+          type: integer
+          minimum: 0
+          maximum: 1000
+        assigneeUserId:
+          type: string
+        isActive:
+          type: boolean
+          default: true
+        requiredCompletionsPerWeek:
+          type: integer
+          minimum: 1
+
+    UpdateTaskRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 100
+        notes:
+          type: string
+          maxLength: 500
+        penaltyPoints:
+          type: integer
+          minimum: 0
+          maximum: 1000
+        assigneeUserId:
+          type: string
+        isActive:
+          type: boolean
+        requiredCompletionsPerWeek:
+          type: integer
+          minimum: 1
+
+    ToggleTaskCompletionRequest:
+      type: object
+      required: [targetDate]
+      properties:
+        targetDate:
+          type: string
+          format: date
+
+    TaskCompletionResponse:
+      type: object
+      required: [taskId, targetDate, completed, weeklyCompletedCount]
+      properties:
+        taskId:
+          type: string
+        targetDate:
+          type: string
+          format: date
+        completed:
+          type: boolean
+        weeklyCompletedCount:
+          type: integer
+
+    PenaltyRule:
+      type: object
+      required: [id, teamId, threshold, name, isActive, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        teamId:
+          type: string
+        threshold:
+          type: integer
+          minimum: 1
+        name:
+          type: string
+        description:
+          type: string
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreatePenaltyRuleRequest:
+      type: object
+      required: [threshold, name]
+      properties:
+        threshold:
+          type: integer
+          minimum: 1
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+        isActive:
+          type: boolean
+          default: true
+
+    UpdatePenaltyRuleRequest:
+      type: object
+      properties:
+        threshold:
+          type: integer
+          minimum: 1
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+        isActive:
+          type: boolean
+
+    HomeDailyTask:
+      type: object
+      required: [task, completedToday]
+      properties:
+        task:
+          $ref: '#/components/schemas/Task'
+        completedToday:
+          type: boolean
+
+    HomeWeeklyTask:
+      type: object
+      required: [task, weekCompletedCount, requiredCompletionsPerWeek]
+      properties:
+        task:
+          $ref: '#/components/schemas/Task'
+        weekCompletedCount:
+          type: integer
+        requiredCompletionsPerWeek:
+          type: integer
+
+    HomeResponse:
+      type: object
+      required:
+        [
+          month,
+          today,
+          elapsedDaysInWeek,
+          monthlyPenaltyTotal,
+          dailyTasks,
+          weeklyTasks,
+        ]
       properties:
         month:
           type: string
           example: 2026-02
+        today:
+          type: string
+          format: date
+        elapsedDaysInWeek:
+          type: integer
         monthlyPenaltyTotal:
           type: integer
-          example: 0
-        dailyOpenCount:
+        dailyTasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/HomeDailyTask'
+        weeklyTasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/HomeWeeklyTask'
+
+    MonthlyPenaltySummary:
+      type: object
+      required:
+        [
+          month,
+          teamId,
+          dailyPenaltyTotal,
+          weeklyPenaltyTotal,
+          totalPenalty,
+          isClosed,
+          triggeredPenaltyRuleIds,
+        ]
+      properties:
+        month:
+          type: string
+        teamId:
+          type: string
+        dailyPenaltyTotal:
           type: integer
-          example: 0
-        weeklyOpenCount:
+        weeklyPenaltyTotal:
           type: integer
-          example: 0
+        totalPenalty:
+          type: integer
+        isClosed:
+          type: boolean
+        triggeredPenaltyRuleIds:
+          type: array
+          items:
+            type: string
+
+    CloseResponse:
+      type: object
+      required: [closedAt, month]
+      properties:
+        closedAt:
+          type: string
+          format: date-time
+        month:
+          type: string

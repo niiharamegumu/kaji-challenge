@@ -34,6 +34,7 @@ services:
         condition: service_healthy
     volumes:
       - ./backend:/app/backend
+      - ./api:/app/api
 
   frontend:
     image: node:22
@@ -49,6 +50,7 @@ services:
     command: sh -c "npm ci && npm run dev -- --host 0.0.0.0 --port 5173"
     volumes:
       - ./frontend:/app/frontend
+      - ./api:/app/api
       - frontend_node_modules:/app/frontend/node_modules
 
 volumes:
