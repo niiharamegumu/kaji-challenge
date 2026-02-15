@@ -5,12 +5,16 @@ export const customFetch = async <T>(
   url: string,
   options?: RequestInit,
 ): Promise<T> => {
+  const headers: Record<string, string> = {
+    ...(options?.headers as Record<string, string> | undefined),
+  };
+  if (options?.body != null && headers["Content-Type"] == null) {
+    headers["Content-Type"] = "application/json";
+  }
+
   const response = await fetch(`${API_BASE_URL}${url}`, {
     ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(options?.headers ?? {}),
-    },
+    headers,
   });
 
   if (!response.ok) {

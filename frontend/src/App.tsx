@@ -21,10 +21,16 @@ function App() {
   }, []);
 
   return (
-    <main className="container">
-      <h1>家事チャレ</h1>
-      <p>モノレポひな形（React + Vite + Cloudflare Workers）</p>
-      <p data-testid="health-status">API Health: {healthState}</p>
+    <main className="min-h-screen bg-linear-to-br from-sky-50 to-cyan-50 text-gray-800">
+      <div className="mx-auto max-w-4xl px-6 py-10">
+        <h1 className="text-3xl font-semibold">家事チャレ</h1>
+        <p className="mt-3">
+          モノレポひな形（React + Vite + Cloudflare Workers）
+        </p>
+        <p className="mt-2" data-testid="health-status">
+          API Health: {healthState}
+        </p>
+      </div>
     </main>
   );
 }
