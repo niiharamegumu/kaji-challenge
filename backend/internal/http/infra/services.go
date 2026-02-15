@@ -1,20 +1,12 @@
-package http
+package infra
 
 import (
 	"context"
 	"time"
 
+	"github.com/megu/kaji-challenge/backend/internal/http/application"
 	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 )
-
-type services struct {
-	auth    authService
-	team    teamService
-	task    taskService
-	penalty penaltyService
-	home    homeService
-	admin   adminService
-}
 
 type authService struct{ store *store }
 type teamService struct{ store *store }
@@ -23,14 +15,18 @@ type penaltyService struct{ store *store }
 type homeService struct{ store *store }
 type adminService struct{ store *store }
 
-func newServices(s *store) *services {
-	return &services{
-		auth:    authService{store: s},
-		team:    teamService{store: s},
-		task:    taskService{store: s},
-		penalty: penaltyService{store: s},
-		home:    homeService{store: s},
-		admin:   adminService{store: s},
+func NewStore() *store {
+	return newStore()
+}
+
+func NewServices(s *store) *application.Services {
+	return &application.Services{
+		Auth:    authService{store: s},
+		Team:    teamService{store: s},
+		Task:    taskService{store: s},
+		Penalty: penaltyService{store: s},
+		Home:    homeService{store: s},
+		Admin:   adminService{store: s},
 	}
 }
 
@@ -50,8 +46,16 @@ func (s authService) RevokeSession(ctx context.Context, token string) {
 	s.store.revokeSession(ctx, token)
 }
 
-func (s teamService) CurrentUserAndMemberships(ctx context.Context, userID string) (userRecord, []api.TeamMembership, error) {
-	return s.store.currentUserAndMemberships(ctx, userID)
+func (s authService) LookupSession(ctx context.Context, token string) (string, bool) {
+	return s.store.lookupSession(ctx, token)
+}
+
+func (s teamService) GetMe(ctx context.Context, userID string) (api.MeResponse, error) {
+	user, memberships, err := s.store.currentUserAndMemberships(ctx, userID)
+	if err != nil {
+		return api.MeResponse{}, err
+	}
+	return api.MeResponse{User: user.toAPI(), Memberships: memberships}, nil
 }
 
 func (s teamService) CreateInvite(ctx context.Context, userID string, req api.CreateInviteRequest) (api.InviteCodeResponse, error) {
@@ -116,4 +120,22 @@ func (s adminService) CloseWeekForUser(ctx context.Context, userID string) (api.
 
 func (s adminService) CloseMonthForUser(ctx context.Context, userID string) (api.CloseResponse, error) {
 	return s.store.closeMonthForUser(ctx, userID)
+}
+
+// RejectMockParamsInStrictModeForTest is used by router tests without exposing internal store types.
+func RejectMockParamsInStrictModeForTest(ctx context.Context, loc *time.Location) error {
+	if loc == nil {
+		loc = time.FixedZone("JST", 9*60*60)
+	}
+	s := &store{
+		loc:          loc,
+		authRequests: map[string]authRequest{},
+	}
+	s.authRequests["state-1"] = authRequest{
+		Nonce:        "nonce-1",
+		CodeVerifier: "verifier-1",
+		ExpiresAt:    time.Now().In(loc).Add(10 * time.Minute),
+	}
+	_, _, err := s.completeGoogleAuth(ctx, "mock-code", "state-1", "owner@example.com", "Owner", "")
+	return err
 }

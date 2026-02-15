@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/megu/kaji-challenge/backend/internal/http/infra"
 	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 )
 
@@ -56,22 +57,12 @@ func TestNewRouterPanicsWhenStrictModeMissingOIDCEnv(t *testing.T) {
 
 func TestCompleteGoogleAuthRejectsMockParamsInStrictMode(t *testing.T) {
 	t.Setenv("OIDC_STRICT_MODE", "true")
-	loc, _ := time.LoadLocation(jstTZ)
+	loc, _ := time.LoadLocation("Asia/Tokyo")
 	if loc == nil {
 		loc = time.FixedZone("JST", 9*60*60)
 	}
 
-	s := &store{
-		loc:          loc,
-		authRequests: map[string]authRequest{},
-	}
-	s.authRequests["state-1"] = authRequest{
-		Nonce:        "nonce-1",
-		CodeVerifier: "verifier-1",
-		ExpiresAt:    time.Now().In(loc).Add(10 * time.Minute),
-	}
-
-	_, _, err := s.completeGoogleAuth(context.Background(), "mock-code", "state-1", "owner@example.com", "Owner", "")
+	err := infra.RejectMockParamsInStrictModeForTest(context.Background(), loc)
 	if err == nil || !strings.Contains(err.Error(), "disabled") {
 		t.Fatalf("expected strict mode mock rejection, got: %v", err)
 	}

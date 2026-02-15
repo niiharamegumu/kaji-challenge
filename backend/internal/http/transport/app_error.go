@@ -1,4 +1,4 @@
-package http
+package transport
 
 import (
 	"errors"
@@ -6,6 +6,11 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+)
+
+const (
+	AuthUserIDKey = "auth.userId"
+	AuthTokenKey  = "auth.token"
 )
 
 type AppError struct {
