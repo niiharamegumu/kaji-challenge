@@ -1,4 +1,4 @@
-package infra
+package store
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 )
 
-func (s *store) getHome(ctx context.Context, userID string) (api.HomeResponse, error) {
+func (s *Store) GetHome(ctx context.Context, userID string) (api.HomeResponse, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return api.HomeResponse{}, err
@@ -75,7 +75,7 @@ func (s *store) getHome(ctx context.Context, userID string) (api.HomeResponse, e
 	}, nil
 }
 
-func (s *store) getMonthlySummary(ctx context.Context, userID string, month *string) (api.MonthlyPenaltySummary, error) {
+func (s *Store) GetMonthlySummary(ctx context.Context, userID string, month *string) (api.MonthlyPenaltySummary, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return api.MonthlyPenaltySummary{}, err

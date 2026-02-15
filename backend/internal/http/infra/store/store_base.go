@@ -1,4 +1,4 @@
-package infra
+package store
 
 import (
 	"context"
@@ -12,13 +12,13 @@ import (
 	dbsqlc "github.com/megu/kaji-challenge/backend/internal/db/sqlc"
 )
 
-func newStore() *store {
+func newStore() *Store {
 	loc, _ := time.LoadLocation(jstTZ)
 	if loc == nil {
 		loc = time.FixedZone("JST", 9*60*60)
 	}
 
-	s := &store{
+	s := &Store{
 		loc:            loc,
 		users:          map[string]userRecord{},
 		usersByMail:    map[string]string{},
@@ -44,7 +44,11 @@ func newStore() *store {
 	return s
 }
 
-func (s *store) initPersistence() error {
+func NewStore() *Store {
+	return newStore()
+}
+
+func (s *Store) initPersistence() error {
 	databaseURL := strings.TrimSpace(os.Getenv("DATABASE_URL"))
 	if databaseURL == "" {
 		return errors.New("DATABASE_URL is required")
@@ -63,7 +67,7 @@ func (s *store) initPersistence() error {
 	return nil
 }
 
-func (s *store) nextID(_ string) string {
+func (s *Store) nextID(_ string) string {
 	id, err := uuid.NewV7()
 	if err != nil {
 		return uuid.NewString()

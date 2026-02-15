@@ -1,4 +1,4 @@
-package infra
+package store
 
 import (
 	"sync"
@@ -15,7 +15,7 @@ const (
 	jstTZ         = "Asia/Tokyo"
 )
 
-type store struct {
+type Store struct {
 	mu sync.Mutex
 
 	loc *time.Location

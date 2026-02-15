@@ -1,4 +1,4 @@
-package infra
+package store
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 )
 
-func (s *store) listTasks(ctx context.Context, userID string, filter *api.TaskType) ([]api.Task, error) {
+func (s *Store) ListTasks(ctx context.Context, userID string, filter *api.TaskType) ([]api.Task, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -30,7 +30,7 @@ func (s *store) listTasks(ctx context.Context, userID string, filter *api.TaskTy
 	return items, nil
 }
 
-func (s *store) createTask(ctx context.Context, userID string, req api.CreateTaskRequest) (api.Task, error) {
+func (s *Store) CreateTask(ctx context.Context, userID string, req api.CreateTaskRequest) (api.Task, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return api.Task{}, err
@@ -93,7 +93,7 @@ func (s *store) createTask(ctx context.Context, userID string, req api.CreateTas
 	return task.toAPI(), nil
 }
 
-func (s *store) patchTask(ctx context.Context, userID, taskID string, req api.UpdateTaskRequest) (api.Task, error) {
+func (s *Store) PatchTask(ctx context.Context, userID, taskID string, req api.UpdateTaskRequest) (api.Task, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return api.Task{}, err
@@ -152,7 +152,7 @@ func (s *store) patchTask(ctx context.Context, userID, taskID string, req api.Up
 	return task.toAPI(), nil
 }
 
-func (s *store) deleteTask(ctx context.Context, userID, taskID string) error {
+func (s *Store) DeleteTask(ctx context.Context, userID, taskID string) error {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return err
@@ -167,7 +167,7 @@ func (s *store) deleteTask(ctx context.Context, userID, taskID string) error {
 	return s.q.DeleteTask(ctx, taskID)
 }
 
-func (s *store) toggleTaskCompletion(ctx context.Context, userID, taskID string, target time.Time) (api.TaskCompletionResponse, error) {
+func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string, target time.Time) (api.TaskCompletionResponse, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return api.TaskCompletionResponse{}, err

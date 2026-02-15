@@ -1,4 +1,4 @@
-package infra
+package store
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 )
 
-func (s *store) getOrCreateUserLocked(ctx context.Context, email, displayName string) (string, userRecord, error) {
+func (s *Store) getOrCreateUserLocked(ctx context.Context, email, displayName string) (string, userRecord, error) {
 	now := time.Now().In(s.loc)
 	row, err := s.q.GetUserByEmail(ctx, email)
 	if err == nil {
@@ -57,14 +57,14 @@ func (s *store) getOrCreateUserLocked(ctx context.Context, email, displayName st
 	return user.ID, user, nil
 }
 
-func (s *store) currentUserAndMemberships(ctx context.Context, userID string) (userRecord, []api.TeamMembership, error) {
+func (s *Store) GetMe(ctx context.Context, userID string) (api.MeResponse, error) {
 	row, err := s.q.GetUserByID(ctx, userID)
 	if err != nil {
-		return userRecord{}, nil, errors.New("user not found")
+		return api.MeResponse{}, errors.New("user not found")
 	}
 	mRows, err := s.q.ListMembershipsByUserID(ctx, userID)
 	if err != nil {
-		return userRecord{}, nil, err
+		return api.MeResponse{}, err
 	}
 	memberships := make([]api.TeamMembership, 0, len(mRows))
 	for _, m := range mRows {
@@ -74,15 +74,18 @@ func (s *store) currentUserAndMemberships(ctx context.Context, userID string) (u
 		}
 		memberships = append(memberships, api.TeamMembership{TeamId: m.TeamID, Role: role})
 	}
-	return userRecord{
-		ID:        row.ID,
-		Email:     row.Email,
-		Name:      row.DisplayName,
-		CreatedAt: row.CreatedAt.Time.In(s.loc),
-	}, memberships, nil
+	return api.MeResponse{
+		User: api.User{
+			Id:          row.ID,
+			Email:       row.Email,
+			DisplayName: row.DisplayName,
+			CreatedAt:   row.CreatedAt.Time.In(s.loc),
+		},
+		Memberships: memberships,
+	}, nil
 }
 
-func (s *store) createInvite(ctx context.Context, userID string, req api.CreateInviteRequest) (api.InviteCodeResponse, error) {
+func (s *Store) CreateInvite(ctx context.Context, userID string, req api.CreateInviteRequest) (api.InviteCodeResponse, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return api.InviteCodeResponse{}, err
@@ -126,7 +129,7 @@ func (s *store) createInvite(ctx context.Context, userID string, req api.CreateI
 	}, nil
 }
 
-func (s *store) joinTeam(ctx context.Context, userID, code string) (api.JoinTeamResponse, error) {
+func (s *Store) JoinTeam(ctx context.Context, userID, code string) (api.JoinTeamResponse, error) {
 	code = strings.ToUpper(strings.TrimSpace(code))
 	invite, err := s.q.GetInviteCode(ctx, code)
 	if err != nil {
@@ -168,7 +171,7 @@ func (s *store) joinTeam(ctx context.Context, userID, code string) (api.JoinTeam
 	return api.JoinTeamResponse{TeamId: invite.TeamID}, nil
 }
 
-func (s *store) primaryTeamLocked(ctx context.Context, userID string) (string, error) {
+func (s *Store) primaryTeamLocked(ctx context.Context, userID string) (string, error) {
 	list, err := s.q.ListMembershipsByUserID(ctx, userID)
 	if err != nil {
 		return "", err

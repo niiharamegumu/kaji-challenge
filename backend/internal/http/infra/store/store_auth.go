@@ -1,4 +1,4 @@
-package infra
+package store
 
 import (
 	"context"
@@ -36,7 +36,7 @@ type exchangeCodeRecord struct {
 	Used      bool
 }
 
-func (s *store) lookupSession(ctx context.Context, token string) (string, bool) {
+func (s *Store) LookupSession(ctx context.Context, token string) (string, bool) {
 	rec, err := s.q.GetSessionByToken(ctx, token)
 	if err != nil {
 		return "", false
@@ -44,7 +44,7 @@ func (s *store) lookupSession(ctx context.Context, token string) (string, bool) 
 	return rec.UserID, true
 }
 
-func (s *store) startGoogleAuth(ctx context.Context) (api.AuthStartResponse, error) {
+func (s *Store) StartGoogleAuth(ctx context.Context) (api.AuthStartResponse, error) {
 	state, err := randomToken()
 	if err != nil {
 		return api.AuthStartResponse{}, err
@@ -85,7 +85,7 @@ func (s *store) startGoogleAuth(ctx context.Context) (api.AuthStartResponse, err
 	return api.AuthStartResponse{AuthorizationUrl: authURL}, nil
 }
 
-func (s *store) completeGoogleAuth(ctx context.Context, code, state, mockEmail, mockName, mockSub string) (string, string, error) {
+func (s *Store) CompleteGoogleAuth(ctx context.Context, code, state, mockEmail, mockName, mockSub string) (string, string, error) {
 	var req authRequest
 	if s.q != nil {
 		row, err := s.q.GetAuthRequest(ctx, state)
@@ -185,7 +185,7 @@ type idTokenClaims struct {
 	Nonce string `json:"nonce"`
 }
 
-func (s *store) exchangeAndVerifyIDToken(ctx context.Context, code string, req authRequest) (idTokenClaims, error) {
+func (s *Store) exchangeAndVerifyIDToken(ctx context.Context, code string, req authRequest) (idTokenClaims, error) {
 	s.mu.Lock()
 	client, err := s.ensureOIDCClientLocked(ctx)
 	s.mu.Unlock()
@@ -212,7 +212,7 @@ func (s *store) exchangeAndVerifyIDToken(ctx context.Context, code string, req a
 	return claims, nil
 }
 
-func (s *store) buildAuthorizationURLLocked(ctx context.Context, state, nonce, verifier string) (string, error) {
+func (s *Store) buildAuthorizationURLLocked(ctx context.Context, state, nonce, verifier string) (string, error) {
 	if !oidcConfigured() {
 		if oidcStrictMode() {
 			return "", errors.New("OIDC_STRICT_MODE=true requires OIDC configuration")
@@ -243,7 +243,7 @@ func (s *store) buildAuthorizationURLLocked(ctx context.Context, state, nonce, v
 	return authURL, nil
 }
 
-func (s *store) ensureOIDCClientLocked(ctx context.Context) (*oidcClient, error) {
+func (s *Store) ensureOIDCClientLocked(ctx context.Context) (*oidcClient, error) {
 	if s.oidc != nil {
 		return s.oidc, nil
 	}
@@ -317,7 +317,7 @@ func pkceChallenge(verifier string) string {
 	return base64.RawURLEncoding.EncodeToString(sum[:])
 }
 
-func (s *store) exchangeSession(ctx context.Context, exchangeCode string) (api.AuthSessionResponse, error) {
+func (s *Store) ExchangeSession(ctx context.Context, exchangeCode string) (api.AuthSessionResponse, error) {
 	rec, err := s.q.GetExchangeCode(ctx, exchangeCode)
 	if err != nil {
 		return api.AuthSessionResponse{}, errors.New("invalid exchange code")
@@ -352,6 +352,6 @@ func (s *store) exchangeSession(ctx context.Context, exchangeCode string) (api.A
 	return api.AuthSessionResponse{AccessToken: token, User: user.toAPI()}, nil
 }
 
-func (s *store) revokeSession(ctx context.Context, token string) {
+func (s *Store) RevokeSession(ctx context.Context, token string) {
 	_ = s.q.DeleteSession(ctx, token)
 }

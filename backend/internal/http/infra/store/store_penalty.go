@@ -1,4 +1,4 @@
-package infra
+package store
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 )
 
-func (s *store) listPenaltyRules(ctx context.Context, userID string) ([]api.PenaltyRule, error) {
+func (s *Store) ListPenaltyRules(ctx context.Context, userID string) ([]api.PenaltyRule, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -26,7 +26,7 @@ func (s *store) listPenaltyRules(ctx context.Context, userID string) ([]api.Pena
 	return items, nil
 }
 
-func (s *store) createPenaltyRule(ctx context.Context, userID string, req api.CreatePenaltyRuleRequest) (api.PenaltyRule, error) {
+func (s *Store) CreatePenaltyRule(ctx context.Context, userID string, req api.CreatePenaltyRuleRequest) (api.PenaltyRule, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return api.PenaltyRule{}, err
@@ -65,7 +65,7 @@ func (s *store) createPenaltyRule(ctx context.Context, userID string, req api.Cr
 	return r.toAPI(), nil
 }
 
-func (s *store) patchPenaltyRule(ctx context.Context, userID, ruleID string, req api.UpdatePenaltyRuleRequest) (api.PenaltyRule, error) {
+func (s *Store) PatchPenaltyRule(ctx context.Context, userID, ruleID string, req api.UpdatePenaltyRuleRequest) (api.PenaltyRule, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return api.PenaltyRule{}, err
@@ -108,7 +108,7 @@ func (s *store) patchPenaltyRule(ctx context.Context, userID, ruleID string, req
 	return rule.toAPI(), nil
 }
 
-func (s *store) deletePenaltyRule(ctx context.Context, userID, ruleID string) error {
+func (s *Store) DeletePenaltyRule(ctx context.Context, userID, ruleID string) error {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return err

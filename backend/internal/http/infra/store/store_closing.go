@@ -1,4 +1,4 @@
-package infra
+package store
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 )
 
-func (s *store) closeDayForUser(ctx context.Context, userID string) (api.CloseResponse, error) {
+func (s *Store) CloseDayForUser(ctx context.Context, userID string) (api.CloseResponse, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return api.CloseResponse{}, err
@@ -24,7 +24,7 @@ func (s *store) closeDayForUser(ctx context.Context, userID string) (api.CloseRe
 	return api.CloseResponse{ClosedAt: now, Month: now.Format("2006-01")}, nil
 }
 
-func (s *store) closeWeekForUser(ctx context.Context, userID string) (api.CloseResponse, error) {
+func (s *Store) CloseWeekForUser(ctx context.Context, userID string) (api.CloseResponse, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return api.CloseResponse{}, err
@@ -36,7 +36,7 @@ func (s *store) closeWeekForUser(ctx context.Context, userID string) (api.CloseR
 	return api.CloseResponse{ClosedAt: now, Month: now.Format("2006-01")}, nil
 }
 
-func (s *store) closeMonthForUser(ctx context.Context, userID string) (api.CloseResponse, error) {
+func (s *Store) CloseMonthForUser(ctx context.Context, userID string) (api.CloseResponse, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return api.CloseResponse{}, err
@@ -49,7 +49,7 @@ func (s *store) closeMonthForUser(ctx context.Context, userID string) (api.Close
 	return api.CloseResponse{ClosedAt: now, Month: closedMonth}, nil
 }
 
-func (s *store) autoCloseLocked(ctx context.Context, now time.Time, teamID string) error {
+func (s *Store) autoCloseLocked(ctx context.Context, now time.Time, teamID string) error {
 	if err := s.closeDayLocked(ctx, now, teamID); err != nil {
 		return err
 	}
@@ -64,7 +64,7 @@ func (s *store) autoCloseLocked(ctx context.Context, now time.Time, teamID strin
 	return nil
 }
 
-func (s *store) closeDayLocked(ctx context.Context, now time.Time, teamID string) error {
+func (s *Store) closeDayLocked(ctx context.Context, now time.Time, teamID string) error {
 	targetDate := dateOnly(now, s.loc).AddDate(0, 0, -1)
 	dateKey := targetDate.Format("2006-01-02")
 	rows, err := s.q.InsertCloseExecutionKey(ctx, "closed|"+teamID+"|"+dateKey)
@@ -119,7 +119,7 @@ func (s *store) closeDayLocked(ctx context.Context, now time.Time, teamID string
 	return nil
 }
 
-func (s *store) closeWeekLocked(ctx context.Context, now time.Time, teamID string) error {
+func (s *Store) closeWeekLocked(ctx context.Context, now time.Time, teamID string) error {
 	thisWeekStart := startOfWeek(dateOnly(now, s.loc), s.loc)
 	previousWeekStart := thisWeekStart.AddDate(0, 0, -7)
 	weekKey := previousWeekStart.Format("2006-01-02")
@@ -172,7 +172,7 @@ func (s *store) closeWeekLocked(ctx context.Context, now time.Time, teamID strin
 	return nil
 }
 
-func (s *store) closeMonthLocked(ctx context.Context, now time.Time, teamID string) (string, error) {
+func (s *Store) closeMonthLocked(ctx context.Context, now time.Time, teamID string) (string, error) {
 	target := now.AddDate(0, -1, 0)
 	month := target.Format("2006-01")
 	key := teamID + "|" + month
@@ -217,7 +217,7 @@ func (s *store) closeMonthLocked(ctx context.Context, now time.Time, teamID stri
 	return month, nil
 }
 
-func (s *store) weeklyCompletionCountLocked(ctx context.Context, taskID string, weekStart time.Time) (int, error) {
+func (s *Store) weeklyCompletionCountLocked(ctx context.Context, taskID string, weekStart time.Time) (int, error) {
 	weekEnd := weekStart.AddDate(0, 0, 6)
 	count, err := s.q.CountTaskCompletionsInRange(ctx, dbsqlc.CountTaskCompletionsInRangeParams{
 		TaskID:       taskID,
@@ -230,7 +230,7 @@ func (s *store) weeklyCompletionCountLocked(ctx context.Context, taskID string, 
 	return int(count), nil
 }
 
-func (s *store) ensureMonthSummaryLocked(ctx context.Context, teamID, month string) (dbsqlc.MonthlyPenaltySummary, error) {
+func (s *Store) ensureMonthSummaryLocked(ctx context.Context, teamID, month string) (dbsqlc.MonthlyPenaltySummary, error) {
 	got, err := s.q.GetMonthlyPenaltySummary(ctx, dbsqlc.GetMonthlyPenaltySummaryParams{
 		TeamID: teamID,
 		Month:  month,
