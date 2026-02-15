@@ -72,7 +72,7 @@ type Task struct {
 	Notes                      pgtype.Text        `json:"notes"`
 	Type                       string             `json:"type"`
 	PenaltyPoints              int32              `json:"penalty_points"`
-	AssigneeUserID             pgtype.Text        `json:"assignee_user_id"`
+	AssigneeUserID             string             `json:"assignee_user_id"`
 	IsActive                   bool               `json:"is_active"`
 	RequiredCompletionsPerWeek int32              `json:"required_completions_per_week"`
 	CreatedAt                  pgtype.Timestamptz `json:"created_at"`
