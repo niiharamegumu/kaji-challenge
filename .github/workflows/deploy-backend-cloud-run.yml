@@ -14,6 +14,7 @@ env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   SERVICE: kaji-backend
   REGION: us-central1
+  DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
 jobs:
   deploy:
@@ -32,6 +33,18 @@ jobs:
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
       - uses: google-github-actions/setup-gcloud@v2
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+
+      - name: Run DB migrations
+        run: |
+          test -n "$DATABASE_URL" || (echo "DATABASE_URL secret is empty" && exit 1)
+          go run github.com/golang-migrate/migrate/v4/cmd/migrate@v4.19.0 \
+            -path backend/migrations \
+            -database "$DATABASE_URL" \
+            up
 
       - name: Configure Docker auth
         run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet

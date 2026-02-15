@@ -29,10 +29,25 @@ const (
 	Owner  TeamMembershipRole = "owner"
 )
 
+// AuthCallbackResponse defines model for AuthCallbackResponse.
+type AuthCallbackResponse struct {
+	ExchangeCode string `json:"exchangeCode"`
+}
+
+// AuthSessionExchangeRequest defines model for AuthSessionExchangeRequest.
+type AuthSessionExchangeRequest struct {
+	ExchangeCode string `json:"exchangeCode"`
+}
+
 // AuthSessionResponse defines model for AuthSessionResponse.
 type AuthSessionResponse struct {
 	AccessToken string `json:"accessToken"`
 	User        User   `json:"user"`
+}
+
+// AuthStartResponse defines model for AuthStartResponse.
+type AuthStartResponse struct {
+	AuthorizationUrl string `json:"authorizationUrl"`
 }
 
 // CloseResponse defines model for CloseResponse.
@@ -130,13 +145,6 @@ type MonthlyPenaltySummary struct {
 	WeeklyPenaltyTotal      int      `json:"weeklyPenaltyTotal"`
 }
 
-// OidcCallbackRequest defines model for OidcCallbackRequest.
-type OidcCallbackRequest struct {
-	DisplayName   string              `json:"displayName"`
-	Email         openapi_types.Email `json:"email"`
-	GoogleSubject *string             `json:"googleSubject,omitempty"`
-}
-
 // PenaltyRule defines model for PenaltyRule.
 type PenaltyRule struct {
 	CreatedAt   time.Time `json:"createdAt"`
@@ -215,6 +223,12 @@ type User struct {
 	Id          string    `json:"id"`
 }
 
+// GetAuthGoogleCallbackParams defines parameters for GetAuthGoogleCallback.
+type GetAuthGoogleCallbackParams struct {
+	Code  string `form:"code" json:"code"`
+	State string `form:"state" json:"state"`
+}
+
 // GetPenaltySummaryMonthlyParams defines parameters for GetPenaltySummaryMonthly.
 type GetPenaltySummaryMonthlyParams struct {
 	Month *string `form:"month,omitempty" json:"month,omitempty"`
@@ -225,8 +239,8 @@ type ListTasksParams struct {
 	Type *TaskType `form:"type,omitempty" json:"type,omitempty"`
 }
 
-// PostAuthOidcGoogleCallbackJSONRequestBody defines body for PostAuthOidcGoogleCallback for application/json ContentType.
-type PostAuthOidcGoogleCallbackJSONRequestBody = OidcCallbackRequest
+// PostAuthSessionsExchangeJSONRequestBody defines body for PostAuthSessionsExchange for application/json ContentType.
+type PostAuthSessionsExchangeJSONRequestBody = AuthSessionExchangeRequest
 
 // PostPenaltyRuleJSONRequestBody defines body for PostPenaltyRule for application/json ContentType.
 type PostPenaltyRuleJSONRequestBody = CreatePenaltyRuleRequest
@@ -263,9 +277,18 @@ type ServerInterface interface {
 	// Run week close now
 	// (POST /v1/admin/close-week)
 	PostAdminCloseWeek(c *gin.Context)
-	// Authenticate by Google OIDC callback payload
-	// (POST /v1/auth/oidc/google/callback)
-	PostAuthOidcGoogleCallback(c *gin.Context)
+	// Handle Google OIDC callback and issue one-time exchange code
+	// (GET /v1/auth/google/callback)
+	GetAuthGoogleCallback(c *gin.Context, params GetAuthGoogleCallbackParams)
+	// Start Google OIDC authorization
+	// (GET /v1/auth/google/start)
+	GetAuthGoogleStart(c *gin.Context)
+	// Revoke current session token
+	// (POST /v1/auth/logout)
+	PostAuthLogout(c *gin.Context)
+	// Exchange one-time code for app session token
+	// (POST /v1/auth/sessions/exchange)
+	PostAuthSessionsExchange(c *gin.Context)
 	// Home payload for dashboard
 	// (GET /v1/home)
 	GetHome(c *gin.Context)
@@ -377,8 +400,43 @@ func (siw *ServerInterfaceWrapper) PostAdminCloseWeek(c *gin.Context) {
 	siw.Handler.PostAdminCloseWeek(c)
 }
 
-// PostAuthOidcGoogleCallback operation middleware
-func (siw *ServerInterfaceWrapper) PostAuthOidcGoogleCallback(c *gin.Context) {
+// GetAuthGoogleCallback operation middleware
+func (siw *ServerInterfaceWrapper) GetAuthGoogleCallback(c *gin.Context) {
+
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetAuthGoogleCallbackParams
+
+	// ------------- Required query parameter "code" -------------
+
+	if paramValue := c.Query("code"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandler(c, fmt.Errorf("Query argument code is required, but not found"), http.StatusBadRequest)
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "code", c.Request.URL.Query(), &params.Code)
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter code: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// ------------- Required query parameter "state" -------------
+
+	if paramValue := c.Query("state"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandler(c, fmt.Errorf("Query argument state is required, but not found"), http.StatusBadRequest)
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "state", c.Request.URL.Query(), &params.State)
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter state: %w", err), http.StatusBadRequest)
+		return
+	}
 
 	for _, middleware := range siw.HandlerMiddlewares {
 		middleware(c)
@@ -387,7 +445,48 @@ func (siw *ServerInterfaceWrapper) PostAuthOidcGoogleCallback(c *gin.Context) {
 		}
 	}
 
-	siw.Handler.PostAuthOidcGoogleCallback(c)
+	siw.Handler.GetAuthGoogleCallback(c, params)
+}
+
+// GetAuthGoogleStart operation middleware
+func (siw *ServerInterfaceWrapper) GetAuthGoogleStart(c *gin.Context) {
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.GetAuthGoogleStart(c)
+}
+
+// PostAuthLogout operation middleware
+func (siw *ServerInterfaceWrapper) PostAuthLogout(c *gin.Context) {
+
+	c.Set(BearerAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.PostAuthLogout(c)
+}
+
+// PostAuthSessionsExchange operation middleware
+func (siw *ServerInterfaceWrapper) PostAuthSessionsExchange(c *gin.Context) {
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.PostAuthSessionsExchange(c)
 }
 
 // GetHome operation middleware
@@ -712,7 +811,10 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	router.POST(options.BaseURL+"/v1/admin/close-day", wrapper.PostAdminCloseDay)
 	router.POST(options.BaseURL+"/v1/admin/close-month", wrapper.PostAdminCloseMonth)
 	router.POST(options.BaseURL+"/v1/admin/close-week", wrapper.PostAdminCloseWeek)
-	router.POST(options.BaseURL+"/v1/auth/oidc/google/callback", wrapper.PostAuthOidcGoogleCallback)
+	router.GET(options.BaseURL+"/v1/auth/google/callback", wrapper.GetAuthGoogleCallback)
+	router.GET(options.BaseURL+"/v1/auth/google/start", wrapper.GetAuthGoogleStart)
+	router.POST(options.BaseURL+"/v1/auth/logout", wrapper.PostAuthLogout)
+	router.POST(options.BaseURL+"/v1/auth/sessions/exchange", wrapper.PostAuthSessionsExchange)
 	router.GET(options.BaseURL+"/v1/home", wrapper.GetHome)
 	router.GET(options.BaseURL+"/v1/me", wrapper.GetMe)
 	router.GET(options.BaseURL+"/v1/penalty-rules", wrapper.ListPenaltyRules)

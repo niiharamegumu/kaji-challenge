@@ -10,6 +10,7 @@ import {
   TaskType as TaskTypeConst,
   deletePenaltyRule,
   deleteTask,
+  getAuthGoogleStart,
   getHome,
   getMe,
   getPenaltySummaryMonthly,
@@ -17,7 +18,8 @@ import {
   listTasks,
   patchPenaltyRule,
   patchTask,
-  postAuthOidcGoogleCallback,
+  postAuthLogout,
+  postAuthSessionsExchange,
   postPenaltyRule,
   postTask,
   postTaskCompletionToggle,
@@ -57,8 +59,6 @@ function App() {
     token: null,
     userName: null,
   });
-  const [email, setEmail] = useState("owner@example.com");
-  const [displayName, setDisplayName] = useState("オーナー");
   const [home, setHome] = useState<HomeResponse | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [rules, setRules] = useState<PenaltyRule[]>([]);
@@ -114,6 +114,32 @@ function App() {
   }, []);
 
   useEffect(() => {
+    const exchangeCode = new URLSearchParams(window.location.search).get(
+      "exchangeCode",
+    );
+    if (exchangeCode == null || exchangeCode === "") {
+      return;
+    }
+
+    const run = async () => {
+      try {
+        const res = await postAuthSessionsExchange({ exchangeCode });
+        const token = res.data.accessToken;
+        window.localStorage.setItem("kaji.accessToken", token);
+        setSession({ token, userName: res.data.user.displayName });
+        const next = new URL(window.location.href);
+        next.searchParams.delete("exchangeCode");
+        window.history.replaceState({}, "", next.pathname + next.search);
+        setStatus("ログインしました");
+      } catch (error) {
+        setStatus(`ログインに失敗しました: ${formatError(error)}`);
+      }
+    };
+
+    void run();
+  }, []);
+
+  useEffect(() => {
     void refresh();
   }, [refresh]);
 
@@ -136,17 +162,19 @@ function App() {
 
   const login = async () => {
     try {
-      const res = await postAuthOidcGoogleCallback({ email, displayName });
-      const token = res.data.accessToken;
-      window.localStorage.setItem("kaji.accessToken", token);
-      setSession({ token, userName: res.data.user.displayName });
-      setStatus("ログインしました");
+      const res = await getAuthGoogleStart();
+      window.location.href = res.data.authorizationUrl;
     } catch (error) {
-      setStatus(`ログインに失敗しました: ${formatError(error)}`);
+      setStatus(`ログイン開始に失敗しました: ${formatError(error)}`);
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await postAuthLogout();
+    } catch {
+      // ignore logout request errors and clear local session anyway
+    }
     window.localStorage.removeItem("kaji.accessToken");
     setSession({ token: null, userName: null });
     setHome(null);
@@ -265,33 +293,13 @@ function App() {
       <main className="min-h-screen bg-gradient-to-br from-amber-50 via-white to-emerald-50 p-6 text-slate-800">
         <div className="mx-auto max-w-xl rounded-2xl border border-amber-200 bg-white p-6 shadow-sm">
           <h1 className="text-2xl font-bold">家事チャレ MVP</h1>
-          <p className="mt-2 text-sm text-slate-600">
-            Google OIDC相当ログイン（開発向け）
-          </p>
-          <label className="mt-4 block text-sm" htmlFor="login-email">
-            メール
-          </label>
-          <input
-            id="login-email"
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-          />
-          <label className="mt-3 block text-sm" htmlFor="login-name">
-            表示名
-          </label>
-          <input
-            id="login-name"
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
-            value={displayName}
-            onChange={(event) => setDisplayName(event.target.value)}
-          />
+          <p className="mt-2 text-sm text-slate-600">Google OIDCでログイン</p>
           <button
             type="button"
             className="mt-5 rounded-lg bg-emerald-600 px-4 py-2 text-white"
             onClick={() => void login()}
           >
-            ログイン
+            Googleでログイン
           </button>
           <p
             className="mt-4 text-sm text-slate-700"
@@ -317,7 +325,7 @@ function App() {
               <button
                 type="button"
                 className="rounded-lg border border-slate-300 px-3 py-1 text-sm"
-                onClick={logout}
+                onClick={() => void logout()}
               >
                 ログアウト
               </button>
@@ -403,7 +411,9 @@ function App() {
                         className="rounded-lg border border-slate-300 px-3 py-1 text-sm"
                         onClick={() => void toggleCompletion(item.task.id)}
                       >
-                        トグル
+                        {item.requiredCompletionsPerWeek > 1
+                          ? "カウントアップ"
+                          : "トグル"}
                       </button>
                     </div>
                   </li>
@@ -421,7 +431,11 @@ function App() {
             <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <h2 className="text-lg font-semibold">タスク管理</h2>
               <div className="mt-3 grid gap-2">
+                <label className="text-sm text-slate-700" htmlFor="task-title">
+                  タスク名
+                </label>
                 <input
+                  id="task-title"
                   className="rounded-lg border border-slate-300 px-3 py-2"
                   placeholder="タスク名"
                   value={taskForm.title}
@@ -432,7 +446,11 @@ function App() {
                     }))
                   }
                 />
+                <label className="text-sm text-slate-700" htmlFor="task-notes">
+                  メモ
+                </label>
                 <input
+                  id="task-notes"
                   className="rounded-lg border border-slate-300 px-3 py-2"
                   placeholder="メモ"
                   value={taskForm.notes}
@@ -443,45 +461,75 @@ function App() {
                     }))
                   }
                 />
-                <div className="grid grid-cols-3 gap-2">
-                  <select
-                    className="rounded-lg border border-slate-300 px-3 py-2"
-                    value={taskForm.type}
-                    onChange={(event) =>
-                      setTaskForm((prev) => ({
-                        ...prev,
-                        type: event.target.value as TaskType,
-                      }))
-                    }
-                  >
-                    <option value={TaskTypeConst.daily}>毎日</option>
-                    <option value={TaskTypeConst.weekly}>週間</option>
-                  </select>
-                  <input
-                    className="rounded-lg border border-slate-300 px-3 py-2"
-                    type="number"
-                    min={0}
-                    value={taskForm.penaltyPoints}
-                    onChange={(event) =>
-                      setTaskForm((prev) => ({
-                        ...prev,
-                        penaltyPoints: event.target.value,
-                      }))
-                    }
-                  />
-                  <input
-                    className="rounded-lg border border-slate-300 px-3 py-2"
-                    type="number"
-                    min={1}
-                    disabled={taskForm.type !== TaskTypeConst.weekly}
-                    value={taskForm.requiredCompletionsPerWeek}
-                    onChange={(event) =>
-                      setTaskForm((prev) => ({
-                        ...prev,
-                        requiredCompletionsPerWeek: event.target.value,
-                      }))
-                    }
-                  />
+                <div
+                  className={`grid gap-2 pr-1 ${taskForm.type === TaskTypeConst.weekly ? "grid-cols-1 md:grid-cols-3" : "grid-cols-1 md:grid-cols-2"}`}
+                >
+                  <div className="grid min-w-0 gap-1">
+                    <label
+                      className="text-sm text-slate-700"
+                      htmlFor="task-type"
+                    >
+                      種別
+                    </label>
+                    <select
+                      id="task-type"
+                      className="h-14 w-full rounded-lg border border-slate-300 px-3 py-2"
+                      value={taskForm.type}
+                      onChange={(event) =>
+                        setTaskForm((prev) => ({
+                          ...prev,
+                          type: event.target.value as TaskType,
+                        }))
+                      }
+                    >
+                      <option value={TaskTypeConst.daily}>毎日</option>
+                      <option value={TaskTypeConst.weekly}>週間</option>
+                    </select>
+                  </div>
+                  <div className="grid min-w-0 gap-1">
+                    <label
+                      className="text-sm text-slate-700"
+                      htmlFor="task-penalty-points"
+                    >
+                      未達減点
+                    </label>
+                    <input
+                      id="task-penalty-points"
+                      className="h-14 w-full rounded-lg border border-slate-300 px-3 py-2"
+                      type="number"
+                      min={0}
+                      value={taskForm.penaltyPoints}
+                      onChange={(event) =>
+                        setTaskForm((prev) => ({
+                          ...prev,
+                          penaltyPoints: event.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  {taskForm.type === TaskTypeConst.weekly && (
+                    <div className="grid min-w-0 gap-1">
+                      <label
+                        className="text-sm text-slate-700"
+                        htmlFor="task-weekly-required"
+                      >
+                        週間必要回数
+                      </label>
+                      <input
+                        id="task-weekly-required"
+                        className="h-14 w-full rounded-lg border border-slate-300 px-3 py-2"
+                        type="number"
+                        min={1}
+                        value={taskForm.requiredCompletionsPerWeek}
+                        onChange={(event) =>
+                          setTaskForm((prev) => ({
+                            ...prev,
+                            requiredCompletionsPerWeek: event.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                  )}
                 </div>
                 <button
                   type="button"
@@ -502,6 +550,8 @@ function App() {
                         <div className="font-medium">{task.title}</div>
                         <div className="text-xs text-slate-600">
                           {taskTypeLabel(task.type)} / 減点 {task.penaltyPoints}{" "}
+                          {task.type === TaskTypeConst.weekly &&
+                            ` / 必要 ${task.requiredCompletionsPerWeek}回/週`}{" "}
                           / {task.isActive ? "有効" : "無効"}
                         </div>
                       </div>
@@ -529,93 +579,114 @@ function App() {
               </ul>
             </article>
 
-            <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <h2 className="text-lg font-semibold">ペナルティ/招待管理</h2>
-              <div className="mt-3 grid gap-2">
-                <input
-                  className="rounded-lg border border-slate-300 px-3 py-2"
-                  value={ruleName}
-                  onChange={(event) => setRuleName(event.target.value)}
-                  placeholder="ルール名"
-                />
-                <input
-                  className="rounded-lg border border-slate-300 px-3 py-2"
-                  type="number"
-                  min={1}
-                  value={ruleThreshold}
-                  onChange={(event) => setRuleThreshold(event.target.value)}
-                  placeholder="閾値"
-                />
-                <button
-                  type="button"
-                  className="rounded-lg bg-slate-900 px-3 py-2 text-white"
-                  onClick={() => void createRule()}
-                >
-                  ルール追加
-                </button>
-              </div>
-              <ul className="mt-4 space-y-2">
-                {rules.map((rule) => (
-                  <li
-                    key={rule.id}
-                    className="rounded-xl border border-slate-300 p-3"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="font-medium">{rule.name}</div>
-                        <div className="text-xs text-slate-600">
-                          発動しきい値 {rule.threshold} /{" "}
-                          {rule.isActive ? "有効" : "無効"}
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          className="rounded-lg border border-slate-300 px-2 py-1 text-xs"
-                          onClick={() => void toggleRule(rule)}
-                        >
-                          {rule.isActive ? "無効化" : "有効化"}
-                        </button>
-                        <button
-                          type="button"
-                          className="rounded-lg border border-rose-300 px-2 py-1 text-xs text-rose-700"
-                          onClick={() => void removeRule(rule.id)}
-                        >
-                          削除
-                        </button>
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-              <div className="mt-4 rounded-xl border border-slate-200 p-3">
-                <button
-                  type="button"
-                  className="rounded-lg bg-emerald-600 px-3 py-2 text-white"
-                  onClick={() => void createInvite()}
-                >
-                  招待コード発行
-                </button>
-                <p className="mt-2 text-sm">
-                  発行コード: {inviteCode || "未発行"}
-                </p>
-                <div className="mt-3 flex gap-2">
+            <div className="grid gap-4">
+              <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <h2 className="text-lg font-semibold">ペナルティ管理</h2>
+                <div className="mt-3 grid gap-2">
+                  <label className="text-sm text-slate-700" htmlFor="rule-name">
+                    ルール名
+                  </label>
                   <input
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2"
-                    value={joinCode}
-                    onChange={(event) => setJoinCode(event.target.value)}
-                    placeholder="招待コード入力"
+                    id="rule-name"
+                    className="rounded-lg border border-slate-300 px-3 py-2"
+                    value={ruleName}
+                    onChange={(event) => setRuleName(event.target.value)}
+                    placeholder="ルール名"
+                  />
+                  <label
+                    className="text-sm text-slate-700"
+                    htmlFor="rule-threshold"
+                  >
+                    発動しきい値
+                  </label>
+                  <input
+                    id="rule-threshold"
+                    className="rounded-lg border border-slate-300 px-3 py-2"
+                    type="number"
+                    min={1}
+                    value={ruleThreshold}
+                    onChange={(event) => setRuleThreshold(event.target.value)}
+                    placeholder="閾値"
                   />
                   <button
                     type="button"
-                    className="rounded-lg border border-slate-400 px-3 py-2"
-                    onClick={() => void joinTeam()}
+                    className="rounded-lg bg-slate-900 px-3 py-2 text-white"
+                    onClick={() => void createRule()}
                   >
-                    参加
+                    ルール追加
                   </button>
                 </div>
-              </div>
-            </article>
+                <ul className="mt-4 space-y-2">
+                  {rules.map((rule) => (
+                    <li
+                      key={rule.id}
+                      className="rounded-xl border border-slate-300 p-3"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-medium">{rule.name}</div>
+                          <div className="text-xs text-slate-600">
+                            発動しきい値 {rule.threshold} /{" "}
+                            {rule.isActive ? "有効" : "無効"}
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            className="rounded-lg border border-slate-300 px-2 py-1 text-xs"
+                            onClick={() => void toggleRule(rule)}
+                          >
+                            {rule.isActive ? "無効化" : "有効化"}
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded-lg border border-rose-300 px-2 py-1 text-xs text-rose-700"
+                            onClick={() => void removeRule(rule.id)}
+                          >
+                            削除
+                          </button>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </article>
+
+              <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <h2 className="text-lg font-semibold">招待管理</h2>
+                <div className="mt-4 rounded-xl border border-slate-200 p-3">
+                  <button
+                    type="button"
+                    className="rounded-lg bg-emerald-600 px-3 py-2 text-white"
+                    onClick={() => void createInvite()}
+                  >
+                    招待コード発行
+                  </button>
+                  <p className="mt-2 text-sm">
+                    発行コード: {inviteCode || "未発行"}
+                  </p>
+                  <label className="text-sm text-slate-700" htmlFor="join-code">
+                    招待コード
+                  </label>
+                  <div className="mt-3 flex gap-2">
+                    <input
+                      id="join-code"
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                      value={joinCode}
+                      onChange={(event) => setJoinCode(event.target.value)}
+                      placeholder="招待コード入力"
+                    />
+                    <button
+                      type="button"
+                      className="rounded-lg border border-slate-400 px-3 py-2"
+                      onClick={() => void joinTeam()}
+                    >
+                      参加
+                    </button>
+                  </div>
+                </div>
+              </article>
+            </div>
           </section>
         )}
       </div>

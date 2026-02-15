@@ -71,6 +71,7 @@ GitHub Actions デプロイで必要な secrets:
 - `GCP_PROJECT_ID`
 - `GCP_WORKLOAD_IDENTITY_PROVIDER`
 - `GCP_SERVICE_ACCOUNT`
+- `DATABASE_URL`（migration実行用）
 
 Cloud Run の初期設定:
 
