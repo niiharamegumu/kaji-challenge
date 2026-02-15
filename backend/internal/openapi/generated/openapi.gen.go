@@ -4,40 +4,310 @@
 package generated
 
 import (
+	"fmt"
+	"net/http"
+	"time"
+
 	"github.com/gin-gonic/gin"
+	"github.com/oapi-codegen/runtime"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
+
+const (
+	BearerAuthScopes = "bearerAuth.Scopes"
+)
+
+// Defines values for TaskType.
+const (
+	Daily  TaskType = "daily"
+	Weekly TaskType = "weekly"
+)
+
+// Defines values for TeamMembershipRole.
+const (
+	Member TeamMembershipRole = "member"
+	Owner  TeamMembershipRole = "owner"
+)
+
+// AuthSessionResponse defines model for AuthSessionResponse.
+type AuthSessionResponse struct {
+	AccessToken string `json:"accessToken"`
+	User        User   `json:"user"`
+}
+
+// CloseResponse defines model for CloseResponse.
+type CloseResponse struct {
+	ClosedAt time.Time `json:"closedAt"`
+	Month    string    `json:"month"`
+}
+
+// CreateInviteRequest defines model for CreateInviteRequest.
+type CreateInviteRequest struct {
+	ExpiresInHours *int `json:"expiresInHours,omitempty"`
+	MaxUses        *int `json:"maxUses,omitempty"`
+}
+
+// CreatePenaltyRuleRequest defines model for CreatePenaltyRuleRequest.
+type CreatePenaltyRuleRequest struct {
+	Description *string `json:"description,omitempty"`
+	IsActive    *bool   `json:"isActive,omitempty"`
+	Name        string  `json:"name"`
+	Threshold   int     `json:"threshold"`
+}
+
+// CreateTaskRequest defines model for CreateTaskRequest.
+type CreateTaskRequest struct {
+	AssigneeUserId             *string  `json:"assigneeUserId,omitempty"`
+	IsActive                   *bool    `json:"isActive,omitempty"`
+	Notes                      *string  `json:"notes,omitempty"`
+	PenaltyPoints              int      `json:"penaltyPoints"`
+	RequiredCompletionsPerWeek *int     `json:"requiredCompletionsPerWeek,omitempty"`
+	Title                      string   `json:"title"`
+	Type                       TaskType `json:"type"`
+}
 
 // HealthResponse defines model for HealthResponse.
 type HealthResponse struct {
 	Status string `json:"status"`
 }
 
-// HomeSummaryResponse defines model for HomeSummaryResponse.
-type HomeSummaryResponse struct {
-	DailyOpenCount      int    `json:"dailyOpenCount"`
-	Month               string `json:"month"`
-	MonthlyPenaltyTotal int    `json:"monthlyPenaltyTotal"`
-	WeeklyOpenCount     int    `json:"weeklyOpenCount"`
+// HomeDailyTask defines model for HomeDailyTask.
+type HomeDailyTask struct {
+	CompletedToday bool `json:"completedToday"`
+	Task           Task `json:"task"`
+}
+
+// HomeResponse defines model for HomeResponse.
+type HomeResponse struct {
+	DailyTasks          []HomeDailyTask    `json:"dailyTasks"`
+	ElapsedDaysInWeek   int                `json:"elapsedDaysInWeek"`
+	Month               string             `json:"month"`
+	MonthlyPenaltyTotal int                `json:"monthlyPenaltyTotal"`
+	Today               openapi_types.Date `json:"today"`
+	WeeklyTasks         []HomeWeeklyTask   `json:"weeklyTasks"`
+}
+
+// HomeWeeklyTask defines model for HomeWeeklyTask.
+type HomeWeeklyTask struct {
+	RequiredCompletionsPerWeek int  `json:"requiredCompletionsPerWeek"`
+	Task                       Task `json:"task"`
+	WeekCompletedCount         int  `json:"weekCompletedCount"`
+}
+
+// InviteCodeResponse defines model for InviteCodeResponse.
+type InviteCodeResponse struct {
+	Code      string    `json:"code"`
+	ExpiresAt time.Time `json:"expiresAt"`
+	MaxUses   int       `json:"maxUses"`
+	TeamId    string    `json:"teamId"`
+	UsedCount int       `json:"usedCount"`
+}
+
+// JoinTeamRequest defines model for JoinTeamRequest.
+type JoinTeamRequest struct {
+	Code string `json:"code"`
+}
+
+// JoinTeamResponse defines model for JoinTeamResponse.
+type JoinTeamResponse struct {
+	TeamId string `json:"teamId"`
 }
 
 // MeResponse defines model for MeResponse.
 type MeResponse struct {
-	DisplayName string `json:"displayName"`
-	TeamId      string `json:"teamId"`
-	UserId      string `json:"userId"`
+	Memberships []TeamMembership `json:"memberships"`
+	User        User             `json:"user"`
 }
+
+// MonthlyPenaltySummary defines model for MonthlyPenaltySummary.
+type MonthlyPenaltySummary struct {
+	DailyPenaltyTotal       int      `json:"dailyPenaltyTotal"`
+	IsClosed                bool     `json:"isClosed"`
+	Month                   string   `json:"month"`
+	TeamId                  string   `json:"teamId"`
+	TotalPenalty            int      `json:"totalPenalty"`
+	TriggeredPenaltyRuleIds []string `json:"triggeredPenaltyRuleIds"`
+	WeeklyPenaltyTotal      int      `json:"weeklyPenaltyTotal"`
+}
+
+// OidcCallbackRequest defines model for OidcCallbackRequest.
+type OidcCallbackRequest struct {
+	DisplayName   string              `json:"displayName"`
+	Email         openapi_types.Email `json:"email"`
+	GoogleSubject *string             `json:"googleSubject,omitempty"`
+}
+
+// PenaltyRule defines model for PenaltyRule.
+type PenaltyRule struct {
+	CreatedAt   time.Time `json:"createdAt"`
+	Description *string   `json:"description,omitempty"`
+	Id          string    `json:"id"`
+	IsActive    bool      `json:"isActive"`
+	Name        string    `json:"name"`
+	TeamId      string    `json:"teamId"`
+	Threshold   int       `json:"threshold"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
+// Task defines model for Task.
+type Task struct {
+	AssigneeUserId             *string   `json:"assigneeUserId,omitempty"`
+	CreatedAt                  time.Time `json:"createdAt"`
+	Id                         string    `json:"id"`
+	IsActive                   bool      `json:"isActive"`
+	Notes                      *string   `json:"notes,omitempty"`
+	PenaltyPoints              int       `json:"penaltyPoints"`
+	RequiredCompletionsPerWeek int       `json:"requiredCompletionsPerWeek"`
+	TeamId                     string    `json:"teamId"`
+	Title                      string    `json:"title"`
+	Type                       TaskType  `json:"type"`
+	UpdatedAt                  time.Time `json:"updatedAt"`
+}
+
+// TaskCompletionResponse defines model for TaskCompletionResponse.
+type TaskCompletionResponse struct {
+	Completed            bool               `json:"completed"`
+	TargetDate           openapi_types.Date `json:"targetDate"`
+	TaskId               string             `json:"taskId"`
+	WeeklyCompletedCount int                `json:"weeklyCompletedCount"`
+}
+
+// TaskType defines model for TaskType.
+type TaskType string
+
+// TeamMembership defines model for TeamMembership.
+type TeamMembership struct {
+	Role   TeamMembershipRole `json:"role"`
+	TeamId string             `json:"teamId"`
+}
+
+// TeamMembershipRole defines model for TeamMembership.Role.
+type TeamMembershipRole string
+
+// ToggleTaskCompletionRequest defines model for ToggleTaskCompletionRequest.
+type ToggleTaskCompletionRequest struct {
+	TargetDate openapi_types.Date `json:"targetDate"`
+}
+
+// UpdatePenaltyRuleRequest defines model for UpdatePenaltyRuleRequest.
+type UpdatePenaltyRuleRequest struct {
+	Description *string `json:"description,omitempty"`
+	IsActive    *bool   `json:"isActive,omitempty"`
+	Name        *string `json:"name,omitempty"`
+	Threshold   *int    `json:"threshold,omitempty"`
+}
+
+// UpdateTaskRequest defines model for UpdateTaskRequest.
+type UpdateTaskRequest struct {
+	AssigneeUserId             *string `json:"assigneeUserId,omitempty"`
+	IsActive                   *bool   `json:"isActive,omitempty"`
+	Notes                      *string `json:"notes,omitempty"`
+	PenaltyPoints              *int    `json:"penaltyPoints,omitempty"`
+	RequiredCompletionsPerWeek *int    `json:"requiredCompletionsPerWeek,omitempty"`
+	Title                      *string `json:"title,omitempty"`
+}
+
+// User defines model for User.
+type User struct {
+	CreatedAt   time.Time `json:"createdAt"`
+	DisplayName string    `json:"displayName"`
+	Email       string    `json:"email"`
+	Id          string    `json:"id"`
+}
+
+// GetPenaltySummaryMonthlyParams defines parameters for GetPenaltySummaryMonthly.
+type GetPenaltySummaryMonthlyParams struct {
+	Month *string `form:"month,omitempty" json:"month,omitempty"`
+}
+
+// ListTasksParams defines parameters for ListTasks.
+type ListTasksParams struct {
+	Type *TaskType `form:"type,omitempty" json:"type,omitempty"`
+}
+
+// PostAuthOidcGoogleCallbackJSONRequestBody defines body for PostAuthOidcGoogleCallback for application/json ContentType.
+type PostAuthOidcGoogleCallbackJSONRequestBody = OidcCallbackRequest
+
+// PostPenaltyRuleJSONRequestBody defines body for PostPenaltyRule for application/json ContentType.
+type PostPenaltyRuleJSONRequestBody = CreatePenaltyRuleRequest
+
+// PatchPenaltyRuleJSONRequestBody defines body for PatchPenaltyRule for application/json ContentType.
+type PatchPenaltyRuleJSONRequestBody = UpdatePenaltyRuleRequest
+
+// PostTaskJSONRequestBody defines body for PostTask for application/json ContentType.
+type PostTaskJSONRequestBody = CreateTaskRequest
+
+// PatchTaskJSONRequestBody defines body for PatchTask for application/json ContentType.
+type PatchTaskJSONRequestBody = UpdateTaskRequest
+
+// PostTaskCompletionToggleJSONRequestBody defines body for PostTaskCompletionToggle for application/json ContentType.
+type PostTaskCompletionToggleJSONRequestBody = ToggleTaskCompletionRequest
+
+// PostTeamInviteJSONRequestBody defines body for PostTeamInvite for application/json ContentType.
+type PostTeamInviteJSONRequestBody = CreateInviteRequest
+
+// PostTeamJoinJSONRequestBody defines body for PostTeamJoin for application/json ContentType.
+type PostTeamJoinJSONRequestBody = JoinTeamRequest
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// Health check
 	// (GET /health)
 	Health(c *gin.Context)
-	// Home summary (stub)
-	// (GET /v1/home/summary)
-	GetHomeSummary(c *gin.Context)
-	// Current user (stub)
+	// Run day close now
+	// (POST /v1/admin/close-day)
+	PostAdminCloseDay(c *gin.Context)
+	// Run month close now
+	// (POST /v1/admin/close-month)
+	PostAdminCloseMonth(c *gin.Context)
+	// Run week close now
+	// (POST /v1/admin/close-week)
+	PostAdminCloseWeek(c *gin.Context)
+	// Authenticate by Google OIDC callback payload
+	// (POST /v1/auth/oidc/google/callback)
+	PostAuthOidcGoogleCallback(c *gin.Context)
+	// Home payload for dashboard
+	// (GET /v1/home)
+	GetHome(c *gin.Context)
+	// Current user
 	// (GET /v1/me)
 	GetMe(c *gin.Context)
+	// List penalty rules in current team
+	// (GET /v1/penalty-rules)
+	ListPenaltyRules(c *gin.Context)
+	// Create penalty rule
+	// (POST /v1/penalty-rules)
+	PostPenaltyRule(c *gin.Context)
+	// Delete penalty rule
+	// (DELETE /v1/penalty-rules/{ruleId})
+	DeletePenaltyRule(c *gin.Context, ruleId string)
+	// Update penalty rule
+	// (PATCH /v1/penalty-rules/{ruleId})
+	PatchPenaltyRule(c *gin.Context, ruleId string)
+	// Monthly penalty summary
+	// (GET /v1/penalty-summaries/monthly)
+	GetPenaltySummaryMonthly(c *gin.Context, params GetPenaltySummaryMonthlyParams)
+	// List tasks in current team
+	// (GET /v1/tasks)
+	ListTasks(c *gin.Context, params ListTasksParams)
+	// Create task
+	// (POST /v1/tasks)
+	PostTask(c *gin.Context)
+	// Delete task
+	// (DELETE /v1/tasks/{taskId})
+	DeleteTask(c *gin.Context, taskId string)
+	// Update task
+	// (PATCH /v1/tasks/{taskId})
+	PatchTask(c *gin.Context, taskId string)
+	// Toggle task completion in target period
+	// (POST /v1/tasks/{taskId}/completions/toggle)
+	PostTaskCompletionToggle(c *gin.Context, taskId string)
+	// Create invite code
+	// (POST /v1/teams/invites)
+	PostTeamInvite(c *gin.Context)
+	// Join team by invite code
+	// (POST /v1/teams/join)
+	PostTeamJoin(c *gin.Context)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -62,8 +332,10 @@ func (siw *ServerInterfaceWrapper) Health(c *gin.Context) {
 	siw.Handler.Health(c)
 }
 
-// GetHomeSummary operation middleware
-func (siw *ServerInterfaceWrapper) GetHomeSummary(c *gin.Context) {
+// PostAdminCloseDay operation middleware
+func (siw *ServerInterfaceWrapper) PostAdminCloseDay(c *gin.Context) {
+
+	c.Set(BearerAuthScopes, []string{})
 
 	for _, middleware := range siw.HandlerMiddlewares {
 		middleware(c)
@@ -72,11 +344,71 @@ func (siw *ServerInterfaceWrapper) GetHomeSummary(c *gin.Context) {
 		}
 	}
 
-	siw.Handler.GetHomeSummary(c)
+	siw.Handler.PostAdminCloseDay(c)
+}
+
+// PostAdminCloseMonth operation middleware
+func (siw *ServerInterfaceWrapper) PostAdminCloseMonth(c *gin.Context) {
+
+	c.Set(BearerAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.PostAdminCloseMonth(c)
+}
+
+// PostAdminCloseWeek operation middleware
+func (siw *ServerInterfaceWrapper) PostAdminCloseWeek(c *gin.Context) {
+
+	c.Set(BearerAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.PostAdminCloseWeek(c)
+}
+
+// PostAuthOidcGoogleCallback operation middleware
+func (siw *ServerInterfaceWrapper) PostAuthOidcGoogleCallback(c *gin.Context) {
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.PostAuthOidcGoogleCallback(c)
+}
+
+// GetHome operation middleware
+func (siw *ServerInterfaceWrapper) GetHome(c *gin.Context) {
+
+	c.Set(BearerAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.GetHome(c)
 }
 
 // GetMe operation middleware
 func (siw *ServerInterfaceWrapper) GetMe(c *gin.Context) {
+
+	c.Set(BearerAuthScopes, []string{})
 
 	for _, middleware := range siw.HandlerMiddlewares {
 		middleware(c)
@@ -86,6 +418,267 @@ func (siw *ServerInterfaceWrapper) GetMe(c *gin.Context) {
 	}
 
 	siw.Handler.GetMe(c)
+}
+
+// ListPenaltyRules operation middleware
+func (siw *ServerInterfaceWrapper) ListPenaltyRules(c *gin.Context) {
+
+	c.Set(BearerAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.ListPenaltyRules(c)
+}
+
+// PostPenaltyRule operation middleware
+func (siw *ServerInterfaceWrapper) PostPenaltyRule(c *gin.Context) {
+
+	c.Set(BearerAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.PostPenaltyRule(c)
+}
+
+// DeletePenaltyRule operation middleware
+func (siw *ServerInterfaceWrapper) DeletePenaltyRule(c *gin.Context) {
+
+	var err error
+
+	// ------------- Path parameter "ruleId" -------------
+	var ruleId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ruleId", c.Param("ruleId"), &ruleId, runtime.BindStyledParameterOptions{Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter ruleId: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	c.Set(BearerAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.DeletePenaltyRule(c, ruleId)
+}
+
+// PatchPenaltyRule operation middleware
+func (siw *ServerInterfaceWrapper) PatchPenaltyRule(c *gin.Context) {
+
+	var err error
+
+	// ------------- Path parameter "ruleId" -------------
+	var ruleId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ruleId", c.Param("ruleId"), &ruleId, runtime.BindStyledParameterOptions{Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter ruleId: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	c.Set(BearerAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.PatchPenaltyRule(c, ruleId)
+}
+
+// GetPenaltySummaryMonthly operation middleware
+func (siw *ServerInterfaceWrapper) GetPenaltySummaryMonthly(c *gin.Context) {
+
+	var err error
+
+	c.Set(BearerAuthScopes, []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetPenaltySummaryMonthlyParams
+
+	// ------------- Optional query parameter "month" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "month", c.Request.URL.Query(), &params.Month)
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter month: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.GetPenaltySummaryMonthly(c, params)
+}
+
+// ListTasks operation middleware
+func (siw *ServerInterfaceWrapper) ListTasks(c *gin.Context) {
+
+	var err error
+
+	c.Set(BearerAuthScopes, []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListTasksParams
+
+	// ------------- Optional query parameter "type" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "type", c.Request.URL.Query(), &params.Type)
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter type: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.ListTasks(c, params)
+}
+
+// PostTask operation middleware
+func (siw *ServerInterfaceWrapper) PostTask(c *gin.Context) {
+
+	c.Set(BearerAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.PostTask(c)
+}
+
+// DeleteTask operation middleware
+func (siw *ServerInterfaceWrapper) DeleteTask(c *gin.Context) {
+
+	var err error
+
+	// ------------- Path parameter "taskId" -------------
+	var taskId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "taskId", c.Param("taskId"), &taskId, runtime.BindStyledParameterOptions{Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter taskId: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	c.Set(BearerAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.DeleteTask(c, taskId)
+}
+
+// PatchTask operation middleware
+func (siw *ServerInterfaceWrapper) PatchTask(c *gin.Context) {
+
+	var err error
+
+	// ------------- Path parameter "taskId" -------------
+	var taskId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "taskId", c.Param("taskId"), &taskId, runtime.BindStyledParameterOptions{Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter taskId: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	c.Set(BearerAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.PatchTask(c, taskId)
+}
+
+// PostTaskCompletionToggle operation middleware
+func (siw *ServerInterfaceWrapper) PostTaskCompletionToggle(c *gin.Context) {
+
+	var err error
+
+	// ------------- Path parameter "taskId" -------------
+	var taskId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "taskId", c.Param("taskId"), &taskId, runtime.BindStyledParameterOptions{Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter taskId: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	c.Set(BearerAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.PostTaskCompletionToggle(c, taskId)
+}
+
+// PostTeamInvite operation middleware
+func (siw *ServerInterfaceWrapper) PostTeamInvite(c *gin.Context) {
+
+	c.Set(BearerAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.PostTeamInvite(c)
+}
+
+// PostTeamJoin operation middleware
+func (siw *ServerInterfaceWrapper) PostTeamJoin(c *gin.Context) {
+
+	c.Set(BearerAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.PostTeamJoin(c)
 }
 
 // GinServerOptions provides options for the Gin server.
@@ -116,6 +709,22 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	}
 
 	router.GET(options.BaseURL+"/health", wrapper.Health)
-	router.GET(options.BaseURL+"/v1/home/summary", wrapper.GetHomeSummary)
+	router.POST(options.BaseURL+"/v1/admin/close-day", wrapper.PostAdminCloseDay)
+	router.POST(options.BaseURL+"/v1/admin/close-month", wrapper.PostAdminCloseMonth)
+	router.POST(options.BaseURL+"/v1/admin/close-week", wrapper.PostAdminCloseWeek)
+	router.POST(options.BaseURL+"/v1/auth/oidc/google/callback", wrapper.PostAuthOidcGoogleCallback)
+	router.GET(options.BaseURL+"/v1/home", wrapper.GetHome)
 	router.GET(options.BaseURL+"/v1/me", wrapper.GetMe)
+	router.GET(options.BaseURL+"/v1/penalty-rules", wrapper.ListPenaltyRules)
+	router.POST(options.BaseURL+"/v1/penalty-rules", wrapper.PostPenaltyRule)
+	router.DELETE(options.BaseURL+"/v1/penalty-rules/:ruleId", wrapper.DeletePenaltyRule)
+	router.PATCH(options.BaseURL+"/v1/penalty-rules/:ruleId", wrapper.PatchPenaltyRule)
+	router.GET(options.BaseURL+"/v1/penalty-summaries/monthly", wrapper.GetPenaltySummaryMonthly)
+	router.GET(options.BaseURL+"/v1/tasks", wrapper.ListTasks)
+	router.POST(options.BaseURL+"/v1/tasks", wrapper.PostTask)
+	router.DELETE(options.BaseURL+"/v1/tasks/:taskId", wrapper.DeleteTask)
+	router.PATCH(options.BaseURL+"/v1/tasks/:taskId", wrapper.PatchTask)
+	router.POST(options.BaseURL+"/v1/tasks/:taskId/completions/toggle", wrapper.PostTaskCompletionToggle)
+	router.POST(options.BaseURL+"/v1/teams/invites", wrapper.PostTeamInvite)
+	router.POST(options.BaseURL+"/v1/teams/join", wrapper.PostTeamJoin)
 }
