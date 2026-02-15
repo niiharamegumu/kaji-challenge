@@ -36,281 +36,16 @@ const (
 	jstTZ         = "Asia/Tokyo"
 )
 
-type Handler struct {
-	store *store
+func NewRouter() *gin.Engine {
+	return NewRouterWithStore(newStore())
 }
 
-func NewRouter() *gin.Engine {
-	s := newStore()
-
+func NewRouterWithStore(s *store) *gin.Engine {
 	r := gin.Default()
 	r.Use(middleware.CORS())
 	r.Use(authMiddleware(s))
 	api.RegisterHandlers(r, &Handler{store: s})
 	return r
-}
-
-func (h *Handler) Health(c *gin.Context) {
-	c.JSON(http.StatusOK, api.HealthResponse{Status: "ok"})
-}
-
-func (h *Handler) GetAuthGoogleStart(c *gin.Context) {
-	res, err := h.store.startGoogleAuth()
-	if err != nil {
-		writeError(c, http.StatusInternalServerError, err.Error())
-		return
-	}
-	c.JSON(http.StatusOK, res)
-}
-
-func (h *Handler) GetAuthGoogleCallback(c *gin.Context, params api.GetAuthGoogleCallbackParams) {
-	exchangeCode, redirectTo, err := h.store.completeGoogleAuth(c.Request.Context(), params.Code, params.State, c.Query("mock_email"), c.Query("mock_name"), c.Query("mock_sub"))
-	if err != nil {
-		writeError(c, http.StatusBadRequest, err.Error())
-		return
-	}
-	if redirectTo != "" {
-		sep := "?"
-		if strings.Contains(redirectTo, "?") {
-			sep = "&"
-		}
-		c.Redirect(http.StatusFound, redirectTo+sep+"exchangeCode="+url.QueryEscape(exchangeCode))
-		return
-	}
-	c.JSON(http.StatusOK, api.AuthCallbackResponse{ExchangeCode: exchangeCode})
-}
-
-func (h *Handler) PostAuthSessionsExchange(c *gin.Context) {
-	var req api.AuthSessionExchangeRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		writeError(c, http.StatusBadRequest, "invalid request body")
-		return
-	}
-	session, err := h.store.exchangeSession(req.ExchangeCode)
-	if err != nil {
-		writeError(c, http.StatusBadRequest, err.Error())
-		return
-	}
-	c.JSON(http.StatusOK, session)
-}
-
-func (h *Handler) PostAuthLogout(c *gin.Context) {
-	token := c.GetString(authTokenKey)
-	if token == "" {
-		writeError(c, http.StatusUnauthorized, "missing bearer token")
-		return
-	}
-	h.store.revokeSession(token)
-	c.Status(http.StatusNoContent)
-}
-
-func (h *Handler) GetMe(c *gin.Context) {
-	user, memberships, err := h.store.currentUserAndMemberships(c.GetString(authUserIDKey))
-	if err != nil {
-		writeError(c, http.StatusUnauthorized, err.Error())
-		return
-	}
-	c.JSON(http.StatusOK, api.MeResponse{User: user.toAPI(), Memberships: memberships})
-}
-
-func (h *Handler) PostTeamInvite(c *gin.Context) {
-	userID := c.GetString(authUserIDKey)
-	var req api.CreateInviteRequest
-	if c.Request.ContentLength > 0 {
-		if err := c.ShouldBindJSON(&req); err != nil {
-			writeError(c, http.StatusBadRequest, "invalid request body")
-			return
-		}
-	}
-
-	invite, err := h.store.createInvite(userID, req)
-	if err != nil {
-		writeError(c, http.StatusBadRequest, err.Error())
-		return
-	}
-	c.JSON(http.StatusCreated, invite)
-}
-
-func (h *Handler) PostTeamJoin(c *gin.Context) {
-	userID := c.GetString(authUserIDKey)
-	var req api.JoinTeamRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		writeError(c, http.StatusBadRequest, "invalid request body")
-		return
-	}
-
-	res, err := h.store.joinTeam(userID, req.Code)
-	if err != nil {
-		writeError(c, http.StatusBadRequest, err.Error())
-		return
-	}
-	c.JSON(http.StatusOK, res)
-}
-
-func (h *Handler) ListTasks(c *gin.Context, params api.ListTasksParams) {
-	userID := c.GetString(authUserIDKey)
-	items, err := h.store.listTasks(userID, params.Type)
-	if err != nil {
-		writeError(c, http.StatusBadRequest, err.Error())
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"items": items})
-}
-
-func (h *Handler) PostTask(c *gin.Context) {
-	userID := c.GetString(authUserIDKey)
-	var req api.CreateTaskRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		writeError(c, http.StatusBadRequest, "invalid request body")
-		return
-	}
-
-	task, err := h.store.createTask(userID, req)
-	if err != nil {
-		writeError(c, http.StatusBadRequest, err.Error())
-		return
-	}
-	c.JSON(http.StatusCreated, task)
-}
-
-func (h *Handler) PatchTask(c *gin.Context, taskID string) {
-	userID := c.GetString(authUserIDKey)
-	var req api.UpdateTaskRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		writeError(c, http.StatusBadRequest, "invalid request body")
-		return
-	}
-	task, err := h.store.patchTask(userID, taskID, req)
-	if err != nil {
-		writeError(c, http.StatusBadRequest, err.Error())
-		return
-	}
-	c.JSON(http.StatusOK, task)
-}
-
-func (h *Handler) DeleteTask(c *gin.Context, taskID string) {
-	userID := c.GetString(authUserIDKey)
-	if err := h.store.deleteTask(userID, taskID); err != nil {
-		writeError(c, http.StatusBadRequest, err.Error())
-		return
-	}
-	c.Status(http.StatusNoContent)
-}
-
-func (h *Handler) PostTaskCompletionToggle(c *gin.Context, taskID string) {
-	userID := c.GetString(authUserIDKey)
-	var req api.ToggleTaskCompletionRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		writeError(c, http.StatusBadRequest, "invalid request body")
-		return
-	}
-
-	res, err := h.store.toggleTaskCompletion(userID, taskID, req.TargetDate.Time)
-	if err != nil {
-		writeError(c, http.StatusBadRequest, err.Error())
-		return
-	}
-	c.JSON(http.StatusOK, res)
-}
-
-func (h *Handler) ListPenaltyRules(c *gin.Context) {
-	userID := c.GetString(authUserIDKey)
-	items, err := h.store.listPenaltyRules(userID)
-	if err != nil {
-		writeError(c, http.StatusBadRequest, err.Error())
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"items": items})
-}
-
-func (h *Handler) PostPenaltyRule(c *gin.Context) {
-	userID := c.GetString(authUserIDKey)
-	var req api.CreatePenaltyRuleRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		writeError(c, http.StatusBadRequest, "invalid request body")
-		return
-	}
-
-	rule, err := h.store.createPenaltyRule(userID, req)
-	if err != nil {
-		writeError(c, http.StatusBadRequest, err.Error())
-		return
-	}
-	c.JSON(http.StatusCreated, rule)
-}
-
-func (h *Handler) PatchPenaltyRule(c *gin.Context, ruleID string) {
-	userID := c.GetString(authUserIDKey)
-	var req api.UpdatePenaltyRuleRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		writeError(c, http.StatusBadRequest, "invalid request body")
-		return
-	}
-	rule, err := h.store.patchPenaltyRule(userID, ruleID, req)
-	if err != nil {
-		writeError(c, http.StatusBadRequest, err.Error())
-		return
-	}
-	c.JSON(http.StatusOK, rule)
-}
-
-func (h *Handler) DeletePenaltyRule(c *gin.Context, ruleID string) {
-	userID := c.GetString(authUserIDKey)
-	if err := h.store.deletePenaltyRule(userID, ruleID); err != nil {
-		writeError(c, http.StatusBadRequest, err.Error())
-		return
-	}
-	c.Status(http.StatusNoContent)
-}
-
-func (h *Handler) GetHome(c *gin.Context) {
-	userID := c.GetString(authUserIDKey)
-	home, err := h.store.getHome(userID)
-	if err != nil {
-		writeError(c, http.StatusBadRequest, err.Error())
-		return
-	}
-	c.JSON(http.StatusOK, home)
-}
-
-func (h *Handler) GetPenaltySummaryMonthly(c *gin.Context, params api.GetPenaltySummaryMonthlyParams) {
-	userID := c.GetString(authUserIDKey)
-	summary, err := h.store.getMonthlySummary(userID, params.Month)
-	if err != nil {
-		writeError(c, http.StatusBadRequest, err.Error())
-		return
-	}
-	c.JSON(http.StatusOK, summary)
-}
-
-func (h *Handler) PostAdminCloseDay(c *gin.Context) {
-	userID := c.GetString(authUserIDKey)
-	res, err := h.store.closeDayForUser(userID)
-	if err != nil {
-		writeError(c, http.StatusBadRequest, err.Error())
-		return
-	}
-	c.JSON(http.StatusOK, res)
-}
-
-func (h *Handler) PostAdminCloseWeek(c *gin.Context) {
-	userID := c.GetString(authUserIDKey)
-	res, err := h.store.closeWeekForUser(userID)
-	if err != nil {
-		writeError(c, http.StatusBadRequest, err.Error())
-		return
-	}
-	c.JSON(http.StatusOK, res)
-}
-
-func (h *Handler) PostAdminCloseMonth(c *gin.Context) {
-	userID := c.GetString(authUserIDKey)
-	res, err := h.store.closeMonthForUser(userID)
-	if err != nil {
-		writeError(c, http.StatusBadRequest, err.Error())
-		return
-	}
-	c.JSON(http.StatusOK, res)
 }
 
 type oidcClient struct {
@@ -491,7 +226,7 @@ func authMiddleware(s *store) gin.HandlerFunc {
 			return
 		}
 
-		userID, ok := s.lookupSession(token)
+		userID, ok := s.lookupSession(c.Request.Context(), token)
 		if !ok {
 			writeError(c, http.StatusUnauthorized, "invalid bearer token")
 			c.Abort()
@@ -503,8 +238,7 @@ func authMiddleware(s *store) gin.HandlerFunc {
 	}
 }
 
-func (s *store) lookupSession(token string) (string, bool) {
-	ctx := context.Background()
+func (s *store) lookupSession(ctx context.Context, token string) (string, bool) {
 	rec, err := s.q.GetSessionByToken(ctx, token)
 	if err != nil {
 		return "", false
@@ -512,7 +246,7 @@ func (s *store) lookupSession(token string) (string, bool) {
 	return rec.UserID, true
 }
 
-func (s *store) startGoogleAuth() (api.AuthStartResponse, error) {
+func (s *store) startGoogleAuth(ctx context.Context) (api.AuthStartResponse, error) {
 	state, err := randomToken()
 	if err != nil {
 		return api.AuthStartResponse{}, err
@@ -527,7 +261,7 @@ func (s *store) startGoogleAuth() (api.AuthStartResponse, error) {
 	}
 	expiresAt := time.Now().In(s.loc).Add(10 * time.Minute)
 	if s.q != nil {
-		if err := s.q.InsertAuthRequest(context.Background(), dbsqlc.InsertAuthRequestParams{
+		if err := s.q.InsertAuthRequest(ctx, dbsqlc.InsertAuthRequestParams{
 			State:        state,
 			Nonce:        nonce,
 			CodeVerifier: verifier,
@@ -545,7 +279,7 @@ func (s *store) startGoogleAuth() (api.AuthStartResponse, error) {
 		s.mu.Unlock()
 	}
 	s.mu.Lock()
-	authURL, err := s.buildAuthorizationURLLocked(state, nonce, verifier)
+	authURL, err := s.buildAuthorizationURLLocked(ctx, state, nonce, verifier)
 	s.mu.Unlock()
 	if err != nil {
 		return api.AuthStartResponse{}, err
@@ -680,7 +414,7 @@ func (s *store) exchangeAndVerifyIDToken(ctx context.Context, code string, req a
 	return claims, nil
 }
 
-func (s *store) buildAuthorizationURLLocked(state, nonce, verifier string) (string, error) {
+func (s *store) buildAuthorizationURLLocked(ctx context.Context, state, nonce, verifier string) (string, error) {
 	if !oidcConfigured() {
 		if oidcStrictMode() {
 			return "", errors.New("OIDC_STRICT_MODE=true requires OIDC configuration")
@@ -697,7 +431,7 @@ func (s *store) buildAuthorizationURLLocked(state, nonce, verifier string) (stri
 		)
 		return mockURL, nil
 	}
-	client, err := s.ensureOIDCClientLocked(context.Background())
+	client, err := s.ensureOIDCClientLocked(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -785,8 +519,7 @@ func pkceChallenge(verifier string) string {
 	return base64.RawURLEncoding.EncodeToString(sum[:])
 }
 
-func (s *store) exchangeSession(exchangeCode string) (api.AuthSessionResponse, error) {
-	ctx := context.Background()
+func (s *store) exchangeSession(ctx context.Context, exchangeCode string) (api.AuthSessionResponse, error) {
 	rec, err := s.q.GetExchangeCode(ctx, exchangeCode)
 	if err != nil {
 		return api.AuthSessionResponse{}, errors.New("invalid exchange code")
@@ -821,8 +554,8 @@ func (s *store) exchangeSession(exchangeCode string) (api.AuthSessionResponse, e
 	return api.AuthSessionResponse{AccessToken: token, User: user.toAPI()}, nil
 }
 
-func (s *store) revokeSession(token string) {
-	_ = s.q.DeleteSession(context.Background(), token)
+func (s *store) revokeSession(ctx context.Context, token string) {
+	_ = s.q.DeleteSession(ctx, token)
 }
 
 func (s *store) getOrCreateUserLocked(ctx context.Context, email, displayName string) (string, userRecord, error) {
@@ -871,8 +604,7 @@ func (s *store) getOrCreateUserLocked(ctx context.Context, email, displayName st
 	return user.ID, user, nil
 }
 
-func (s *store) currentUserAndMemberships(userID string) (userRecord, []api.TeamMembership, error) {
-	ctx := context.Background()
+func (s *store) currentUserAndMemberships(ctx context.Context, userID string) (userRecord, []api.TeamMembership, error) {
 	row, err := s.q.GetUserByID(ctx, userID)
 	if err != nil {
 		return userRecord{}, nil, errors.New("user not found")
@@ -897,8 +629,7 @@ func (s *store) currentUserAndMemberships(userID string) (userRecord, []api.Team
 	}, memberships, nil
 }
 
-func (s *store) createInvite(userID string, req api.CreateInviteRequest) (api.InviteCodeResponse, error) {
-	ctx := context.Background()
+func (s *store) createInvite(ctx context.Context, userID string, req api.CreateInviteRequest) (api.InviteCodeResponse, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return api.InviteCodeResponse{}, err
@@ -942,8 +673,7 @@ func (s *store) createInvite(userID string, req api.CreateInviteRequest) (api.In
 	}, nil
 }
 
-func (s *store) joinTeam(userID, code string) (api.JoinTeamResponse, error) {
-	ctx := context.Background()
+func (s *store) joinTeam(ctx context.Context, userID, code string) (api.JoinTeamResponse, error) {
 	code = strings.ToUpper(strings.TrimSpace(code))
 	invite, err := s.q.GetInviteCode(ctx, code)
 	if err != nil {
@@ -985,8 +715,7 @@ func (s *store) joinTeam(userID, code string) (api.JoinTeamResponse, error) {
 	return api.JoinTeamResponse{TeamId: invite.TeamID}, nil
 }
 
-func (s *store) listTasks(userID string, filter *api.TaskType) ([]api.Task, error) {
-	ctx := context.Background()
+func (s *store) listTasks(ctx context.Context, userID string, filter *api.TaskType) ([]api.Task, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -1006,8 +735,7 @@ func (s *store) listTasks(userID string, filter *api.TaskType) ([]api.Task, erro
 	return items, nil
 }
 
-func (s *store) createTask(userID string, req api.CreateTaskRequest) (api.Task, error) {
-	ctx := context.Background()
+func (s *store) createTask(ctx context.Context, userID string, req api.CreateTaskRequest) (api.Task, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return api.Task{}, err
@@ -1070,8 +798,7 @@ func (s *store) createTask(userID string, req api.CreateTaskRequest) (api.Task, 
 	return task.toAPI(), nil
 }
 
-func (s *store) patchTask(userID, taskID string, req api.UpdateTaskRequest) (api.Task, error) {
-	ctx := context.Background()
+func (s *store) patchTask(ctx context.Context, userID, taskID string, req api.UpdateTaskRequest) (api.Task, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return api.Task{}, err
@@ -1130,8 +857,7 @@ func (s *store) patchTask(userID, taskID string, req api.UpdateTaskRequest) (api
 	return task.toAPI(), nil
 }
 
-func (s *store) deleteTask(userID, taskID string) error {
-	ctx := context.Background()
+func (s *store) deleteTask(ctx context.Context, userID, taskID string) error {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return err
@@ -1146,8 +872,7 @@ func (s *store) deleteTask(userID, taskID string) error {
 	return s.q.DeleteTask(ctx, taskID)
 }
 
-func (s *store) toggleTaskCompletion(userID, taskID string, target time.Time) (api.TaskCompletionResponse, error) {
-	ctx := context.Background()
+func (s *store) toggleTaskCompletion(ctx context.Context, userID, taskID string, target time.Time) (api.TaskCompletionResponse, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return api.TaskCompletionResponse{}, err
@@ -1214,8 +939,7 @@ func (s *store) toggleTaskCompletion(userID, taskID string, target time.Time) (a
 	}, nil
 }
 
-func (s *store) listPenaltyRules(userID string) ([]api.PenaltyRule, error) {
-	ctx := context.Background()
+func (s *store) listPenaltyRules(ctx context.Context, userID string) ([]api.PenaltyRule, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -1231,8 +955,7 @@ func (s *store) listPenaltyRules(userID string) ([]api.PenaltyRule, error) {
 	return items, nil
 }
 
-func (s *store) createPenaltyRule(userID string, req api.CreatePenaltyRuleRequest) (api.PenaltyRule, error) {
-	ctx := context.Background()
+func (s *store) createPenaltyRule(ctx context.Context, userID string, req api.CreatePenaltyRuleRequest) (api.PenaltyRule, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return api.PenaltyRule{}, err
@@ -1271,8 +994,7 @@ func (s *store) createPenaltyRule(userID string, req api.CreatePenaltyRuleReques
 	return r.toAPI(), nil
 }
 
-func (s *store) patchPenaltyRule(userID, ruleID string, req api.UpdatePenaltyRuleRequest) (api.PenaltyRule, error) {
-	ctx := context.Background()
+func (s *store) patchPenaltyRule(ctx context.Context, userID, ruleID string, req api.UpdatePenaltyRuleRequest) (api.PenaltyRule, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return api.PenaltyRule{}, err
@@ -1315,8 +1037,7 @@ func (s *store) patchPenaltyRule(userID, ruleID string, req api.UpdatePenaltyRul
 	return rule.toAPI(), nil
 }
 
-func (s *store) deletePenaltyRule(userID, ruleID string) error {
-	ctx := context.Background()
+func (s *store) deletePenaltyRule(ctx context.Context, userID, ruleID string) error {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return err
@@ -1328,8 +1049,7 @@ func (s *store) deletePenaltyRule(userID, ruleID string) error {
 	return s.q.DeletePenaltyRule(ctx, ruleID)
 }
 
-func (s *store) getHome(userID string) (api.HomeResponse, error) {
-	ctx := context.Background()
+func (s *store) getHome(ctx context.Context, userID string) (api.HomeResponse, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return api.HomeResponse{}, err
@@ -1395,8 +1115,7 @@ func (s *store) getHome(userID string) (api.HomeResponse, error) {
 	}, nil
 }
 
-func (s *store) getMonthlySummary(userID string, month *string) (api.MonthlyPenaltySummary, error) {
-	ctx := context.Background()
+func (s *store) getMonthlySummary(ctx context.Context, userID string, month *string) (api.MonthlyPenaltySummary, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return api.MonthlyPenaltySummary{}, err
@@ -1419,8 +1138,7 @@ func (s *store) getMonthlySummary(userID string, month *string) (api.MonthlyPena
 	}.toAPI(), nil
 }
 
-func (s *store) closeDayForUser(userID string) (api.CloseResponse, error) {
-	ctx := context.Background()
+func (s *store) closeDayForUser(ctx context.Context, userID string) (api.CloseResponse, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return api.CloseResponse{}, err
@@ -1432,8 +1150,7 @@ func (s *store) closeDayForUser(userID string) (api.CloseResponse, error) {
 	return api.CloseResponse{ClosedAt: now, Month: now.Format("2006-01")}, nil
 }
 
-func (s *store) closeWeekForUser(userID string) (api.CloseResponse, error) {
-	ctx := context.Background()
+func (s *store) closeWeekForUser(ctx context.Context, userID string) (api.CloseResponse, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return api.CloseResponse{}, err
@@ -1445,8 +1162,7 @@ func (s *store) closeWeekForUser(userID string) (api.CloseResponse, error) {
 	return api.CloseResponse{ClosedAt: now, Month: now.Format("2006-01")}, nil
 }
 
-func (s *store) closeMonthForUser(userID string) (api.CloseResponse, error) {
-	ctx := context.Background()
+func (s *store) closeMonthForUser(ctx context.Context, userID string) (api.CloseResponse, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return api.CloseResponse{}, err
@@ -1881,8 +1597,4 @@ func randomToken() (string, error) {
 
 func toDate(t time.Time) openapi_types.Date {
 	return openapi_types.Date{Time: dateOnly(t, t.Location())}
-}
-
-func writeError(c *gin.Context, status int, message string) {
-	c.JSON(status, gin.H{"message": message})
 }
