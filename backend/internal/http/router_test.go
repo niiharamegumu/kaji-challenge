@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -212,6 +213,9 @@ func doRequest(t *testing.T, r http.Handler, method, path, body, token string) *
 
 func newTestRouter(t *testing.T) *gin.Engine {
 	t.Helper()
+	if strings.TrimSpace(os.Getenv("DATABASE_URL")) == "" {
+		t.Skip("DATABASE_URL is required for router tests")
+	}
 	t.Setenv("OIDC_STRICT_MODE", "false")
 	t.Setenv("OIDC_ISSUER_URL", "")
 	t.Setenv("OIDC_CLIENT_ID", "")

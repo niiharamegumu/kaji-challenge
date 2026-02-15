@@ -4,11 +4,11 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -19,7 +19,11 @@ import (
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-gonic/gin"
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
+	dbsqlc "github.com/megu/kaji-challenge/backend/internal/db/sqlc"
 	"github.com/megu/kaji-challenge/backend/internal/http/middleware"
 	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -331,9 +335,8 @@ type store struct {
 	mu sync.Mutex
 
 	loc *time.Location
-	db  *sql.DB
-
-	ids int64
+	db  *pgxpool.Pool
+	q   *dbsqlc.Queries
 
 	users       map[string]userRecord
 	usersByMail map[string]string
@@ -353,7 +356,8 @@ type store struct {
 
 	authRequests  map[string]authRequest
 	exchangeCodes map[string]exchangeCodeRecord
-	oidc          *oidcClient
+
+	oidc *oidcClient
 }
 
 type userRecord struct {
@@ -445,23 +449,20 @@ func newStore() *store {
 func (s *store) initPersistence() error {
 	databaseURL := strings.TrimSpace(os.Getenv("DATABASE_URL"))
 	if databaseURL == "" {
-		return nil
-	}
-	db, err := sql.Open("pgx", databaseURL)
-	if err != nil {
-		return err
+		return errors.New("DATABASE_URL is required")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := db.PingContext(ctx); err != nil {
+	db, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		return err
+	}
+	if err := db.Ping(ctx); err != nil {
 		return err
 	}
 	s.db = db
+	s.q = dbsqlc.New(db)
 	return nil
-}
-
-func (s *store) persistLocked() {
-	// 永続化は今後repository層へ移行予定。
 }
 
 func authMiddleware(s *store) gin.HandlerFunc {
@@ -503,16 +504,15 @@ func authMiddleware(s *store) gin.HandlerFunc {
 }
 
 func (s *store) lookupSession(token string) (string, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	userID, ok := s.sessions[token]
-	return userID, ok
+	ctx := context.Background()
+	rec, err := s.q.GetSessionByToken(ctx, token)
+	if err != nil {
+		return "", false
+	}
+	return rec.UserID, true
 }
 
 func (s *store) startGoogleAuth() (api.AuthStartResponse, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	state, err := randomToken()
 	if err != nil {
 		return api.AuthStartResponse{}, err
@@ -525,35 +525,67 @@ func (s *store) startGoogleAuth() (api.AuthStartResponse, error) {
 	if err != nil {
 		return api.AuthStartResponse{}, err
 	}
-	s.authRequests[state] = authRequest{
-		Nonce:        nonce,
-		CodeVerifier: verifier,
-		ExpiresAt:    time.Now().In(s.loc).Add(10 * time.Minute),
+	expiresAt := time.Now().In(s.loc).Add(10 * time.Minute)
+	if s.q != nil {
+		if err := s.q.InsertAuthRequest(context.Background(), dbsqlc.InsertAuthRequestParams{
+			State:        state,
+			Nonce:        nonce,
+			CodeVerifier: verifier,
+			ExpiresAt:    toPgTimestamptz(expiresAt),
+		}); err != nil {
+			return api.AuthStartResponse{}, err
+		}
+	} else {
+		s.mu.Lock()
+		s.authRequests[state] = authRequest{
+			Nonce:        nonce,
+			CodeVerifier: verifier,
+			ExpiresAt:    expiresAt,
+		}
+		s.mu.Unlock()
 	}
+	s.mu.Lock()
 	authURL, err := s.buildAuthorizationURLLocked(state, nonce, verifier)
+	s.mu.Unlock()
 	if err != nil {
 		return api.AuthStartResponse{}, err
 	}
-	s.persistLocked()
 	return api.AuthStartResponse{AuthorizationUrl: authURL}, nil
 }
 
 func (s *store) completeGoogleAuth(ctx context.Context, code, state, mockEmail, mockName, mockSub string) (string, string, error) {
-	s.mu.Lock()
-	req, ok := s.authRequests[state]
-	if !ok {
-		s.mu.Unlock()
-		return "", "", errors.New("invalid state")
-	}
-	if time.Now().In(s.loc).After(req.ExpiresAt) {
+	var req authRequest
+	if s.q != nil {
+		row, err := s.q.GetAuthRequest(ctx, state)
+		if err != nil {
+			return "", "", errors.New("invalid state")
+		}
+		req = authRequest{
+			Nonce:        row.Nonce,
+			CodeVerifier: row.CodeVerifier,
+			ExpiresAt:    row.ExpiresAt.Time.In(s.loc),
+		}
+		if time.Now().In(s.loc).After(req.ExpiresAt) {
+			_ = s.q.DeleteAuthRequest(ctx, state)
+			return "", "", errors.New("state expired")
+		}
+		_ = s.q.DeleteAuthRequest(ctx, state)
+	} else {
+		s.mu.Lock()
+		var ok bool
+		req, ok = s.authRequests[state]
+		if !ok {
+			s.mu.Unlock()
+			return "", "", errors.New("invalid state")
+		}
+		if time.Now().In(s.loc).After(req.ExpiresAt) {
+			delete(s.authRequests, state)
+			s.mu.Unlock()
+			return "", "", errors.New("state expired")
+		}
 		delete(s.authRequests, state)
-		s.persistLocked()
 		s.mu.Unlock()
-		return "", "", errors.New("state expired")
 	}
-	delete(s.authRequests, state)
-	s.persistLocked()
-	s.mu.Unlock()
 
 	email := strings.TrimSpace(strings.ToLower(mockEmail))
 	name := strings.TrimSpace(mockName)
@@ -584,15 +616,30 @@ func (s *store) completeGoogleAuth(ctx context.Context, code, state, mockEmail, 
 	_ = sub
 
 	s.mu.Lock()
-	userID, user := s.getOrCreateUserLocked(email, name)
+	userID, user, getErr := s.getOrCreateUserLocked(ctx, email, name)
+	if getErr != nil {
+		s.mu.Unlock()
+		return "", "", getErr
+	}
 	exchangeCode, err := randomToken()
 	if err != nil {
 		s.mu.Unlock()
 		return "", "", err
 	}
-	s.exchangeCodes[exchangeCode] = exchangeCodeRecord{UserID: userID, ExpiresAt: time.Now().In(s.loc).Add(2 * time.Minute)}
-	s.users[userID] = user
-	s.persistLocked()
+	expiresAt := time.Now().In(s.loc).Add(2 * time.Minute)
+	if s.q != nil {
+		if err := s.q.InsertExchangeCode(ctx, dbsqlc.InsertExchangeCodeParams{
+			Code:      exchangeCode,
+			UserID:    userID,
+			ExpiresAt: toPgTimestamptz(expiresAt),
+		}); err != nil {
+			s.mu.Unlock()
+			return "", "", err
+		}
+	} else {
+		s.exchangeCodes[exchangeCode] = exchangeCodeRecord{UserID: userID, ExpiresAt: expiresAt}
+		s.users[userID] = user
+	}
 	s.mu.Unlock()
 
 	redirectTo := strings.TrimSpace(os.Getenv("FRONTEND_CALLBACK_URL"))
@@ -739,80 +786,120 @@ func pkceChallenge(verifier string) string {
 }
 
 func (s *store) exchangeSession(exchangeCode string) (api.AuthSessionResponse, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	rec, ok := s.exchangeCodes[exchangeCode]
-	if !ok {
+	ctx := context.Background()
+	rec, err := s.q.GetExchangeCode(ctx, exchangeCode)
+	if err != nil {
 		return api.AuthSessionResponse{}, errors.New("invalid exchange code")
 	}
-	if rec.Used || time.Now().In(s.loc).After(rec.ExpiresAt) {
-		delete(s.exchangeCodes, exchangeCode)
-		s.persistLocked()
+	if rec.UsedAt.Valid || time.Now().In(s.loc).After(rec.ExpiresAt.Time.In(s.loc)) {
+		_ = s.q.ConsumeExchangeCode(ctx, exchangeCode)
 		return api.AuthSessionResponse{}, errors.New("exchange code expired")
 	}
-	user, ok := s.users[rec.UserID]
-	if !ok {
+	userRow, err := s.q.GetUserByID(ctx, rec.UserID)
+	if err != nil {
 		return api.AuthSessionResponse{}, errors.New("user not found")
 	}
 	token, err := randomToken()
 	if err != nil {
 		return api.AuthSessionResponse{}, err
 	}
-	rec.Used = true
-	s.exchangeCodes[exchangeCode] = rec
-	s.sessions[token] = rec.UserID
-	s.persistLocked()
-
+	if err := s.q.ConsumeExchangeCode(ctx, exchangeCode); err != nil {
+		return api.AuthSessionResponse{}, errors.New("exchange code expired")
+	}
+	if err := s.q.CreateSession(ctx, dbsqlc.CreateSessionParams{
+		Token:  token,
+		UserID: rec.UserID,
+	}); err != nil {
+		return api.AuthSessionResponse{}, err
+	}
+	user := userRecord{
+		ID:        userRow.ID,
+		Email:     userRow.Email,
+		Name:      userRow.DisplayName,
+		CreatedAt: userRow.CreatedAt.Time.In(s.loc),
+	}
 	return api.AuthSessionResponse{AccessToken: token, User: user.toAPI()}, nil
 }
 
 func (s *store) revokeSession(token string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	delete(s.sessions, token)
-	s.persistLocked()
+	_ = s.q.DeleteSession(context.Background(), token)
 }
 
-func (s *store) getOrCreateUserLocked(email, displayName string) (string, userRecord) {
-	userID, ok := s.usersByMail[email]
+func (s *store) getOrCreateUserLocked(ctx context.Context, email, displayName string) (string, userRecord, error) {
 	now := time.Now().In(s.loc)
-	if !ok {
-		userID = s.nextID("usr")
-		user := userRecord{ID: userID, Email: email, Name: displayName, CreatedAt: now}
-		s.users[userID] = user
-		s.usersByMail[email] = userID
-		teamID := s.nextID("team")
-		s.memberships[userID] = []membership{{TeamID: teamID, Role: api.Owner}}
-		return userID, user
+	row, err := s.q.GetUserByEmail(ctx, email)
+	if err == nil {
+		if displayName != "" && row.DisplayName != displayName {
+			if err := s.q.UpdateUserDisplayName(ctx, dbsqlc.UpdateUserDisplayNameParams{
+				ID:          row.ID,
+				DisplayName: displayName,
+			}); err != nil {
+				return "", userRecord{}, err
+			}
+			row.DisplayName = displayName
+		}
+		return row.ID, userRecord{ID: row.ID, Email: row.Email, Name: row.DisplayName, CreatedAt: row.CreatedAt.Time.In(s.loc)}, nil
 	}
-	user := s.users[userID]
-	if displayName != "" && user.Name != displayName {
-		user.Name = displayName
-		s.users[userID] = user
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return "", userRecord{}, err
 	}
-	return userID, user
+	userID := s.nextID("usr")
+	teamID := s.nextID("team")
+	user := userRecord{ID: userID, Email: email, Name: displayName, CreatedAt: now}
+	if err := s.q.CreateUser(ctx, dbsqlc.CreateUserParams{
+		ID:          user.ID,
+		Email:       user.Email,
+		DisplayName: user.Name,
+		CreatedAt:   toPgTimestamptz(user.CreatedAt),
+	}); err != nil {
+		return "", userRecord{}, err
+	}
+	if err := s.q.CreateTeam(ctx, dbsqlc.CreateTeamParams{
+		ID:        teamID,
+		CreatedAt: toPgTimestamptz(now),
+	}); err != nil {
+		return "", userRecord{}, err
+	}
+	if err := s.q.AddTeamMember(ctx, dbsqlc.AddTeamMemberParams{
+		TeamID:    teamID,
+		UserID:    user.ID,
+		Role:      string(api.Owner),
+		CreatedAt: toPgTimestamptz(now),
+	}); err != nil {
+		return "", userRecord{}, err
+	}
+	return user.ID, user, nil
 }
 
 func (s *store) currentUserAndMemberships(userID string) (userRecord, []api.TeamMembership, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	user, ok := s.users[userID]
-	if !ok {
+	ctx := context.Background()
+	row, err := s.q.GetUserByID(ctx, userID)
+	if err != nil {
 		return userRecord{}, nil, errors.New("user not found")
 	}
-	memberships := make([]api.TeamMembership, 0, len(s.memberships[userID]))
-	for _, m := range s.memberships[userID] {
-		memberships = append(memberships, api.TeamMembership{TeamId: m.TeamID, Role: m.Role})
+	mRows, err := s.q.ListMembershipsByUserID(ctx, userID)
+	if err != nil {
+		return userRecord{}, nil, err
 	}
-	return user, memberships, nil
+	memberships := make([]api.TeamMembership, 0, len(mRows))
+	for _, m := range mRows {
+		role := api.Member
+		if m.Role == string(api.Owner) {
+			role = api.Owner
+		}
+		memberships = append(memberships, api.TeamMembership{TeamId: m.TeamID, Role: role})
+	}
+	return userRecord{
+		ID:        row.ID,
+		Email:     row.Email,
+		Name:      row.DisplayName,
+		CreatedAt: row.CreatedAt.Time.In(s.loc),
+	}, memberships, nil
 }
 
 func (s *store) createInvite(userID string, req api.CreateInviteRequest) (api.InviteCodeResponse, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	teamID, err := s.primaryTeamLocked(userID)
+	ctx := context.Background()
+	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return api.InviteCodeResponse{}, err
 	}
@@ -825,86 +912,103 @@ func (s *store) createInvite(userID string, req api.CreateInviteRequest) (api.In
 	if req.ExpiresInHours != nil {
 		expiresInHours = *req.ExpiresInHours
 	}
+	maxUses32, err := safeInt32(maxUses, "max uses")
+	if err != nil {
+		return api.InviteCodeResponse{}, err
+	}
 
 	raw, err := randomToken()
 	if err != nil {
 		return api.InviteCodeResponse{}, err
 	}
 	code := strings.ToUpper(raw[:10])
-	invite := inviteCode{
+	expiresAt := time.Now().In(s.loc).Add(time.Duration(expiresInHours) * time.Hour)
+	if err := s.q.CreateInviteCode(ctx, dbsqlc.CreateInviteCodeParams{
 		Code:      code,
 		TeamID:    teamID,
-		ExpiresAt: time.Now().In(s.loc).Add(time.Duration(expiresInHours) * time.Hour),
-		MaxUses:   maxUses,
+		ExpiresAt: toPgTimestamptz(expiresAt),
+		MaxUses:   maxUses32,
 		UsedCount: 0,
+	}); err != nil {
+		return api.InviteCodeResponse{}, err
 	}
-	s.invites[code] = invite
-	s.persistLocked()
 
 	return api.InviteCodeResponse{
 		Code:      code,
-		TeamId:    invite.TeamID,
-		ExpiresAt: invite.ExpiresAt,
-		MaxUses:   invite.MaxUses,
-		UsedCount: invite.UsedCount,
+		TeamId:    teamID,
+		ExpiresAt: expiresAt,
+		MaxUses:   maxUses,
+		UsedCount: 0,
 	}, nil
 }
 
 func (s *store) joinTeam(userID, code string) (api.JoinTeamResponse, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
+	ctx := context.Background()
 	code = strings.ToUpper(strings.TrimSpace(code))
-	invite, ok := s.invites[code]
-	if !ok {
+	invite, err := s.q.GetInviteCode(ctx, code)
+	if err != nil {
 		return api.JoinTeamResponse{}, errors.New("invite code not found")
 	}
 	now := time.Now().In(s.loc)
-	if invite.ExpiresAt.Before(now) {
+	if invite.ExpiresAt.Time.In(s.loc).Before(now) {
 		return api.JoinTeamResponse{}, errors.New("invite code expired")
 	}
 	if invite.UsedCount >= invite.MaxUses {
 		return api.JoinTeamResponse{}, errors.New("invite code max uses exceeded")
 	}
 
-	for _, m := range s.memberships[userID] {
+	memberships, err := s.q.ListMembershipsByUserID(ctx, userID)
+	if err != nil {
+		return api.JoinTeamResponse{}, err
+	}
+	for _, m := range memberships {
 		if m.TeamID == invite.TeamID {
 			return api.JoinTeamResponse{TeamId: invite.TeamID}, nil
 		}
 	}
 
-	s.memberships[userID] = append(s.memberships[userID], membership{TeamID: invite.TeamID, Role: api.Member})
-	invite.UsedCount++
-	s.invites[code] = invite
-	s.persistLocked()
+	if err := s.q.AddTeamMember(ctx, dbsqlc.AddTeamMemberParams{
+		TeamID:    invite.TeamID,
+		UserID:    userID,
+		Role:      string(api.Member),
+		CreatedAt: toPgTimestamptz(now),
+	}); err != nil {
+		return api.JoinTeamResponse{}, err
+	}
+	rows, err := s.q.IncrementInviteCodeUsedCount(ctx, code)
+	if err != nil {
+		return api.JoinTeamResponse{}, err
+	}
+	if rows == 0 {
+		return api.JoinTeamResponse{}, errors.New("invite code max uses exceeded")
+	}
 	return api.JoinTeamResponse{TeamId: invite.TeamID}, nil
 }
 
 func (s *store) listTasks(userID string, filter *api.TaskType) ([]api.Task, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	teamID, err := s.primaryTeamLocked(userID)
+	ctx := context.Background()
+	teamID, err := s.primaryTeamLocked(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.q.ListTasksByTeamID(ctx, teamID)
 	if err != nil {
 		return nil, err
 	}
 	items := []api.Task{}
-	for _, t := range s.tasks {
-		if t.TeamID != teamID {
-			continue
-		}
+	for _, row := range rows {
+		t := taskFromListRow(row, s.loc)
 		if filter != nil && t.Type != *filter {
 			continue
 		}
 		items = append(items, t.toAPI())
 	}
-	sort.Slice(items, func(i, j int) bool { return items[i].CreatedAt.Before(items[j].CreatedAt) })
 	return items, nil
 }
 
 func (s *store) createTask(userID string, req api.CreateTaskRequest) (api.Task, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	teamID, err := s.primaryTeamLocked(userID)
+	ctx := context.Background()
+	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return api.Task{}, err
 	}
@@ -920,14 +1024,23 @@ func (s *store) createTask(userID string, req api.CreateTaskRequest) (api.Task, 
 	if req.Type == api.Daily {
 		required = 1
 	}
+	penalty32, err := safeInt32(req.PenaltyPoints, "penalty points")
+	if err != nil {
+		return api.Task{}, err
+	}
+	required32, err := safeInt32(required, "required completions")
+	if err != nil {
+		return api.Task{}, err
+	}
 
 	active := true
 	if req.IsActive != nil {
 		active = *req.IsActive
 	}
 	now := time.Now().In(s.loc)
+	taskID := s.nextID("tsk")
 	task := taskRecord{
-		ID:         s.nextID("tsk"),
+		ID:         taskID,
 		TeamID:     teamID,
 		Title:      title,
 		Notes:      req.Notes,
@@ -939,20 +1052,36 @@ func (s *store) createTask(userID string, req api.CreateTaskRequest) (api.Task, 
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	}
-	s.tasks[task.ID] = task
-	s.persistLocked()
+	if err := s.q.CreateTask(ctx, dbsqlc.CreateTaskParams{
+		ID:                         task.ID,
+		TeamID:                     task.TeamID,
+		Title:                      task.Title,
+		Notes:                      textFromPtr(task.Notes),
+		Type:                       string(task.Type),
+		PenaltyPoints:              penalty32,
+		Column7:                    uuidStringFromPtr(task.AssigneeID),
+		IsActive:                   task.IsActive,
+		RequiredCompletionsPerWeek: required32,
+		CreatedAt:                  toPgTimestamptz(task.CreatedAt),
+		UpdatedAt:                  toPgTimestamptz(task.UpdatedAt),
+	}); err != nil {
+		return api.Task{}, err
+	}
 	return task.toAPI(), nil
 }
 
 func (s *store) patchTask(userID, taskID string, req api.UpdateTaskRequest) (api.Task, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	teamID, err := s.primaryTeamLocked(userID)
+	ctx := context.Background()
+	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return api.Task{}, err
 	}
-	task, ok := s.tasks[taskID]
-	if !ok || task.TeamID != teamID {
+	row, err := s.q.GetTaskByID(ctx, taskID)
+	if err != nil {
+		return api.Task{}, errors.New("task not found")
+	}
+	task := taskFromGetRow(row, s.loc)
+	if task.TeamID != teamID {
 		return api.Task{}, errors.New("task not found")
 	}
 	if req.Title != nil {
@@ -978,41 +1107,57 @@ func (s *store) patchTask(userID, taskID string, req api.UpdateTaskRequest) (api
 		task.Required = *req.RequiredCompletionsPerWeek
 	}
 	task.UpdatedAt = time.Now().In(s.loc)
-	s.tasks[task.ID] = task
-	s.persistLocked()
+	penalty32, err := safeInt32(task.Penalty, "penalty points")
+	if err != nil {
+		return api.Task{}, err
+	}
+	required32, err := safeInt32(task.Required, "required completions")
+	if err != nil {
+		return api.Task{}, err
+	}
+	if err := s.q.UpdateTask(ctx, dbsqlc.UpdateTaskParams{
+		ID:                         task.ID,
+		Title:                      task.Title,
+		Notes:                      textFromPtr(task.Notes),
+		PenaltyPoints:              penalty32,
+		Column5:                    uuidStringFromPtr(task.AssigneeID),
+		IsActive:                   task.IsActive,
+		RequiredCompletionsPerWeek: required32,
+		UpdatedAt:                  toPgTimestamptz(task.UpdatedAt),
+	}); err != nil {
+		return api.Task{}, err
+	}
 	return task.toAPI(), nil
 }
 
 func (s *store) deleteTask(userID, taskID string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	teamID, err := s.primaryTeamLocked(userID)
+	ctx := context.Background()
+	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return err
 	}
-	task, ok := s.tasks[taskID]
-	if !ok || task.TeamID != teamID {
+	task, err := s.q.GetTaskByID(ctx, taskID)
+	if err != nil || task.TeamID != teamID {
 		return errors.New("task not found")
 	}
-	delete(s.tasks, taskID)
-	for key := range s.completions {
-		if strings.HasPrefix(key, taskID+"|") {
-			delete(s.completions, key)
-		}
+	if err := s.q.DeleteTaskCompletionsByTaskID(ctx, taskID); err != nil {
+		return err
 	}
-	s.persistLocked()
-	return nil
+	return s.q.DeleteTask(ctx, taskID)
 }
 
 func (s *store) toggleTaskCompletion(userID, taskID string, target time.Time) (api.TaskCompletionResponse, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	teamID, err := s.primaryTeamLocked(userID)
+	ctx := context.Background()
+	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return api.TaskCompletionResponse{}, err
 	}
-	task, ok := s.tasks[taskID]
-	if !ok || task.TeamID != teamID {
+	row, err := s.q.GetTaskByID(ctx, taskID)
+	if err != nil {
+		return api.TaskCompletionResponse{}, errors.New("task not found")
+	}
+	task := taskFromGetRow(row, s.loc)
+	if task.TeamID != teamID {
 		return api.TaskCompletionResponse{}, errors.New("task not found")
 	}
 	if !task.IsActive {
@@ -1032,16 +1177,35 @@ func (s *store) toggleTaskCompletion(userID, taskID string, target time.Time) (a
 		}
 	}
 
-	key := completionKey(taskID, targetDate)
-	completed := !s.completions[key]
+	targetPg := toPgDate(targetDate)
+	exists, err := s.q.HasTaskCompletion(ctx, dbsqlc.HasTaskCompletionParams{
+		TaskID:     taskID,
+		TargetDate: targetPg,
+	})
+	if err != nil {
+		return api.TaskCompletionResponse{}, err
+	}
+	completed := !exists
 	if completed {
-		s.completions[key] = true
+		if err := s.q.CreateTaskCompletion(ctx, dbsqlc.CreateTaskCompletionParams{
+			TaskID:     taskID,
+			TargetDate: targetPg,
+		}); err != nil {
+			return api.TaskCompletionResponse{}, err
+		}
 	} else {
-		delete(s.completions, key)
+		if err := s.q.DeleteTaskCompletion(ctx, dbsqlc.DeleteTaskCompletionParams{
+			TaskID:     taskID,
+			TargetDate: targetPg,
+		}); err != nil {
+			return api.TaskCompletionResponse{}, err
+		}
 	}
 
-	count := s.weeklyCompletionCountLocked(taskID, startOfWeek(targetDate, s.loc))
-	s.persistLocked()
+	count, err := s.weeklyCompletionCountLocked(ctx, taskID, startOfWeek(targetDate, s.loc))
+	if err != nil {
+		return api.TaskCompletionResponse{}, err
+	}
 	return api.TaskCompletionResponse{
 		TaskId:               taskID,
 		TargetDate:           toDate(targetDate),
@@ -1051,26 +1215,25 @@ func (s *store) toggleTaskCompletion(userID, taskID string, target time.Time) (a
 }
 
 func (s *store) listPenaltyRules(userID string) ([]api.PenaltyRule, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	teamID, err := s.primaryTeamLocked(userID)
+	ctx := context.Background()
+	teamID, err := s.primaryTeamLocked(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.q.ListPenaltyRulesByTeamID(ctx, teamID)
 	if err != nil {
 		return nil, err
 	}
 	items := []api.PenaltyRule{}
-	for _, r := range s.rules {
-		if r.TeamID == teamID {
-			items = append(items, r.toAPI())
-		}
+	for _, row := range rows {
+		items = append(items, ruleFromDB(row, s.loc).toAPI())
 	}
-	sort.Slice(items, func(i, j int) bool { return items[i].Threshold < items[j].Threshold })
 	return items, nil
 }
 
 func (s *store) createPenaltyRule(userID string, req api.CreatePenaltyRuleRequest) (api.PenaltyRule, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	teamID, err := s.primaryTeamLocked(userID)
+	ctx := context.Background()
+	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return api.PenaltyRule{}, err
 	}
@@ -1089,20 +1252,37 @@ func (s *store) createPenaltyRule(userID string, req api.CreatePenaltyRuleReques
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
-	s.rules[r.ID] = r
-	s.persistLocked()
+	threshold32, err := safeInt32(r.Threshold, "threshold")
+	if err != nil {
+		return api.PenaltyRule{}, err
+	}
+	if err := s.q.CreatePenaltyRule(ctx, dbsqlc.CreatePenaltyRuleParams{
+		ID:          r.ID,
+		TeamID:      r.TeamID,
+		Threshold:   threshold32,
+		Name:        r.Name,
+		Description: textFromPtr(r.Description),
+		IsActive:    r.IsActive,
+		CreatedAt:   toPgTimestamptz(r.CreatedAt),
+		UpdatedAt:   toPgTimestamptz(r.UpdatedAt),
+	}); err != nil {
+		return api.PenaltyRule{}, err
+	}
 	return r.toAPI(), nil
 }
 
 func (s *store) patchPenaltyRule(userID, ruleID string, req api.UpdatePenaltyRuleRequest) (api.PenaltyRule, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	teamID, err := s.primaryTeamLocked(userID)
+	ctx := context.Background()
+	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return api.PenaltyRule{}, err
 	}
-	rule, ok := s.rules[ruleID]
-	if !ok || rule.TeamID != teamID {
+	row, err := s.q.GetPenaltyRuleByID(ctx, ruleID)
+	if err != nil {
+		return api.PenaltyRule{}, errors.New("rule not found")
+	}
+	rule := ruleFromDB(row, s.loc)
+	if rule.TeamID != teamID {
 		return api.PenaltyRule{}, errors.New("rule not found")
 	}
 	if req.Threshold != nil {
@@ -1118,59 +1298,85 @@ func (s *store) patchPenaltyRule(userID, ruleID string, req api.UpdatePenaltyRul
 		rule.IsActive = *req.IsActive
 	}
 	rule.UpdatedAt = time.Now().In(s.loc)
-	s.rules[ruleID] = rule
-	s.persistLocked()
+	threshold32, err := safeInt32(rule.Threshold, "threshold")
+	if err != nil {
+		return api.PenaltyRule{}, err
+	}
+	if err := s.q.UpdatePenaltyRule(ctx, dbsqlc.UpdatePenaltyRuleParams{
+		ID:          rule.ID,
+		Threshold:   threshold32,
+		Name:        rule.Name,
+		Description: textFromPtr(rule.Description),
+		IsActive:    rule.IsActive,
+		UpdatedAt:   toPgTimestamptz(rule.UpdatedAt),
+	}); err != nil {
+		return api.PenaltyRule{}, err
+	}
 	return rule.toAPI(), nil
 }
 
 func (s *store) deletePenaltyRule(userID, ruleID string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	teamID, err := s.primaryTeamLocked(userID)
+	ctx := context.Background()
+	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return err
 	}
-	rule, ok := s.rules[ruleID]
-	if !ok || rule.TeamID != teamID {
+	rule, err := s.q.GetPenaltyRuleByID(ctx, ruleID)
+	if err != nil || rule.TeamID != teamID {
 		return errors.New("rule not found")
 	}
-	delete(s.rules, ruleID)
-	s.persistLocked()
-	return nil
+	return s.q.DeletePenaltyRule(ctx, ruleID)
 }
 
 func (s *store) getHome(userID string) (api.HomeResponse, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	teamID, err := s.primaryTeamLocked(userID)
+	ctx := context.Background()
+	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return api.HomeResponse{}, err
 	}
 
 	now := time.Now().In(s.loc)
-	s.autoCloseLocked(now, teamID)
+	if err := s.autoCloseLocked(ctx, now, teamID); err != nil {
+		return api.HomeResponse{}, err
+	}
 
 	today := dateOnly(now, s.loc)
 	weekStart := startOfWeek(today, s.loc)
 	monthKey := today.Format("2006-01")
-	monthly := s.ensureMonthSummaryLocked(teamID, monthKey)
+	monthly, err := s.ensureMonthSummaryLocked(ctx, teamID, monthKey)
+	if err != nil {
+		return api.HomeResponse{}, err
+	}
 	daily := []api.HomeDailyTask{}
 	weekly := []api.HomeWeeklyTask{}
 
-	for _, t := range s.tasks {
-		if t.TeamID != teamID || !t.IsActive {
-			continue
-		}
+	tasks, err := s.q.ListActiveTasksByTeamID(ctx, teamID)
+	if err != nil {
+		return api.HomeResponse{}, err
+	}
+	for _, row := range tasks {
+		t := taskFromActiveListRow(row, s.loc)
 		if t.Type == api.Daily {
+			done, err := s.q.HasTaskCompletion(ctx, dbsqlc.HasTaskCompletionParams{
+				TaskID:     t.ID,
+				TargetDate: toPgDate(today),
+			})
+			if err != nil {
+				return api.HomeResponse{}, err
+			}
 			daily = append(daily, api.HomeDailyTask{
 				Task:           t.toAPI(),
-				CompletedToday: s.completions[completionKey(t.ID, today)],
+				CompletedToday: done,
 			})
 			continue
 		}
+		count, err := s.weeklyCompletionCountLocked(ctx, t.ID, weekStart)
+		if err != nil {
+			return api.HomeResponse{}, err
+		}
 		weekly = append(weekly, api.HomeWeeklyTask{
 			Task:                       t.toAPI(),
-			WeekCompletedCount:         s.weeklyCompletionCountLocked(t.ID, weekStart),
+			WeekCompletedCount:         count,
 			RequiredCompletionsPerWeek: t.Required,
 		})
 	}
@@ -1179,21 +1385,19 @@ func (s *store) getHome(userID string) (api.HomeResponse, error) {
 	sort.Slice(weekly, func(i, j int) bool { return weekly[i].Task.CreatedAt.Before(weekly[j].Task.CreatedAt) })
 
 	elapsed := int(today.Sub(weekStart).Hours()/24) + 1
-	s.persistLocked()
 	return api.HomeResponse{
 		Month:               monthKey,
 		Today:               toDate(today),
 		ElapsedDaysInWeek:   elapsed,
-		MonthlyPenaltyTotal: monthly.DailyPenalty + monthly.WeeklyPenalty,
+		MonthlyPenaltyTotal: int(monthly.DailyPenaltyTotal + monthly.WeeklyPenaltyTotal),
 		DailyTasks:          daily,
 		WeeklyTasks:         weekly,
 	}, nil
 }
 
 func (s *store) getMonthlySummary(userID string, month *string) (api.MonthlyPenaltySummary, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	teamID, err := s.primaryTeamLocked(userID)
+	ctx := context.Background()
+	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return api.MonthlyPenaltySummary{}, err
 	}
@@ -1201,178 +1405,286 @@ func (s *store) getMonthlySummary(userID string, month *string) (api.MonthlyPena
 	if month != nil && *month != "" {
 		targetMonth = *month
 	}
-	summary := s.ensureMonthSummaryLocked(teamID, targetMonth)
-	s.persistLocked()
-	return summary.toAPI(), nil
+	summary, err := s.ensureMonthSummaryLocked(ctx, teamID, targetMonth)
+	if err != nil {
+		return api.MonthlyPenaltySummary{}, err
+	}
+	return monthSummary{
+		TeamID:          summary.TeamID,
+		Month:           summary.Month,
+		DailyPenalty:    int(summary.DailyPenaltyTotal),
+		WeeklyPenalty:   int(summary.WeeklyPenaltyTotal),
+		IsClosed:        summary.IsClosed,
+		TriggeredRuleID: summary.TriggeredPenaltyRuleIds,
+	}.toAPI(), nil
 }
 
 func (s *store) closeDayForUser(userID string) (api.CloseResponse, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	teamID, err := s.primaryTeamLocked(userID)
+	ctx := context.Background()
+	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return api.CloseResponse{}, err
 	}
 	now := time.Now().In(s.loc)
-	s.closeDayLocked(now, teamID)
-	s.persistLocked()
+	if err := s.closeDayLocked(ctx, now, teamID); err != nil {
+		return api.CloseResponse{}, err
+	}
 	return api.CloseResponse{ClosedAt: now, Month: now.Format("2006-01")}, nil
 }
 
 func (s *store) closeWeekForUser(userID string) (api.CloseResponse, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	teamID, err := s.primaryTeamLocked(userID)
+	ctx := context.Background()
+	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return api.CloseResponse{}, err
 	}
 	now := time.Now().In(s.loc)
-	s.closeWeekLocked(now, teamID)
-	s.persistLocked()
+	if err := s.closeWeekLocked(ctx, now, teamID); err != nil {
+		return api.CloseResponse{}, err
+	}
 	return api.CloseResponse{ClosedAt: now, Month: now.Format("2006-01")}, nil
 }
 
 func (s *store) closeMonthForUser(userID string) (api.CloseResponse, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	teamID, err := s.primaryTeamLocked(userID)
+	ctx := context.Background()
+	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return api.CloseResponse{}, err
 	}
 	now := time.Now().In(s.loc)
-	closedMonth := s.closeMonthLocked(now, teamID)
-	s.persistLocked()
+	closedMonth, err := s.closeMonthLocked(ctx, now, teamID)
+	if err != nil {
+		return api.CloseResponse{}, err
+	}
 	return api.CloseResponse{ClosedAt: now, Month: closedMonth}, nil
 }
 
-func (s *store) autoCloseLocked(now time.Time, teamID string) {
-	s.closeDayLocked(now, teamID)
-	s.closeWeekLocked(now, teamID)
-	if now.Day() == 1 {
-		s.closeMonthLocked(now, teamID)
+func (s *store) autoCloseLocked(ctx context.Context, now time.Time, teamID string) error {
+	if err := s.closeDayLocked(ctx, now, teamID); err != nil {
+		return err
 	}
+	if err := s.closeWeekLocked(ctx, now, teamID); err != nil {
+		return err
+	}
+	if now.Day() == 1 {
+		if _, err := s.closeMonthLocked(ctx, now, teamID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
-func (s *store) closeDayLocked(now time.Time, teamID string) {
+func (s *store) closeDayLocked(ctx context.Context, now time.Time, teamID string) error {
 	targetDate := dateOnly(now, s.loc).AddDate(0, 0, -1)
 	dateKey := targetDate.Format("2006-01-02")
-	if s.dayPenaltyKeys["closed|"+teamID+"|"+dateKey] {
-		return
+	rows, err := s.q.InsertCloseExecutionKey(ctx, "closed|"+teamID+"|"+dateKey)
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return nil
 	}
 	month := targetDate.Format("2006-01")
-	summary := s.ensureMonthSummaryLocked(teamID, month)
-	for _, t := range s.tasks {
-		if t.TeamID != teamID || t.Type != api.Daily || !t.IsActive {
+	if _, err := s.ensureMonthSummaryLocked(ctx, teamID, month); err != nil {
+		return err
+	}
+	tasks, err := s.q.ListActiveTasksByTeamID(ctx, teamID)
+	if err != nil {
+		return err
+	}
+	for _, row := range tasks {
+		t := taskFromActiveListRow(row, s.loc)
+		if t.Type != api.Daily {
 			continue
 		}
 		penaltyKey := fmt.Sprintf("%s|%s|%s", teamID, t.ID, dateKey)
-		if s.dayPenaltyKeys[penaltyKey] {
+		penRows, err := s.q.InsertCloseExecutionKey(ctx, penaltyKey)
+		if err != nil {
+			return err
+		}
+		if penRows == 0 {
 			continue
 		}
-		if !s.completions[completionKey(t.ID, targetDate)] {
-			summary.DailyPenalty += t.Penalty
+		done, err := s.q.HasTaskCompletion(ctx, dbsqlc.HasTaskCompletionParams{
+			TaskID:     t.ID,
+			TargetDate: toPgDate(targetDate),
+		})
+		if err != nil {
+			return err
 		}
-		s.dayPenaltyKeys[penaltyKey] = true
+		if !done {
+			penalty32, err := safeInt32(t.Penalty, "daily penalty")
+			if err != nil {
+				return err
+			}
+			if err := s.q.IncrementDailyPenalty(ctx, dbsqlc.IncrementDailyPenaltyParams{
+				TeamID:            teamID,
+				Month:             month,
+				DailyPenaltyTotal: penalty32,
+			}); err != nil {
+				return err
+			}
+		}
 	}
-	s.dayPenaltyKeys["closed|"+teamID+"|"+dateKey] = true
+	return nil
 }
 
-func (s *store) closeWeekLocked(now time.Time, teamID string) {
+func (s *store) closeWeekLocked(ctx context.Context, now time.Time, teamID string) error {
 	thisWeekStart := startOfWeek(dateOnly(now, s.loc), s.loc)
 	previousWeekStart := thisWeekStart.AddDate(0, 0, -7)
 	weekKey := previousWeekStart.Format("2006-01-02")
-	if s.weekPenaltyKey["closed|"+teamID+"|"+weekKey] {
-		return
+	rows, err := s.q.InsertCloseExecutionKey(ctx, "closed|"+teamID+"|"+weekKey)
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return nil
 	}
 	month := previousWeekStart.Format("2006-01")
-	summary := s.ensureMonthSummaryLocked(teamID, month)
-	for _, t := range s.tasks {
-		if t.TeamID != teamID || t.Type != api.Weekly || !t.IsActive {
+	if _, err := s.ensureMonthSummaryLocked(ctx, teamID, month); err != nil {
+		return err
+	}
+	tasks, err := s.q.ListActiveTasksByTeamID(ctx, teamID)
+	if err != nil {
+		return err
+	}
+	for _, row := range tasks {
+		t := taskFromActiveListRow(row, s.loc)
+		if t.Type != api.Weekly {
 			continue
 		}
 		penaltyKey := fmt.Sprintf("%s|%s|%s", teamID, t.ID, weekKey)
-		if s.weekPenaltyKey[penaltyKey] {
+		penRows, err := s.q.InsertCloseExecutionKey(ctx, penaltyKey)
+		if err != nil {
+			return err
+		}
+		if penRows == 0 {
 			continue
 		}
-		if s.weeklyCompletionCountLocked(t.ID, previousWeekStart) < t.Required {
-			summary.WeeklyPenalty += t.Penalty
+		count, err := s.weeklyCompletionCountLocked(ctx, t.ID, previousWeekStart)
+		if err != nil {
+			return err
 		}
-		s.weekPenaltyKey[penaltyKey] = true
+		if count < t.Required {
+			penalty32, err := safeInt32(t.Penalty, "weekly penalty")
+			if err != nil {
+				return err
+			}
+			if err := s.q.IncrementWeeklyPenalty(ctx, dbsqlc.IncrementWeeklyPenaltyParams{
+				TeamID:             teamID,
+				Month:              month,
+				WeeklyPenaltyTotal: penalty32,
+			}); err != nil {
+				return err
+			}
+		}
 	}
-	s.weekPenaltyKey["closed|"+teamID+"|"+weekKey] = true
+	return nil
 }
 
-func (s *store) closeMonthLocked(now time.Time, teamID string) string {
+func (s *store) closeMonthLocked(ctx context.Context, now time.Time, teamID string) (string, error) {
 	target := now.AddDate(0, -1, 0)
 	month := target.Format("2006-01")
 	key := teamID + "|" + month
-	if s.monthClosedKey[key] {
-		return month
+	rows, err := s.q.InsertCloseExecutionKey(ctx, key)
+	if err != nil {
+		return "", err
 	}
-	summary := s.ensureMonthSummaryLocked(teamID, month)
+	if rows == 0 {
+		return month, nil
+	}
+	summary, err := s.ensureMonthSummaryLocked(ctx, teamID, month)
+	if err != nil {
+		return "", err
+	}
 	if summary.IsClosed {
-		s.monthClosedKey[key] = true
-		return month
+		return month, nil
 	}
 
-	rules := []ruleRecord{}
-	for _, rule := range s.rules {
-		if rule.TeamID == teamID && rule.IsActive {
-			rules = append(rules, rule)
-		}
+	activeRules, err := s.q.ListActivePenaltyRulesByTeamID(ctx, teamID)
+	if err != nil {
+		return "", err
+	}
+	rules := make([]ruleRecord, 0, len(activeRules))
+	for _, row := range activeRules {
+		rules = append(rules, ruleFromDB(row, s.loc))
 	}
 	sort.Slice(rules, func(i, j int) bool { return rules[i].Threshold < rules[j].Threshold })
-	total := summary.DailyPenalty + summary.WeeklyPenalty
+	total := int(summary.DailyPenaltyTotal + summary.WeeklyPenaltyTotal)
 	triggered := []string{}
 	for _, r := range rules {
 		if total >= r.Threshold {
 			triggered = append(triggered, r.ID)
 		}
 	}
-	summary.IsClosed = true
-	summary.TriggeredRuleID = triggered
-	s.monthClosedKey[key] = true
-	return month
+	if err := s.q.CloseMonthlyPenaltySummary(ctx, dbsqlc.CloseMonthlyPenaltySummaryParams{
+		TeamID:                  teamID,
+		Month:                   month,
+		TriggeredPenaltyRuleIds: triggered,
+	}); err != nil {
+		return "", err
+	}
+	return month, nil
 }
 
-func (s *store) weeklyCompletionCountLocked(taskID string, weekStart time.Time) int {
-	count := 0
-	for i := 0; i < 7; i++ {
-		d := weekStart.AddDate(0, 0, i)
-		if s.completions[completionKey(taskID, d)] {
-			count++
-		}
+func (s *store) weeklyCompletionCountLocked(ctx context.Context, taskID string, weekStart time.Time) (int, error) {
+	weekEnd := weekStart.AddDate(0, 0, 6)
+	count, err := s.q.CountTaskCompletionsInRange(ctx, dbsqlc.CountTaskCompletionsInRangeParams{
+		TaskID:       taskID,
+		TargetDate:   toPgDate(weekStart),
+		TargetDate_2: toPgDate(weekEnd),
+	})
+	if err != nil {
+		return 0, err
 	}
-	return count
+	return int(count), nil
 }
 
-func (s *store) ensureMonthSummaryLocked(teamID, month string) *monthSummary {
-	key := teamID + "|" + month
-	if got, ok := s.monthSummaries[key]; ok {
-		return got
+func (s *store) ensureMonthSummaryLocked(ctx context.Context, teamID, month string) (dbsqlc.MonthlyPenaltySummary, error) {
+	got, err := s.q.GetMonthlyPenaltySummary(ctx, dbsqlc.GetMonthlyPenaltySummaryParams{
+		TeamID: teamID,
+		Month:  month,
+	})
+	if err == nil {
+		return got, nil
 	}
-	s.monthSummaries[key] = &monthSummary{
-		TeamID:          teamID,
-		Month:           month,
-		DailyPenalty:    0,
-		WeeklyPenalty:   0,
-		IsClosed:        false,
-		TriggeredRuleID: []string{},
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return dbsqlc.MonthlyPenaltySummary{}, err
 	}
-	return s.monthSummaries[key]
+	if err := s.q.UpsertMonthlyPenaltySummary(ctx, dbsqlc.UpsertMonthlyPenaltySummaryParams{
+		TeamID:                  teamID,
+		Month:                   month,
+		DailyPenaltyTotal:       0,
+		WeeklyPenaltyTotal:      0,
+		IsClosed:                false,
+		TriggeredPenaltyRuleIds: []string{},
+	}); err != nil {
+		return dbsqlc.MonthlyPenaltySummary{}, err
+	}
+	return s.q.GetMonthlyPenaltySummary(ctx, dbsqlc.GetMonthlyPenaltySummaryParams{
+		TeamID: teamID,
+		Month:  month,
+	})
 }
 
-func (s *store) primaryTeamLocked(userID string) (string, error) {
-	list, ok := s.memberships[userID]
-	if !ok || len(list) == 0 {
+func (s *store) primaryTeamLocked(ctx context.Context, userID string) (string, error) {
+	list, err := s.q.ListMembershipsByUserID(ctx, userID)
+	if err != nil {
+		return "", err
+	}
+	if len(list) == 0 {
 		return "", errors.New("user has no team membership")
 	}
 	return list[0].TeamID, nil
 }
 
-func (s *store) nextID(prefix string) string {
-	s.ids++
-	return fmt.Sprintf("%s_%d", prefix, s.ids)
+func (s *store) nextID(_ string) string {
+	id, err := uuid.NewV7()
+	if err != nil {
+		// Fallback keeps service alive even if UUIDv7 generation fails unexpectedly.
+		return uuid.NewString()
+	}
+	return id.String()
 }
 
 func (u userRecord) toAPI() api.User {
@@ -1425,6 +1737,125 @@ func (m monthSummary) toAPI() api.MonthlyPenaltySummary {
 	}
 }
 
+func taskFromGetRow(row dbsqlc.GetTaskByIDRow, loc *time.Location) taskRecord {
+	return taskRecord{
+		ID:         row.ID,
+		TeamID:     row.TeamID,
+		Title:      row.Title,
+		Notes:      ptrFromText(row.Notes),
+		Type:       api.TaskType(row.Type),
+		Penalty:    int(row.PenaltyPoints),
+		AssigneeID: ptrFromAny(row.AssigneeUserID),
+		IsActive:   row.IsActive,
+		Required:   int(row.RequiredCompletionsPerWeek),
+		CreatedAt:  row.CreatedAt.Time.In(loc),
+		UpdatedAt:  row.UpdatedAt.Time.In(loc),
+	}
+}
+
+func taskFromListRow(row dbsqlc.ListTasksByTeamIDRow, loc *time.Location) taskRecord {
+	return taskRecord{
+		ID:         row.ID,
+		TeamID:     row.TeamID,
+		Title:      row.Title,
+		Notes:      ptrFromText(row.Notes),
+		Type:       api.TaskType(row.Type),
+		Penalty:    int(row.PenaltyPoints),
+		AssigneeID: ptrFromAny(row.AssigneeUserID),
+		IsActive:   row.IsActive,
+		Required:   int(row.RequiredCompletionsPerWeek),
+		CreatedAt:  row.CreatedAt.Time.In(loc),
+		UpdatedAt:  row.UpdatedAt.Time.In(loc),
+	}
+}
+
+func taskFromActiveListRow(row dbsqlc.ListActiveTasksByTeamIDRow, loc *time.Location) taskRecord {
+	return taskRecord{
+		ID:         row.ID,
+		TeamID:     row.TeamID,
+		Title:      row.Title,
+		Notes:      ptrFromText(row.Notes),
+		Type:       api.TaskType(row.Type),
+		Penalty:    int(row.PenaltyPoints),
+		AssigneeID: ptrFromAny(row.AssigneeUserID),
+		IsActive:   row.IsActive,
+		Required:   int(row.RequiredCompletionsPerWeek),
+		CreatedAt:  row.CreatedAt.Time.In(loc),
+		UpdatedAt:  row.UpdatedAt.Time.In(loc),
+	}
+}
+
+func ruleFromDB(row dbsqlc.PenaltyRule, loc *time.Location) ruleRecord {
+	return ruleRecord{
+		ID:          row.ID,
+		TeamID:      row.TeamID,
+		Threshold:   int(row.Threshold),
+		Name:        row.Name,
+		Description: ptrFromText(row.Description),
+		IsActive:    row.IsActive,
+		CreatedAt:   row.CreatedAt.Time.In(loc),
+		UpdatedAt:   row.UpdatedAt.Time.In(loc),
+	}
+}
+
+func toPgTimestamptz(t time.Time) pgtype.Timestamptz {
+	return pgtype.Timestamptz{Time: t, Valid: true}
+}
+
+func toPgDate(t time.Time) pgtype.Date {
+	return pgtype.Date{Time: t, Valid: true}
+}
+
+func textFromPtr(s *string) pgtype.Text {
+	if s == nil {
+		return pgtype.Text{}
+	}
+	return pgtype.Text{String: *s, Valid: true}
+}
+
+func ptrFromText(t pgtype.Text) *string {
+	if !t.Valid {
+		return nil
+	}
+	s := t.String
+	return &s
+}
+
+func uuidStringFromPtr(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+func ptrFromUUIDString(s string) *string {
+	if strings.TrimSpace(s) == "" {
+		return nil
+	}
+	v := s
+	return &v
+}
+
+func ptrFromAny(v interface{}) *string {
+	switch x := v.(type) {
+	case nil:
+		return nil
+	case string:
+		return ptrFromUUIDString(x)
+	case []byte:
+		return ptrFromUUIDString(string(x))
+	default:
+		return nil
+	}
+}
+
+func safeInt32(v int, field string) (int32, error) {
+	if v < math.MinInt32 || v > math.MaxInt32 {
+		return 0, fmt.Errorf("%s is out of int32 range", field)
+	}
+	return int32(v), nil
+}
+
 func dateOnly(t time.Time, loc *time.Location) time.Time {
 	tt := t.In(loc)
 	return time.Date(tt.Year(), tt.Month(), tt.Day(), 0, 0, 0, 0, loc)
@@ -1438,10 +1869,6 @@ func startOfWeek(t time.Time, loc *time.Location) time.Time {
 	tt := dateOnly(t, loc)
 	offset := (int(tt.Weekday()) + 6) % 7
 	return tt.AddDate(0, 0, -offset)
-}
-
-func completionKey(taskID string, d time.Time) string {
-	return fmt.Sprintf("%s|%s", taskID, d.Format("2006-01-02"))
 }
 
 func randomToken() (string, error) {
