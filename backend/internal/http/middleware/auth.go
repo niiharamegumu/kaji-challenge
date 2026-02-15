@@ -5,11 +5,11 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/megu/kaji-challenge/backend/internal/http/application"
+	"github.com/megu/kaji-challenge/backend/internal/http/application/ports"
 	"github.com/megu/kaji-challenge/backend/internal/http/transport"
 )
 
-func Auth(auth application.AuthService) gin.HandlerFunc {
+func Auth(auth ports.AuthService) gin.HandlerFunc {
 	publicPaths := map[string]bool{
 		"/health":                    true,
 		"/v1/auth/google/start":      true,

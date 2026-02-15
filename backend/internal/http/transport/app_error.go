@@ -3,9 +3,9 @@ package transport
 import (
 	"errors"
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/megu/kaji-challenge/backend/internal/http/application"
 )
 
 const (
@@ -40,19 +40,21 @@ func writeAppError(c *gin.Context, err error, defaultStatus int) {
 		writeError(c, appErr.Status, appErr.Message)
 		return
 	}
-	status := mapErrorStatus(err, defaultStatus)
-	writeError(c, status, err.Error())
+	writeError(c, mapErrorStatus(err, defaultStatus), err.Error())
 }
 
 func mapErrorStatus(err error, defaultStatus int) int {
-	msg := strings.ToLower(err.Error())
 	switch {
-	case strings.Contains(msg, "missing bearer token"), strings.Contains(msg, "invalid bearer token"):
+	case errors.Is(err, application.ErrUnauthorized):
 		return http.StatusUnauthorized
-	case strings.Contains(msg, "not found"):
+	case errors.Is(err, application.ErrNotFound):
 		return http.StatusNotFound
-	case strings.Contains(msg, "expired"), strings.Contains(msg, "disabled"), strings.Contains(msg, "invalid"):
+	case errors.Is(err, application.ErrInvalid):
 		return http.StatusBadRequest
+	case errors.Is(err, application.ErrConflict):
+		return http.StatusConflict
+	case errors.Is(err, application.ErrInternal):
+		return http.StatusInternalServerError
 	default:
 		return defaultStatus
 	}

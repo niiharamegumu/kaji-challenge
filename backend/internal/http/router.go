@@ -2,7 +2,7 @@ package http
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/megu/kaji-challenge/backend/internal/http/application"
+	"github.com/megu/kaji-challenge/backend/internal/http/application/ports"
 	"github.com/megu/kaji-challenge/backend/internal/http/infra"
 	"github.com/megu/kaji-challenge/backend/internal/http/middleware"
 	"github.com/megu/kaji-challenge/backend/internal/http/transport"
@@ -14,7 +14,7 @@ func NewRouter() *gin.Engine {
 	return NewRouterWithServices(infra.NewServices(s))
 }
 
-func NewRouterWithServices(svcs *application.Services) *gin.Engine {
+func NewRouterWithServices(svcs *ports.Services) *gin.Engine {
 	r := gin.Default()
 	r.Use(middleware.CORS())
 	r.Use(middleware.Auth(svcs.Auth))
