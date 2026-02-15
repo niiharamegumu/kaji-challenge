@@ -32,6 +32,8 @@
 - `make check`: `gen + lint + test`
 - `make diff-gen`: 生成差分チェック
 
+backend の Critical 判定は `backend/security/critical_goids.txt` の GO-ID allowlist で管理します。
+
 ## OpenAPI SSOT
 
 - 仕様: `api/openapi.yaml`
