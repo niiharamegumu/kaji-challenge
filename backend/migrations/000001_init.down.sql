@@ -1,0 +1,13 @@
+DROP TABLE IF EXISTS app_state;
+DROP TABLE IF EXISTS close_execution_keys;
+DROP TABLE IF EXISTS monthly_penalty_summaries;
+DROP TABLE IF EXISTS penalty_rules;
+DROP TABLE IF EXISTS task_completions;
+DROP TABLE IF EXISTS tasks;
+DROP TABLE IF EXISTS invite_codes;
+DROP TABLE IF EXISTS oauth_exchange_codes;
+DROP TABLE IF EXISTS oauth_auth_requests;
+DROP TABLE IF EXISTS sessions;
+DROP TABLE IF EXISTS team_members;
+DROP TABLE IF EXISTS teams;
+DROP TABLE IF EXISTS users;

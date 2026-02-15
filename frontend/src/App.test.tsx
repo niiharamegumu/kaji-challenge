@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import App from "./App";
 
-const mockPostAuth = vi.fn();
+const mockGetAuthStart = vi.fn();
 const mockGetHome = vi.fn();
 const mockListTasks = vi.fn();
 const mockListRules = vi.fn();
@@ -14,7 +14,9 @@ const mockPostTask = vi.fn();
 
 vi.mock("./lib/api/generated/client", () => ({
   TaskType: { daily: "daily", weekly: "weekly" },
-  postAuthOidcGoogleCallback: (...args: unknown[]) => mockPostAuth(...args),
+  getAuthGoogleStart: (...args: unknown[]) => mockGetAuthStart(...args),
+  postAuthSessionsExchange: vi.fn(),
+  postAuthLogout: vi.fn(),
   getHome: (...args: unknown[]) => mockGetHome(...args),
   listTasks: (...args: unknown[]) => mockListTasks(...args),
   listPenaltyRules: (...args: unknown[]) => mockListRules(...args),
@@ -34,7 +36,7 @@ vi.mock("./lib/api/generated/client", () => ({
 describe("App", () => {
   beforeEach(() => {
     window.localStorage.clear();
-    mockPostAuth.mockReset();
+    mockGetAuthStart.mockReset();
     mockGetHome.mockReset();
     mockListTasks.mockReset();
     mockListRules.mockReset();
@@ -59,40 +61,29 @@ describe("App", () => {
     mockPostTask.mockResolvedValue({ data: {} });
   });
 
-  it("renders login form before authentication", () => {
+  it("renders login before authentication", () => {
     render(<App />);
 
     expect(screen.getByText("家事チャレ MVP")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "ログイン" }),
+      screen.getByRole("button", { name: "Googleでログイン" }),
     ).toBeInTheDocument();
   });
 
-  it("shows error message when login returns 404", async () => {
-    mockPostAuth.mockRejectedValue(new Error("request failed: 404"));
+  it("shows error message when auth start returns 404", async () => {
+    mockGetAuthStart.mockRejectedValue(new Error("request failed: 404"));
     const user = userEvent.setup();
 
     render(<App />);
 
-    await user.click(screen.getAllByRole("button", { name: "ログイン" })[0]);
+    await user.click(
+      screen.getAllByRole("button", { name: "Googleでログイン" })[0],
+    );
 
     expect(
-      await screen.findByText(/ログインに失敗しました/),
+      await screen.findByText(/ログイン開始に失敗しました/),
     ).toBeInTheDocument();
     expect(screen.getByText(/404/)).toBeInTheDocument();
-  });
-
-  it("can login and render dashboard", async () => {
-    mockPostAuth.mockResolvedValue({
-      data: { accessToken: "token-1", user: { displayName: "Owner" } },
-    });
-    const user = userEvent.setup();
-    render(<App />);
-
-    await user.click(screen.getAllByRole("button", { name: "ログイン" })[0]);
-
-    expect(await screen.findByText("家事チャレ")).toBeInTheDocument();
-    expect(screen.getByText("ホーム")).toBeInTheDocument();
   });
 
   it("posts task from admin tab", async () => {
@@ -100,9 +91,8 @@ describe("App", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    const adminButtons = await screen.findAllByRole("button", { name: "管理" });
-    await user.click(adminButtons[0]);
-    await user.click(screen.getAllByRole("button", { name: "タスク追加" })[0]);
+    await user.click(await screen.findByRole("button", { name: "管理" }));
+    await user.click(screen.getByRole("button", { name: "タスク追加" }));
 
     expect(mockPostTask).toHaveBeenCalled();
     const firstArg = mockPostTask.mock.calls[0]?.[0];

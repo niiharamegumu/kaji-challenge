@@ -1,24 +1,35 @@
 package http
 
 import (
+	"context"
 	"crypto/rand"
+	"crypto/sha256"
+	"database/sql"
+	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"os"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-gonic/gin"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/megu/kaji-challenge/backend/internal/http/middleware"
 	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 	openapi_types "github.com/oapi-codegen/runtime/types"
+	"golang.org/x/oauth2"
 )
 
 const (
 	authUserIDKey = "auth.userId"
+	authTokenKey  = "auth.token"
 	jstTZ         = "Asia/Tokyo"
 )
 
@@ -40,6 +51,56 @@ func (h *Handler) Health(c *gin.Context) {
 	c.JSON(http.StatusOK, api.HealthResponse{Status: "ok"})
 }
 
+func (h *Handler) GetAuthGoogleStart(c *gin.Context) {
+	res, err := h.store.startGoogleAuth()
+	if err != nil {
+		writeError(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, res)
+}
+
+func (h *Handler) GetAuthGoogleCallback(c *gin.Context, params api.GetAuthGoogleCallbackParams) {
+	exchangeCode, redirectTo, err := h.store.completeGoogleAuth(c.Request.Context(), params.Code, params.State, c.Query("mock_email"), c.Query("mock_name"), c.Query("mock_sub"))
+	if err != nil {
+		writeError(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	if redirectTo != "" {
+		sep := "?"
+		if strings.Contains(redirectTo, "?") {
+			sep = "&"
+		}
+		c.Redirect(http.StatusFound, redirectTo+sep+"exchangeCode="+url.QueryEscape(exchangeCode))
+		return
+	}
+	c.JSON(http.StatusOK, api.AuthCallbackResponse{ExchangeCode: exchangeCode})
+}
+
+func (h *Handler) PostAuthSessionsExchange(c *gin.Context) {
+	var req api.AuthSessionExchangeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		writeError(c, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	session, err := h.store.exchangeSession(req.ExchangeCode)
+	if err != nil {
+		writeError(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, session)
+}
+
+func (h *Handler) PostAuthLogout(c *gin.Context) {
+	token := c.GetString(authTokenKey)
+	if token == "" {
+		writeError(c, http.StatusUnauthorized, "missing bearer token")
+		return
+	}
+	h.store.revokeSession(token)
+	c.Status(http.StatusNoContent)
+}
+
 func (h *Handler) GetMe(c *gin.Context) {
 	user, memberships, err := h.store.currentUserAndMemberships(c.GetString(authUserIDKey))
 	if err != nil {
@@ -47,21 +108,6 @@ func (h *Handler) GetMe(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, api.MeResponse{User: user.toAPI(), Memberships: memberships})
-}
-
-func (h *Handler) PostAuthOidcGoogleCallback(c *gin.Context) {
-	var req api.OidcCallbackRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		writeError(c, http.StatusBadRequest, "invalid request body")
-		return
-	}
-
-	session, err := h.store.loginOrCreateUser(string(req.Email), req.DisplayName)
-	if err != nil {
-		writeError(c, http.StatusBadRequest, err.Error())
-		return
-	}
-	c.JSON(http.StatusOK, session)
 }
 
 func (h *Handler) PostTeamInvite(c *gin.Context) {
@@ -264,10 +310,29 @@ func (h *Handler) PostAdminCloseMonth(c *gin.Context) {
 	c.JSON(http.StatusOK, res)
 }
 
+type oidcClient struct {
+	provider    *oidc.Provider
+	verifier    *oidc.IDTokenVerifier
+	oauthConfig oauth2.Config
+}
+
+type authRequest struct {
+	Nonce        string
+	CodeVerifier string
+	ExpiresAt    time.Time
+}
+
+type exchangeCodeRecord struct {
+	UserID    string
+	ExpiresAt time.Time
+	Used      bool
+}
+
 type store struct {
 	mu sync.Mutex
 
 	loc *time.Location
+	db  *sql.DB
 
 	ids int64
 
@@ -286,6 +351,28 @@ type store struct {
 	dayPenaltyKeys map[string]bool
 	weekPenaltyKey map[string]bool
 	monthClosedKey map[string]bool
+
+	authRequests  map[string]authRequest
+	exchangeCodes map[string]exchangeCodeRecord
+	oidc          *oidcClient
+}
+
+type persistState struct {
+	IDs            int64                         `json:"ids"`
+	Users          map[string]userRecord         `json:"users"`
+	UsersByMail    map[string]string             `json:"usersByMail"`
+	Memberships    map[string][]membership       `json:"memberships"`
+	Sessions       map[string]string             `json:"sessions"`
+	Invites        map[string]inviteCode         `json:"invites"`
+	Tasks          map[string]taskRecord         `json:"tasks"`
+	Rules          map[string]ruleRecord         `json:"rules"`
+	Completions    map[string]bool               `json:"completions"`
+	MonthSummaries map[string]*monthSummary      `json:"monthSummaries"`
+	DayPenaltyKeys map[string]bool               `json:"dayPenaltyKeys"`
+	WeekPenaltyKey map[string]bool               `json:"weekPenaltyKey"`
+	MonthClosedKey map[string]bool               `json:"monthClosedKey"`
+	AuthRequests   map[string]authRequest        `json:"authRequests"`
+	ExchangeCodes  map[string]exchangeCodeRecord `json:"exchangeCodes"`
 }
 
 type userRecord struct {
@@ -348,7 +435,7 @@ func newStore() *store {
 		loc = time.FixedZone("JST", 9*60*60)
 	}
 
-	return &store{
+	s := &store{
 		loc:            loc,
 		users:          map[string]userRecord{},
 		usersByMail:    map[string]string{},
@@ -362,17 +449,134 @@ func newStore() *store {
 		dayPenaltyKeys: map[string]bool{},
 		weekPenaltyKey: map[string]bool{},
 		monthClosedKey: map[string]bool{},
+		authRequests:   map[string]authRequest{},
+		exchangeCodes:  map[string]exchangeCodeRecord{},
 	}
+	if err := s.initPersistence(); err != nil {
+		panic(err)
+	}
+	return s
+}
+
+func (s *store) initPersistence() error {
+	databaseURL := strings.TrimSpace(os.Getenv("DATABASE_URL"))
+	if databaseURL == "" {
+		return nil
+	}
+	db, err := sql.Open("pgx", databaseURL)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := db.PingContext(ctx); err != nil {
+		return err
+	}
+	if _, err := db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS app_state (
+			id SMALLINT PRIMARY KEY,
+			payload JSONB NOT NULL,
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`); err != nil {
+		return err
+	}
+	s.db = db
+	return s.loadState()
+}
+
+func (s *store) loadState() error {
+	if s.db == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var payload []byte
+	err := s.db.QueryRowContext(ctx, "SELECT payload FROM app_state WHERE id = 1").Scan(&payload)
+	if errors.Is(err, sql.ErrNoRows) {
+		return s.persistLockedWithContext(ctx)
+	}
+	if err != nil {
+		return err
+	}
+	var snap persistState
+	if err := json.Unmarshal(payload, &snap); err != nil {
+		return err
+	}
+	s.ids = snap.IDs
+	s.users = defaultUserMap(snap.Users)
+	s.usersByMail = defaultStringMap(snap.UsersByMail)
+	s.memberships = defaultMembershipMap(snap.Memberships)
+	s.sessions = defaultStringMap(snap.Sessions)
+	s.invites = defaultInviteMap(snap.Invites)
+	s.tasks = defaultTaskMap(snap.Tasks)
+	s.rules = defaultRuleMap(snap.Rules)
+	s.completions = defaultBoolMap(snap.Completions)
+	s.monthSummaries = defaultMonthSummaryMap(snap.MonthSummaries)
+	s.dayPenaltyKeys = defaultBoolMap(snap.DayPenaltyKeys)
+	s.weekPenaltyKey = defaultBoolMap(snap.WeekPenaltyKey)
+	s.monthClosedKey = defaultBoolMap(snap.MonthClosedKey)
+	s.authRequests = defaultAuthRequestMap(snap.AuthRequests)
+	s.exchangeCodes = defaultExchangeCodeMap(snap.ExchangeCodes)
+	return nil
+}
+
+func (s *store) persistLocked() {
+	if s.db == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_ = s.persistLockedWithContext(ctx)
+}
+
+func (s *store) persistLockedWithContext(ctx context.Context) error {
+	if s.db == nil {
+		return nil
+	}
+	snap := persistState{
+		IDs:            s.ids,
+		Users:          s.users,
+		UsersByMail:    s.usersByMail,
+		Memberships:    s.memberships,
+		Sessions:       s.sessions,
+		Invites:        s.invites,
+		Tasks:          s.tasks,
+		Rules:          s.rules,
+		Completions:    s.completions,
+		MonthSummaries: s.monthSummaries,
+		DayPenaltyKeys: s.dayPenaltyKeys,
+		WeekPenaltyKey: s.weekPenaltyKey,
+		MonthClosedKey: s.monthClosedKey,
+		AuthRequests:   s.authRequests,
+		ExchangeCodes:  s.exchangeCodes,
+	}
+	payload, err := json.Marshal(snap)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, `
+		INSERT INTO app_state (id, payload, updated_at)
+		VALUES (1, $1, NOW())
+		ON CONFLICT (id) DO UPDATE SET payload = EXCLUDED.payload, updated_at = NOW()
+	`, payload)
+	return err
 }
 
 func authMiddleware(s *store) gin.HandlerFunc {
+	publicPaths := map[string]bool{
+		"/health":                        true,
+		"/v1/auth/google/start":          true,
+		"/v1/auth/google/callback":       true,
+		"/v1/auth/sessions/exchange":     true,
+	}
+
 	return func(c *gin.Context) {
 		if c.Request.Method == http.MethodOptions {
 			c.Next()
 			return
 		}
-		path := c.Request.URL.Path
-		if path == "/health" || path == "/v1/auth/oidc/google/callback" {
+		if publicPaths[c.Request.URL.Path] {
 			c.Next()
 			return
 		}
@@ -392,6 +596,7 @@ func authMiddleware(s *store) gin.HandlerFunc {
 			return
 		}
 		c.Set(authUserIDKey, userID)
+		c.Set(authTokenKey, token)
 		c.Next()
 	}
 }
@@ -403,42 +608,256 @@ func (s *store) lookupSession(token string) (string, bool) {
 	return userID, ok
 }
 
-func (s *store) loginOrCreateUser(email, displayName string) (api.AuthSessionResponse, error) {
+func (s *store) startGoogleAuth() (api.AuthStartResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	email = strings.TrimSpace(strings.ToLower(email))
-	displayName = strings.TrimSpace(displayName)
-	if email == "" || displayName == "" {
-		return api.AuthSessionResponse{}, errors.New("email and displayName are required")
+	state, err := randomToken()
+	if err != nil {
+		return api.AuthStartResponse{}, err
 	}
+	nonce, err := randomToken()
+	if err != nil {
+		return api.AuthStartResponse{}, err
+	}
+	verifier, err := randomToken()
+	if err != nil {
+		return api.AuthStartResponse{}, err
+	}
+	s.authRequests[state] = authRequest{
+		Nonce:        nonce,
+		CodeVerifier: verifier,
+		ExpiresAt:    time.Now().In(s.loc).Add(10 * time.Minute),
+	}
+	authURL, err := s.buildAuthorizationURLLocked(state, nonce, verifier)
+	if err != nil {
+		return api.AuthStartResponse{}, err
+	}
+	s.persistLocked()
+	return api.AuthStartResponse{AuthorizationUrl: authURL}, nil
+}
 
-	now := time.Now().In(s.loc)
-	userID, ok := s.usersByMail[email]
+func (s *store) completeGoogleAuth(ctx context.Context, code, state, mockEmail, mockName, mockSub string) (string, string, error) {
+	s.mu.Lock()
+	req, ok := s.authRequests[state]
 	if !ok {
-		userID = s.nextID("usr")
-		s.users[userID] = userRecord{
-			ID:        userID,
-			Email:     email,
-			Name:      displayName,
-			CreatedAt: now,
+		s.mu.Unlock()
+		return "", "", errors.New("invalid state")
+	}
+	if time.Now().In(s.loc).After(req.ExpiresAt) {
+		delete(s.authRequests, state)
+		s.persistLocked()
+		s.mu.Unlock()
+		return "", "", errors.New("state expired")
+	}
+	delete(s.authRequests, state)
+	s.persistLocked()
+	s.mu.Unlock()
+
+	email := strings.TrimSpace(strings.ToLower(mockEmail))
+	name := strings.TrimSpace(mockName)
+	sub := strings.TrimSpace(mockSub)
+
+	if email == "" {
+		claims, err := s.exchangeAndVerifyIDToken(ctx, code, req)
+		if err != nil {
+			return "", "", err
 		}
-		s.usersByMail[email] = userID
-		teamID := s.nextID("team")
-		s.memberships[userID] = []membership{{TeamID: teamID, Role: api.Owner}}
+		if claims.Nonce != req.Nonce {
+			return "", "", errors.New("nonce mismatch")
+		}
+		email = strings.TrimSpace(strings.ToLower(claims.Email))
+		name = strings.TrimSpace(claims.Name)
+		sub = strings.TrimSpace(claims.Sub)
 	}
 
+	if email == "" {
+		return "", "", errors.New("email not available from provider")
+	}
+	if name == "" {
+		name = strings.Split(email, "@")[0]
+	}
+	_ = sub
+
+	s.mu.Lock()
+	userID, user := s.getOrCreateUserLocked(email, name)
+	exchangeCode, err := randomToken()
+	if err != nil {
+		s.mu.Unlock()
+		return "", "", err
+	}
+	s.exchangeCodes[exchangeCode] = exchangeCodeRecord{UserID: userID, ExpiresAt: time.Now().In(s.loc).Add(2 * time.Minute)}
+	s.users[userID] = user
+	s.persistLocked()
+	s.mu.Unlock()
+
+	redirectTo := strings.TrimSpace(os.Getenv("FRONTEND_CALLBACK_URL"))
+	return exchangeCode, redirectTo, nil
+}
+
+type idTokenClaims struct {
+	Sub   string `json:"sub"`
+	Email string `json:"email"`
+	Name  string `json:"name"`
+	Nonce string `json:"nonce"`
+}
+
+func (s *store) exchangeAndVerifyIDToken(ctx context.Context, code string, req authRequest) (idTokenClaims, error) {
+	s.mu.Lock()
+	client, err := s.ensureOIDCClientLocked(ctx)
+	s.mu.Unlock()
+	if err != nil {
+		return idTokenClaims{}, err
+	}
+
+	tok, err := client.oauthConfig.Exchange(ctx, code, oauth2.SetAuthURLParam("code_verifier", req.CodeVerifier))
+	if err != nil {
+		return idTokenClaims{}, fmt.Errorf("oauth exchange failed: %w", err)
+	}
+	raw, ok := tok.Extra("id_token").(string)
+	if !ok || raw == "" {
+		return idTokenClaims{}, errors.New("id_token missing")
+	}
+	verified, err := client.verifier.Verify(ctx, raw)
+	if err != nil {
+		return idTokenClaims{}, fmt.Errorf("id token verify failed: %w", err)
+	}
+	var claims idTokenClaims
+	if err := verified.Claims(&claims); err != nil {
+		return idTokenClaims{}, err
+	}
+	return claims, nil
+}
+
+func (s *store) buildAuthorizationURLLocked(state, nonce, verifier string) (string, error) {
+	if !oidcConfigured() {
+		base := strings.TrimSpace(os.Getenv("APP_BASE_URL"))
+		if base == "" {
+			base = "http://localhost:8080"
+		}
+		mockURL := fmt.Sprintf("%s/v1/auth/google/callback?code=mock-code&state=%s&mock_email=%s&mock_name=%s",
+			strings.TrimRight(base, "/"),
+			url.QueryEscape(state),
+			url.QueryEscape("owner@example.com"),
+			url.QueryEscape("Owner"),
+		)
+		return mockURL, nil
+	}
+	client, err := s.ensureOIDCClientLocked(context.Background())
+	if err != nil {
+		return "", err
+	}
+	challenge := pkceChallenge(verifier)
+	authURL := client.oauthConfig.AuthCodeURL(
+		state,
+		oauth2.SetAuthURLParam("nonce", nonce),
+		oauth2.SetAuthURLParam("code_challenge", challenge),
+		oauth2.SetAuthURLParam("code_challenge_method", "S256"),
+	)
+	return authURL, nil
+}
+
+func (s *store) ensureOIDCClientLocked(ctx context.Context) (*oidcClient, error) {
+	if s.oidc != nil {
+		return s.oidc, nil
+	}
+	if !oidcConfigured() {
+		return nil, errors.New("OIDC is not configured")
+	}
+	issuer := os.Getenv("OIDC_ISSUER_URL")
+	clientID := os.Getenv("OIDC_CLIENT_ID")
+	clientSecret := os.Getenv("OIDC_CLIENT_SECRET")
+	redirectURL := os.Getenv("OIDC_REDIRECT_URL")
+	if redirectURL == "" {
+		base := strings.TrimSpace(os.Getenv("APP_BASE_URL"))
+		if base == "" {
+			base = "http://localhost:8080"
+		}
+		redirectURL = strings.TrimRight(base, "/") + "/v1/auth/google/callback"
+	}
+	provider, err := oidc.NewProvider(ctx, issuer)
+	if err != nil {
+		return nil, err
+	}
+	s.oidc = &oidcClient{
+		provider: provider,
+		verifier: provider.Verifier(&oidc.Config{ClientID: clientID}),
+		oauthConfig: oauth2.Config{
+			ClientID:     clientID,
+			ClientSecret: clientSecret,
+			Endpoint:     provider.Endpoint(),
+			RedirectURL:  redirectURL,
+			Scopes:       []string{oidc.ScopeOpenID, "email", "profile"},
+		},
+	}
+	return s.oidc, nil
+}
+
+func oidcConfigured() bool {
+	return strings.TrimSpace(os.Getenv("OIDC_ISSUER_URL")) != "" &&
+		strings.TrimSpace(os.Getenv("OIDC_CLIENT_ID")) != "" &&
+		strings.TrimSpace(os.Getenv("OIDC_CLIENT_SECRET")) != ""
+}
+
+func pkceChallenge(verifier string) string {
+	sum := sha256.Sum256([]byte(verifier))
+	return base64.RawURLEncoding.EncodeToString(sum[:])
+}
+
+func (s *store) exchangeSession(exchangeCode string) (api.AuthSessionResponse, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	rec, ok := s.exchangeCodes[exchangeCode]
+	if !ok {
+		return api.AuthSessionResponse{}, errors.New("invalid exchange code")
+	}
+	if rec.Used || time.Now().In(s.loc).After(rec.ExpiresAt) {
+		delete(s.exchangeCodes, exchangeCode)
+		s.persistLocked()
+		return api.AuthSessionResponse{}, errors.New("exchange code expired")
+	}
+	user, ok := s.users[rec.UserID]
+	if !ok {
+		return api.AuthSessionResponse{}, errors.New("user not found")
+	}
 	token, err := randomToken()
 	if err != nil {
 		return api.AuthSessionResponse{}, err
 	}
-	s.sessions[token] = userID
-	user := s.users[userID]
+	rec.Used = true
+	s.exchangeCodes[exchangeCode] = rec
+	s.sessions[token] = rec.UserID
+	s.persistLocked()
 
-	return api.AuthSessionResponse{
-		AccessToken: token,
-		User:        user.toAPI(),
-	}, nil
+	return api.AuthSessionResponse{AccessToken: token, User: user.toAPI()}, nil
+}
+
+func (s *store) revokeSession(token string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.sessions, token)
+	s.persistLocked()
+}
+
+func (s *store) getOrCreateUserLocked(email, displayName string) (string, userRecord) {
+	userID, ok := s.usersByMail[email]
+	now := time.Now().In(s.loc)
+	if !ok {
+		userID = s.nextID("usr")
+		user := userRecord{ID: userID, Email: email, Name: displayName, CreatedAt: now}
+		s.users[userID] = user
+		s.usersByMail[email] = userID
+		teamID := s.nextID("team")
+		s.memberships[userID] = []membership{{TeamID: teamID, Role: api.Owner}}
+		return userID, user
+	}
+	user := s.users[userID]
+	if displayName != "" && user.Name != displayName {
+		user.Name = displayName
+		s.users[userID] = user
+	}
+	return userID, user
 }
 
 func (s *store) currentUserAndMemberships(userID string) (userRecord, []api.TeamMembership, error) {
@@ -486,6 +905,7 @@ func (s *store) createInvite(userID string, req api.CreateInviteRequest) (api.In
 		UsedCount: 0,
 	}
 	s.invites[code] = invite
+	s.persistLocked()
 
 	return api.InviteCodeResponse{
 		Code:      code,
@@ -522,7 +942,7 @@ func (s *store) joinTeam(userID, code string) (api.JoinTeamResponse, error) {
 	s.memberships[userID] = append(s.memberships[userID], membership{TeamID: invite.TeamID, Role: api.Member})
 	invite.UsedCount++
 	s.invites[code] = invite
-
+	s.persistLocked()
 	return api.JoinTeamResponse{TeamId: invite.TeamID}, nil
 }
 
@@ -586,6 +1006,7 @@ func (s *store) createTask(userID string, req api.CreateTaskRequest) (api.Task, 
 		UpdatedAt:  now,
 	}
 	s.tasks[task.ID] = task
+	s.persistLocked()
 	return task.toAPI(), nil
 }
 
@@ -624,6 +1045,7 @@ func (s *store) patchTask(userID, taskID string, req api.UpdateTaskRequest) (api
 	}
 	task.UpdatedAt = time.Now().In(s.loc)
 	s.tasks[task.ID] = task
+	s.persistLocked()
 	return task.toAPI(), nil
 }
 
@@ -644,6 +1066,7 @@ func (s *store) deleteTask(userID, taskID string) error {
 			delete(s.completions, key)
 		}
 	}
+	s.persistLocked()
 	return nil
 }
 
@@ -684,6 +1107,7 @@ func (s *store) toggleTaskCompletion(userID, taskID string, target time.Time) (a
 	}
 
 	count := s.weeklyCompletionCountLocked(taskID, startOfWeek(targetDate, s.loc))
+	s.persistLocked()
 	return api.TaskCompletionResponse{
 		TaskId:               taskID,
 		TargetDate:           toDate(targetDate),
@@ -732,6 +1156,7 @@ func (s *store) createPenaltyRule(userID string, req api.CreatePenaltyRuleReques
 		UpdatedAt:   now,
 	}
 	s.rules[r.ID] = r
+	s.persistLocked()
 	return r.toAPI(), nil
 }
 
@@ -760,6 +1185,7 @@ func (s *store) patchPenaltyRule(userID, ruleID string, req api.UpdatePenaltyRul
 	}
 	rule.UpdatedAt = time.Now().In(s.loc)
 	s.rules[ruleID] = rule
+	s.persistLocked()
 	return rule.toAPI(), nil
 }
 
@@ -775,6 +1201,7 @@ func (s *store) deletePenaltyRule(userID, ruleID string) error {
 		return errors.New("rule not found")
 	}
 	delete(s.rules, ruleID)
+	s.persistLocked()
 	return nil
 }
 
@@ -818,6 +1245,7 @@ func (s *store) getHome(userID string) (api.HomeResponse, error) {
 	sort.Slice(weekly, func(i, j int) bool { return weekly[i].Task.CreatedAt.Before(weekly[j].Task.CreatedAt) })
 
 	elapsed := int(today.Sub(weekStart).Hours()/24) + 1
+	s.persistLocked()
 	return api.HomeResponse{
 		Month:               monthKey,
 		Today:               toDate(today),
@@ -840,6 +1268,7 @@ func (s *store) getMonthlySummary(userID string, month *string) (api.MonthlyPena
 		targetMonth = *month
 	}
 	summary := s.ensureMonthSummaryLocked(teamID, targetMonth)
+	s.persistLocked()
 	return summary.toAPI(), nil
 }
 
@@ -852,6 +1281,7 @@ func (s *store) closeDayForUser(userID string) (api.CloseResponse, error) {
 	}
 	now := time.Now().In(s.loc)
 	s.closeDayLocked(now, teamID)
+	s.persistLocked()
 	return api.CloseResponse{ClosedAt: now, Month: now.Format("2006-01")}, nil
 }
 
@@ -864,6 +1294,7 @@ func (s *store) closeWeekForUser(userID string) (api.CloseResponse, error) {
 	}
 	now := time.Now().In(s.loc)
 	s.closeWeekLocked(now, teamID)
+	s.persistLocked()
 	return api.CloseResponse{ClosedAt: now, Month: now.Format("2006-01")}, nil
 }
 
@@ -876,6 +1307,7 @@ func (s *store) closeMonthForUser(userID string) (api.CloseResponse, error) {
 	}
 	now := time.Now().In(s.loc)
 	closedMonth := s.closeMonthLocked(now, teamID)
+	s.persistLocked()
 	return api.CloseResponse{ClosedAt: now, Month: closedMonth}, nil
 }
 
@@ -1092,4 +1524,74 @@ func toDate(t time.Time) openapi_types.Date {
 
 func writeError(c *gin.Context, status int, message string) {
 	c.JSON(status, gin.H{"message": message})
+}
+
+func defaultUserMap(v map[string]userRecord) map[string]userRecord {
+	if v == nil {
+		return map[string]userRecord{}
+	}
+	return v
+}
+
+func defaultStringMap(v map[string]string) map[string]string {
+	if v == nil {
+		return map[string]string{}
+	}
+	return v
+}
+
+func defaultMembershipMap(v map[string][]membership) map[string][]membership {
+	if v == nil {
+		return map[string][]membership{}
+	}
+	return v
+}
+
+func defaultInviteMap(v map[string]inviteCode) map[string]inviteCode {
+	if v == nil {
+		return map[string]inviteCode{}
+	}
+	return v
+}
+
+func defaultTaskMap(v map[string]taskRecord) map[string]taskRecord {
+	if v == nil {
+		return map[string]taskRecord{}
+	}
+	return v
+}
+
+func defaultRuleMap(v map[string]ruleRecord) map[string]ruleRecord {
+	if v == nil {
+		return map[string]ruleRecord{}
+	}
+	return v
+}
+
+func defaultBoolMap(v map[string]bool) map[string]bool {
+	if v == nil {
+		return map[string]bool{}
+	}
+	return v
+}
+
+func defaultMonthSummaryMap(v map[string]*monthSummary) map[string]*monthSummary {
+	if v == nil {
+		return map[string]*monthSummary{}
+	}
+	return v
+}
+
+func defaultAuthRequestMap(v map[string]authRequest) map[string]authRequest {
+	if v == nil {
+		return map[string]authRequest{}
+	}
+	return v
+}
+
+func defaultExchangeCodeMap(v map[string]exchangeCodeRecord) map[string]exchangeCodeRecord {
+	if v == nil {
+		return map[string]exchangeCodeRecord{}
+	}
+	return v
 }

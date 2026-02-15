@@ -26,9 +26,11 @@ services:
     working_dir: /app/backend
     ports:
       - "8080:8080"
+    env_file:
+      - .env
     environment:
-      PORT: "8080"
-      DATABASE_URL: "postgres://kaji:kaji@postgres:5432/kaji?sslmode=disable"
+      PORT: "${PORT:-8080}"
+      DATABASE_URL: "${DATABASE_URL:-postgres://kaji:kaji@postgres:5432/kaji?sslmode=disable}"
     depends_on:
       postgres:
         condition: service_healthy
@@ -43,8 +45,10 @@ services:
     working_dir: /app/frontend
     ports:
       - "5173:5173"
+    env_file:
+      - .env
     environment:
-      VITE_API_BASE_URL: "http://localhost:8080"
+      VITE_API_BASE_URL: "${VITE_API_BASE_URL:-http://localhost:8080}"
     depends_on:
       - backend
     command: sh -c "npm ci && npm run dev -- --host 0.0.0.0 --port 5173"

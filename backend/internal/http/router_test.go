@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -19,19 +20,19 @@ func TestHealth(t *testing.T) {
 	}
 }
 
-func TestAuthCallbackRouteExists(t *testing.T) {
+func TestAuthFlowRoutesExist(t *testing.T) {
 	r := NewRouter()
-	res := doRequest(t, r, http.MethodPost, "/v1/auth/oidc/google/callback", `{"email":"alice@example.com","displayName":"Alice"}`, "")
+	res := doRequest(t, r, http.MethodGet, "/v1/auth/google/start", "", "")
 	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200 on auth callback, got %d: %s", res.Code, res.Body.String())
+		t.Fatalf("expected 200 on auth start, got %d: %s", res.Code, res.Body.String())
 	}
 
-	var session api.AuthSessionResponse
-	if err := json.Unmarshal(res.Body.Bytes(), &session); err != nil {
-		t.Fatalf("failed to parse auth response: %v", err)
+	var start api.AuthStartResponse
+	if err := json.Unmarshal(res.Body.Bytes(), &start); err != nil {
+		t.Fatalf("failed to parse auth start response: %v", err)
 	}
-	if session.AccessToken == "" {
-		t.Fatalf("expected access token to be issued")
+	if start.AuthorizationUrl == "" {
+		t.Fatalf("expected authorization url")
 	}
 }
 
@@ -45,7 +46,7 @@ func TestProtectedRouteRequiresAuth(t *testing.T) {
 
 func TestInviteJoinFlow(t *testing.T) {
 	r := NewRouter()
-	ownerToken := login(t, r, "owner@example.com", "Owner")
+	ownerToken := login(t, r)
 	inviteRes := doRequest(t, r, http.MethodPost, "/v1/teams/invites", `{"maxUses":2,"expiresInHours":72}`, ownerToken)
 	if inviteRes.Code != http.StatusCreated {
 		t.Fatalf("expected 201 invite create, got %d: %s", inviteRes.Code, inviteRes.Body.String())
@@ -59,7 +60,7 @@ func TestInviteJoinFlow(t *testing.T) {
 		t.Fatalf("expected invite code")
 	}
 
-	memberToken := login(t, r, "member@example.com", "Member")
+	memberToken := login(t, r)
 	joinRes := doRequest(t, r, http.MethodPost, "/v1/teams/join", `{"code":"`+invite.Code+`"}`, memberToken)
 	if joinRes.Code != http.StatusOK {
 		t.Fatalf("expected 200 join, got %d: %s", joinRes.Code, joinRes.Body.String())
@@ -68,7 +69,7 @@ func TestInviteJoinFlow(t *testing.T) {
 
 func TestTaskLifecycleAndHome(t *testing.T) {
 	r := NewRouter()
-	token := login(t, r, "bob@example.com", "Bob")
+	token := login(t, r)
 
 	taskRes := doRequest(t, r, http.MethodPost, "/v1/tasks", `{"title":"皿洗い","type":"daily","penaltyPoints":2}`, token)
 	if taskRes.Code != http.StatusCreated {
@@ -100,16 +101,43 @@ func TestTaskLifecycleAndHome(t *testing.T) {
 	}
 }
 
-func login(t *testing.T, r http.Handler, email, name string) string {
+func login(t *testing.T, r http.Handler) string {
 	t.Helper()
-	res := doRequest(t, r, http.MethodPost, "/v1/auth/oidc/google/callback", `{"email":"`+email+`","displayName":"`+name+`"}`, "")
-	if res.Code != http.StatusOK {
-		t.Fatalf("login failed: %d %s", res.Code, res.Body.String())
+
+	startRes := doRequest(t, r, http.MethodGet, "/v1/auth/google/start", "", "")
+	if startRes.Code != http.StatusOK {
+		t.Fatalf("auth start failed: %d %s", startRes.Code, startRes.Body.String())
+	}
+
+	var start api.AuthStartResponse
+	if err := json.Unmarshal(startRes.Body.Bytes(), &start); err != nil {
+		t.Fatalf("failed to parse auth start response: %v", err)
+	}
+
+	u, err := url.Parse(start.AuthorizationUrl)
+	if err != nil {
+		t.Fatalf("failed to parse authorization url: %v", err)
+	}
+	callbackPath := u.RequestURI()
+	callbackRes := doRequest(t, r, http.MethodGet, callbackPath, "", "")
+	if callbackRes.Code != http.StatusOK {
+		t.Fatalf("auth callback failed: %d %s", callbackRes.Code, callbackRes.Body.String())
+	}
+
+	var callback api.AuthCallbackResponse
+	if err := json.Unmarshal(callbackRes.Body.Bytes(), &callback); err != nil {
+		t.Fatalf("failed to parse callback response: %v", err)
+	}
+
+	exchangeReq := `{"exchangeCode":"` + callback.ExchangeCode + `"}`
+	exchangeRes := doRequest(t, r, http.MethodPost, "/v1/auth/sessions/exchange", exchangeReq, "")
+	if exchangeRes.Code != http.StatusOK {
+		t.Fatalf("exchange failed: %d %s", exchangeRes.Code, exchangeRes.Body.String())
 	}
 
 	var session api.AuthSessionResponse
-	if err := json.Unmarshal(res.Body.Bytes(), &session); err != nil {
-		t.Fatalf("failed to parse login response: %v", err)
+	if err := json.Unmarshal(exchangeRes.Body.Bytes(), &session); err != nil {
+		t.Fatalf("failed to parse exchange response: %v", err)
 	}
 	return session.AccessToken
 }
