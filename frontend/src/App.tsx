@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
+  clearAccessToken,
+  readAccessToken,
+  writeAccessToken,
+} from "./lib/api/client";
+import {
   type CreatePenaltyRuleRequest,
   type CreateTaskRequest,
   type HomeResponse,
@@ -107,7 +112,7 @@ function App() {
   }, [loggedIn]);
 
   useEffect(() => {
-    const token = window.localStorage.getItem("kaji.accessToken");
+    const token = readAccessToken();
     if (token != null && token !== "") {
       setSession({ token, userName: null });
     }
@@ -125,7 +130,7 @@ function App() {
       try {
         const res = await postAuthSessionsExchange({ exchangeCode });
         const token = res.data.accessToken;
-        window.localStorage.setItem("kaji.accessToken", token);
+        writeAccessToken(token);
         setSession({ token, userName: res.data.user.displayName });
         const next = new URL(window.location.href);
         next.searchParams.delete("exchangeCode");
@@ -175,7 +180,7 @@ function App() {
     } catch {
       // ignore logout request errors and clear local session anyway
     }
-    window.localStorage.removeItem("kaji.accessToken");
+    clearAccessToken();
     setSession({ token: null, userName: null });
     setHome(null);
     setTasks([]);

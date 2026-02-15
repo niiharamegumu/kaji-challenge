@@ -7,7 +7,6 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -357,24 +356,6 @@ type store struct {
 	oidc          *oidcClient
 }
 
-type persistState struct {
-	IDs            int64                         `json:"ids"`
-	Users          map[string]userRecord         `json:"users"`
-	UsersByMail    map[string]string             `json:"usersByMail"`
-	Memberships    map[string][]membership       `json:"memberships"`
-	Sessions       map[string]string             `json:"sessions"`
-	Invites        map[string]inviteCode         `json:"invites"`
-	Tasks          map[string]taskRecord         `json:"tasks"`
-	Rules          map[string]ruleRecord         `json:"rules"`
-	Completions    map[string]bool               `json:"completions"`
-	MonthSummaries map[string]*monthSummary      `json:"monthSummaries"`
-	DayPenaltyKeys map[string]bool               `json:"dayPenaltyKeys"`
-	WeekPenaltyKey map[string]bool               `json:"weekPenaltyKey"`
-	MonthClosedKey map[string]bool               `json:"monthClosedKey"`
-	AuthRequests   map[string]authRequest        `json:"authRequests"`
-	ExchangeCodes  map[string]exchangeCodeRecord `json:"exchangeCodes"`
-}
-
 type userRecord struct {
 	ID        string
 	Email     string
@@ -452,6 +433,9 @@ func newStore() *store {
 		authRequests:   map[string]authRequest{},
 		exchangeCodes:  map[string]exchangeCodeRecord{},
 	}
+	if err := validateOIDCSettings(); err != nil {
+		panic(err)
+	}
 	if err := s.initPersistence(); err != nil {
 		panic(err)
 	}
@@ -472,103 +456,20 @@ func (s *store) initPersistence() error {
 	if err := db.PingContext(ctx); err != nil {
 		return err
 	}
-	if _, err := db.ExecContext(ctx, `
-		CREATE TABLE IF NOT EXISTS app_state (
-			id SMALLINT PRIMARY KEY,
-			payload JSONB NOT NULL,
-			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-		)
-	`); err != nil {
-		return err
-	}
 	s.db = db
-	return s.loadState()
-}
-
-func (s *store) loadState() error {
-	if s.db == nil {
-		return nil
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	var payload []byte
-	err := s.db.QueryRowContext(ctx, "SELECT payload FROM app_state WHERE id = 1").Scan(&payload)
-	if errors.Is(err, sql.ErrNoRows) {
-		return s.persistLockedWithContext(ctx)
-	}
-	if err != nil {
-		return err
-	}
-	var snap persistState
-	if err := json.Unmarshal(payload, &snap); err != nil {
-		return err
-	}
-	s.ids = snap.IDs
-	s.users = defaultUserMap(snap.Users)
-	s.usersByMail = defaultStringMap(snap.UsersByMail)
-	s.memberships = defaultMembershipMap(snap.Memberships)
-	s.sessions = defaultStringMap(snap.Sessions)
-	s.invites = defaultInviteMap(snap.Invites)
-	s.tasks = defaultTaskMap(snap.Tasks)
-	s.rules = defaultRuleMap(snap.Rules)
-	s.completions = defaultBoolMap(snap.Completions)
-	s.monthSummaries = defaultMonthSummaryMap(snap.MonthSummaries)
-	s.dayPenaltyKeys = defaultBoolMap(snap.DayPenaltyKeys)
-	s.weekPenaltyKey = defaultBoolMap(snap.WeekPenaltyKey)
-	s.monthClosedKey = defaultBoolMap(snap.MonthClosedKey)
-	s.authRequests = defaultAuthRequestMap(snap.AuthRequests)
-	s.exchangeCodes = defaultExchangeCodeMap(snap.ExchangeCodes)
 	return nil
 }
 
 func (s *store) persistLocked() {
-	if s.db == nil {
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	_ = s.persistLockedWithContext(ctx)
-}
-
-func (s *store) persistLockedWithContext(ctx context.Context) error {
-	if s.db == nil {
-		return nil
-	}
-	snap := persistState{
-		IDs:            s.ids,
-		Users:          s.users,
-		UsersByMail:    s.usersByMail,
-		Memberships:    s.memberships,
-		Sessions:       s.sessions,
-		Invites:        s.invites,
-		Tasks:          s.tasks,
-		Rules:          s.rules,
-		Completions:    s.completions,
-		MonthSummaries: s.monthSummaries,
-		DayPenaltyKeys: s.dayPenaltyKeys,
-		WeekPenaltyKey: s.weekPenaltyKey,
-		MonthClosedKey: s.monthClosedKey,
-		AuthRequests:   s.authRequests,
-		ExchangeCodes:  s.exchangeCodes,
-	}
-	payload, err := json.Marshal(snap)
-	if err != nil {
-		return err
-	}
-	_, err = s.db.ExecContext(ctx, `
-		INSERT INTO app_state (id, payload, updated_at)
-		VALUES (1, $1, NOW())
-		ON CONFLICT (id) DO UPDATE SET payload = EXCLUDED.payload, updated_at = NOW()
-	`, payload)
-	return err
+	// 永続化は今後repository層へ移行予定。
 }
 
 func authMiddleware(s *store) gin.HandlerFunc {
 	publicPaths := map[string]bool{
-		"/health":                        true,
-		"/v1/auth/google/start":          true,
-		"/v1/auth/google/callback":       true,
-		"/v1/auth/sessions/exchange":     true,
+		"/health":                    true,
+		"/v1/auth/google/start":      true,
+		"/v1/auth/google/callback":   true,
+		"/v1/auth/sessions/exchange": true,
 	}
 
 	return func(c *gin.Context) {
@@ -657,6 +558,9 @@ func (s *store) completeGoogleAuth(ctx context.Context, code, state, mockEmail, 
 	email := strings.TrimSpace(strings.ToLower(mockEmail))
 	name := strings.TrimSpace(mockName)
 	sub := strings.TrimSpace(mockSub)
+	if oidcStrictMode() && (email != "" || name != "" || sub != "") {
+		return "", "", errors.New("mock callback params are disabled when OIDC_STRICT_MODE=true")
+	}
 
 	if email == "" {
 		claims, err := s.exchangeAndVerifyIDToken(ctx, code, req)
@@ -731,6 +635,9 @@ func (s *store) exchangeAndVerifyIDToken(ctx context.Context, code string, req a
 
 func (s *store) buildAuthorizationURLLocked(state, nonce, verifier string) (string, error) {
 	if !oidcConfigured() {
+		if oidcStrictMode() {
+			return "", errors.New("OIDC_STRICT_MODE=true requires OIDC configuration")
+		}
 		base := strings.TrimSpace(os.Getenv("APP_BASE_URL"))
 		if base == "" {
 			base = "http://localhost:8080"
@@ -797,6 +704,33 @@ func oidcConfigured() bool {
 	return strings.TrimSpace(os.Getenv("OIDC_ISSUER_URL")) != "" &&
 		strings.TrimSpace(os.Getenv("OIDC_CLIENT_ID")) != "" &&
 		strings.TrimSpace(os.Getenv("OIDC_CLIENT_SECRET")) != ""
+}
+
+func oidcStrictMode() bool {
+	return strings.EqualFold(strings.TrimSpace(os.Getenv("OIDC_STRICT_MODE")), "true")
+}
+
+func validateOIDCSettings() error {
+	if !oidcStrictMode() {
+		return nil
+	}
+	missing := []string{}
+	required := map[string]string{
+		"OIDC_ISSUER_URL":    strings.TrimSpace(os.Getenv("OIDC_ISSUER_URL")),
+		"OIDC_CLIENT_ID":     strings.TrimSpace(os.Getenv("OIDC_CLIENT_ID")),
+		"OIDC_CLIENT_SECRET": strings.TrimSpace(os.Getenv("OIDC_CLIENT_SECRET")),
+		"OIDC_REDIRECT_URL":  strings.TrimSpace(os.Getenv("OIDC_REDIRECT_URL")),
+	}
+	for key, value := range required {
+		if value == "" {
+			missing = append(missing, key)
+		}
+	}
+	sort.Strings(missing)
+	if len(missing) > 0 {
+		return fmt.Errorf("OIDC_STRICT_MODE=true but missing required env vars: %s", strings.Join(missing, ", "))
+	}
+	return nil
 }
 
 func pkceChallenge(verifier string) string {
@@ -1524,74 +1458,4 @@ func toDate(t time.Time) openapi_types.Date {
 
 func writeError(c *gin.Context, status int, message string) {
 	c.JSON(status, gin.H{"message": message})
-}
-
-func defaultUserMap(v map[string]userRecord) map[string]userRecord {
-	if v == nil {
-		return map[string]userRecord{}
-	}
-	return v
-}
-
-func defaultStringMap(v map[string]string) map[string]string {
-	if v == nil {
-		return map[string]string{}
-	}
-	return v
-}
-
-func defaultMembershipMap(v map[string][]membership) map[string][]membership {
-	if v == nil {
-		return map[string][]membership{}
-	}
-	return v
-}
-
-func defaultInviteMap(v map[string]inviteCode) map[string]inviteCode {
-	if v == nil {
-		return map[string]inviteCode{}
-	}
-	return v
-}
-
-func defaultTaskMap(v map[string]taskRecord) map[string]taskRecord {
-	if v == nil {
-		return map[string]taskRecord{}
-	}
-	return v
-}
-
-func defaultRuleMap(v map[string]ruleRecord) map[string]ruleRecord {
-	if v == nil {
-		return map[string]ruleRecord{}
-	}
-	return v
-}
-
-func defaultBoolMap(v map[string]bool) map[string]bool {
-	if v == nil {
-		return map[string]bool{}
-	}
-	return v
-}
-
-func defaultMonthSummaryMap(v map[string]*monthSummary) map[string]*monthSummary {
-	if v == nil {
-		return map[string]*monthSummary{}
-	}
-	return v
-}
-
-func defaultAuthRequestMap(v map[string]authRequest) map[string]authRequest {
-	if v == nil {
-		return map[string]authRequest{}
-	}
-	return v
-}
-
-func defaultExchangeCodeMap(v map[string]exchangeCodeRecord) map[string]exchangeCodeRecord {
-	if v == nil {
-		return map[string]exchangeCodeRecord{}
-	}
-	return v
 }
