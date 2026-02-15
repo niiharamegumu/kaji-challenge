@@ -1,7 +1,14 @@
 {
   "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
   "files": {
-    "ignore": ["dist/**", "src/lib/api/generated/**"]
+    "ignore": [
+      ".vite/**",
+      "dist/**",
+      "src/lib/api/generated/**",
+      "*.config.js",
+      "*.config.d.ts",
+      "*.tsbuildinfo"
+    ]
   },
   "formatter": {
     "enabled": true,
