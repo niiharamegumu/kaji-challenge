@@ -87,7 +87,10 @@ describe("App", () => {
   });
 
   it("posts task from admin tab", async () => {
-    window.localStorage.setItem("kaji.accessToken", "token-1");
+    window.localStorage.setItem(
+      "kaji.session.v1",
+      JSON.stringify({ version: 1, accessToken: "token-1" }),
+    );
     const user = userEvent.setup();
     render(<App />);
 
@@ -101,5 +104,15 @@ describe("App", () => {
       type: "daily",
       penaltyPoints: 2,
     });
+  });
+
+  it("falls back to logged-out state when stored session is malformed", () => {
+    window.localStorage.setItem("kaji.session.v1", "{invalid-json");
+    render(<App />);
+
+    expect(screen.getAllByText("家事チャレ MVP").length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByRole("button", { name: "Googleでログイン" }).length,
+    ).toBeGreaterThan(0);
   });
 });
