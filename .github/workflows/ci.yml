@@ -5,7 +5,33 @@ on:
   pull_request:
 
 jobs:
-  security:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect changed paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - 'api/**'
+              - 'Makefile'
+              - '.github/workflows/ci.yml'
+            frontend:
+              - 'frontend/**'
+              - 'api/**'
+              - 'Makefile'
+              - '.github/workflows/ci.yml'
+
+  security-backend:
+    needs: changes
+    if: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.backend == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -14,10 +40,15 @@ jobs:
         with:
           go-version-file: backend/go.mod
 
-      - name: Install golangci-lint
-        run: |
-          go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
-          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Run backend security gate (Critical only)
+        run: make security-backend
+
+  security-frontend:
+    needs: changes
+    if: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
@@ -29,5 +60,5 @@ jobs:
         run: npm ci
         working-directory: frontend
 
-      - name: Run security gate (Critical only)
-        run: make security
+      - name: Run frontend security gate (Critical only)
+        run: make security-frontend
