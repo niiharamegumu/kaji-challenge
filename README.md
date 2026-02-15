@@ -22,11 +22,13 @@
 ## 開発コマンド
 
 - `make up`: PostgreSQL 起動
-- `make down`: PostgreSQL 停止
+- `make down`: コンテナ停止（volumeは保持）
+- `make down-reset`: コンテナ停止 + volume削除（DB初期化）
 - `make dev`: frontend/backend/postgres を Compose で起動（ログ追従）
 - `make gen`: OpenAPI から frontend/backend 生成
 - `make lint`: frontend/backend lint
 - `make test`: frontend/backend test
+- `make security`: backend/frontend の脆弱性チェック（Critical fail）
 - `make check`: `gen + lint + test`
 - `make diff-gen`: 生成差分チェック
 
@@ -47,6 +49,7 @@ APIを変更する場合は、必ず `api/openapi.yaml` を先に更新してか
 - postgres: `localhost:5432`
 
 backend は `air` で起動され、`backend/` 配下の変更を自動リロードします。
+`DATABASE_URL` は全環境で必須です（未設定時は backend 起動失敗）。
 
 ## Frontend (Cloudflare Workers)
 
