@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -9,11 +10,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 )
 
 func TestHealth(t *testing.T) {
-	r := NewRouter()
+	r := newTestRouter(t)
 	res := doRequest(t, r, http.MethodGet, "/health", "", "")
 	if res.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", res.Code)
@@ -21,7 +23,7 @@ func TestHealth(t *testing.T) {
 }
 
 func TestAuthFlowRoutesExist(t *testing.T) {
-	r := NewRouter()
+	r := newTestRouter(t)
 	res := doRequest(t, r, http.MethodGet, "/v1/auth/google/start", "", "")
 	if res.Code != http.StatusOK {
 		t.Fatalf("expected 200 on auth start, got %d: %s", res.Code, res.Body.String())
@@ -36,8 +38,46 @@ func TestAuthFlowRoutesExist(t *testing.T) {
 	}
 }
 
+func TestNewRouterPanicsWhenStrictModeMissingOIDCEnv(t *testing.T) {
+	t.Setenv("OIDC_STRICT_MODE", "true")
+	t.Setenv("OIDC_ISSUER_URL", "")
+	t.Setenv("OIDC_CLIENT_ID", "")
+	t.Setenv("OIDC_CLIENT_SECRET", "")
+	t.Setenv("OIDC_REDIRECT_URL", "")
+
+	defer func() {
+		if recover() == nil {
+			t.Fatalf("expected panic when strict mode env is incomplete")
+		}
+	}()
+	_ = NewRouter()
+}
+
+func TestCompleteGoogleAuthRejectsMockParamsInStrictMode(t *testing.T) {
+	t.Setenv("OIDC_STRICT_MODE", "true")
+	loc, _ := time.LoadLocation(jstTZ)
+	if loc == nil {
+		loc = time.FixedZone("JST", 9*60*60)
+	}
+
+	s := &store{
+		loc:          loc,
+		authRequests: map[string]authRequest{},
+	}
+	s.authRequests["state-1"] = authRequest{
+		Nonce:        "nonce-1",
+		CodeVerifier: "verifier-1",
+		ExpiresAt:    time.Now().In(loc).Add(10 * time.Minute),
+	}
+
+	_, _, err := s.completeGoogleAuth(context.Background(), "mock-code", "state-1", "owner@example.com", "Owner", "")
+	if err == nil || !strings.Contains(err.Error(), "disabled") {
+		t.Fatalf("expected strict mode mock rejection, got: %v", err)
+	}
+}
+
 func TestProtectedRouteRequiresAuth(t *testing.T) {
-	r := NewRouter()
+	r := newTestRouter(t)
 	res := doRequest(t, r, http.MethodGet, "/v1/me", "", "")
 	if res.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d", res.Code)
@@ -45,7 +85,7 @@ func TestProtectedRouteRequiresAuth(t *testing.T) {
 }
 
 func TestInviteJoinFlow(t *testing.T) {
-	r := NewRouter()
+	r := newTestRouter(t)
 	ownerToken := login(t, r)
 	inviteRes := doRequest(t, r, http.MethodPost, "/v1/teams/invites", `{"maxUses":2,"expiresInHours":72}`, ownerToken)
 	if inviteRes.Code != http.StatusCreated {
@@ -68,7 +108,7 @@ func TestInviteJoinFlow(t *testing.T) {
 }
 
 func TestTaskLifecycleAndHome(t *testing.T) {
-	r := NewRouter()
+	r := newTestRouter(t)
 	token := login(t, r)
 
 	taskRes := doRequest(t, r, http.MethodPost, "/v1/tasks", `{"title":"皿洗い","type":"daily","penaltyPoints":2}`, token)
@@ -120,16 +160,30 @@ func login(t *testing.T, r http.Handler) string {
 	}
 	callbackPath := u.RequestURI()
 	callbackRes := doRequest(t, r, http.MethodGet, callbackPath, "", "")
-	if callbackRes.Code != http.StatusOK {
+	if callbackRes.Code != http.StatusOK && callbackRes.Code != http.StatusFound {
 		t.Fatalf("auth callback failed: %d %s", callbackRes.Code, callbackRes.Body.String())
 	}
 
-	var callback api.AuthCallbackResponse
-	if err := json.Unmarshal(callbackRes.Body.Bytes(), &callback); err != nil {
-		t.Fatalf("failed to parse callback response: %v", err)
+	exchangeCode := ""
+	if callbackRes.Code == http.StatusFound {
+		location := callbackRes.Header().Get("Location")
+		locURL, err := url.Parse(location)
+		if err != nil {
+			t.Fatalf("failed to parse callback redirect location: %v", err)
+		}
+		exchangeCode = locURL.Query().Get("exchangeCode")
+	} else {
+		var callback api.AuthCallbackResponse
+		if err := json.Unmarshal(callbackRes.Body.Bytes(), &callback); err != nil {
+			t.Fatalf("failed to parse callback response: %v", err)
+		}
+		exchangeCode = callback.ExchangeCode
+	}
+	if exchangeCode == "" {
+		t.Fatalf("expected exchange code from callback")
 	}
 
-	exchangeReq := `{"exchangeCode":"` + callback.ExchangeCode + `"}`
+	exchangeReq := `{"exchangeCode":"` + exchangeCode + `"}`
 	exchangeRes := doRequest(t, r, http.MethodPost, "/v1/auth/sessions/exchange", exchangeReq, "")
 	if exchangeRes.Code != http.StatusOK {
 		t.Fatalf("exchange failed: %d %s", exchangeRes.Code, exchangeRes.Body.String())
@@ -154,4 +208,14 @@ func doRequest(t *testing.T, r http.Handler, method, path, body, token string) *
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
 	return res
+}
+
+func newTestRouter(t *testing.T) *gin.Engine {
+	t.Helper()
+	t.Setenv("OIDC_STRICT_MODE", "false")
+	t.Setenv("OIDC_ISSUER_URL", "")
+	t.Setenv("OIDC_CLIENT_ID", "")
+	t.Setenv("OIDC_CLIENT_SECRET", "")
+	t.Setenv("OIDC_REDIRECT_URL", "")
+	return NewRouter()
 }

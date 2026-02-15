@@ -79,6 +79,11 @@ Cloud Run の初期設定:
 - Service: `kaji-backend`
 - Deploy mode: `--allow-unauthenticated`（アプリ層で認証）
 
+OIDC厳格運用（推奨）:
+
+- `OIDC_STRICT_MODE=true` を設定すると、`OIDC_ISSUER_URL` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` / `OIDC_REDIRECT_URL` が未設定の場合にbackendは起動失敗します。
+- `OIDC_STRICT_MODE=true` ではローカルモック認証分岐は無効化されます。
+
 ## Git Hooks
 
 - 設定: `lefthook.yml`
