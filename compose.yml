@@ -37,6 +37,9 @@ services:
     volumes:
       - ./backend:/app/backend
       - ./api:/app/api
+      - backend_go_pkg_mod:/go/pkg/mod
+      - backend_go_build_cache:/root/.cache/go-build
+      - backend_golangci_cache:/root/.cache/golangci-lint
 
   frontend:
     image: node:22
@@ -60,3 +63,6 @@ services:
 volumes:
   postgres_data:
   frontend_node_modules:
+  backend_go_pkg_mod:
+  backend_go_build_cache:
+  backend_golangci_cache:

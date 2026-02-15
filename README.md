@@ -87,7 +87,8 @@ OIDC厳格運用（推奨）:
 ## Git Hooks
 
 - 設定: `lefthook.yml`
-- pre-commit で `make gen` / `make lint` / `git diff --exit-code` を実行
+- pre-commit で `make lint` を実行
+- pre-push で `make check`（`gen + lint + test`）を実行
 
 初回セットアップ:
 
