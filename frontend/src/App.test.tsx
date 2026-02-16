@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import App from "./App";
-import { appQueryClient } from "./lib/query/queryClient";
+import { appQueryClient } from "./shared/query/queryClient";
 
 const mockGetAuthStart = vi.fn();
 const mockGetHome = vi.fn();
@@ -11,7 +11,6 @@ const mockListTasks = vi.fn();
 const mockListRules = vi.fn();
 const mockSummary = vi.fn();
 const mockGetMe = vi.fn();
-const mockPostTask = vi.fn();
 
 vi.mock("./lib/api/generated/client", () => ({
   TaskType: { daily: "daily", weekly: "weekly" },
@@ -23,7 +22,7 @@ vi.mock("./lib/api/generated/client", () => ({
   listPenaltyRules: (...args: unknown[]) => mockListRules(...args),
   getPenaltySummaryMonthly: (...args: unknown[]) => mockSummary(...args),
   getMe: (...args: unknown[]) => mockGetMe(...args),
-  postTask: (...args: unknown[]) => mockPostTask(...args),
+  postTask: vi.fn(),
   postTaskCompletionToggle: vi.fn(),
   patchTask: vi.fn(),
   deleteTask: vi.fn(),
@@ -50,7 +49,6 @@ describe("App", () => {
     mockListRules.mockReset();
     mockSummary.mockReset();
     mockGetMe.mockReset();
-    mockPostTask.mockReset();
 
     mockGetHome.mockResolvedValue({
       data: {
@@ -66,7 +64,6 @@ describe("App", () => {
     mockListRules.mockResolvedValue({ data: { items: [] } });
     mockSummary.mockResolvedValue({ data: { totalPenalty: 0 } });
     mockGetMe.mockResolvedValue({ data: { user: { displayName: "Owner" } } });
-    mockPostTask.mockResolvedValue({ data: {} });
   });
 
   it("renders login before authentication", () => {
@@ -84,7 +81,10 @@ describe("App", () => {
 
     render(<App />);
 
-    await user.click(screen.getAllByRole("button", { name: "Googleでログイン" })[0]!);
+    const loginButtons = screen.getAllByRole("button", {
+      name: "Googleでログイン",
+    });
+    await user.click(loginButtons[0]);
 
     expect(
       await screen.findByText(/ログイン開始に失敗しました/),
