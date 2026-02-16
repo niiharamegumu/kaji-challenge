@@ -1,69 +1,56 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useAtom, useAtomValue } from "jotai";
+import { useSetAtom } from "jotai";
 import { useEffect } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 
+import { readAccessToken } from "../../../lib/api/client";
+import { queryKeys } from "../../../shared/query/queryKeys";
+import { isLoggedInAtom, sessionAtom } from "../../../state/session";
+import {
+  initialRuleFormState,
+  initialTaskFormState,
+  ruleFormAtom,
+  taskFormAtom,
+} from "../../admin/state/forms";
+import { inviteCodeAtom, joinCodeAtom } from "../../admin/state/ui";
+import { LoginCard } from "../../auth/components/LoginCard";
+import {
+  useLoginAction,
+  useLogoutAction,
+  useMeQuery,
+} from "../../auth/hooks/useAuthActions";
+import { useExchangeCodeFallback } from "../../auth/hooks/useExchangeCodeFallback";
+import { consumeFlashStatus } from "../../auth/state/flash";
 import { StatusBanner } from "../components/StatusBanner";
-import { LoginCard } from "../features/auth/LoginCard";
-import { useMeQuery } from "../features/api/hooks";
-import { consumeFlashStatus } from "../lib/auth/flash";
-import {
-  clearAccessToken,
-  readAccessToken,
-  writeAccessToken,
-} from "../lib/api/client";
-import {
-  getAuthGoogleStart,
-  postAuthLogout,
-  postAuthSessionsExchange,
-} from "../lib/api/generated/client";
-import { formatError } from "../lib/errors";
-import { queryKeys } from "../lib/query/queryKeys";
-import { isLoggedInAtom, sessionAtom } from "../state/session";
-import { statusMessageAtom } from "../state/ui";
+import { statusMessageAtom } from "../state/status";
 
 const linkClass = ({ isActive }: { isActive: boolean }) =>
   `rounded-lg px-3 py-2 text-sm ${isActive ? "bg-stone-900 text-white" : "bg-stone-100"}`;
 
 export function RootLayout() {
   const queryClient = useQueryClient();
-  const [, setSession] = useAtom(sessionAtom);
+  const [session, setSession] = useAtom(sessionAtom);
   const [status, setStatus] = useAtom(statusMessageAtom);
   const loggedIn = useAtomValue(isLoggedInAtom);
+
+  const setTaskForm = useSetAtom(taskFormAtom);
+  const setRuleForm = useSetAtom(ruleFormAtom);
+  const setInviteCode = useSetAtom(inviteCodeAtom);
+  const setJoinCode = useSetAtom(joinCodeAtom);
+
   const meQuery = useMeQuery(loggedIn);
+  const login = useLoginAction(setStatus);
+  const logoutAction = useLogoutAction(setStatus, setSession);
 
   useEffect(() => {
     const token = readAccessToken();
-    if (token != null && token !== "") {
+    if (token != null && token !== "" && session.token == null) {
       setSession({ token });
     }
-  }, [setSession]);
+  }, [session.token, setSession]);
 
-  // Backward compatibility for auth callback style: /?exchangeCode=...
-  useEffect(() => {
-    const exchangeCode = new URLSearchParams(window.location.search).get(
-      "exchangeCode",
-    );
-    if (exchangeCode == null || exchangeCode === "") {
-      return;
-    }
-
-    const run = async () => {
-      try {
-        const res = await postAuthSessionsExchange({ exchangeCode });
-        writeAccessToken(res.data.accessToken);
-        setSession({ token: res.data.accessToken });
-        const next = new URL(window.location.href);
-        next.searchParams.delete("exchangeCode");
-        window.history.replaceState({}, "", next.pathname + next.search);
-        setStatus("ログインしました");
-      } catch (error) {
-        setStatus(`ログインに失敗しました: ${formatError(error)}`);
-      }
-    };
-
-    void run();
-  }, [setSession, setStatus]);
+  useExchangeCodeFallback(setSession, setStatus);
 
   useEffect(() => {
     const flash = consumeFlashStatus();
@@ -72,25 +59,12 @@ export function RootLayout() {
     }
   }, [setStatus]);
 
-  const login = async () => {
-    try {
-      const res = await getAuthGoogleStart();
-      window.location.href = res.data.authorizationUrl;
-    } catch (error) {
-      setStatus(`ログイン開始に失敗しました: ${formatError(error)}`);
-    }
-  };
-
   const logout = async () => {
-    try {
-      await postAuthLogout();
-    } catch {
-      // ignore logout request errors and clear local session anyway
-    }
-    clearAccessToken();
-    setSession({ token: null });
-    setStatus("ログアウトしました");
-    await queryClient.removeQueries();
+    await logoutAction();
+    setTaskForm(initialTaskFormState);
+    setRuleForm(initialRuleFormState);
+    setInviteCode("");
+    setJoinCode("");
   };
 
   const refresh = async () => {
@@ -118,7 +92,11 @@ export function RootLayout() {
               <span className="rounded-full bg-[color:var(--color-matcha-100)] px-3 py-1 text-sm">
                 {meQuery.data?.user.displayName ?? "ログイン中"}
               </span>
-              <button type="button" className="rounded-lg border border-stone-300 px-3 py-1 text-sm" onClick={() => void logout()}>
+              <button
+                type="button"
+                className="rounded-lg border border-stone-300 px-3 py-1 text-sm"
+                onClick={() => void logout()}
+              >
                 ログアウト
               </button>
             </div>
@@ -130,7 +108,11 @@ export function RootLayout() {
             <NavLink className={linkClass} to="/admin">
               管理
             </NavLink>
-            <button type="button" className="ml-auto rounded-lg border border-stone-300 px-3 py-2 text-sm" onClick={() => void refresh()}>
+            <button
+              type="button"
+              className="ml-auto rounded-lg border border-stone-300 px-3 py-2 text-sm"
+              onClick={() => void refresh()}
+            >
               再読込
             </button>
           </div>

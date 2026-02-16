@@ -1,4 +1,4 @@
-import type { HomeDailyTask } from "../../lib/api/generated/client";
+import type { HomeDailyTask } from "../../../lib/api/generated/client";
 
 type Props = {
   items: HomeDailyTask[];
@@ -18,8 +18,12 @@ export function DailyTasksPanel({ items, onToggle }: Props) {
             onClick={() => onToggle(item.task.id)}
           >
             <div className="font-medium">{item.task.title}</div>
-            <div className="text-sm text-stone-600">未達減点: {item.task.penaltyPoints}</div>
-            <div className="mt-1 text-xs">{item.completedToday ? "完了" : "未完了"}</div>
+            <div className="text-sm text-stone-600">
+              未達減点: {item.task.penaltyPoints}
+            </div>
+            <div className="mt-1 text-xs">
+              {item.completedToday ? "完了" : "未完了"}
+            </div>
           </button>
         ))}
       </div>

@@ -1,23 +1,23 @@
 import { useAtom, useAtomValue } from "jotai";
 
 import {
-  useInviteMutations,
-  usePenaltyRuleMutations,
-  usePenaltyRulesQuery,
-  useTaskMutations,
-  useTasksQuery,
-} from "../features/api/hooks";
-import { InviteManager } from "../features/admin/InviteManager";
-import { PenaltyRuleManager } from "../features/admin/PenaltyRuleManager";
-import { TaskManager } from "../features/admin/TaskManager";
-import {
   type CreatePenaltyRuleRequest,
   type CreateTaskRequest,
   TaskType as TaskTypeConst,
-} from "../lib/api/generated/client";
-import { taskFormAtom, ruleFormAtom } from "../state/forms";
-import { isLoggedInAtom } from "../state/session";
-import { inviteCodeAtom, joinCodeAtom, statusMessageAtom } from "../state/ui";
+} from "../../../lib/api/generated/client";
+import { isLoggedInAtom } from "../../../state/session";
+import { statusMessageAtom } from "../../shell/state/status";
+import { InviteManager } from "../components/InviteManager";
+import { PenaltyRuleManager } from "../components/PenaltyRuleManager";
+import { TaskManager } from "../components/TaskManager";
+import {
+  useInviteMutations,
+  usePenaltyRuleMutations,
+  useTaskMutations,
+} from "../hooks/useAdminMutations";
+import { usePenaltyRulesQuery, useTasksQuery } from "../hooks/useAdminQueries";
+import { ruleFormAtom, taskFormAtom } from "../state/forms";
+import { inviteCodeAtom, joinCodeAtom } from "../state/ui";
 
 export function AdminPage() {
   const loggedIn = useAtomValue(isLoggedInAtom);
@@ -31,7 +31,8 @@ export function AdminPage() {
   const [, setStatus] = useAtom(statusMessageAtom);
 
   const { createTask, toggleTask, removeTask } = useTaskMutations(setStatus);
-  const { createRule, toggleRule, removeRule } = usePenaltyRuleMutations(setStatus);
+  const { createRule, toggleRule, removeRule } =
+    usePenaltyRuleMutations(setStatus);
   const { createInvite, joinTeam } = useInviteMutations(setStatus);
 
   const handleCreateTask = async () => {

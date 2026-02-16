@@ -1,4 +1,4 @@
-import type { HomeWeeklyTask } from "../../lib/api/generated/client";
+import type { HomeWeeklyTask } from "../../../lib/api/generated/client";
 
 type Props = {
   items: HomeWeeklyTask[];
@@ -23,7 +23,10 @@ export function WeeklyTasksPanel({
       </p>
       <ul className="mt-3 space-y-2">
         {items.map((item) => (
-          <li key={item.task.id} className="rounded-xl border border-stone-300 p-3">
+          <li
+            key={item.task.id}
+            className="rounded-xl border border-stone-300 p-3"
+          >
             <div className="flex items-center justify-between gap-2">
               <div>
                 <div className="font-medium">{item.task.title}</div>
@@ -36,7 +39,9 @@ export function WeeklyTasksPanel({
                 className="rounded-lg border border-stone-300 px-3 py-1 text-sm"
                 onClick={() => onToggle(item.task.id)}
               >
-                {item.requiredCompletionsPerWeek > 1 ? "カウントアップ" : "トグル"}
+                {item.requiredCompletionsPerWeek > 1
+                  ? "カウントアップ"
+                  : "トグル"}
               </button>
             </div>
           </li>

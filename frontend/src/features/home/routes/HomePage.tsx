@@ -2,15 +2,15 @@ import { useAtom } from "jotai";
 import { useAtomValue } from "jotai";
 import { useMemo } from "react";
 
-import { DailyTasksPanel } from "../features/home/DailyTasksPanel";
-import { WeeklyTasksPanel } from "../features/home/WeeklyTasksPanel";
+import { isLoggedInAtom } from "../../../state/session";
+import { statusMessageAtom } from "../../shell/state/status";
+import { DailyTasksPanel } from "../components/DailyTasksPanel";
+import { WeeklyTasksPanel } from "../components/WeeklyTasksPanel";
 import {
   useHomeQuery,
   useMonthlySummaryQuery,
   useToggleCompletionMutation,
-} from "../features/api/hooks";
-import { isLoggedInAtom } from "../state/session";
-import { statusMessageAtom } from "../state/ui";
+} from "../hooks/useHomeQueries";
 
 export function HomePage() {
   const loggedIn = useAtomValue(isLoggedInAtom);
@@ -28,7 +28,8 @@ export function HomePage() {
     }
     const done = home.weeklyTasks.reduce(
       (acc, item) =>
-        acc + Math.min(item.weekCompletedCount, item.requiredCompletionsPerWeek),
+        acc +
+        Math.min(item.weekCompletedCount, item.requiredCompletionsPerWeek),
       0,
     );
     const total = home.weeklyTasks.reduce(

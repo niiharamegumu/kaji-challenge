@@ -3,7 +3,7 @@ import { atom } from "jotai";
 import {
   type TaskType,
   TaskType as TaskTypeConst,
-} from "../lib/api/generated/client";
+} from "../../../lib/api/generated/client";
 
 export type TaskFormState = {
   title: string;
@@ -18,15 +18,18 @@ export type RuleFormState = {
   threshold: string;
 };
 
-export const taskFormAtom = atom<TaskFormState>({
+export const initialTaskFormState: TaskFormState = {
   title: "皿洗い",
   notes: "",
   type: TaskTypeConst.daily,
   penaltyPoints: "2",
   requiredCompletionsPerWeek: "3",
-});
+};
 
-export const ruleFormAtom = atom<RuleFormState>({
+export const initialRuleFormState: RuleFormState = {
   name: "買い出し担当",
   threshold: "10",
-});
+};
+
+export const taskFormAtom = atom<TaskFormState>(initialTaskFormState);
+export const ruleFormAtom = atom<RuleFormState>(initialRuleFormState);

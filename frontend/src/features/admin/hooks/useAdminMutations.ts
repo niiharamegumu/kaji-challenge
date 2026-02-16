@@ -1,94 +1,22 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { formatError, todayString } from "../../lib/errors";
 import {
+  type CreatePenaltyRuleRequest,
+  type CreateTaskRequest,
+  type PenaltyRule,
   deletePenaltyRule,
   deleteTask,
-  getHome,
-  getMe,
-  getPenaltySummaryMonthly,
-  listPenaltyRules,
-  listTasks,
   patchPenaltyRule,
   patchTask,
   postPenaltyRule,
   postTask,
-  postTaskCompletionToggle,
   postTeamInvite,
   postTeamJoin,
-  type CreatePenaltyRuleRequest,
-  type CreateTaskRequest,
-  type PenaltyRule,
-} from "../../lib/api/generated/client";
-import { queryKeys } from "../../lib/query/queryKeys";
+} from "../../../lib/api/generated/client";
+import { queryKeys } from "../../../shared/query/queryKeys";
+import { formatError } from "../../../shared/utils/errors";
 
 type StatusSetter = (message: string) => void;
-
-export function useMeQuery(enabled: boolean) {
-  return useQuery({
-    queryKey: queryKeys.me,
-    queryFn: async () => (await getMe()).data,
-    enabled,
-  });
-}
-
-export function useHomeQuery(enabled: boolean) {
-  return useQuery({
-    queryKey: queryKeys.home,
-    queryFn: async () => (await getHome()).data,
-    enabled,
-  });
-}
-
-export function useMonthlySummaryQuery(enabled: boolean) {
-  return useQuery({
-    queryKey: queryKeys.monthlySummary,
-    queryFn: async () => (await getPenaltySummaryMonthly()).data,
-    enabled,
-  });
-}
-
-export function useTasksQuery(enabled: boolean) {
-  return useQuery({
-    queryKey: queryKeys.tasks,
-    queryFn: async () => (await listTasks()).data.items,
-    enabled,
-  });
-}
-
-export function usePenaltyRulesQuery(enabled: boolean) {
-  return useQuery({
-    queryKey: queryKeys.rules,
-    queryFn: async () => (await listPenaltyRules()).data.items,
-    enabled,
-  });
-}
-
-export function useRefreshAll(setStatus: StatusSetter) {
-  const queryClient = useQueryClient();
-  return async () => {
-    await queryClient.invalidateQueries();
-    setStatus("最新状態に同期しました");
-  };
-}
-
-export function useToggleCompletionMutation(setStatus: StatusSetter) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (taskId: string) =>
-      postTaskCompletionToggle(taskId, { targetDate: todayString() }),
-    onSuccess: async () => {
-      setStatus("完了状態を更新しました");
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.home }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.monthlySummary }),
-      ]);
-    },
-    onError: (error) => {
-      setStatus(`完了更新に失敗しました: ${formatError(error)}`);
-    },
-  });
-}
 
 export function useTaskMutations(setStatus: StatusSetter) {
   const queryClient = useQueryClient();
@@ -113,8 +41,13 @@ export function useTaskMutations(setStatus: StatusSetter) {
   });
 
   const toggleTask = useMutation({
-    mutationFn: async ({ taskId, isActive }: { taskId: string; isActive: boolean }) =>
-      patchTask(taskId, { isActive: !isActive }),
+    mutationFn: async ({
+      taskId,
+      isActive,
+    }: {
+      taskId: string;
+      isActive: boolean;
+    }) => patchTask(taskId, { isActive: !isActive }),
     onSuccess: async () => {
       setStatus("タスク状態を更新しました");
       await invalidate();
@@ -146,7 +79,8 @@ export function usePenaltyRuleMutations(setStatus: StatusSetter) {
   };
 
   const createRule = useMutation({
-    mutationFn: async (payload: CreatePenaltyRuleRequest) => postPenaltyRule(payload),
+    mutationFn: async (payload: CreatePenaltyRuleRequest) =>
+      postPenaltyRule(payload),
     onSuccess: async () => {
       setStatus("ペナルティルールを作成しました");
       await invalidate();

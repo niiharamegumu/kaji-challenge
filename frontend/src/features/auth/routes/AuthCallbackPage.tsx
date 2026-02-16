@@ -1,9 +1,9 @@
-import { redirect, type LoaderFunctionArgs } from "react-router-dom";
+import { type LoaderFunctionArgs, redirect } from "react-router-dom";
 
-import { writeAccessToken } from "../lib/api/client";
-import { postAuthSessionsExchange } from "../lib/api/generated/client";
-import { formatError } from "../lib/errors";
-import { writeFlashStatus } from "../lib/auth/flash";
+import { writeAccessToken } from "../../../lib/api/client";
+import { postAuthSessionsExchange } from "../../../lib/api/generated/client";
+import { formatError } from "../../../shared/utils/errors";
+import { writeFlashStatus } from "../state/flash";
 
 export async function authCallbackLoader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);

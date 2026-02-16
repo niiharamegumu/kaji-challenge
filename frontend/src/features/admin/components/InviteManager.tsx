@@ -17,11 +17,17 @@ export function InviteManager({
     <article className="rounded-2xl border border-stone-200 bg-white/90 p-4 shadow-sm animate-enter">
       <h2 className="text-lg font-semibold">招待管理</h2>
       <div className="mt-4 rounded-xl border border-stone-200 p-3">
-        <button type="button" className="rounded-lg bg-[color:var(--color-matcha-600)] px-3 py-2 text-white" onClick={onCreateInvite}>
+        <button
+          type="button"
+          className="rounded-lg bg-[color:var(--color-matcha-600)] px-3 py-2 text-white"
+          onClick={onCreateInvite}
+        >
           招待コード発行
         </button>
         <p className="mt-2 text-sm">発行コード: {inviteCode || "未発行"}</p>
-        <label className="text-sm text-stone-700" htmlFor="join-code">招待コード</label>
+        <label className="text-sm text-stone-700" htmlFor="join-code">
+          招待コード
+        </label>
         <div className="mt-3 flex gap-2">
           <input
             id="join-code"
@@ -30,7 +36,11 @@ export function InviteManager({
             onChange={(event) => onJoinCodeChange(event.target.value)}
             placeholder="招待コード入力"
           />
-          <button type="button" className="rounded-lg border border-stone-400 px-3 py-2 whitespace-nowrap" onClick={onJoinTeam}>
+          <button
+            type="button"
+            className="rounded-lg border border-stone-400 px-3 py-2 whitespace-nowrap"
+            onClick={onJoinTeam}
+          >
             参加
           </button>
         </div>
