@@ -47,7 +47,7 @@ export function WeeklyTasksPanel({
           </li>
         ))}
       </ul>
-      <div className="mt-4 rounded-lg bg-[color:var(--color-kohaku-50)] p-3 text-sm">
+      <div className="mt-4 rounded-lg bg-kohaku-50 p-3 text-sm">
         今月の減点合計: <strong>{monthlyTotal}</strong>
       </div>
     </article>
