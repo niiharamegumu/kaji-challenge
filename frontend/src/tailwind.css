@@ -2,4 +2,28 @@
 
 @theme {
   --font-sans: "Noto Sans JP", sans-serif;
+
+  --color-washi-50: #f6f4ef;
+  --color-kohaku-50: #fff8ef;
+  --color-kohaku-200: #f2d4a7;
+  --color-matcha-50: #eff8ef;
+  --color-matcha-100: #daf0da;
+  --color-matcha-300: #95c895;
+  --color-matcha-400: #6cad6c;
+  --color-matcha-600: #3e7f4a;
+}
+
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-enter {
+  animation: enter 220ms ease-out both;
 }

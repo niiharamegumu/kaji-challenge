@@ -13,8 +13,11 @@
     "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.90.21",
+    "jotai": "^2.17.1",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "react-router-dom": "^7.13.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
