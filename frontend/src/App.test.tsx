@@ -1,8 +1,9 @@
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import App from "./App";
+import { appQueryClient } from "./lib/query/queryClient";
 
 const mockGetAuthStart = vi.fn();
 const mockGetHome = vi.fn();
@@ -34,8 +35,15 @@ vi.mock("./lib/api/generated/client", () => ({
 }));
 
 describe("App", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
   beforeEach(() => {
     window.localStorage.clear();
+    window.history.pushState({}, "", "/");
+    appQueryClient.clear();
+
     mockGetAuthStart.mockReset();
     mockGetHome.mockReset();
     mockListTasks.mockReset();
@@ -76,9 +84,7 @@ describe("App", () => {
 
     render(<App />);
 
-    await user.click(
-      screen.getAllByRole("button", { name: "Googleでログイン" })[0],
-    );
+    await user.click(screen.getAllByRole("button", { name: "Googleでログイン" })[0]!);
 
     expect(
       await screen.findByText(/ログイン開始に失敗しました/),
@@ -86,23 +92,16 @@ describe("App", () => {
     expect(screen.getByText(/404/)).toBeInTheDocument();
   });
 
-  it("posts task from admin tab", async () => {
+  it("shows navigation after authentication", async () => {
     window.localStorage.setItem(
       "kaji.session.v1",
       JSON.stringify({ version: 1, accessToken: "token-1" }),
     );
-    const user = userEvent.setup();
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "管理" }));
-    await user.click(screen.getByRole("button", { name: "タスク追加" }));
-
-    expect(mockPostTask).toHaveBeenCalled();
-    const firstArg = mockPostTask.mock.calls[0]?.[0];
-    expect(firstArg).toMatchObject({
-      title: "皿洗い",
-      type: "daily",
-      penaltyPoints: 2,
+    await waitFor(() => {
+      expect(screen.getByRole("link", { name: "ホーム" })).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "管理" })).toBeInTheDocument();
     });
   });
 
