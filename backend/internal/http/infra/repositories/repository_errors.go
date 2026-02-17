@@ -13,7 +13,10 @@ func mapInfraErr(err error) error {
 	}
 	msg := strings.ToLower(err.Error())
 	switch {
-	case strings.Contains(msg, "missing bearer token"), strings.Contains(msg, "invalid bearer token"):
+	case strings.Contains(msg, "missing bearer token"),
+		strings.Contains(msg, "invalid bearer token"),
+		strings.Contains(msg, "missing session cookie"),
+		strings.Contains(msg, "invalid session cookie"):
 		return fmt.Errorf("%w: %v", application.ErrUnauthorized, err)
 	case strings.Contains(msg, "not found"):
 		return fmt.Errorf("%w: %v", application.ErrNotFound, err)

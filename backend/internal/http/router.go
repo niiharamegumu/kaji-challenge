@@ -18,6 +18,7 @@ func NewRouterWithServices(svcs *ports.Services) *gin.Engine {
 	r := gin.Default()
 	r.Use(middleware.CORS())
 	r.Use(middleware.Auth(svcs.Auth))
+	r.Use(middleware.CSRFSameOrigin())
 	api.RegisterHandlers(r, transport.NewHandler(svcs))
 	return r
 }

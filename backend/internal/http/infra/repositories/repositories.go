@@ -12,7 +12,7 @@ import (
 type Store interface {
 	StartGoogleAuth(ctx context.Context) (api.AuthStartResponse, error)
 	CompleteGoogleAuth(ctx context.Context, code, state, mockEmail, mockName, mockSub string) (string, string, error)
-	ExchangeSession(ctx context.Context, exchangeCode string) (api.AuthSessionResponse, error)
+	ExchangeSession(ctx context.Context, exchangeCode string) (ports.AuthSession, error)
 	RevokeSession(ctx context.Context, token string)
 	LookupSession(ctx context.Context, token string) (string, bool)
 

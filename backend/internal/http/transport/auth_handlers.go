@@ -45,15 +45,17 @@ func (h *Handler) PostAuthSessionsExchange(c *gin.Context) {
 		writeAppError(c, err, http.StatusBadRequest)
 		return
 	}
-	c.JSON(http.StatusOK, session)
+	setSessionCookie(c.Writer, session.Token, shouldUseSecureCookie(c.Request))
+	c.JSON(http.StatusOK, api.AuthSessionResponse{User: session.User})
 }
 
 func (h *Handler) PostAuthLogout(c *gin.Context) {
 	token := c.GetString(AuthTokenKey)
 	if token == "" {
-		writeAppError(c, newAppError(http.StatusUnauthorized, "missing_token", "missing bearer token"), http.StatusUnauthorized)
+		writeAppError(c, newAppError(http.StatusUnauthorized, "missing_token", "missing session cookie"), http.StatusUnauthorized)
 		return
 	}
 	h.services.Auth.RevokeSession(c.Request.Context(), token)
+	clearSessionCookie(c.Writer, shouldUseSecureCookie(c.Request))
 	c.Status(http.StatusNoContent)
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/url"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	dbsqlc "github.com/megu/kaji-challenge/backend/internal/db/sqlc"
+	"github.com/megu/kaji-challenge/backend/internal/http/application/ports"
 	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 	"golang.org/x/oauth2"
 )
@@ -37,7 +39,7 @@ type exchangeCodeRecord struct {
 }
 
 func (s *Store) LookupSession(ctx context.Context, token string) (string, bool) {
-	rec, err := s.q.GetSessionByToken(ctx, token)
+	rec, err := s.q.GetSessionByToken(ctx, hashToken(token))
 	if err != nil {
 		return "", false
 	}
@@ -317,31 +319,32 @@ func pkceChallenge(verifier string) string {
 	return base64.RawURLEncoding.EncodeToString(sum[:])
 }
 
-func (s *Store) ExchangeSession(ctx context.Context, exchangeCode string) (api.AuthSessionResponse, error) {
+func (s *Store) ExchangeSession(ctx context.Context, exchangeCode string) (ports.AuthSession, error) {
 	rec, err := s.q.GetExchangeCode(ctx, exchangeCode)
 	if err != nil {
-		return api.AuthSessionResponse{}, errors.New("invalid exchange code")
+		return ports.AuthSession{}, errors.New("invalid exchange code")
 	}
 	if rec.UsedAt.Valid || time.Now().In(s.loc).After(rec.ExpiresAt.Time.In(s.loc)) {
 		_ = s.q.ConsumeExchangeCode(ctx, exchangeCode)
-		return api.AuthSessionResponse{}, errors.New("exchange code expired")
+		return ports.AuthSession{}, errors.New("exchange code expired")
 	}
 	userRow, err := s.q.GetUserByID(ctx, rec.UserID)
 	if err != nil {
-		return api.AuthSessionResponse{}, errors.New("user not found")
+		return ports.AuthSession{}, errors.New("user not found")
 	}
-	token, err := randomToken()
+	rawToken, err := randomToken()
 	if err != nil {
-		return api.AuthSessionResponse{}, err
+		return ports.AuthSession{}, err
 	}
 	if err := s.q.ConsumeExchangeCode(ctx, exchangeCode); err != nil {
-		return api.AuthSessionResponse{}, errors.New("exchange code expired")
+		return ports.AuthSession{}, errors.New("exchange code expired")
 	}
+	hashedToken := hashToken(rawToken)
 	if err := s.q.CreateSession(ctx, dbsqlc.CreateSessionParams{
-		Token:  token,
+		Token:  hashedToken,
 		UserID: rec.UserID,
 	}); err != nil {
-		return api.AuthSessionResponse{}, err
+		return ports.AuthSession{}, err
 	}
 	user := userRecord{
 		ID:        userRow.ID,
@@ -349,9 +352,14 @@ func (s *Store) ExchangeSession(ctx context.Context, exchangeCode string) (api.A
 		Name:      userRow.DisplayName,
 		CreatedAt: userRow.CreatedAt.Time.In(s.loc),
 	}
-	return api.AuthSessionResponse{AccessToken: token, User: user.toAPI()}, nil
+	return ports.AuthSession{Token: rawToken, User: user.toAPI()}, nil
 }
 
 func (s *Store) RevokeSession(ctx context.Context, token string) {
-	_ = s.q.DeleteSession(ctx, token)
+	_ = s.q.DeleteSession(ctx, hashToken(token))
+}
+
+func hashToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
 }

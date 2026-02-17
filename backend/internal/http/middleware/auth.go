@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/megu/kaji-challenge/backend/internal/http/application/ports"
@@ -27,17 +26,16 @@ func Auth(auth ports.AuthService) gin.HandlerFunc {
 			return
 		}
 
-		authHeader := c.GetHeader("Authorization")
-		token := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer"))
-		if token == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "missing bearer token"})
+		token, err := c.Cookie(transport.SessionCookieName)
+		if err != nil || token == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "missing session cookie"})
 			c.Abort()
 			return
 		}
 
 		userID, ok := auth.LookupSession(c.Request.Context(), token)
 		if !ok {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "invalid bearer token"})
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "invalid session cookie"})
 			c.Abort()
 			return
 		}
