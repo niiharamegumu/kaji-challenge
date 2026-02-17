@@ -23,8 +23,8 @@ func (m mockAuthService) StartGoogleAuth(context.Context) (api.AuthStartResponse
 func (m mockAuthService) CompleteGoogleAuth(context.Context, string, string, string, string, string) (string, string, error) {
 	return "", "", nil
 }
-func (m mockAuthService) ExchangeSession(context.Context, string) (api.AuthSessionResponse, error) {
-	return api.AuthSessionResponse{}, nil
+func (m mockAuthService) ExchangeSession(context.Context, string) (ports.AuthSession, error) {
+	return ports.AuthSession{}, nil
 }
 func (m mockAuthService) RevokeSession(context.Context, string)                {}
 func (m mockAuthService) LookupSession(context.Context, string) (string, bool) { return "", false }

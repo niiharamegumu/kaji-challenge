@@ -3,6 +3,7 @@ package usecases
 import (
 	"context"
 
+	"github.com/megu/kaji-challenge/backend/internal/http/application/ports"
 	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 )
 
@@ -14,7 +15,7 @@ func (u authUsecase) CompleteGoogleAuth(ctx context.Context, code, state, mockEm
 	return u.repo.CompleteGoogleAuth(ctx, code, state, mockEmail, mockName, mockSub)
 }
 
-func (u authUsecase) ExchangeSession(ctx context.Context, exchangeCode string) (api.AuthSessionResponse, error) {
+func (u authUsecase) ExchangeSession(ctx context.Context, exchangeCode string) (ports.AuthSession, error) {
 	return u.repo.ExchangeSession(ctx, exchangeCode)
 }
 

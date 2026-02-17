@@ -3,6 +3,7 @@ package repositories
 import (
 	"context"
 
+	"github.com/megu/kaji-challenge/backend/internal/http/application/ports"
 	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 )
 
@@ -16,7 +17,7 @@ func (r authRepo) CompleteGoogleAuth(ctx context.Context, code, state, mockEmail
 	return exchangeCode, redirectTo, mapInfraErr(err)
 }
 
-func (r authRepo) ExchangeSession(ctx context.Context, exchangeCode string) (api.AuthSessionResponse, error) {
+func (r authRepo) ExchangeSession(ctx context.Context, exchangeCode string) (ports.AuthSession, error) {
 	res, err := r.store.ExchangeSession(ctx, exchangeCode)
 	return res, mapInfraErr(err)
 }

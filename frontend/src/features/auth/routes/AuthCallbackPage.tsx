@@ -1,6 +1,5 @@
 import { type LoaderFunctionArgs, redirect } from "react-router-dom";
 
-import { writeAccessToken } from "../../../lib/api/client";
 import { postAuthSessionsExchange } from "../../../lib/api/generated/client";
 import { formatError } from "../../../shared/utils/errors";
 import { writeFlashStatus } from "../state/flash";
@@ -15,8 +14,7 @@ export async function authCallbackLoader({ request }: LoaderFunctionArgs) {
   }
 
   try {
-    const res = await postAuthSessionsExchange({ exchangeCode });
-    writeAccessToken(res.data.accessToken);
+    await postAuthSessionsExchange({ exchangeCode });
     writeFlashStatus("ログインしました");
   } catch (error) {
     writeFlashStatus(`ログインに失敗しました: ${formatError(error)}`);

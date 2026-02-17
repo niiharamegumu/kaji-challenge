@@ -1,6 +1,5 @@
 import { useEffect, useRef } from "react";
 
-import { writeAccessToken } from "../../../lib/api/client";
 import { postAuthSessionsExchange } from "../../../lib/api/generated/client";
 import { formatError } from "../../../shared/utils/errors";
 import type { SessionState } from "../../../state/session";
@@ -36,9 +35,8 @@ export function useExchangeCodeFallback(
 
     const run = async () => {
       try {
-        const res = await postAuthSessionsExchange({ exchangeCode });
-        writeAccessToken(res.data.accessToken);
-        setSession({ token: res.data.accessToken });
+        await postAuthSessionsExchange({ exchangeCode });
+        setSession({ authenticated: true });
         setStatus("ログインしました");
       } catch (error) {
         setStatus(`ログインに失敗しました: ${formatError(error)}`);

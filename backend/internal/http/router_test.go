@@ -113,7 +113,11 @@ func TestTaskLifecycleAndHome(t *testing.T) {
 		t.Fatalf("failed to parse task: %v", err)
 	}
 
-	toggleReq := `{"targetDate":"` + time.Now().Format("2006-01-02") + `"}`
+	loc, _ := time.LoadLocation("Asia/Tokyo")
+	if loc == nil {
+		loc = time.FixedZone("JST", 9*60*60)
+	}
+	toggleReq := `{"targetDate":"` + time.Now().In(loc).Format("2006-01-02") + `"}`
 	toggleRes := doRequest(t, r, http.MethodPost, "/v1/tasks/"+task.Id+"/completions/toggle", toggleReq, token)
 	if toggleRes.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", toggleRes.Code, toggleRes.Body.String())
@@ -130,6 +134,69 @@ func TestTaskLifecycleAndHome(t *testing.T) {
 	}
 	if len(home.DailyTasks) == 0 {
 		t.Fatalf("expected at least one daily task in home response")
+	}
+}
+
+func TestProtectedWriteRejectsInvalidOrigin(t *testing.T) {
+	r := newTestRouter(t)
+	token := login(t, r)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/teams/invites", strings.NewReader(`{"maxUses":1}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", "https://evil.example")
+	req.AddCookie(&http.Cookie{Name: "kaji_session", Value: token})
+
+	res := httptest.NewRecorder()
+	r.ServeHTTP(res, req)
+	if res.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", res.Code, res.Body.String())
+	}
+}
+
+func TestSessionExchangeRequiresOrigin(t *testing.T) {
+	r := newTestRouter(t)
+
+	startRes := doRequest(t, r, http.MethodGet, "/v1/auth/google/start", "", "")
+	if startRes.Code != http.StatusOK {
+		t.Fatalf("auth start failed: %d %s", startRes.Code, startRes.Body.String())
+	}
+	var start api.AuthStartResponse
+	if err := json.Unmarshal(startRes.Body.Bytes(), &start); err != nil {
+		t.Fatalf("failed to parse auth start response: %v", err)
+	}
+	u, err := url.Parse(start.AuthorizationUrl)
+	if err != nil {
+		t.Fatalf("failed to parse authorization url: %v", err)
+	}
+	callbackRes := doRequest(t, r, http.MethodGet, u.RequestURI(), "", "")
+	if callbackRes.Code != http.StatusOK && callbackRes.Code != http.StatusFound {
+		t.Fatalf("auth callback failed: %d %s", callbackRes.Code, callbackRes.Body.String())
+	}
+	exchangeCode := ""
+	if callbackRes.Code == http.StatusFound {
+		locURL, err := url.Parse(callbackRes.Header().Get("Location"))
+		if err != nil {
+			t.Fatalf("failed to parse callback redirect location: %v", err)
+		}
+		exchangeCode = locURL.Query().Get("exchangeCode")
+	} else {
+		var callback api.AuthCallbackResponse
+		if err := json.Unmarshal(callbackRes.Body.Bytes(), &callback); err != nil {
+			t.Fatalf("failed to parse callback response: %v", err)
+		}
+		exchangeCode = callback.ExchangeCode
+	}
+	if exchangeCode == "" {
+		t.Fatalf("expected exchange code from callback")
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/auth/sessions/exchange", strings.NewReader(`{"exchangeCode":"`+exchangeCode+`"}`))
+	req.Header.Set("Content-Type", "application/json")
+	// no Origin header on purpose
+	res := httptest.NewRecorder()
+	r.ServeHTTP(res, req)
+	if res.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", res.Code, res.Body.String())
 	}
 }
 
@@ -181,21 +248,27 @@ func login(t *testing.T, r http.Handler) string {
 		t.Fatalf("exchange failed: %d %s", exchangeRes.Code, exchangeRes.Body.String())
 	}
 
-	var session api.AuthSessionResponse
-	if err := json.Unmarshal(exchangeRes.Body.Bytes(), &session); err != nil {
-		t.Fatalf("failed to parse exchange response: %v", err)
+	cookies := exchangeRes.Result().Cookies()
+	for _, cookie := range cookies {
+		if cookie.Name == "kaji_session" && cookie.Value != "" {
+			return cookie.Value
+		}
 	}
-	return session.AccessToken
+	t.Fatalf("expected kaji_session cookie in exchange response")
+	return ""
 }
 
-func doRequest(t *testing.T, r http.Handler, method, path, body, token string) *httptest.ResponseRecorder {
+func doRequest(t *testing.T, r http.Handler, method, path, body, sessionCookie string) *httptest.ResponseRecorder {
 	t.Helper()
 	req := httptest.NewRequest(method, path, strings.NewReader(body))
 	if body != "" {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
+	if sessionCookie != "" {
+		req.AddCookie(&http.Cookie{Name: "kaji_session", Value: sessionCookie})
+	}
+	if method == http.MethodPost || method == http.MethodPut || method == http.MethodPatch || method == http.MethodDelete {
+		req.Header.Set("Origin", "http://localhost:5173")
 	}
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)

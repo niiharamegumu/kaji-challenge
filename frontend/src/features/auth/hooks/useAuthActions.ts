@@ -1,6 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { clearAccessToken } from "../../../lib/api/client";
 import {
   getAuthGoogleStart,
   getMe,
@@ -18,6 +17,7 @@ export function useMeQuery(enabled: boolean) {
     queryKey: queryKeys.me,
     queryFn: async () => (await getMe()).data,
     enabled,
+    retry: false,
   });
 }
 
@@ -45,9 +45,8 @@ export function useLogoutAction(
       // ignore logout request errors and clear local session anyway
     }
 
-    clearAccessToken();
-    setSession({ token: null });
+    setSession({ authenticated: false });
     setStatus("ログアウトしました");
-    await queryClient.removeQueries();
+    queryClient.removeQueries();
   };
 }

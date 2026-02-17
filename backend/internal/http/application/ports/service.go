@@ -16,10 +16,15 @@ type Services struct {
 	Admin   AdminService
 }
 
+type AuthSession struct {
+	Token string
+	User  api.User
+}
+
 type AuthService interface {
 	StartGoogleAuth(ctx context.Context) (api.AuthStartResponse, error)
 	CompleteGoogleAuth(ctx context.Context, code, state, mockEmail, mockName, mockSub string) (string, string, error)
-	ExchangeSession(ctx context.Context, exchangeCode string) (api.AuthSessionResponse, error)
+	ExchangeSession(ctx context.Context, exchangeCode string) (AuthSession, error)
 	RevokeSession(ctx context.Context, token string)
 	LookupSession(ctx context.Context, token string) (string, bool)
 }

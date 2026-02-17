@@ -1,14 +1,13 @@
 import { atom } from "jotai";
 
 export type SessionState = {
-  token: string | null;
+  authenticated: boolean;
 };
 
 export const sessionAtom = atom<SessionState>({
-  token: null,
+  authenticated: false,
 });
 
 export const isLoggedInAtom = atom((get) => {
-  const token = get(sessionAtom).token;
-  return token != null && token !== "";
+  return get(sessionAtom).authenticated;
 });

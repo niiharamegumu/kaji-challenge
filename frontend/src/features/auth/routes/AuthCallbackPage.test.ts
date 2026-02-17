@@ -2,13 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { authCallbackLoader } from "./AuthCallbackPage";
 
-const mockWriteToken = vi.fn();
 const mockExchange = vi.fn();
 const mockWriteFlash = vi.fn();
-
-vi.mock("../../../lib/api/client", () => ({
-  writeAccessToken: (...args: unknown[]) => mockWriteToken(...args),
-}));
 
 vi.mock("../../../lib/api/generated/client", () => ({
   postAuthSessionsExchange: (...args: unknown[]) => mockExchange(...args),
@@ -20,13 +15,12 @@ vi.mock("../state/flash", () => ({
 
 describe("authCallbackLoader", () => {
   beforeEach(() => {
-    mockWriteToken.mockReset();
     mockExchange.mockReset();
     mockWriteFlash.mockReset();
   });
 
-  it("stores token and redirects to root", async () => {
-    mockExchange.mockResolvedValue({ data: { accessToken: "token-1" } });
+  it("exchanges session and redirects to root", async () => {
+    mockExchange.mockResolvedValue({ data: { user: { id: "u1" } } });
 
     const response = await authCallbackLoader({
       request: new Request("http://localhost/auth/callback?exchangeCode=abc"),
@@ -35,7 +29,6 @@ describe("authCallbackLoader", () => {
       unstable_pattern: "",
     });
 
-    expect(mockWriteToken).toHaveBeenCalledWith("token-1");
     expect(mockWriteFlash).toHaveBeenCalledWith("ログインしました");
     expect(response.status).toBe(302);
     expect(response.headers.get("Location")).toBe("/");
