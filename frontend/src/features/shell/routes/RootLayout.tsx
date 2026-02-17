@@ -4,7 +4,6 @@ import { useSetAtom } from "jotai";
 import { useEffect } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 
-import { readAccessToken } from "../../../lib/api/client";
 import { queryKeys } from "../../../shared/query/queryKeys";
 import { isLoggedInAtom, sessionAtom } from "../../../state/session";
 import {
@@ -30,7 +29,7 @@ const linkClass = ({ isActive }: { isActive: boolean }) =>
 
 export function RootLayout() {
   const queryClient = useQueryClient();
-  const [session, setSession] = useAtom(sessionAtom);
+  const [, setSession] = useAtom(sessionAtom);
   const [status, setStatus] = useAtom(statusMessageAtom);
   const loggedIn = useAtomValue(isLoggedInAtom);
 
@@ -39,16 +38,19 @@ export function RootLayout() {
   const setInviteCode = useSetAtom(inviteCodeAtom);
   const setJoinCode = useSetAtom(joinCodeAtom);
 
-  const meQuery = useMeQuery(loggedIn);
+  const meQuery = useMeQuery(true);
   const login = useLoginAction(setStatus);
   const logoutAction = useLogoutAction(setStatus, setSession);
 
   useEffect(() => {
-    const token = readAccessToken();
-    if (token != null && token !== "" && session.token == null) {
-      setSession({ token });
+    if (meQuery.isSuccess) {
+      setSession({ authenticated: true });
+      return;
     }
-  }, [session.token, setSession]);
+    if (meQuery.isError) {
+      setSession({ authenticated: false });
+    }
+  }, [meQuery.isError, meQuery.isSuccess, setSession]);
 
   useExchangeCodeFallback(setSession, setStatus);
 
