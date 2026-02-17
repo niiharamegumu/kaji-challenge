@@ -5,7 +5,7 @@ info:
 servers:
   - url: http://localhost:8080
 security:
-  - bearerAuth: []
+  - cookieAuth: []
 paths:
   /health:
     get:
@@ -370,10 +370,10 @@ paths:
 
 components:
   securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: session-token
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: kaji_session
 
   schemas:
     ErrorResponse:
@@ -416,10 +416,8 @@ components:
 
     AuthSessionResponse:
       type: object
-      required: [accessToken, user]
+      required: [user]
       properties:
-        accessToken:
-          type: string
         user:
           $ref: '#/components/schemas/User'
 

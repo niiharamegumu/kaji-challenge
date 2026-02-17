@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	BearerAuthScopes = "bearerAuth.Scopes"
+	CookieAuthScopes = "cookieAuth.Scopes"
 )
 
 // Defines values for TaskType.
@@ -41,8 +41,7 @@ type AuthSessionExchangeRequest struct {
 
 // AuthSessionResponse defines model for AuthSessionResponse.
 type AuthSessionResponse struct {
-	AccessToken string `json:"accessToken"`
-	User        User   `json:"user"`
+	User User `json:"user"`
 }
 
 // AuthStartResponse defines model for AuthStartResponse.
@@ -358,7 +357,7 @@ func (siw *ServerInterfaceWrapper) Health(c *gin.Context) {
 // PostAdminCloseDay operation middleware
 func (siw *ServerInterfaceWrapper) PostAdminCloseDay(c *gin.Context) {
 
-	c.Set(BearerAuthScopes, []string{})
+	c.Set(CookieAuthScopes, []string{})
 
 	for _, middleware := range siw.HandlerMiddlewares {
 		middleware(c)
@@ -373,7 +372,7 @@ func (siw *ServerInterfaceWrapper) PostAdminCloseDay(c *gin.Context) {
 // PostAdminCloseMonth operation middleware
 func (siw *ServerInterfaceWrapper) PostAdminCloseMonth(c *gin.Context) {
 
-	c.Set(BearerAuthScopes, []string{})
+	c.Set(CookieAuthScopes, []string{})
 
 	for _, middleware := range siw.HandlerMiddlewares {
 		middleware(c)
@@ -388,7 +387,7 @@ func (siw *ServerInterfaceWrapper) PostAdminCloseMonth(c *gin.Context) {
 // PostAdminCloseWeek operation middleware
 func (siw *ServerInterfaceWrapper) PostAdminCloseWeek(c *gin.Context) {
 
-	c.Set(BearerAuthScopes, []string{})
+	c.Set(CookieAuthScopes, []string{})
 
 	for _, middleware := range siw.HandlerMiddlewares {
 		middleware(c)
@@ -464,7 +463,7 @@ func (siw *ServerInterfaceWrapper) GetAuthGoogleStart(c *gin.Context) {
 // PostAuthLogout operation middleware
 func (siw *ServerInterfaceWrapper) PostAuthLogout(c *gin.Context) {
 
-	c.Set(BearerAuthScopes, []string{})
+	c.Set(CookieAuthScopes, []string{})
 
 	for _, middleware := range siw.HandlerMiddlewares {
 		middleware(c)
@@ -492,7 +491,7 @@ func (siw *ServerInterfaceWrapper) PostAuthSessionsExchange(c *gin.Context) {
 // GetHome operation middleware
 func (siw *ServerInterfaceWrapper) GetHome(c *gin.Context) {
 
-	c.Set(BearerAuthScopes, []string{})
+	c.Set(CookieAuthScopes, []string{})
 
 	for _, middleware := range siw.HandlerMiddlewares {
 		middleware(c)
@@ -507,7 +506,7 @@ func (siw *ServerInterfaceWrapper) GetHome(c *gin.Context) {
 // GetMe operation middleware
 func (siw *ServerInterfaceWrapper) GetMe(c *gin.Context) {
 
-	c.Set(BearerAuthScopes, []string{})
+	c.Set(CookieAuthScopes, []string{})
 
 	for _, middleware := range siw.HandlerMiddlewares {
 		middleware(c)
@@ -522,7 +521,7 @@ func (siw *ServerInterfaceWrapper) GetMe(c *gin.Context) {
 // ListPenaltyRules operation middleware
 func (siw *ServerInterfaceWrapper) ListPenaltyRules(c *gin.Context) {
 
-	c.Set(BearerAuthScopes, []string{})
+	c.Set(CookieAuthScopes, []string{})
 
 	for _, middleware := range siw.HandlerMiddlewares {
 		middleware(c)
@@ -537,7 +536,7 @@ func (siw *ServerInterfaceWrapper) ListPenaltyRules(c *gin.Context) {
 // PostPenaltyRule operation middleware
 func (siw *ServerInterfaceWrapper) PostPenaltyRule(c *gin.Context) {
 
-	c.Set(BearerAuthScopes, []string{})
+	c.Set(CookieAuthScopes, []string{})
 
 	for _, middleware := range siw.HandlerMiddlewares {
 		middleware(c)
@@ -563,7 +562,7 @@ func (siw *ServerInterfaceWrapper) DeletePenaltyRule(c *gin.Context) {
 		return
 	}
 
-	c.Set(BearerAuthScopes, []string{})
+	c.Set(CookieAuthScopes, []string{})
 
 	for _, middleware := range siw.HandlerMiddlewares {
 		middleware(c)
@@ -589,7 +588,7 @@ func (siw *ServerInterfaceWrapper) PatchPenaltyRule(c *gin.Context) {
 		return
 	}
 
-	c.Set(BearerAuthScopes, []string{})
+	c.Set(CookieAuthScopes, []string{})
 
 	for _, middleware := range siw.HandlerMiddlewares {
 		middleware(c)
@@ -606,7 +605,7 @@ func (siw *ServerInterfaceWrapper) GetPenaltySummaryMonthly(c *gin.Context) {
 
 	var err error
 
-	c.Set(BearerAuthScopes, []string{})
+	c.Set(CookieAuthScopes, []string{})
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params GetPenaltySummaryMonthlyParams
@@ -634,7 +633,7 @@ func (siw *ServerInterfaceWrapper) ListTasks(c *gin.Context) {
 
 	var err error
 
-	c.Set(BearerAuthScopes, []string{})
+	c.Set(CookieAuthScopes, []string{})
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListTasksParams
@@ -660,7 +659,7 @@ func (siw *ServerInterfaceWrapper) ListTasks(c *gin.Context) {
 // PostTask operation middleware
 func (siw *ServerInterfaceWrapper) PostTask(c *gin.Context) {
 
-	c.Set(BearerAuthScopes, []string{})
+	c.Set(CookieAuthScopes, []string{})
 
 	for _, middleware := range siw.HandlerMiddlewares {
 		middleware(c)
@@ -686,7 +685,7 @@ func (siw *ServerInterfaceWrapper) DeleteTask(c *gin.Context) {
 		return
 	}
 
-	c.Set(BearerAuthScopes, []string{})
+	c.Set(CookieAuthScopes, []string{})
 
 	for _, middleware := range siw.HandlerMiddlewares {
 		middleware(c)
@@ -712,7 +711,7 @@ func (siw *ServerInterfaceWrapper) PatchTask(c *gin.Context) {
 		return
 	}
 
-	c.Set(BearerAuthScopes, []string{})
+	c.Set(CookieAuthScopes, []string{})
 
 	for _, middleware := range siw.HandlerMiddlewares {
 		middleware(c)
@@ -738,7 +737,7 @@ func (siw *ServerInterfaceWrapper) PostTaskCompletionToggle(c *gin.Context) {
 		return
 	}
 
-	c.Set(BearerAuthScopes, []string{})
+	c.Set(CookieAuthScopes, []string{})
 
 	for _, middleware := range siw.HandlerMiddlewares {
 		middleware(c)
@@ -753,7 +752,7 @@ func (siw *ServerInterfaceWrapper) PostTaskCompletionToggle(c *gin.Context) {
 // PostTeamInvite operation middleware
 func (siw *ServerInterfaceWrapper) PostTeamInvite(c *gin.Context) {
 
-	c.Set(BearerAuthScopes, []string{})
+	c.Set(CookieAuthScopes, []string{})
 
 	for _, middleware := range siw.HandlerMiddlewares {
 		middleware(c)
@@ -768,7 +767,7 @@ func (siw *ServerInterfaceWrapper) PostTeamInvite(c *gin.Context) {
 // PostTeamJoin operation middleware
 func (siw *ServerInterfaceWrapper) PostTeamJoin(c *gin.Context) {
 
-	c.Set(BearerAuthScopes, []string{})
+	c.Set(CookieAuthScopes, []string{})
 
 	for _, middleware := range siw.HandlerMiddlewares {
 		middleware(c)

@@ -34,7 +34,6 @@ export interface User {
 }
 
 export interface AuthSessionResponse {
-  accessToken: string;
   user: User;
 }
 
