@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/megu/kaji-challenge/backend/internal/http/infra"
 	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
+	"github.com/megu/kaji-challenge/backend/internal/testutil/dbtest"
 )
 
 func TestHealth(t *testing.T) {
@@ -204,9 +204,7 @@ func doRequest(t *testing.T, r http.Handler, method, path, body, token string) *
 
 func newTestRouter(t *testing.T) *gin.Engine {
 	t.Helper()
-	if strings.TrimSpace(os.Getenv("DATABASE_URL")) == "" {
-		t.Skip("DATABASE_URL is required for router tests")
-	}
+	t.Setenv("DATABASE_URL", dbtest.IsolatedDatabaseURL(t))
 	t.Setenv("OIDC_STRICT_MODE", "false")
 	t.Setenv("OIDC_ISSUER_URL", "")
 	t.Setenv("OIDC_CLIENT_ID", "")
