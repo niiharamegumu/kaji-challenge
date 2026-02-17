@@ -8,9 +8,13 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type CloseExecutionKey struct {
-	Key       string             `json:"key"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
+type CloseExecution struct {
+	TeamID        string             `json:"team_id"`
+	Scope         string             `json:"scope"`
+	TargetDate    pgtype.Date        `json:"target_date"`
+	TaskID        string             `json:"task_id"`
+	DedupeTaskKey pgtype.Text        `json:"dedupe_task_key"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 }
 
 type InviteCode struct {
@@ -23,12 +27,18 @@ type InviteCode struct {
 }
 
 type MonthlyPenaltySummary struct {
-	TeamID                  string   `json:"team_id"`
-	Month                   string   `json:"month"`
-	DailyPenaltyTotal       int32    `json:"daily_penalty_total"`
-	WeeklyPenaltyTotal      int32    `json:"weekly_penalty_total"`
-	IsClosed                bool     `json:"is_closed"`
-	TriggeredPenaltyRuleIds []string `json:"triggered_penalty_rule_ids"`
+	TeamID             string      `json:"team_id"`
+	MonthStart         pgtype.Date `json:"month_start"`
+	DailyPenaltyTotal  int32       `json:"daily_penalty_total"`
+	WeeklyPenaltyTotal int32       `json:"weekly_penalty_total"`
+	IsClosed           bool        `json:"is_closed"`
+}
+
+type MonthlyPenaltySummaryTriggeredRule struct {
+	TeamID     string             `json:"team_id"`
+	MonthStart pgtype.Date        `json:"month_start"`
+	RuleID     string             `json:"rule_id"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 }
 
 type OauthAuthRequest struct {

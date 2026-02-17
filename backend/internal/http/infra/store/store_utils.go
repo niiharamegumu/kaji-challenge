@@ -96,3 +96,15 @@ func randomToken() (string, error) {
 func toDate(t time.Time) openapi_types.Date {
 	return openapi_types.Date{Time: dateOnly(t, t.Location())}
 }
+
+func monthKeyFromTime(t time.Time, loc *time.Location) string {
+	return t.In(loc).Format("2006-01")
+}
+
+func monthStartFromKey(month string, loc *time.Location) (time.Time, error) {
+	parsed, err := time.ParseInLocation("2006-01", month, loc)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("invalid month format: %s", month)
+	}
+	return time.Date(parsed.Year(), parsed.Month(), 1, 0, 0, 0, 0, loc), nil
+}

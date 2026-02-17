@@ -1,5 +1,5 @@
-DROP TABLE IF EXISTS app_state;
-DROP TABLE IF EXISTS close_execution_keys;
+DROP TABLE IF EXISTS close_executions;
+DROP TABLE IF EXISTS monthly_penalty_summary_triggered_rules;
 DROP TABLE IF EXISTS monthly_penalty_summaries;
 DROP TABLE IF EXISTS penalty_rules;
 DROP TABLE IF EXISTS task_completions;

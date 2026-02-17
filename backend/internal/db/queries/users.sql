@@ -1,7 +1,7 @@
 -- name: GetUserByEmail :one
 SELECT id, email, display_name, created_at
 FROM users
-WHERE email = $1;
+WHERE LOWER(email) = LOWER($1);
 
 -- name: GetUserByID :one
 SELECT id, email, display_name, created_at
