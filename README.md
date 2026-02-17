@@ -34,6 +34,9 @@
 
 backend の Critical 判定は `backend/security/critical_goids.txt` の GO-ID allowlist で管理します。
 
+backend の統合テストは `TEST_DATABASE_URL` を利用して隔離DBを作成して実行します。  
+未指定時は `postgres://kaji:kaji@postgres:5432/postgres?sslmode=disable` を既定値として使用します。
+
 ## OpenAPI SSOT
 
 - 仕様: `api/openapi.yaml`

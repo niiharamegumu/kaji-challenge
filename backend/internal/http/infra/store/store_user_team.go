@@ -152,6 +152,9 @@ func (s *Store) JoinTeam(ctx context.Context, userID, code string) (api.JoinTeam
 			return api.JoinTeamResponse{TeamId: invite.TeamID}, nil
 		}
 	}
+	if len(memberships) > 0 {
+		return api.JoinTeamResponse{}, errors.New("user already belongs to a team")
+	}
 
 	if err := s.q.AddTeamMember(ctx, dbsqlc.AddTeamMemberParams{
 		TeamID:    invite.TeamID,

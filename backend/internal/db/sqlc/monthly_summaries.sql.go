@@ -7,47 +7,78 @@ package dbsqlc
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+const addTriggeredRuleForMonth = `-- name: AddTriggeredRuleForMonth :exec
+INSERT INTO monthly_penalty_summary_triggered_rules (team_id, month_start, rule_id, created_at)
+VALUES ($1, $2, $3, NOW())
+ON CONFLICT (team_id, month_start, rule_id) DO NOTHING
+`
+
+type AddTriggeredRuleForMonthParams struct {
+	TeamID     string      `json:"team_id"`
+	MonthStart pgtype.Date `json:"month_start"`
+	RuleID     string      `json:"rule_id"`
+}
+
+func (q *Queries) AddTriggeredRuleForMonth(ctx context.Context, arg AddTriggeredRuleForMonthParams) error {
+	_, err := q.db.Exec(ctx, addTriggeredRuleForMonth, arg.TeamID, arg.MonthStart, arg.RuleID)
+	return err
+}
 
 const closeMonthlyPenaltySummary = `-- name: CloseMonthlyPenaltySummary :exec
 UPDATE monthly_penalty_summaries
-SET is_closed = TRUE,
-    triggered_penalty_rule_ids = $3
-WHERE team_id = $1 AND month = $2
+SET is_closed = TRUE
+WHERE team_id = $1 AND month_start = $2
 `
 
 type CloseMonthlyPenaltySummaryParams struct {
-	TeamID                  string   `json:"team_id"`
-	Month                   string   `json:"month"`
-	TriggeredPenaltyRuleIds []string `json:"triggered_penalty_rule_ids"`
+	TeamID     string      `json:"team_id"`
+	MonthStart pgtype.Date `json:"month_start"`
 }
 
 func (q *Queries) CloseMonthlyPenaltySummary(ctx context.Context, arg CloseMonthlyPenaltySummaryParams) error {
-	_, err := q.db.Exec(ctx, closeMonthlyPenaltySummary, arg.TeamID, arg.Month, arg.TriggeredPenaltyRuleIds)
+	_, err := q.db.Exec(ctx, closeMonthlyPenaltySummary, arg.TeamID, arg.MonthStart)
+	return err
+}
+
+const deleteTriggeredRulesByMonth = `-- name: DeleteTriggeredRulesByMonth :exec
+DELETE FROM monthly_penalty_summary_triggered_rules
+WHERE team_id = $1 AND month_start = $2
+`
+
+type DeleteTriggeredRulesByMonthParams struct {
+	TeamID     string      `json:"team_id"`
+	MonthStart pgtype.Date `json:"month_start"`
+}
+
+func (q *Queries) DeleteTriggeredRulesByMonth(ctx context.Context, arg DeleteTriggeredRulesByMonthParams) error {
+	_, err := q.db.Exec(ctx, deleteTriggeredRulesByMonth, arg.TeamID, arg.MonthStart)
 	return err
 }
 
 const getMonthlyPenaltySummary = `-- name: GetMonthlyPenaltySummary :one
-SELECT team_id, month, daily_penalty_total, weekly_penalty_total, is_closed, triggered_penalty_rule_ids
+SELECT team_id, month_start, daily_penalty_total, weekly_penalty_total, is_closed
 FROM monthly_penalty_summaries
-WHERE team_id = $1 AND month = $2
+WHERE team_id = $1 AND month_start = $2
 `
 
 type GetMonthlyPenaltySummaryParams struct {
-	TeamID string `json:"team_id"`
-	Month  string `json:"month"`
+	TeamID     string      `json:"team_id"`
+	MonthStart pgtype.Date `json:"month_start"`
 }
 
 func (q *Queries) GetMonthlyPenaltySummary(ctx context.Context, arg GetMonthlyPenaltySummaryParams) (MonthlyPenaltySummary, error) {
-	row := q.db.QueryRow(ctx, getMonthlyPenaltySummary, arg.TeamID, arg.Month)
+	row := q.db.QueryRow(ctx, getMonthlyPenaltySummary, arg.TeamID, arg.MonthStart)
 	var i MonthlyPenaltySummary
 	err := row.Scan(
 		&i.TeamID,
-		&i.Month,
+		&i.MonthStart,
 		&i.DailyPenaltyTotal,
 		&i.WeeklyPenaltyTotal,
 		&i.IsClosed,
-		&i.TriggeredPenaltyRuleIds,
 	)
 	return i, err
 }
@@ -55,64 +86,93 @@ func (q *Queries) GetMonthlyPenaltySummary(ctx context.Context, arg GetMonthlyPe
 const incrementDailyPenalty = `-- name: IncrementDailyPenalty :exec
 UPDATE monthly_penalty_summaries
 SET daily_penalty_total = daily_penalty_total + $3
-WHERE team_id = $1 AND month = $2
+WHERE team_id = $1 AND month_start = $2
 `
 
 type IncrementDailyPenaltyParams struct {
-	TeamID            string `json:"team_id"`
-	Month             string `json:"month"`
-	DailyPenaltyTotal int32  `json:"daily_penalty_total"`
+	TeamID            string      `json:"team_id"`
+	MonthStart        pgtype.Date `json:"month_start"`
+	DailyPenaltyTotal int32       `json:"daily_penalty_total"`
 }
 
 func (q *Queries) IncrementDailyPenalty(ctx context.Context, arg IncrementDailyPenaltyParams) error {
-	_, err := q.db.Exec(ctx, incrementDailyPenalty, arg.TeamID, arg.Month, arg.DailyPenaltyTotal)
+	_, err := q.db.Exec(ctx, incrementDailyPenalty, arg.TeamID, arg.MonthStart, arg.DailyPenaltyTotal)
 	return err
 }
 
 const incrementWeeklyPenalty = `-- name: IncrementWeeklyPenalty :exec
 UPDATE monthly_penalty_summaries
 SET weekly_penalty_total = weekly_penalty_total + $3
-WHERE team_id = $1 AND month = $2
+WHERE team_id = $1 AND month_start = $2
 `
 
 type IncrementWeeklyPenaltyParams struct {
-	TeamID             string `json:"team_id"`
-	Month              string `json:"month"`
-	WeeklyPenaltyTotal int32  `json:"weekly_penalty_total"`
+	TeamID             string      `json:"team_id"`
+	MonthStart         pgtype.Date `json:"month_start"`
+	WeeklyPenaltyTotal int32       `json:"weekly_penalty_total"`
 }
 
 func (q *Queries) IncrementWeeklyPenalty(ctx context.Context, arg IncrementWeeklyPenaltyParams) error {
-	_, err := q.db.Exec(ctx, incrementWeeklyPenalty, arg.TeamID, arg.Month, arg.WeeklyPenaltyTotal)
+	_, err := q.db.Exec(ctx, incrementWeeklyPenalty, arg.TeamID, arg.MonthStart, arg.WeeklyPenaltyTotal)
 	return err
 }
 
+const listTriggeredRuleIDsByMonth = `-- name: ListTriggeredRuleIDsByMonth :many
+SELECT rule_id
+FROM monthly_penalty_summary_triggered_rules
+WHERE team_id = $1 AND month_start = $2
+ORDER BY rule_id
+`
+
+type ListTriggeredRuleIDsByMonthParams struct {
+	TeamID     string      `json:"team_id"`
+	MonthStart pgtype.Date `json:"month_start"`
+}
+
+func (q *Queries) ListTriggeredRuleIDsByMonth(ctx context.Context, arg ListTriggeredRuleIDsByMonthParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, listTriggeredRuleIDsByMonth, arg.TeamID, arg.MonthStart)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var rule_id string
+		if err := rows.Scan(&rule_id); err != nil {
+			return nil, err
+		}
+		items = append(items, rule_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const upsertMonthlyPenaltySummary = `-- name: UpsertMonthlyPenaltySummary :exec
-INSERT INTO monthly_penalty_summaries (team_id, month, daily_penalty_total, weekly_penalty_total, is_closed, triggered_penalty_rule_ids)
-VALUES ($1, $2, $3, $4, $5, $6)
-ON CONFLICT (team_id, month) DO UPDATE SET
+INSERT INTO monthly_penalty_summaries (team_id, month_start, daily_penalty_total, weekly_penalty_total, is_closed)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (team_id, month_start) DO UPDATE SET
   daily_penalty_total = EXCLUDED.daily_penalty_total,
   weekly_penalty_total = EXCLUDED.weekly_penalty_total,
-  is_closed = EXCLUDED.is_closed,
-  triggered_penalty_rule_ids = EXCLUDED.triggered_penalty_rule_ids
+  is_closed = EXCLUDED.is_closed
 `
 
 type UpsertMonthlyPenaltySummaryParams struct {
-	TeamID                  string   `json:"team_id"`
-	Month                   string   `json:"month"`
-	DailyPenaltyTotal       int32    `json:"daily_penalty_total"`
-	WeeklyPenaltyTotal      int32    `json:"weekly_penalty_total"`
-	IsClosed                bool     `json:"is_closed"`
-	TriggeredPenaltyRuleIds []string `json:"triggered_penalty_rule_ids"`
+	TeamID             string      `json:"team_id"`
+	MonthStart         pgtype.Date `json:"month_start"`
+	DailyPenaltyTotal  int32       `json:"daily_penalty_total"`
+	WeeklyPenaltyTotal int32       `json:"weekly_penalty_total"`
+	IsClosed           bool        `json:"is_closed"`
 }
 
 func (q *Queries) UpsertMonthlyPenaltySummary(ctx context.Context, arg UpsertMonthlyPenaltySummaryParams) error {
 	_, err := q.db.Exec(ctx, upsertMonthlyPenaltySummary,
 		arg.TeamID,
-		arg.Month,
+		arg.MonthStart,
 		arg.DailyPenaltyTotal,
 		arg.WeeklyPenaltyTotal,
 		arg.IsClosed,
-		arg.TriggeredPenaltyRuleIds,
 	)
 	return err
 }

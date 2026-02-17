@@ -7,16 +7,30 @@ package dbsqlc
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const insertCloseExecutionKey = `-- name: InsertCloseExecutionKey :execrows
-INSERT INTO close_execution_keys (key, created_at)
-VALUES ($1, NOW())
-ON CONFLICT (key) DO NOTHING
+const insertCloseExecution = `-- name: InsertCloseExecution :execrows
+INSERT INTO close_executions (team_id, scope, target_date, task_id, created_at)
+VALUES ($1, $2, $3, NULLIF($4, '')::uuid, NOW())
+ON CONFLICT (team_id, scope, target_date, dedupe_task_key) DO NOTHING
 `
 
-func (q *Queries) InsertCloseExecutionKey(ctx context.Context, key string) (int64, error) {
-	result, err := q.db.Exec(ctx, insertCloseExecutionKey, key)
+type InsertCloseExecutionParams struct {
+	TeamID     string      `json:"team_id"`
+	Scope      string      `json:"scope"`
+	TargetDate pgtype.Date `json:"target_date"`
+	Column4    interface{} `json:"column_4"`
+}
+
+func (q *Queries) InsertCloseExecution(ctx context.Context, arg InsertCloseExecutionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, insertCloseExecution,
+		arg.TeamID,
+		arg.Scope,
+		arg.TargetDate,
+		arg.Column4,
+	)
 	if err != nil {
 		return 0, err
 	}

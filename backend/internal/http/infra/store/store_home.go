@@ -22,7 +22,7 @@ func (s *Store) GetHome(ctx context.Context, userID string) (api.HomeResponse, e
 
 	today := dateOnly(now, s.loc)
 	weekStart := startOfWeek(today, s.loc)
-	monthKey := today.Format("2006-01")
+	monthKey := monthKeyFromTime(today, s.loc)
 	monthly, err := s.ensureMonthSummaryLocked(ctx, teamID, monthKey)
 	if err != nil {
 		return api.HomeResponse{}, err
@@ -88,12 +88,19 @@ func (s *Store) GetMonthlySummary(ctx context.Context, userID string, month *str
 	if err != nil {
 		return api.MonthlyPenaltySummary{}, err
 	}
+	triggered, err := s.q.ListTriggeredRuleIDsByMonth(ctx, dbsqlc.ListTriggeredRuleIDsByMonthParams{
+		TeamID:     teamID,
+		MonthStart: summary.MonthStart,
+	})
+	if err != nil {
+		return api.MonthlyPenaltySummary{}, err
+	}
 	return monthSummary{
 		TeamID:          summary.TeamID,
-		Month:           summary.Month,
+		Month:           monthKeyFromTime(summary.MonthStart.Time, s.loc),
 		DailyPenalty:    int(summary.DailyPenaltyTotal),
 		WeeklyPenalty:   int(summary.WeeklyPenaltyTotal),
 		IsClosed:        summary.IsClosed,
-		TriggeredRuleID: summary.TriggeredPenaltyRuleIds,
+		TriggeredRuleID: triggered,
 	}.toAPI(), nil
 }
