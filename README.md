@@ -63,7 +63,8 @@ backend は `air` で起動され、`backend/` 配下の変更を自動リロー
 
 必要な環境変数:
 
-- `VITE_API_BASE_URL`: backend API のベースURL
+- `VITE_API_BASE_URL`: APIベースURL（推奨: `/api`）
+- `API_ORIGIN`: Workerが転送するbackend APIのオリジン（例: `https://kaji-backend-xxxx.run.app`）
 
 GitHub Actions デプロイで必要な secrets:
 
@@ -91,6 +92,12 @@ OIDC厳格運用（推奨）:
 
 - `OIDC_STRICT_MODE=true` を設定すると、`OIDC_ISSUER_URL` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` / `OIDC_REDIRECT_URL` が未設定の場合にbackendは起動失敗します。
 - `OIDC_STRICT_MODE=true` ではローカルモック認証分岐は無効化されます。
+
+Cookieセッション認証:
+
+- 認証は `HttpOnly` Cookie (`kaji_session`) で管理します（Bearer tokenは非対応）。
+- backend は `FRONTEND_ORIGIN` を許可オリジンとして使用します。
+- `COOKIE_SECURE=true` で `Secure` Cookie を強制します（ローカルHTTP開発時は `false`）。
 
 ## Git Hooks
 
