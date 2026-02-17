@@ -63,7 +63,7 @@ describe("App", () => {
     mockListTasks.mockResolvedValue({ data: { items: [] } });
     mockListRules.mockResolvedValue({ data: { items: [] } });
     mockSummary.mockResolvedValue({ data: { totalPenalty: 0 } });
-    mockGetMe.mockResolvedValue({ data: { user: { displayName: "Owner" } } });
+    mockGetMe.mockRejectedValue(new Error("request failed: 401"));
   });
 
   it("renders login before authentication", () => {
@@ -93,10 +93,7 @@ describe("App", () => {
   });
 
   it("shows navigation after authentication", async () => {
-    window.localStorage.setItem(
-      "kaji.session.v1",
-      JSON.stringify({ version: 1, accessToken: "token-1" }),
-    );
+    mockGetMe.mockResolvedValue({ data: { user: { displayName: "Owner" } } });
     render(<App />);
 
     await waitFor(() => {
@@ -105,8 +102,7 @@ describe("App", () => {
     });
   });
 
-  it("falls back to logged-out state when stored session is malformed", () => {
-    window.localStorage.setItem("kaji.session.v1", "{invalid-json");
+  it("keeps logged-out state when getMe returns 401", () => {
     render(<App />);
 
     expect(screen.getAllByText("家事チャレ MVP").length).toBeGreaterThan(0);
