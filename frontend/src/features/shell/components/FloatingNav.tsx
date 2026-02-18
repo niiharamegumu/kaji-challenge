@@ -68,11 +68,14 @@ export function FloatingNav({ onLogout }: Props) {
               : "pointer-events-none translate-y-2 opacity-0"
           }`}
         >
-          <p className="mb-2 px-1 text-xs text-stone-600">管理</p>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             <NavLink to="/" end className={linkClass}>
               <House size={18} aria-hidden="true" />
               <span>ホーム</span>
+            </NavLink>
+            <NavLink to="/admin/summary" className={linkClass}>
+              <ChartColumn size={18} aria-hidden="true" />
+              <span>サマリー</span>
             </NavLink>
             <NavLink to="/admin/tasks" className={linkClass}>
               <Shield size={18} aria-hidden="true" />
@@ -85,10 +88,6 @@ export function FloatingNav({ onLogout }: Props) {
             <NavLink to="/admin/invites" className={linkClass}>
               <ShieldPlus size={18} aria-hidden="true" />
               <span>招待</span>
-            </NavLink>
-            <NavLink to="/admin/summary" className={linkClass}>
-              <ChartColumn size={18} aria-hidden="true" />
-              <span>サマリー</span>
             </NavLink>
             <button
               type="button"
