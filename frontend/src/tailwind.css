@@ -8,9 +8,12 @@
   --color-kohaku-200: #f2d4a7;
   --color-matcha-50: #eff8ef;
   --color-matcha-100: #daf0da;
+  --color-matcha-200: #b9e0b9;
   --color-matcha-300: #95c895;
   --color-matcha-400: #6cad6c;
+  --color-matcha-500: #4f9859;
   --color-matcha-600: #3e7f4a;
+  --color-matcha-700: #2f663b;
 }
 
 @keyframes enter {

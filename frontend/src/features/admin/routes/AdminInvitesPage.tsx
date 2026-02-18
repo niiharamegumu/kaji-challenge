@@ -22,6 +22,8 @@ export function AdminInvitesPage() {
       <InviteManager
         inviteCode={inviteCode}
         joinCode={joinCode}
+        isCreatingInvite={createInvite.isPending}
+        isJoiningTeam={joinTeam.isPending}
         onJoinCodeChange={setJoinCode}
         onCreateInvite={() => {
           void handleCreateInvite();
