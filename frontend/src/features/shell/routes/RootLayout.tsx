@@ -1,7 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useAtom, useAtomValue } from "jotai";
 import { useSetAtom } from "jotai";
-import { RefreshCw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 
@@ -122,17 +121,6 @@ export function RootLayout() {
     setJoinCode("");
   };
 
-  const refresh = async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.me }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.home }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.tasks }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.rules }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.monthlySummary }),
-    ]);
-    setStatus("最新状態に同期しました");
-  };
-
   if (!authChecked) {
     return (
       <main className="min-h-screen bg-[radial-gradient(circle_at_top,_var(--color-washi-50),_#fff,_var(--color-matcha-50))] p-6 text-stone-700">
@@ -156,20 +144,9 @@ export function RootLayout() {
         <header className="rounded-2xl border border-[color:var(--color-matcha-300)] bg-white/90 p-4 shadow-sm backdrop-blur">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h1 className="text-2xl font-bold tracking-wide">KajiChalle</h1>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                className="flex min-h-11 items-center gap-2 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-800 transition-colors duration-200 hover:bg-stone-50"
-                onClick={() => void refresh()}
-                aria-label="最新状態に再読込する"
-              >
-                <RefreshCw size={16} aria-hidden="true" />
-                <span>再読込</span>
-              </button>
-              <span className="rounded-full bg-[color:var(--color-matcha-100)] px-3 py-2 text-sm">
-                {meQuery.data?.user.displayName ?? "ログイン中"}
-              </span>
-            </div>
+            <span className="rounded-full bg-[color:var(--color-matcha-100)] px-3 py-2 text-sm">
+              {meQuery.data?.user.displayName ?? "ログイン中"}
+            </span>
           </div>
         </header>
 
