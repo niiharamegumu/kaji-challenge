@@ -92,9 +92,6 @@ func (s *Store) CreateInvite(ctx context.Context, userID string, req api.CreateI
 	}
 
 	maxUses := 1
-	if req.MaxUses != nil {
-		maxUses = *req.MaxUses
-	}
 	expiresInHours := 72
 	if req.ExpiresInHours != nil {
 		expiresInHours = *req.ExpiresInHours
@@ -110,13 +107,27 @@ func (s *Store) CreateInvite(ctx context.Context, userID string, req api.CreateI
 	}
 	code := strings.ToUpper(raw[:10])
 	expiresAt := time.Now().In(s.loc).Add(time.Duration(expiresInHours) * time.Hour)
-	if err := s.q.CreateInviteCode(ctx, dbsqlc.CreateInviteCodeParams{
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return api.InviteCodeResponse{}, err
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+	qtx := s.q.WithTx(tx)
+	if err := qtx.DeleteInviteCodesByTeamID(ctx, teamID); err != nil {
+		return api.InviteCodeResponse{}, err
+	}
+	if err := qtx.CreateInviteCode(ctx, dbsqlc.CreateInviteCodeParams{
 		Code:      code,
 		TeamID:    teamID,
 		ExpiresAt: toPgTimestamptz(expiresAt),
 		MaxUses:   maxUses32,
 		UsedCount: 0,
 	}); err != nil {
+		return api.InviteCodeResponse{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
 		return api.InviteCodeResponse{}, err
 	}
 
@@ -156,7 +167,22 @@ func (s *Store) JoinTeam(ctx context.Context, userID, code string) (api.JoinTeam
 		return api.JoinTeamResponse{}, errors.New("user already belongs to a team")
 	}
 
-	if err := s.q.AddTeamMember(ctx, dbsqlc.AddTeamMemberParams{
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return api.JoinTeamResponse{}, err
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+	qtx := s.q.WithTx(tx)
+	rows, err := qtx.DeleteInviteCode(ctx, code)
+	if err != nil {
+		return api.JoinTeamResponse{}, err
+	}
+	if rows == 0 {
+		return api.JoinTeamResponse{}, errors.New("invite code max uses exceeded")
+	}
+	if err := qtx.AddTeamMember(ctx, dbsqlc.AddTeamMemberParams{
 		TeamID:    invite.TeamID,
 		UserID:    userID,
 		Role:      string(api.Member),
@@ -164,12 +190,8 @@ func (s *Store) JoinTeam(ctx context.Context, userID, code string) (api.JoinTeam
 	}); err != nil {
 		return api.JoinTeamResponse{}, err
 	}
-	rows, err := s.q.IncrementInviteCodeUsedCount(ctx, code)
-	if err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		return api.JoinTeamResponse{}, err
-	}
-	if rows == 0 {
-		return api.JoinTeamResponse{}, errors.New("invite code max uses exceeded")
 	}
 	return api.JoinTeamResponse{TeamId: invite.TeamID}, nil
 }

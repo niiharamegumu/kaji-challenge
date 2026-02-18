@@ -35,6 +35,29 @@ func (q *Queries) CreateInviteCode(ctx context.Context, arg CreateInviteCodePara
 	return err
 }
 
+const deleteInviteCode = `-- name: DeleteInviteCode :execrows
+DELETE FROM invite_codes
+WHERE code = $1
+`
+
+func (q *Queries) DeleteInviteCode(ctx context.Context, code string) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteInviteCode, code)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const deleteInviteCodesByTeamID = `-- name: DeleteInviteCodesByTeamID :exec
+DELETE FROM invite_codes
+WHERE team_id = $1
+`
+
+func (q *Queries) DeleteInviteCodesByTeamID(ctx context.Context, teamID string) error {
+	_, err := q.db.Exec(ctx, deleteInviteCodesByTeamID, teamID)
+	return err
+}
+
 const getInviteCode = `-- name: GetInviteCode :one
 SELECT code, team_id, expires_at, max_uses, used_count, created_at
 FROM invite_codes
@@ -53,18 +76,4 @@ func (q *Queries) GetInviteCode(ctx context.Context, code string) (InviteCode, e
 		&i.CreatedAt,
 	)
 	return i, err
-}
-
-const incrementInviteCodeUsedCount = `-- name: IncrementInviteCodeUsedCount :execrows
-UPDATE invite_codes
-SET used_count = used_count + 1
-WHERE code = $1 AND used_count < max_uses
-`
-
-func (q *Queries) IncrementInviteCodeUsedCount(ctx context.Context, code string) (int64, error) {
-	result, err := q.db.Exec(ctx, incrementInviteCodeUsedCount, code)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
 }

@@ -120,7 +120,7 @@ export function useInviteMutations(setStatus: StatusSetter) {
   const queryClient = useQueryClient();
 
   const createInvite = useMutation({
-    mutationFn: async () => postTeamInvite({ expiresInHours: 72, maxUses: 2 }),
+    mutationFn: async () => postTeamInvite({ expiresInHours: 72 }),
     onError: (error) => {
       setStatus(`招待コード発行に失敗しました: ${formatError(error)}`);
     },

@@ -115,6 +115,93 @@ func TestInviteJoinFlow(t *testing.T) {
 	}
 }
 
+func TestInviteCreateRotatesCodeByHardDelete(t *testing.T) {
+	r := newTestRouter(t)
+	ownerToken := loginAs(t, r, "invite-owner-rotate@example.com")
+
+	firstInviteRes := doRequest(t, r, http.MethodPost, "/v1/teams/invites", `{"maxUses":100,"expiresInHours":72}`, ownerToken)
+	if firstInviteRes.Code != http.StatusCreated {
+		t.Fatalf("expected first invite create 201, got %d: %s", firstInviteRes.Code, firstInviteRes.Body.String())
+	}
+	var firstInvite api.InviteCodeResponse
+	if err := json.Unmarshal(firstInviteRes.Body.Bytes(), &firstInvite); err != nil {
+		t.Fatalf("failed to parse first invite response: %v", err)
+	}
+
+	secondInviteRes := doRequest(t, r, http.MethodPost, "/v1/teams/invites", `{"maxUses":100,"expiresInHours":72}`, ownerToken)
+	if secondInviteRes.Code != http.StatusCreated {
+		t.Fatalf("expected second invite create 201, got %d: %s", secondInviteRes.Code, secondInviteRes.Body.String())
+	}
+	var secondInvite api.InviteCodeResponse
+	if err := json.Unmarshal(secondInviteRes.Body.Bytes(), &secondInvite); err != nil {
+		t.Fatalf("failed to parse second invite response: %v", err)
+	}
+	if secondInvite.Code == firstInvite.Code {
+		t.Fatalf("expected rotated invite code, got identical code")
+	}
+
+	memberToken := loginAs(t, r, "invite-rotate-member@example.com")
+	memberID := fetchMeUserID(t, r, memberToken)
+	clearTeamMembershipsForTest(t, memberID)
+
+	oldJoinRes := doRequest(t, r, http.MethodPost, "/v1/teams/join", `{"code":"`+firstInvite.Code+`"}`, memberToken)
+	if oldJoinRes.Code < 400 || oldJoinRes.Code >= 500 {
+		t.Fatalf("expected old invite join 4xx, got %d: %s", oldJoinRes.Code, oldJoinRes.Body.String())
+	}
+
+	newJoinRes := doRequest(t, r, http.MethodPost, "/v1/teams/join", `{"code":"`+secondInvite.Code+`"}`, memberToken)
+	if newJoinRes.Code != http.StatusOK {
+		t.Fatalf("expected new invite join 200, got %d: %s", newJoinRes.Code, newJoinRes.Body.String())
+	}
+}
+
+func TestInviteIsSingleUseByHardDelete(t *testing.T) {
+	r := newTestRouter(t)
+	ownerToken := loginAs(t, r, "invite-owner-single-use@example.com")
+
+	inviteRes := doRequest(t, r, http.MethodPost, "/v1/teams/invites", `{"maxUses":100,"expiresInHours":72}`, ownerToken)
+	if inviteRes.Code != http.StatusCreated {
+		t.Fatalf("expected invite create 201, got %d: %s", inviteRes.Code, inviteRes.Body.String())
+	}
+	var invite api.InviteCodeResponse
+	if err := json.Unmarshal(inviteRes.Body.Bytes(), &invite); err != nil {
+		t.Fatalf("failed to parse invite response: %v", err)
+	}
+
+	firstMemberToken := loginAs(t, r, "invite-single-member-1@example.com")
+	firstMemberID := fetchMeUserID(t, r, firstMemberToken)
+	clearTeamMembershipsForTest(t, firstMemberID)
+	firstJoinRes := doRequest(t, r, http.MethodPost, "/v1/teams/join", `{"code":"`+invite.Code+`"}`, firstMemberToken)
+	if firstJoinRes.Code != http.StatusOK {
+		t.Fatalf("expected first invite join 200, got %d: %s", firstJoinRes.Code, firstJoinRes.Body.String())
+	}
+
+	secondMemberToken := loginAs(t, r, "invite-single-member-2@example.com")
+	secondMemberID := fetchMeUserID(t, r, secondMemberToken)
+	clearTeamMembershipsForTest(t, secondMemberID)
+	secondJoinRes := doRequest(t, r, http.MethodPost, "/v1/teams/join", `{"code":"`+invite.Code+`"}`, secondMemberToken)
+	if secondJoinRes.Code < 400 || secondJoinRes.Code >= 500 {
+		t.Fatalf("expected second invite join 4xx, got %d: %s", secondJoinRes.Code, secondJoinRes.Body.String())
+	}
+}
+
+func TestInviteResponseMaxUsesIsOne(t *testing.T) {
+	r := newTestRouter(t)
+	ownerToken := loginAs(t, r, "invite-owner-max-uses@example.com")
+
+	inviteRes := doRequest(t, r, http.MethodPost, "/v1/teams/invites", `{"maxUses":100,"expiresInHours":72}`, ownerToken)
+	if inviteRes.Code != http.StatusCreated {
+		t.Fatalf("expected invite create 201, got %d: %s", inviteRes.Code, inviteRes.Body.String())
+	}
+	var invite api.InviteCodeResponse
+	if err := json.Unmarshal(inviteRes.Body.Bytes(), &invite); err != nil {
+		t.Fatalf("failed to parse invite response: %v", err)
+	}
+	if invite.MaxUses != 1 {
+		t.Fatalf("expected maxUses to be 1, got %d", invite.MaxUses)
+	}
+}
+
 func TestTaskLifecycleAndTaskOverview(t *testing.T) {
 	r := newTestRouter(t)
 	token := login(t, r)
@@ -217,6 +304,10 @@ func TestSessionExchangeRequiresOrigin(t *testing.T) {
 }
 
 func login(t *testing.T, r http.Handler) string {
+	return loginAs(t, r, "test-user@example.com")
+}
+
+func loginAs(t *testing.T, r http.Handler, email string) string {
 	t.Helper()
 
 	startRes := doRequest(t, r, http.MethodGet, "/v1/auth/google/start", "", "")
@@ -234,6 +325,11 @@ func login(t *testing.T, r http.Handler) string {
 		t.Fatalf("failed to parse authorization url: %v", err)
 	}
 	callbackPath := u.RequestURI()
+	sep := "&"
+	if !strings.Contains(callbackPath, "?") {
+		sep = "?"
+	}
+	callbackPath += sep + "mock_email=" + url.QueryEscape(email) + "&mock_name=" + url.QueryEscape("Test User")
 	callbackRes := doRequest(t, r, http.MethodGet, callbackPath, "", "")
 	if callbackRes.Code != http.StatusOK && callbackRes.Code != http.StatusFound {
 		t.Fatalf("auth callback failed: %d %s", callbackRes.Code, callbackRes.Body.String())
@@ -272,6 +368,38 @@ func login(t *testing.T, r http.Handler) string {
 	}
 	t.Fatalf("expected kaji_session cookie in exchange response")
 	return ""
+}
+
+func fetchMeUserID(t *testing.T, r http.Handler, token string) string {
+	t.Helper()
+
+	res := doRequest(t, r, http.MethodGet, "/v1/me", "", token)
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected 200 from /v1/me, got %d: %s", res.Code, res.Body.String())
+	}
+	var me api.MeResponse
+	if err := json.Unmarshal(res.Body.Bytes(), &me); err != nil {
+		t.Fatalf("failed to parse /v1/me response: %v", err)
+	}
+	return me.User.Id
+}
+
+func clearTeamMembershipsForTest(t *testing.T, userID string) {
+	t.Helper()
+
+	dbURL := strings.TrimSpace(os.Getenv("DATABASE_URL"))
+	if dbURL == "" {
+		t.Fatalf("DATABASE_URL is required")
+	}
+	db, err := sql.Open("pgx", dbURL)
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	defer db.Close()
+
+	if _, err := db.Exec(`DELETE FROM team_members WHERE user_id = $1`, userID); err != nil {
+		t.Fatalf("failed to clear team memberships: %v", err)
+	}
 }
 
 func doRequest(t *testing.T, r http.Handler, method, path, body, sessionCookie string) *httptest.ResponseRecorder {

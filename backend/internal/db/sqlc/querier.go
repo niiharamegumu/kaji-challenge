@@ -22,6 +22,8 @@ type Querier interface {
 	CreateTeam(ctx context.Context, arg CreateTeamParams) error
 	CreateUser(ctx context.Context, arg CreateUserParams) error
 	DeleteAuthRequest(ctx context.Context, state string) error
+	DeleteInviteCode(ctx context.Context, code string) (int64, error)
+	DeleteInviteCodesByTeamID(ctx context.Context, teamID string) error
 	DeletePenaltyRule(ctx context.Context, id string) error
 	DeleteSession(ctx context.Context, token string) error
 	DeleteTask(ctx context.Context, id string) error
@@ -39,7 +41,6 @@ type Querier interface {
 	GetUserByID(ctx context.Context, id string) (User, error)
 	HasTaskCompletion(ctx context.Context, arg HasTaskCompletionParams) (bool, error)
 	IncrementDailyPenalty(ctx context.Context, arg IncrementDailyPenaltyParams) error
-	IncrementInviteCodeUsedCount(ctx context.Context, code string) (int64, error)
 	IncrementWeeklyPenalty(ctx context.Context, arg IncrementWeeklyPenaltyParams) error
 	InsertAuthRequest(ctx context.Context, arg InsertAuthRequestParams) error
 	InsertCloseExecution(ctx context.Context, arg InsertCloseExecutionParams) (int64, error)
