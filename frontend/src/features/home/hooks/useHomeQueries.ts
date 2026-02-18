@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
-  getPenaltySummaryMonthly,
   getTaskOverview,
   postTaskCompletionToggle,
 } from "../../../lib/api/generated/client";
@@ -14,14 +13,6 @@ export function useHomeQuery(enabled: boolean) {
   return useQuery({
     queryKey: queryKeys.home,
     queryFn: async () => (await getTaskOverview()).data,
-    enabled,
-  });
-}
-
-export function useMonthlySummaryQuery(enabled: boolean) {
-  return useQuery({
-    queryKey: queryKeys.monthlySummary,
-    queryFn: async () => (await getPenaltySummaryMonthly()).data,
     enabled,
   });
 }

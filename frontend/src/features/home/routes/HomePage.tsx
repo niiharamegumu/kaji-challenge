@@ -8,7 +8,6 @@ import { DailyTasksPanel } from "../components/DailyTasksPanel";
 import { WeeklyTasksPanel } from "../components/WeeklyTasksPanel";
 import {
   useHomeQuery,
-  useMonthlySummaryQuery,
   useToggleCompletionMutation,
 } from "../hooks/useHomeQueries";
 
@@ -16,11 +15,9 @@ export function HomePage() {
   const loggedIn = useAtomValue(isLoggedInAtom);
   const [, setStatus] = useAtom(statusMessageAtom);
   const homeQuery = useHomeQuery(loggedIn);
-  const summaryQuery = useMonthlySummaryQuery(loggedIn);
   const toggleMutation = useToggleCompletionMutation(setStatus);
 
   const home = homeQuery.data;
-  const monthlyTotal = summaryQuery.data?.totalPenalty ?? 0;
 
   const weeklyProgress = useMemo(() => {
     if (home == null) {
@@ -51,7 +48,6 @@ export function HomePage() {
         items={home?.weeklyTasks ?? []}
         elapsedDaysInWeek={home?.elapsedDaysInWeek ?? 0}
         weeklyProgress={weeklyProgress}
-        monthlyTotal={monthlyTotal}
         onToggle={(taskId) => {
           void toggleMutation.mutateAsync(taskId);
         }}
