@@ -1,7 +1,7 @@
-import type { HomeDailyTask } from "../../../lib/api/generated/client";
+import type { TaskOverviewDailyTask } from "../../../lib/api/generated/client";
 
 type Props = {
-  items: HomeDailyTask[];
+  items: TaskOverviewDailyTask[];
   onToggle: (taskId: string) => void;
 };
 
