@@ -1,3 +1,5 @@
+import { LogIn, Send } from "lucide-react";
+
 type Props = {
   inviteCode: string;
   joinCode: string;
@@ -19,10 +21,11 @@ export function InviteManager({
       <div className="mt-4 rounded-xl border border-stone-200 p-3">
         <button
           type="button"
-          className="rounded-lg bg-[color:var(--color-matcha-600)] px-3 py-2 text-white"
+          className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[color:var(--color-matcha-600)] px-3 py-2 text-white"
           onClick={onCreateInvite}
         >
-          招待コード発行
+          <Send size={16} aria-hidden="true" />
+          <span>招待コード発行</span>
         </button>
         <p className="mt-2 text-sm">発行コード: {inviteCode || "未発行"}</p>
         <label className="text-sm text-stone-700" htmlFor="join-code">
@@ -38,10 +41,11 @@ export function InviteManager({
           />
           <button
             type="button"
-            className="rounded-lg border border-stone-400 px-3 py-2 whitespace-nowrap"
+            className="flex min-h-11 items-center gap-2 rounded-lg border border-stone-400 px-3 py-2 whitespace-nowrap"
             onClick={onJoinTeam}
           >
-            参加
+            <LogIn size={14} aria-hidden="true" />
+            <span>参加</span>
           </button>
         </div>
       </div>

@@ -1,4 +1,6 @@
+import { CheckCircle2, CircleMinus, CirclePlus, Trash2 } from "lucide-react";
 import type { ChangeEvent } from "react";
+import { useMemo } from "react";
 
 import type { PenaltyRule } from "../../../lib/api/generated/client";
 import type { RuleFormState } from "../state/forms";
@@ -25,16 +27,21 @@ export function PenaltyRuleManager({
       onFormChange((prev) => ({ ...prev, [key]: event.target.value }));
     };
 
+  const sortedRules = useMemo(
+    () => [...rules].sort((a, b) => b.threshold - a.threshold),
+    [rules],
+  );
+
   return (
-    <article className="rounded-2xl border border-stone-200 bg-white/90 p-4 shadow-sm animate-enter">
+    <article className="rounded-2xl border border-stone-200 bg-white/90 p-4 shadow-sm animate-enter md:p-6">
       <h2 className="text-lg font-semibold">ペナルティ管理</h2>
-      <div className="mt-3 grid gap-2">
+      <div className="mt-4 grid gap-3">
         <label className="text-sm text-stone-700" htmlFor="rule-name">
           ルール名
         </label>
         <input
           id="rule-name"
-          className="rounded-lg border border-stone-300 px-3 py-2"
+          className="min-h-11 rounded-lg border border-stone-300 bg-white px-3 py-2"
           value={form.name}
           onChange={handleChange("name")}
           placeholder="ルール名"
@@ -44,52 +51,74 @@ export function PenaltyRuleManager({
         </label>
         <input
           id="rule-threshold"
-          className="rounded-lg border border-stone-300 px-3 py-2"
+          className="min-h-11 rounded-lg border border-stone-300 bg-white px-3 py-2"
           type="number"
           min={1}
           value={form.threshold}
           onChange={handleChange("threshold")}
           placeholder="閾値"
         />
-        <button
-          type="button"
-          className="rounded-lg bg-stone-900 px-3 py-2 text-white"
-          onClick={onCreate}
-        >
-          ルール追加
-        </button>
+        <div className="mt-1 flex justify-end">
+          <button
+            type="button"
+            className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 py-2 text-white transition-colors duration-200 hover:bg-stone-800 sm:w-auto sm:min-w-44"
+            onClick={onCreate}
+          >
+            <CirclePlus size={16} aria-hidden="true" />
+            <span>ルール追加</span>
+          </button>
+        </div>
       </div>
-      <ul className="mt-4 space-y-2">
-        {rules.map((rule) => (
-          <li key={rule.id} className="rounded-xl border border-stone-300 p-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium">{rule.name}</div>
-                <div className="text-xs text-stone-600">
+      <div className="mt-6 border-t border-stone-200 pt-5">
+        {sortedRules.length === 0 ? (
+          <p className="text-sm text-stone-500">
+            ペナルティルールはまだありません。
+          </p>
+        ) : (
+          <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {sortedRules.map((rule) => (
+              <li
+                key={rule.id}
+                className={`rounded-xl border p-3 ${rule.isActive ? "border-[color:var(--color-matcha-300)] bg-[color:var(--color-matcha-50)]" : "border-stone-300 bg-stone-100"}`}
+              >
+                <div
+                  className={`font-medium ${rule.isActive ? "text-stone-900" : "text-stone-700"}`}
+                >
+                  {rule.name}
+                </div>
+                <div
+                  className={`mt-1 text-xs ${rule.isActive ? "text-stone-600" : "text-stone-500"}`}
+                >
                   発動しきい値 {rule.threshold} /{" "}
                   {rule.isActive ? "有効" : "無効"}
                 </div>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  className="rounded-lg border border-stone-300 px-2 py-1 text-xs"
-                  onClick={() => onToggle(rule)}
-                >
-                  {rule.isActive ? "無効化" : "有効化"}
-                </button>
-                <button
-                  type="button"
-                  className="rounded-lg border border-rose-300 px-2 py-1 text-xs text-rose-700"
-                  onClick={() => onDelete(rule.id)}
-                >
-                  削除
-                </button>
-              </div>
-            </div>
-          </li>
-        ))}
-      </ul>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="flex min-h-11 items-center gap-1 rounded-lg border border-stone-300 bg-white px-3 py-2 text-xs transition-colors duration-200 hover:bg-stone-50"
+                    onClick={() => onToggle(rule)}
+                  >
+                    {rule.isActive ? (
+                      <CircleMinus size={14} aria-hidden="true" />
+                    ) : (
+                      <CheckCircle2 size={14} aria-hidden="true" />
+                    )}
+                    <span>{rule.isActive ? "無効化" : "有効化"}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="flex min-h-11 items-center gap-1 rounded-lg border border-rose-300 bg-white px-3 py-2 text-xs text-rose-700 transition-colors duration-200 hover:bg-rose-50"
+                    onClick={() => onDelete(rule.id)}
+                  >
+                    <Trash2 size={14} aria-hidden="true" />
+                    <span>削除</span>
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </article>
   );
 }

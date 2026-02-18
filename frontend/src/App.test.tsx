@@ -71,7 +71,7 @@ describe("App", () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByText("家事チャレ MVP")).toBeInTheDocument();
+      expect(screen.getByText("KajiChalle")).toBeInTheDocument();
       expect(
         screen.getByRole("button", { name: "Googleでログイン" }),
       ).toBeInTheDocument();
@@ -97,11 +97,20 @@ describe("App", () => {
 
   it("shows navigation after authentication", async () => {
     mockGetMe.mockResolvedValue({ data: { user: { displayName: "Owner" } } });
+    const user = userEvent.setup();
     render(<App />);
+
+    const navOpenButton = await screen.findByRole("button", {
+      name: "ナビゲーションを開く",
+    });
+    await user.click(navOpenButton);
 
     await waitFor(() => {
       expect(screen.getByRole("link", { name: "ホーム" })).toBeInTheDocument();
-      expect(screen.getByRole("link", { name: "管理" })).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "タスク" })).toBeInTheDocument();
+      expect(
+        screen.getByRole("link", { name: "サマリー" }),
+      ).toBeInTheDocument();
     });
   });
 
@@ -109,7 +118,7 @@ describe("App", () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getAllByText("家事チャレ MVP").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("KajiChalle").length).toBeGreaterThan(0);
       expect(
         screen.getAllByRole("button", { name: "Googleでログイン" }).length,
       ).toBeGreaterThan(0);

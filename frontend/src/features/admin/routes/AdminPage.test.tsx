@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { AppProviders } from "../../../app/providers";
-import { AdminPage } from "./AdminPage";
+import { AdminTasksPage } from "./AdminTasksPage";
 
 const mockPostTask = vi.fn();
 
@@ -27,14 +27,14 @@ vi.mock("../../../lib/api/generated/client", async () => {
   };
 });
 
-describe("AdminPage", () => {
+describe("AdminTasksPage", () => {
   it("posts task from task manager", async () => {
     mockPostTask.mockResolvedValue({ data: {} });
     const user = userEvent.setup();
 
     render(
       <AppProviders>
-        <AdminPage />
+        <AdminTasksPage />
       </AppProviders>,
     );
 

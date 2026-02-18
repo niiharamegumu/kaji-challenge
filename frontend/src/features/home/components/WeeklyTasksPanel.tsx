@@ -4,7 +4,6 @@ type Props = {
   items: TaskOverviewWeeklyTask[];
   elapsedDaysInWeek: number;
   weeklyProgress: string;
-  monthlyTotal: number;
   onToggle: (taskId: string) => void;
 };
 
@@ -12,7 +11,6 @@ export function WeeklyTasksPanel({
   items,
   elapsedDaysInWeek,
   weeklyProgress,
-  monthlyTotal,
   onToggle,
 }: Props) {
   return (
@@ -36,7 +34,7 @@ export function WeeklyTasksPanel({
               </div>
               <button
                 type="button"
-                className="rounded-lg border border-stone-300 px-3 py-1 text-sm"
+                className="min-h-11 rounded-lg border border-stone-300 px-3 py-1 text-sm"
                 onClick={() => onToggle(item.task.id)}
               >
                 {item.requiredCompletionsPerWeek > 1
@@ -47,9 +45,6 @@ export function WeeklyTasksPanel({
           </li>
         ))}
       </ul>
-      <div className="mt-4 rounded-lg bg-kohaku-50 p-3 text-sm">
-        今月の減点合計: <strong>{monthlyTotal}</strong>
-      </div>
     </article>
   );
 }

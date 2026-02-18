@@ -2,13 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAtom, useAtomValue } from "jotai";
 import { useSetAtom } from "jotai";
 import { useEffect, useRef, useState } from "react";
-import {
-  NavLink,
-  Navigate,
-  Outlet,
-  useLocation,
-  useNavigate,
-} from "react-router-dom";
+import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { queryKeys } from "../../../shared/query/queryKeys";
 import { extractHttpStatus, formatError } from "../../../shared/utils/errors";
@@ -28,11 +22,9 @@ import {
 } from "../../auth/hooks/useAuthActions";
 import { useExchangeCodeFallback } from "../../auth/hooks/useExchangeCodeFallback";
 import { consumeFlashStatus } from "../../auth/state/flash";
-import { StatusBanner } from "../components/StatusBanner";
+import { FloatingNav } from "../components/FloatingNav";
+import { StatusToast } from "../components/StatusToast";
 import { statusMessageAtom } from "../state/status";
-
-const linkClass = ({ isActive }: { isActive: boolean }) =>
-  `rounded-lg px-3 py-2 text-sm ${isActive ? "bg-stone-900 text-white" : "bg-stone-100"}`;
 
 const protectedQueryKeys = [
   queryKeys.me,
@@ -129,17 +121,6 @@ export function RootLayout() {
     setJoinCode("");
   };
 
-  const refresh = async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.me }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.home }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.tasks }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.rules }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.monthlySummary }),
-    ]);
-    setStatus("最新状態に同期しました");
-  };
-
   if (!authChecked) {
     return (
       <main className="min-h-screen bg-[radial-gradient(circle_at_top,_var(--color-washi-50),_#fff,_var(--color-matcha-50))] p-6 text-stone-700">
@@ -156,44 +137,23 @@ export function RootLayout() {
   }
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,_var(--color-washi-50),_#fff,_var(--color-kohaku-50))] p-4 text-stone-800 md:p-8">
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top,_var(--color-washi-50),_#fff,_var(--color-kohaku-50))] p-4 pb-32 text-stone-800 md:p-8 md:pb-20">
+      <StatusToast message={status} onDismiss={() => setStatus("")} />
+
       <div className="mx-auto max-w-6xl">
         <header className="rounded-2xl border border-[color:var(--color-matcha-300)] bg-white/90 p-4 shadow-sm backdrop-blur">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h1 className="text-2xl font-bold tracking-wide">家事チャレ</h1>
-            <div className="flex items-center gap-2">
-              <span className="rounded-full bg-[color:var(--color-matcha-100)] px-3 py-1 text-sm">
-                {meQuery.data?.user.displayName ?? "ログイン中"}
-              </span>
-              <button
-                type="button"
-                className="rounded-lg border border-stone-300 px-3 py-1 text-sm"
-                onClick={() => void logout()}
-              >
-                ログアウト
-              </button>
-            </div>
+            <h1 className="text-2xl font-bold tracking-wide">KajiChalle</h1>
+            <span className="rounded-full bg-[color:var(--color-matcha-100)] px-3 py-2 text-sm">
+              {meQuery.data?.user.displayName ?? "ログイン中"}
+            </span>
           </div>
-          <div className="mt-4 flex gap-2">
-            <NavLink className={linkClass} to="/" end>
-              ホーム
-            </NavLink>
-            <NavLink className={linkClass} to="/admin">
-              管理
-            </NavLink>
-            <button
-              type="button"
-              className="ml-auto rounded-lg border border-stone-300 px-3 py-2 text-sm"
-              onClick={() => void refresh()}
-            >
-              再読込
-            </button>
-          </div>
-          <StatusBanner message={status} />
         </header>
 
         <Outlet />
       </div>
+
+      <FloatingNav onLogout={() => void logout()} />
     </main>
   );
 }
