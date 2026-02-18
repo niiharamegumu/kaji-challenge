@@ -96,9 +96,11 @@ func (q *Queries) GetExchangeCode(ctx context.Context, code string) (OauthExchan
 }
 
 const getSessionByToken = `-- name: GetSessionByToken :one
-SELECT token, user_id, created_at, expires_at
-FROM sessions
-WHERE token = $1
+SELECT s.token, s.user_id, s.created_at, s.expires_at
+FROM sessions AS s
+INNER JOIN users AS u ON u.id = s.user_id
+WHERE s.token = $1
+  AND (s.expires_at IS NULL OR s.expires_at > NOW())
 `
 
 func (q *Queries) GetSessionByToken(ctx context.Context, token string) (Session, error) {

@@ -17,6 +17,9 @@ export function useMeQuery(enabled: boolean) {
     queryKey: queryKeys.me,
     queryFn: async () => (await getMe()).data,
     enabled,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
     retry: false,
   });
 }

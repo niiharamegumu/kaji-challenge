@@ -2,10 +2,14 @@ package http
 
 import (
 	"context"
+	"crypto/sha256"
+	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -73,6 +77,18 @@ func TestProtectedRouteRequiresAuth(t *testing.T) {
 	res := doRequest(t, r, http.MethodGet, "/v1/me", "", "")
 	if res.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d", res.Code)
+	}
+}
+
+func TestProtectedRouteRejectsExpiredSession(t *testing.T) {
+	r := newTestRouter(t)
+	token := login(t, r)
+
+	expireSessionForTest(t, token)
+
+	res := doRequest(t, r, http.MethodGet, "/v1/me", "", token)
+	if res.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d: %s", res.Code, res.Body.String())
 	}
 }
 
@@ -273,6 +289,38 @@ func doRequest(t *testing.T, r http.Handler, method, path, body, sessionCookie s
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
 	return res
+}
+
+func expireSessionForTest(t *testing.T, rawToken string) {
+	t.Helper()
+
+	dbURL := strings.TrimSpace(os.Getenv("DATABASE_URL"))
+	if dbURL == "" {
+		t.Fatalf("DATABASE_URL is required")
+	}
+	db, err := sql.Open("pgx", dbURL)
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	defer db.Close()
+
+	hashed := hashTokenForTest(rawToken)
+	result, err := db.Exec(`UPDATE sessions SET expires_at = NOW() - INTERVAL '1 minute' WHERE token = $1`, hashed)
+	if err != nil {
+		t.Fatalf("failed to expire session: %v", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		t.Fatalf("failed to get affected rows: %v", err)
+	}
+	if rows != 1 {
+		t.Fatalf("expected one affected session row, got %d", rows)
+	}
+}
+
+func hashTokenForTest(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
 }
 
 func newTestRouter(t *testing.T) *gin.Engine {

@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import App from "./App";
 import { appQueryClient } from "./shared/query/queryClient";
+import { queryKeys } from "./shared/query/queryKeys";
 
 const mockGetAuthStart = vi.fn();
 const mockGetTaskOverview = vi.fn();
@@ -66,13 +67,15 @@ describe("App", () => {
     mockGetMe.mockRejectedValue(new Error("request failed: 401"));
   });
 
-  it("renders login before authentication", () => {
+  it("renders login before authentication", async () => {
     render(<App />);
 
-    expect(screen.getByText("家事チャレ MVP")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Googleでログイン" }),
-    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText("家事チャレ MVP")).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Googleでログイン" }),
+      ).toBeInTheDocument();
+    });
   });
 
   it("shows error message when auth start returns 404", async () => {
@@ -81,10 +84,10 @@ describe("App", () => {
 
     render(<App />);
 
-    const loginButtons = screen.getAllByRole("button", {
+    const loginButton = await screen.findByRole("button", {
       name: "Googleでログイン",
     });
-    await user.click(loginButtons[0]);
+    await user.click(loginButton);
 
     expect(
       await screen.findByText(/ログイン開始に失敗しました/),
@@ -102,12 +105,36 @@ describe("App", () => {
     });
   });
 
-  it("keeps logged-out state when getMe returns 401", () => {
+  it("keeps logged-out state when getMe returns 401", async () => {
     render(<App />);
 
-    expect(screen.getAllByText("家事チャレ MVP").length).toBeGreaterThan(0);
+    await waitFor(() => {
+      expect(screen.getAllByText("家事チャレ MVP").length).toBeGreaterThan(0);
+      expect(
+        screen.getAllByRole("button", { name: "Googleでログイン" }).length,
+      ).toBeGreaterThan(0);
+    });
+  });
+
+  it("asks for re-login when cached session becomes invalid", async () => {
+    window.history.pushState({}, "", "/admin");
+    appQueryClient.setQueryData(queryKeys.me, {
+      user: { displayName: "Owner" },
+    });
+    mockGetMe.mockRejectedValue(new Error("request failed: 401"));
+
+    render(<App />);
+
     expect(
-      screen.getAllByRole("button", { name: "Googleでログイン" }).length,
-    ).toBeGreaterThan(0);
+      screen.queryByRole("link", { name: "ホーム" }),
+    ).not.toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          "アカウント情報が無効になったため、トップページへ戻りました。再ログインしてください。",
+        ),
+      ).toBeInTheDocument();
+    });
   });
 });
