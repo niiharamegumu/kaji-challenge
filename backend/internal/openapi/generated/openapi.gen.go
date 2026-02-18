@@ -85,29 +85,6 @@ type HealthResponse struct {
 	Status string `json:"status"`
 }
 
-// HomeDailyTask defines model for HomeDailyTask.
-type HomeDailyTask struct {
-	CompletedToday bool `json:"completedToday"`
-	Task           Task `json:"task"`
-}
-
-// HomeResponse defines model for HomeResponse.
-type HomeResponse struct {
-	DailyTasks          []HomeDailyTask    `json:"dailyTasks"`
-	ElapsedDaysInWeek   int                `json:"elapsedDaysInWeek"`
-	Month               string             `json:"month"`
-	MonthlyPenaltyTotal int                `json:"monthlyPenaltyTotal"`
-	Today               openapi_types.Date `json:"today"`
-	WeeklyTasks         []HomeWeeklyTask   `json:"weeklyTasks"`
-}
-
-// HomeWeeklyTask defines model for HomeWeeklyTask.
-type HomeWeeklyTask struct {
-	RequiredCompletionsPerWeek int  `json:"requiredCompletionsPerWeek"`
-	Task                       Task `json:"task"`
-	WeekCompletedCount         int  `json:"weekCompletedCount"`
-}
-
 // InviteCodeResponse defines model for InviteCodeResponse.
 type InviteCodeResponse struct {
 	Code      string    `json:"code"`
@@ -177,6 +154,29 @@ type TaskCompletionResponse struct {
 	TargetDate           openapi_types.Date `json:"targetDate"`
 	TaskId               string             `json:"taskId"`
 	WeeklyCompletedCount int                `json:"weeklyCompletedCount"`
+}
+
+// TaskOverviewDailyTask defines model for TaskOverviewDailyTask.
+type TaskOverviewDailyTask struct {
+	CompletedToday bool `json:"completedToday"`
+	Task           Task `json:"task"`
+}
+
+// TaskOverviewResponse defines model for TaskOverviewResponse.
+type TaskOverviewResponse struct {
+	DailyTasks          []TaskOverviewDailyTask  `json:"dailyTasks"`
+	ElapsedDaysInWeek   int                      `json:"elapsedDaysInWeek"`
+	Month               string                   `json:"month"`
+	MonthlyPenaltyTotal int                      `json:"monthlyPenaltyTotal"`
+	Today               openapi_types.Date       `json:"today"`
+	WeeklyTasks         []TaskOverviewWeeklyTask `json:"weeklyTasks"`
+}
+
+// TaskOverviewWeeklyTask defines model for TaskOverviewWeeklyTask.
+type TaskOverviewWeeklyTask struct {
+	RequiredCompletionsPerWeek int  `json:"requiredCompletionsPerWeek"`
+	Task                       Task `json:"task"`
+	WeekCompletedCount         int  `json:"weekCompletedCount"`
 }
 
 // TaskType defines model for TaskType.
@@ -288,9 +288,6 @@ type ServerInterface interface {
 	// Exchange one-time code for app session token
 	// (POST /v1/auth/sessions/exchange)
 	PostAuthSessionsExchange(c *gin.Context)
-	// Home payload for dashboard
-	// (GET /v1/home)
-	GetHome(c *gin.Context)
 	// Current user
 	// (GET /v1/me)
 	GetMe(c *gin.Context)
@@ -315,6 +312,9 @@ type ServerInterface interface {
 	// Create task
 	// (POST /v1/tasks)
 	PostTask(c *gin.Context)
+	// Task overview payload
+	// (GET /v1/tasks/overview)
+	GetTaskOverview(c *gin.Context)
 	// Delete task
 	// (DELETE /v1/tasks/{taskId})
 	DeleteTask(c *gin.Context, taskId string)
@@ -488,21 +488,6 @@ func (siw *ServerInterfaceWrapper) PostAuthSessionsExchange(c *gin.Context) {
 	siw.Handler.PostAuthSessionsExchange(c)
 }
 
-// GetHome operation middleware
-func (siw *ServerInterfaceWrapper) GetHome(c *gin.Context) {
-
-	c.Set(CookieAuthScopes, []string{})
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		middleware(c)
-		if c.IsAborted() {
-			return
-		}
-	}
-
-	siw.Handler.GetHome(c)
-}
-
 // GetMe operation middleware
 func (siw *ServerInterfaceWrapper) GetMe(c *gin.Context) {
 
@@ -671,6 +656,21 @@ func (siw *ServerInterfaceWrapper) PostTask(c *gin.Context) {
 	siw.Handler.PostTask(c)
 }
 
+// GetTaskOverview operation middleware
+func (siw *ServerInterfaceWrapper) GetTaskOverview(c *gin.Context) {
+
+	c.Set(CookieAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.GetTaskOverview(c)
+}
+
 // DeleteTask operation middleware
 func (siw *ServerInterfaceWrapper) DeleteTask(c *gin.Context) {
 
@@ -814,7 +814,6 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	router.GET(options.BaseURL+"/v1/auth/google/start", wrapper.GetAuthGoogleStart)
 	router.POST(options.BaseURL+"/v1/auth/logout", wrapper.PostAuthLogout)
 	router.POST(options.BaseURL+"/v1/auth/sessions/exchange", wrapper.PostAuthSessionsExchange)
-	router.GET(options.BaseURL+"/v1/home", wrapper.GetHome)
 	router.GET(options.BaseURL+"/v1/me", wrapper.GetMe)
 	router.GET(options.BaseURL+"/v1/penalty-rules", wrapper.ListPenaltyRules)
 	router.POST(options.BaseURL+"/v1/penalty-rules", wrapper.PostPenaltyRule)
@@ -823,6 +822,7 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	router.GET(options.BaseURL+"/v1/penalty-summaries/monthly", wrapper.GetPenaltySummaryMonthly)
 	router.GET(options.BaseURL+"/v1/tasks", wrapper.ListTasks)
 	router.POST(options.BaseURL+"/v1/tasks", wrapper.PostTask)
+	router.GET(options.BaseURL+"/v1/tasks/overview", wrapper.GetTaskOverview)
 	router.DELETE(options.BaseURL+"/v1/tasks/:taskId", wrapper.DeleteTask)
 	router.PATCH(options.BaseURL+"/v1/tasks/:taskId", wrapper.PatchTask)
 	router.POST(options.BaseURL+"/v1/tasks/:taskId/completions/toggle", wrapper.PostTaskCompletionToggle)
