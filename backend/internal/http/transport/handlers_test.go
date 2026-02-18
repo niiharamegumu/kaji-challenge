@@ -73,12 +73,12 @@ func (m mockPenaltyService) PatchPenaltyRule(context.Context, string, string, ap
 }
 func (m mockPenaltyService) DeletePenaltyRule(context.Context, string, string) error { return nil }
 
-type mockHomeService struct{}
+type mockTaskOverviewService struct{}
 
-func (m mockHomeService) GetHome(context.Context, string) (api.HomeResponse, error) {
-	return api.HomeResponse{}, nil
+func (m mockTaskOverviewService) GetTaskOverview(context.Context, string) (api.TaskOverviewResponse, error) {
+	return api.TaskOverviewResponse{}, nil
 }
-func (m mockHomeService) GetMonthlySummary(context.Context, string, *string) (api.MonthlyPenaltySummary, error) {
+func (m mockTaskOverviewService) GetMonthlySummary(context.Context, string, *string) (api.MonthlyPenaltySummary, error) {
 	return api.MonthlyPenaltySummary{}, nil
 }
 
@@ -96,12 +96,12 @@ func (m mockAdminService) CloseMonthForUser(context.Context, string) (api.CloseR
 
 func newTestHandler(teamErr error) *Handler {
 	return NewHandler(&ports.Services{
-		Auth:    mockAuthService{},
-		Team:    mockTeamService{err: teamErr},
-		Task:    mockTaskService{},
-		Penalty: mockPenaltyService{},
-		Home:    mockHomeService{},
-		Admin:   mockAdminService{},
+		Auth:         mockAuthService{},
+		Team:         mockTeamService{err: teamErr},
+		Task:         mockTaskService{},
+		Penalty:      mockPenaltyService{},
+		TaskOverview: mockTaskOverviewService{},
+		Admin:        mockAdminService{},
 	})
 }
 
@@ -150,13 +150,13 @@ func TestPostTaskInvalidBodyReturns400(t *testing.T) {
 	}
 }
 
-func TestGetHomeWithoutUserReturns401(t *testing.T) {
+func TestGetTaskOverviewWithoutUserReturns401(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	h := newTestHandler(nil)
 	r := gin.New()
-	r.GET("/v1/home", h.GetHome)
+	r.GET("/v1/tasks/overview", h.GetTaskOverview)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/home", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/tasks/overview", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
 

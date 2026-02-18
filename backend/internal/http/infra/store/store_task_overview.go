@@ -9,15 +9,15 @@ import (
 	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 )
 
-func (s *Store) GetHome(ctx context.Context, userID string) (api.HomeResponse, error) {
+func (s *Store) GetTaskOverview(ctx context.Context, userID string) (api.TaskOverviewResponse, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
-		return api.HomeResponse{}, err
+		return api.TaskOverviewResponse{}, err
 	}
 
 	now := time.Now().In(s.loc)
 	if err := s.autoCloseLocked(ctx, now, teamID); err != nil {
-		return api.HomeResponse{}, err
+		return api.TaskOverviewResponse{}, err
 	}
 
 	today := dateOnly(now, s.loc)
@@ -25,14 +25,14 @@ func (s *Store) GetHome(ctx context.Context, userID string) (api.HomeResponse, e
 	monthKey := monthKeyFromTime(today, s.loc)
 	monthly, err := s.ensureMonthSummaryLocked(ctx, teamID, monthKey)
 	if err != nil {
-		return api.HomeResponse{}, err
+		return api.TaskOverviewResponse{}, err
 	}
-	daily := []api.HomeDailyTask{}
-	weekly := []api.HomeWeeklyTask{}
+	daily := []api.TaskOverviewDailyTask{}
+	weekly := []api.TaskOverviewWeeklyTask{}
 
 	tasks, err := s.q.ListActiveTasksByTeamID(ctx, teamID)
 	if err != nil {
-		return api.HomeResponse{}, err
+		return api.TaskOverviewResponse{}, err
 	}
 	for _, row := range tasks {
 		t := taskFromActiveListRow(row, s.loc)
@@ -42,9 +42,9 @@ func (s *Store) GetHome(ctx context.Context, userID string) (api.HomeResponse, e
 				TargetDate: toPgDate(today),
 			})
 			if err != nil {
-				return api.HomeResponse{}, err
+				return api.TaskOverviewResponse{}, err
 			}
-			daily = append(daily, api.HomeDailyTask{
+			daily = append(daily, api.TaskOverviewDailyTask{
 				Task:           t.toAPI(),
 				CompletedToday: done,
 			})
@@ -52,9 +52,9 @@ func (s *Store) GetHome(ctx context.Context, userID string) (api.HomeResponse, e
 		}
 		count, err := s.weeklyCompletionCountLocked(ctx, t.ID, weekStart)
 		if err != nil {
-			return api.HomeResponse{}, err
+			return api.TaskOverviewResponse{}, err
 		}
-		weekly = append(weekly, api.HomeWeeklyTask{
+		weekly = append(weekly, api.TaskOverviewWeeklyTask{
 			Task:                       t.toAPI(),
 			WeekCompletedCount:         count,
 			RequiredCompletionsPerWeek: t.Required,
@@ -65,7 +65,7 @@ func (s *Store) GetHome(ctx context.Context, userID string) (api.HomeResponse, e
 	sort.Slice(weekly, func(i, j int) bool { return weekly[i].Task.CreatedAt.Before(weekly[j].Task.CreatedAt) })
 
 	elapsed := int(today.Sub(weekStart).Hours()/24) + 1
-	return api.HomeResponse{
+	return api.TaskOverviewResponse{
 		Month:               monthKey,
 		Today:               toDate(today),
 		ElapsedDaysInWeek:   elapsed,

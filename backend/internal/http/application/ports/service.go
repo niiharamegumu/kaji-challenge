@@ -8,12 +8,12 @@ import (
 )
 
 type Services struct {
-	Auth    AuthService
-	Team    TeamService
-	Task    TaskService
-	Penalty PenaltyService
-	Home    HomeService
-	Admin   AdminService
+	Auth         AuthService
+	Team         TeamService
+	Task         TaskService
+	Penalty      PenaltyService
+	TaskOverview TaskOverviewService
+	Admin        AdminService
 }
 
 type AuthSession struct {
@@ -50,8 +50,8 @@ type PenaltyService interface {
 	DeletePenaltyRule(ctx context.Context, userID, ruleID string) error
 }
 
-type HomeService interface {
-	GetHome(ctx context.Context, userID string) (api.HomeResponse, error)
+type TaskOverviewService interface {
+	GetTaskOverview(ctx context.Context, userID string) (api.TaskOverviewResponse, error)
 	GetMonthlySummary(ctx context.Context, userID string, month *string) (api.MonthlyPenaltySummary, error)
 }
 
