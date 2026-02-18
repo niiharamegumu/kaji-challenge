@@ -31,7 +31,7 @@ type Store interface {
 	PatchPenaltyRule(ctx context.Context, userID, ruleID string, req api.UpdatePenaltyRuleRequest) (api.PenaltyRule, error)
 	DeletePenaltyRule(ctx context.Context, userID, ruleID string) error
 
-	GetHome(ctx context.Context, userID string) (api.HomeResponse, error)
+	GetTaskOverview(ctx context.Context, userID string) (api.TaskOverviewResponse, error)
 	GetMonthlySummary(ctx context.Context, userID string, month *string) (api.MonthlyPenaltySummary, error)
 
 	CloseDayForUser(ctx context.Context, userID string) (api.CloseResponse, error)
@@ -43,17 +43,17 @@ type authRepo struct{ store Store }
 type teamRepo struct{ store Store }
 type taskRepo struct{ store Store }
 type penaltyRepo struct{ store Store }
-type homeRepo struct{ store Store }
+type taskOverviewRepo struct{ store Store }
 type adminRepo struct{ store Store }
 
 func NewServices(s Store) *ports.Services {
 	deps := ports.Dependencies{
-		AuthRepo:    authRepo{store: s},
-		TeamRepo:    teamRepo{store: s},
-		TaskRepo:    taskRepo{store: s},
-		PenaltyRepo: penaltyRepo{store: s},
-		HomeRepo:    homeRepo{store: s},
-		AdminRepo:   adminRepo{store: s},
+		AuthRepo:         authRepo{store: s},
+		TeamRepo:         teamRepo{store: s},
+		TaskRepo:         taskRepo{store: s},
+		PenaltyRepo:      penaltyRepo{store: s},
+		TaskOverviewRepo: taskOverviewRepo{store: s},
+		AdminRepo:        adminRepo{store: s},
 	}
 	return usecases.NewServices(deps)
 }

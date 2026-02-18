@@ -36,8 +36,8 @@ type PenaltyRepository interface {
 	DeletePenaltyRule(ctx context.Context, userID, ruleID string) error
 }
 
-type HomeRepository interface {
-	GetHome(ctx context.Context, userID string) (api.HomeResponse, error)
+type TaskOverviewRepository interface {
+	GetTaskOverview(ctx context.Context, userID string) (api.TaskOverviewResponse, error)
 	GetMonthlySummary(ctx context.Context, userID string, month *string) (api.MonthlyPenaltySummary, error)
 }
 
@@ -48,10 +48,10 @@ type AdminRepository interface {
 }
 
 type Dependencies struct {
-	AuthRepo    AuthRepository
-	TeamRepo    TeamRepository
-	TaskRepo    TaskRepository
-	PenaltyRepo PenaltyRepository
-	HomeRepo    HomeRepository
-	AdminRepo   AdminRepository
+	AuthRepo         AuthRepository
+	TeamRepo         TeamRepository
+	TaskRepo         TaskRepository
+	PenaltyRepo      PenaltyRepository
+	TaskOverviewRepo TaskOverviewRepository
+	AdminRepo        AdminRepository
 }

@@ -6,12 +6,12 @@ import (
 	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 )
 
-func (r homeRepo) GetHome(ctx context.Context, userID string) (api.HomeResponse, error) {
-	res, err := r.store.GetHome(ctx, userID)
+func (r taskOverviewRepo) GetTaskOverview(ctx context.Context, userID string) (api.TaskOverviewResponse, error) {
+	res, err := r.store.GetTaskOverview(ctx, userID)
 	return res, mapInfraErr(err)
 }
 
-func (r homeRepo) GetMonthlySummary(ctx context.Context, userID string, month *string) (api.MonthlyPenaltySummary, error) {
+func (r taskOverviewRepo) GetMonthlySummary(ctx context.Context, userID string, month *string) (api.MonthlyPenaltySummary, error) {
 	res, err := r.store.GetMonthlySummary(ctx, userID, month)
 	return res, mapInfraErr(err)
 }

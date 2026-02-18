@@ -203,24 +203,24 @@ export interface UpdatePenaltyRuleRequest {
   isActive?: boolean;
 }
 
-export interface HomeDailyTask {
+export interface TaskOverviewDailyTask {
   task: Task;
   completedToday: boolean;
 }
 
-export interface HomeWeeklyTask {
+export interface TaskOverviewWeeklyTask {
   task: Task;
   weekCompletedCount: number;
   requiredCompletionsPerWeek: number;
 }
 
-export interface HomeResponse {
+export interface TaskOverviewResponse {
   month: string;
   today: string;
   elapsedDaysInWeek: number;
   monthlyPenaltyTotal: number;
-  dailyTasks: HomeDailyTask[];
-  weeklyTasks: HomeWeeklyTask[];
+  dailyTasks: TaskOverviewDailyTask[];
+  weeklyTasks: TaskOverviewWeeklyTask[];
 }
 
 export interface MonthlyPenaltySummary {
@@ -900,31 +900,31 @@ export const deletePenaltyRule = async (ruleId: string, options?: RequestInit): 
 
 
 /**
- * @summary Home payload for dashboard
+ * @summary Task overview payload
  */
-export type getHomeResponse200 = {
-  data: HomeResponse
+export type getTaskOverviewResponse200 = {
+  data: TaskOverviewResponse
   status: 200
 }
     
-export type getHomeResponseSuccess = (getHomeResponse200) & {
+export type getTaskOverviewResponseSuccess = (getTaskOverviewResponse200) & {
   headers: Headers;
 };
 ;
 
-export type getHomeResponse = (getHomeResponseSuccess)
+export type getTaskOverviewResponse = (getTaskOverviewResponseSuccess)
 
-export const getGetHomeUrl = () => {
+export const getGetTaskOverviewUrl = () => {
 
 
   
 
-  return `/v1/home`
+  return `/v1/tasks/overview`
 }
 
-export const getHome = async ( options?: RequestInit): Promise<getHomeResponse> => {
+export const getTaskOverview = async ( options?: RequestInit): Promise<getTaskOverviewResponse> => {
   
-  return customFetch<getHomeResponse>(getGetHomeUrl(),
+  return customFetch<getTaskOverviewResponse>(getGetTaskOverviewUrl(),
   {      
     ...options,
     method: 'GET'

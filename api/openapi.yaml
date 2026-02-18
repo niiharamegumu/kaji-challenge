@@ -301,17 +301,17 @@ paths:
         '204':
           description: Penalty rule deleted
 
-  /v1/home:
+  /v1/tasks/overview:
     get:
-      operationId: getHome
-      summary: Home payload for dashboard
+      operationId: getTaskOverview
+      summary: Task overview payload
       responses:
         '200':
-          description: Home payload
+          description: Task overview payload
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/HomeResponse'
+                $ref: '#/components/schemas/TaskOverviewResponse'
 
   /v1/penalty-summaries/monthly:
     get:
@@ -667,7 +667,7 @@ components:
         isActive:
           type: boolean
 
-    HomeDailyTask:
+    TaskOverviewDailyTask:
       type: object
       required: [task, completedToday]
       properties:
@@ -676,7 +676,7 @@ components:
         completedToday:
           type: boolean
 
-    HomeWeeklyTask:
+    TaskOverviewWeeklyTask:
       type: object
       required: [task, weekCompletedCount, requiredCompletionsPerWeek]
       properties:
@@ -687,7 +687,7 @@ components:
         requiredCompletionsPerWeek:
           type: integer
 
-    HomeResponse:
+    TaskOverviewResponse:
       type: object
       required: [month, today, elapsedDaysInWeek, monthlyPenaltyTotal, dailyTasks, weeklyTasks]
       properties:
@@ -704,11 +704,11 @@ components:
         dailyTasks:
           type: array
           items:
-            $ref: '#/components/schemas/HomeDailyTask'
+            $ref: '#/components/schemas/TaskOverviewDailyTask'
         weeklyTasks:
           type: array
           items:
-            $ref: '#/components/schemas/HomeWeeklyTask'
+            $ref: '#/components/schemas/TaskOverviewWeeklyTask'
 
     MonthlyPenaltySummary:
       type: object

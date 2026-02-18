@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
-  getHome,
   getPenaltySummaryMonthly,
+  getTaskOverview,
   postTaskCompletionToggle,
 } from "../../../lib/api/generated/client";
 import { queryKeys } from "../../../shared/query/queryKeys";
@@ -13,7 +13,7 @@ type StatusSetter = (message: string) => void;
 export function useHomeQuery(enabled: boolean) {
   return useQuery({
     queryKey: queryKeys.home,
-    queryFn: async () => (await getHome()).data,
+    queryFn: async () => (await getTaskOverview()).data,
     enabled,
   });
 }

@@ -6,7 +6,7 @@ import App from "./App";
 import { appQueryClient } from "./shared/query/queryClient";
 
 const mockGetAuthStart = vi.fn();
-const mockGetHome = vi.fn();
+const mockGetTaskOverview = vi.fn();
 const mockListTasks = vi.fn();
 const mockListRules = vi.fn();
 const mockSummary = vi.fn();
@@ -17,7 +17,7 @@ vi.mock("./lib/api/generated/client", () => ({
   getAuthGoogleStart: (...args: unknown[]) => mockGetAuthStart(...args),
   postAuthSessionsExchange: vi.fn(),
   postAuthLogout: vi.fn(),
-  getHome: (...args: unknown[]) => mockGetHome(...args),
+  getTaskOverview: (...args: unknown[]) => mockGetTaskOverview(...args),
   listTasks: (...args: unknown[]) => mockListTasks(...args),
   listPenaltyRules: (...args: unknown[]) => mockListRules(...args),
   getPenaltySummaryMonthly: (...args: unknown[]) => mockSummary(...args),
@@ -44,13 +44,13 @@ describe("App", () => {
     appQueryClient.clear();
 
     mockGetAuthStart.mockReset();
-    mockGetHome.mockReset();
+    mockGetTaskOverview.mockReset();
     mockListTasks.mockReset();
     mockListRules.mockReset();
     mockSummary.mockReset();
     mockGetMe.mockReset();
 
-    mockGetHome.mockResolvedValue({
+    mockGetTaskOverview.mockResolvedValue({
       data: {
         month: "2026-02",
         today: "2026-02-15",

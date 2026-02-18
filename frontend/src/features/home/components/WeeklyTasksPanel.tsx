@@ -1,7 +1,7 @@
-import type { HomeWeeklyTask } from "../../../lib/api/generated/client";
+import type { TaskOverviewWeeklyTask } from "../../../lib/api/generated/client";
 
 type Props = {
-  items: HomeWeeklyTask[];
+  items: TaskOverviewWeeklyTask[];
   elapsedDaysInWeek: number;
   weeklyProgress: string;
   monthlyTotal: number;

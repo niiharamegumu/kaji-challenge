@@ -99,7 +99,7 @@ func TestInviteJoinFlow(t *testing.T) {
 	}
 }
 
-func TestTaskLifecycleAndHome(t *testing.T) {
+func TestTaskLifecycleAndTaskOverview(t *testing.T) {
 	r := newTestRouter(t)
 	token := login(t, r)
 
@@ -123,17 +123,17 @@ func TestTaskLifecycleAndHome(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", toggleRes.Code, toggleRes.Body.String())
 	}
 
-	homeRes := doRequest(t, r, http.MethodGet, "/v1/home", "", token)
-	if homeRes.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", homeRes.Code, homeRes.Body.String())
+	taskOverviewRes := doRequest(t, r, http.MethodGet, "/v1/tasks/overview", "", token)
+	if taskOverviewRes.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", taskOverviewRes.Code, taskOverviewRes.Body.String())
 	}
 
-	var home api.HomeResponse
-	if err := json.Unmarshal(homeRes.Body.Bytes(), &home); err != nil {
-		t.Fatalf("failed to parse home: %v", err)
+	var taskOverview api.TaskOverviewResponse
+	if err := json.Unmarshal(taskOverviewRes.Body.Bytes(), &taskOverview); err != nil {
+		t.Fatalf("failed to parse task overview: %v", err)
 	}
-	if len(home.DailyTasks) == 0 {
-		t.Fatalf("expected at least one daily task in home response")
+	if len(taskOverview.DailyTasks) == 0 {
+		t.Fatalf("expected at least one daily task in task overview response")
 	}
 }
 
