@@ -1,10 +1,17 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useAtom, useAtomValue } from "jotai";
 import { useSetAtom } from "jotai";
-import { useEffect } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import {
+  NavLink,
+  Navigate,
+  Outlet,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 
 import { queryKeys } from "../../../shared/query/queryKeys";
+import { extractHttpStatus, formatError } from "../../../shared/utils/errors";
 import { isLoggedInAtom, sessionAtom } from "../../../state/session";
 import {
   initialRuleFormState,
@@ -27,11 +34,23 @@ import { statusMessageAtom } from "../state/status";
 const linkClass = ({ isActive }: { isActive: boolean }) =>
   `rounded-lg px-3 py-2 text-sm ${isActive ? "bg-stone-900 text-white" : "bg-stone-100"}`;
 
+const protectedQueryKeys = [
+  queryKeys.me,
+  queryKeys.home,
+  queryKeys.tasks,
+  queryKeys.rules,
+  queryKeys.monthlySummary,
+] as const;
+
 export function RootLayout() {
   const queryClient = useQueryClient();
   const [, setSession] = useAtom(sessionAtom);
   const [status, setStatus] = useAtom(statusMessageAtom);
   const loggedIn = useAtomValue(isLoggedInAtom);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [authChecked, setAuthChecked] = useState(false);
+  const handledInvalidSessionRef = useRef(false);
 
   const setTaskForm = useSetAtom(taskFormAtom);
   const setRuleForm = useSetAtom(ruleFormAtom);
@@ -43,14 +62,55 @@ export function RootLayout() {
   const logoutAction = useLogoutAction(setStatus, setSession);
 
   useEffect(() => {
+    if (!meQuery.isFetching) {
+      setAuthChecked(true);
+    }
+  }, [meQuery.isFetching]);
+
+  useEffect(() => {
     if (meQuery.isSuccess) {
+      handledInvalidSessionRef.current = false;
       setSession({ authenticated: true });
       return;
     }
-    if (meQuery.isError) {
-      setSession({ authenticated: false });
+    if (!meQuery.isError) {
+      return;
     }
-  }, [meQuery.isError, meQuery.isSuccess, setSession]);
+
+    setSession({ authenticated: false });
+    const statusCode = extractHttpStatus(meQuery.error);
+
+    if (statusCode === 401) {
+      if (handledInvalidSessionRef.current) {
+        return;
+      }
+      handledInvalidSessionRef.current = true;
+
+      for (const key of protectedQueryKeys) {
+        queryClient.removeQueries({ queryKey: key });
+      }
+      setStatus(
+        "アカウント情報が無効になったため、トップページへ戻りました。再ログインしてください。",
+      );
+      if (location.pathname !== "/") {
+        navigate("/", { replace: true });
+      }
+      return;
+    }
+
+    setStatus(
+      `ユーザー情報の取得に失敗しました: ${formatError(meQuery.error)}`,
+    );
+  }, [
+    location.pathname,
+    meQuery.error,
+    meQuery.isError,
+    meQuery.isSuccess,
+    navigate,
+    queryClient,
+    setSession,
+    setStatus,
+  ]);
 
   useExchangeCodeFallback(setSession, setStatus);
 
@@ -80,7 +140,18 @@ export function RootLayout() {
     setStatus("最新状態に同期しました");
   };
 
+  if (!authChecked) {
+    return (
+      <main className="min-h-screen bg-[radial-gradient(circle_at_top,_var(--color-washi-50),_#fff,_var(--color-matcha-50))] p-6 text-stone-700">
+        <p>認証状態を確認中です...</p>
+      </main>
+    );
+  }
+
   if (!loggedIn) {
+    if (location.pathname !== "/") {
+      return <Navigate to="/" replace />;
+    }
     return <LoginCard status={status} onLogin={() => void login()} />;
   }
 
