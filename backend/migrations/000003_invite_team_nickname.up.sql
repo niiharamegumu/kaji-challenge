@@ -1,0 +1,16 @@
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS nickname TEXT;
+
+ALTER TABLE teams
+  ADD COLUMN IF NOT EXISTS name TEXT;
+
+UPDATE teams
+SET name = CONCAT('Team ', LEFT(id::text, 8))
+WHERE name IS NULL OR BTRIM(name) = '';
+
+ALTER TABLE teams
+  ALTER COLUMN name SET NOT NULL;
+
+ALTER TABLE invite_codes
+  DROP COLUMN IF EXISTS max_uses,
+  DROP COLUMN IF EXISTS used_count;

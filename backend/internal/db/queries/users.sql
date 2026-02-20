@@ -1,10 +1,10 @@
 -- name: GetUserByEmail :one
-SELECT id, email, display_name, created_at
+SELECT id, email, display_name, COALESCE(nickname, '') AS nickname, created_at
 FROM users
 WHERE LOWER(email) = LOWER($1);
 
 -- name: GetUserByID :one
-SELECT id, email, display_name, created_at
+SELECT id, email, display_name, COALESCE(nickname, '') AS nickname, created_at
 FROM users
 WHERE id = $1;
 
@@ -15,4 +15,9 @@ VALUES ($1, $2, $3, $4);
 -- name: UpdateUserDisplayName :exec
 UPDATE users
 SET display_name = $2
+WHERE id = $1;
+
+-- name: UpdateUserNickname :exec
+UPDATE users
+SET nickname = NULLIF($2, '')
 WHERE id = $1;
