@@ -17,8 +17,13 @@ type Store interface {
 	LookupSession(ctx context.Context, token string) (string, bool)
 
 	GetMe(ctx context.Context, userID string) (api.MeResponse, error)
+	PatchMeNickname(ctx context.Context, userID string, req api.UpdateNicknameRequest) (api.UpdateNicknameResponse, error)
 	CreateInvite(ctx context.Context, userID string, req api.CreateInviteRequest) (api.InviteCodeResponse, error)
+	GetTeamCurrentInvite(ctx context.Context, userID string) (api.InviteCodeResponse, error)
+	PatchTeamCurrent(ctx context.Context, userID string, req api.UpdateCurrentTeamRequest) (api.TeamInfoResponse, error)
+	GetTeamCurrentMembers(ctx context.Context, userID string) (api.TeamMembersResponse, error)
 	JoinTeam(ctx context.Context, userID, code string) (api.JoinTeamResponse, error)
+	PostTeamLeave(ctx context.Context, userID string) (api.JoinTeamResponse, error)
 
 	ListTasks(ctx context.Context, userID string, filter *api.TaskType) ([]api.Task, error)
 	CreateTask(ctx context.Context, userID string, req api.CreateTaskRequest) (api.Task, error)
