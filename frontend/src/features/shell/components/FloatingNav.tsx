@@ -58,7 +58,7 @@ export function FloatingNav({ onLogout }: Props) {
       )}
 
       <div
-        className="fixed left-1/2 z-50 w-[min(92vw,28rem)] -translate-x-1/2"
+        className="pointer-events-none fixed left-1/2 z-50 w-[min(92vw,28rem)] -translate-x-1/2"
         style={{ bottom: "calc(env(safe-area-inset-bottom) + 1rem)" }}
       >
         <div
@@ -101,7 +101,7 @@ export function FloatingNav({ onLogout }: Props) {
           </div>
         </div>
 
-        <div className="mt-2 flex justify-center">
+        <div className="pointer-events-auto mt-2 flex justify-center">
           <button
             type="button"
             className="flex min-h-14 min-w-14 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-900 shadow-lg transition-transform duration-200 motion-reduce:transition-none"
