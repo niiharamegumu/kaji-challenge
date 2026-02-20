@@ -16,6 +16,7 @@ UPDATE tasks
 SET assignee_user_id = NULL
 WHERE team_id = $1
   AND assignee_user_id = NULLIF($2, '')::uuid
+  AND deleted_at IS NULL
 `
 
 type ClearTaskAssigneeByTeamAndUserParams struct {
@@ -65,7 +66,10 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) error {
 }
 
 const deleteTask = `-- name: DeleteTask :exec
-DELETE FROM tasks
+UPDATE tasks
+SET deleted_at = NOW(),
+    is_active = FALSE,
+    updated_at = NOW()
 WHERE id = $1
 `
 
@@ -75,7 +79,7 @@ func (q *Queries) DeleteTask(ctx context.Context, id string) error {
 }
 
 const getTaskByID = `-- name: GetTaskByID :one
-SELECT id, team_id, title, notes, type, penalty_points, COALESCE(assignee_user_id::text, '') AS assignee_user_id, is_active, required_completions_per_week, created_at, updated_at
+SELECT id, team_id, title, notes, type, penalty_points, COALESCE(assignee_user_id::text, '') AS assignee_user_id, is_active, required_completions_per_week, created_at, updated_at, deleted_at
 FROM tasks
 WHERE id = $1
 `
@@ -92,6 +96,7 @@ type GetTaskByIDRow struct {
 	RequiredCompletionsPerWeek int32              `json:"required_completions_per_week"`
 	CreatedAt                  pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt                  pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt                  pgtype.Timestamptz `json:"deleted_at"`
 }
 
 func (q *Queries) GetTaskByID(ctx context.Context, id string) (GetTaskByIDRow, error) {
@@ -109,14 +114,17 @@ func (q *Queries) GetTaskByID(ctx context.Context, id string) (GetTaskByIDRow, e
 		&i.RequiredCompletionsPerWeek,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeletedAt,
 	)
 	return i, err
 }
 
 const listActiveTasksByTeamID = `-- name: ListActiveTasksByTeamID :many
-SELECT id, team_id, title, notes, type, penalty_points, COALESCE(assignee_user_id::text, '') AS assignee_user_id, is_active, required_completions_per_week, created_at, updated_at
+SELECT id, team_id, title, notes, type, penalty_points, COALESCE(assignee_user_id::text, '') AS assignee_user_id, is_active, required_completions_per_week, created_at, updated_at, deleted_at
 FROM tasks
-WHERE team_id = $1 AND is_active = TRUE
+WHERE team_id = $1
+  AND is_active = TRUE
+  AND deleted_at IS NULL
 ORDER BY created_at
 `
 
@@ -132,6 +140,7 @@ type ListActiveTasksByTeamIDRow struct {
 	RequiredCompletionsPerWeek int32              `json:"required_completions_per_week"`
 	CreatedAt                  pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt                  pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt                  pgtype.Timestamptz `json:"deleted_at"`
 }
 
 func (q *Queries) ListActiveTasksByTeamID(ctx context.Context, teamID string) ([]ListActiveTasksByTeamIDRow, error) {
@@ -155,6 +164,7 @@ func (q *Queries) ListActiveTasksByTeamID(ctx context.Context, teamID string) ([
 			&i.RequiredCompletionsPerWeek,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.DeletedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -167,9 +177,10 @@ func (q *Queries) ListActiveTasksByTeamID(ctx context.Context, teamID string) ([
 }
 
 const listTasksByTeamID = `-- name: ListTasksByTeamID :many
-SELECT id, team_id, title, notes, type, penalty_points, COALESCE(assignee_user_id::text, '') AS assignee_user_id, is_active, required_completions_per_week, created_at, updated_at
+SELECT id, team_id, title, notes, type, penalty_points, COALESCE(assignee_user_id::text, '') AS assignee_user_id, is_active, required_completions_per_week, created_at, updated_at, deleted_at
 FROM tasks
 WHERE team_id = $1
+  AND deleted_at IS NULL
 ORDER BY created_at
 `
 
@@ -185,6 +196,7 @@ type ListTasksByTeamIDRow struct {
 	RequiredCompletionsPerWeek int32              `json:"required_completions_per_week"`
 	CreatedAt                  pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt                  pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt                  pgtype.Timestamptz `json:"deleted_at"`
 }
 
 func (q *Queries) ListTasksByTeamID(ctx context.Context, teamID string) ([]ListTasksByTeamIDRow, error) {
@@ -208,6 +220,58 @@ func (q *Queries) ListTasksByTeamID(ctx context.Context, teamID string) ([]ListT
 			&i.RequiredCompletionsPerWeek,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTasksForMonthlyStatusByTeam = `-- name: ListTasksForMonthlyStatusByTeam :many
+SELECT id, title, type, penalty_points, created_at, deleted_at
+FROM tasks
+WHERE team_id = $1
+  AND created_at < $3
+  AND (deleted_at IS NULL OR deleted_at >= $2)
+ORDER BY created_at, id
+`
+
+type ListTasksForMonthlyStatusByTeamParams struct {
+	TeamID    string             `json:"team_id"`
+	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+type ListTasksForMonthlyStatusByTeamRow struct {
+	ID            string             `json:"id"`
+	Title         string             `json:"title"`
+	Type          string             `json:"type"`
+	PenaltyPoints int32              `json:"penalty_points"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	DeletedAt     pgtype.Timestamptz `json:"deleted_at"`
+}
+
+func (q *Queries) ListTasksForMonthlyStatusByTeam(ctx context.Context, arg ListTasksForMonthlyStatusByTeamParams) ([]ListTasksForMonthlyStatusByTeamRow, error) {
+	rows, err := q.db.Query(ctx, listTasksForMonthlyStatusByTeam, arg.TeamID, arg.DeletedAt, arg.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTasksForMonthlyStatusByTeamRow
+	for rows.Next() {
+		var i ListTasksForMonthlyStatusByTeamRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Type,
+			&i.PenaltyPoints,
+			&i.CreatedAt,
+			&i.DeletedAt,
 		); err != nil {
 			return nil, err
 		}

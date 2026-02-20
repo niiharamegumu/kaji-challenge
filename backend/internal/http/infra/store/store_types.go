@@ -74,6 +74,7 @@ type taskRecord struct {
 	Required   int
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
+	DeletedAt  *time.Time
 }
 
 type ruleRecord struct {
@@ -88,10 +89,11 @@ type ruleRecord struct {
 }
 
 type monthSummary struct {
-	TeamID          string
-	Month           string
-	DailyPenalty    int
-	WeeklyPenalty   int
-	IsClosed        bool
-	TriggeredRuleID []string
+	TeamID           string
+	Month            string
+	DailyPenalty     int
+	WeeklyPenalty    int
+	IsClosed         bool
+	TriggeredRuleID  []string
+	TaskStatusByDate []api.MonthlyTaskStatusGroup
 }

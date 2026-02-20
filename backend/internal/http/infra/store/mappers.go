@@ -54,6 +54,7 @@ func (m monthSummary) toAPI() api.MonthlyPenaltySummary {
 		TotalPenalty:            m.DailyPenalty + m.WeeklyPenalty,
 		IsClosed:                m.IsClosed,
 		TriggeredPenaltyRuleIds: m.TriggeredRuleID,
+		TaskStatusByDate:        m.TaskStatusByDate,
 	}
 }
 
@@ -70,6 +71,7 @@ func taskFromGetRow(row dbsqlc.GetTaskByIDRow, loc *time.Location) taskRecord {
 		Required:   int(row.RequiredCompletionsPerWeek),
 		CreatedAt:  row.CreatedAt.Time.In(loc),
 		UpdatedAt:  row.UpdatedAt.Time.In(loc),
+		DeletedAt:  ptrFromTimestamptz(row.DeletedAt, loc),
 	}
 }
 
@@ -86,6 +88,7 @@ func taskFromListRow(row dbsqlc.ListTasksByTeamIDRow, loc *time.Location) taskRe
 		Required:   int(row.RequiredCompletionsPerWeek),
 		CreatedAt:  row.CreatedAt.Time.In(loc),
 		UpdatedAt:  row.UpdatedAt.Time.In(loc),
+		DeletedAt:  ptrFromTimestamptz(row.DeletedAt, loc),
 	}
 }
 
@@ -102,6 +105,7 @@ func taskFromActiveListRow(row dbsqlc.ListActiveTasksByTeamIDRow, loc *time.Loca
 		Required:   int(row.RequiredCompletionsPerWeek),
 		CreatedAt:  row.CreatedAt.Time.In(loc),
 		UpdatedAt:  row.UpdatedAt.Time.In(loc),
+		DeletedAt:  ptrFromTimestamptz(row.DeletedAt, loc),
 	}
 }
 

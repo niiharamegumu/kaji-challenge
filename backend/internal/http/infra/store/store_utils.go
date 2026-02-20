@@ -35,6 +35,14 @@ func ptrFromText(t pgtype.Text) *string {
 	return &s
 }
 
+func ptrFromTimestamptz(t pgtype.Timestamptz, loc *time.Location) *time.Time {
+	if !t.Valid {
+		return nil
+	}
+	v := t.Time.In(loc)
+	return &v
+}
+
 func uuidStringFromPtr(s *string) string {
 	if s == nil {
 		return ""
