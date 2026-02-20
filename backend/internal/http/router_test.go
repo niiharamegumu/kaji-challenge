@@ -397,6 +397,119 @@ func TestTaskLifecycleAndTaskOverview(t *testing.T) {
 	}
 }
 
+func TestDeleteTaskSoftDeleteExcludesFromList(t *testing.T) {
+	r := newTestRouter(t)
+	token := login(t, r)
+
+	taskRes := doRequest(t, r, http.MethodPost, "/v1/tasks", `{"title":"ソフト削除確認","type":"daily","penaltyPoints":2}`, token)
+	if taskRes.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", taskRes.Code, taskRes.Body.String())
+	}
+
+	var task api.Task
+	if err := json.Unmarshal(taskRes.Body.Bytes(), &task); err != nil {
+		t.Fatalf("failed to parse task: %v", err)
+	}
+
+	deleteRes := doRequest(t, r, http.MethodDelete, "/v1/tasks/"+task.Id, "", token)
+	if deleteRes.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d: %s", deleteRes.Code, deleteRes.Body.String())
+	}
+
+	listRes := doRequest(t, r, http.MethodGet, "/v1/tasks", "", token)
+	if listRes.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", listRes.Code, listRes.Body.String())
+	}
+
+	var listed struct {
+		Items []api.Task `json:"items"`
+	}
+	if err := json.Unmarshal(listRes.Body.Bytes(), &listed); err != nil {
+		t.Fatalf("failed to parse task list response: %v", err)
+	}
+	for _, item := range listed.Items {
+		if item.Id == task.Id {
+			t.Fatalf("deleted task should not appear in list")
+		}
+	}
+}
+
+func TestMonthlySummaryKeepsDeletedTaskStatus(t *testing.T) {
+	r := newTestRouter(t)
+	token := login(t, r)
+
+	taskRes := doRequest(t, r, http.MethodPost, "/v1/tasks", `{"title":"月次履歴タスク","type":"daily","penaltyPoints":2}`, token)
+	if taskRes.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", taskRes.Code, taskRes.Body.String())
+	}
+
+	var task api.Task
+	if err := json.Unmarshal(taskRes.Body.Bytes(), &task); err != nil {
+		t.Fatalf("failed to parse task: %v", err)
+	}
+
+	loc, _ := time.LoadLocation("Asia/Tokyo")
+	if loc == nil {
+		loc = time.FixedZone("JST", 9*60*60)
+	}
+	today := time.Now().In(loc).Format("2006-01-02")
+	targetMonth := time.Now().In(loc).Format("2006-01")
+
+	toggleReq := `{"targetDate":"` + today + `"}`
+	toggleRes := doRequest(t, r, http.MethodPost, "/v1/tasks/"+task.Id+"/completions/toggle", toggleReq, token)
+	if toggleRes.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", toggleRes.Code, toggleRes.Body.String())
+	}
+
+	beforeRes := doRequest(t, r, http.MethodGet, "/v1/penalty-summaries/monthly?month="+targetMonth, "", token)
+	if beforeRes.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", beforeRes.Code, beforeRes.Body.String())
+	}
+	var before api.MonthlyPenaltySummary
+	if err := json.Unmarshal(beforeRes.Body.Bytes(), &before); err != nil {
+		t.Fatalf("failed to parse monthly summary(before): %v", err)
+	}
+
+	deleteRes := doRequest(t, r, http.MethodDelete, "/v1/tasks/"+task.Id, "", token)
+	if deleteRes.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d: %s", deleteRes.Code, deleteRes.Body.String())
+	}
+
+	afterRes := doRequest(t, r, http.MethodGet, "/v1/penalty-summaries/monthly?month="+targetMonth, "", token)
+	if afterRes.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", afterRes.Code, afterRes.Body.String())
+	}
+	var after api.MonthlyPenaltySummary
+	if err := json.Unmarshal(afterRes.Body.Bytes(), &after); err != nil {
+		t.Fatalf("failed to parse monthly summary(after): %v", err)
+	}
+
+	if before.DailyPenaltyTotal != after.DailyPenaltyTotal || before.WeeklyPenaltyTotal != after.WeeklyPenaltyTotal || before.TotalPenalty != after.TotalPenalty {
+		t.Fatalf("monthly penalty totals should remain unchanged after task soft delete")
+	}
+
+	found := false
+	for _, group := range after.TaskStatusByDate {
+		if group.Date.Time.Format("2006-01-02") != today {
+			continue
+		}
+		for _, item := range group.Items {
+			if item.TaskId == task.Id {
+				found = true
+				if !item.IsDeleted {
+					t.Fatalf("expected deleted task marker in monthly summary")
+				}
+				if !item.Completed {
+					t.Fatalf("expected completion status to remain true after delete")
+				}
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("expected deleted task item in monthly summary date group")
+	}
+}
+
 func TestWeeklyTaskIncrementDecrement(t *testing.T) {
 	r := newTestRouter(t)
 	token := login(t, r)

@@ -70,3 +70,21 @@ WHERE task_id = $1 AND week_start = $2 AND completion_count = 0;
 -- name: DeleteTaskCompletionWeeklyByTaskID :exec
 DELETE FROM task_completion_weekly
 WHERE task_id = $1;
+
+-- name: ListTaskCompletionDailyByMonthAndTeam :many
+SELECT d.task_id, d.target_date
+FROM task_completion_daily d
+JOIN tasks t ON t.id = d.task_id
+WHERE t.team_id = $1
+  AND d.target_date >= $2
+  AND d.target_date < $3
+ORDER BY d.target_date, d.task_id;
+
+-- name: ListTaskCompletionWeeklyByMonthAndTeam :many
+SELECT w.task_id, w.week_start, w.completion_count
+FROM task_completion_weekly w
+JOIN tasks t ON t.id = w.task_id
+WHERE t.team_id = $1
+  AND w.week_start >= $2
+  AND w.week_start < $3
+ORDER BY w.week_start, w.task_id;

@@ -275,6 +275,20 @@ export interface TaskOverviewResponse {
   weeklyTasks: TaskOverviewWeeklyTask[];
 }
 
+export interface MonthlyTaskStatusItem {
+  taskId: string;
+  title: string;
+  type: TaskType;
+  penaltyPoints: number;
+  completed: boolean;
+  isDeleted: boolean;
+}
+
+export interface MonthlyTaskStatusGroup {
+  date: string;
+  items: MonthlyTaskStatusItem[];
+}
+
 export interface MonthlyPenaltySummary {
   month: string;
   teamId: string;
@@ -283,6 +297,7 @@ export interface MonthlyPenaltySummary {
   totalPenalty: number;
   isClosed: boolean;
   triggeredPenaltyRuleIds: string[];
+  taskStatusByDate: MonthlyTaskStatusGroup[];
 }
 
 export interface CloseResponse {
