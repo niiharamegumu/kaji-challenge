@@ -1,24 +1,57 @@
-import { Check, Copy, LogIn, Send } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import type { TeamMember } from "../../../lib/api/generated/client";
+import { COPY_FEEDBACK_TIMEOUT_MS } from "../constants/invite";
+import type { InviteState } from "../state/ui";
+import {
+  AccountSettingsSection,
+  InviteCodeIssueSection,
+  JoinTeamSection,
+  TeamMembersSection,
+  TeamNameSection,
+} from "./invite/InviteSections";
+import { getNicknameError, getTeamNameError } from "./invite/inviteUtils";
+
 type Props = {
-  inviteCode: string;
+  invite: InviteState | null;
   joinCode: string;
+  members: TeamMember[];
+  nickname: string;
+  teamName: string;
   isCreatingInvite: boolean;
   isJoiningTeam: boolean;
+  isLeavingTeam: boolean;
+  isSavingNickname: boolean;
+  isSavingTeamName: boolean;
   onJoinCodeChange: (value: string) => void;
+  onNicknameChange: (value: string) => void;
+  onTeamNameChange: (value: string) => void;
   onCreateInvite: () => void;
   onJoinTeam: () => void;
+  onLeaveTeam: () => void;
+  onSaveNickname: () => void;
+  onSaveTeamName: () => void;
 };
 
 export function InviteManager({
-  inviteCode,
+  invite,
   joinCode,
+  members,
+  nickname,
+  teamName,
   isCreatingInvite,
   isJoiningTeam,
+  isLeavingTeam,
+  isSavingNickname,
+  isSavingTeamName,
   onJoinCodeChange,
+  onNicknameChange,
+  onTeamNameChange,
   onCreateInvite,
   onJoinTeam,
+  onLeaveTeam,
+  onSaveNickname,
+  onSaveTeamName,
 }: Props) {
   const [copied, setCopied] = useState(false);
 
@@ -28,21 +61,26 @@ export function InviteManager({
     }
     const timer = window.setTimeout(() => {
       setCopied(false);
-    }, 1500);
+    }, COPY_FEEDBACK_TIMEOUT_MS);
     return () => window.clearTimeout(timer);
   }, [copied]);
 
+  const nicknameError = getNicknameError(nickname);
+  const teamNameError = getTeamNameError(teamName);
+  const inviteExpired =
+    invite != null && new Date(invite.expiresAt).getTime() < Date.now();
+
   const handleCopyInviteCode = async () => {
-    if (!inviteCode) {
+    if (!invite?.code) {
       return;
     }
 
     try {
-      await navigator.clipboard.writeText(inviteCode);
+      await navigator.clipboard.writeText(invite.code);
       setCopied(true);
     } catch {
       const textarea = document.createElement("textarea");
-      textarea.value = inviteCode;
+      textarea.value = invite.code;
       textarea.style.position = "fixed";
       textarea.style.opacity = "0";
       document.body.appendChild(textarea);
@@ -57,68 +95,71 @@ export function InviteManager({
   };
 
   return (
-    <article className="rounded-2xl border border-stone-200 bg-white/90 p-4 shadow-sm animate-enter md:p-6">
-      <h2 className="text-lg font-semibold">招待管理</h2>
-      <div className="mt-4 grid gap-3">
-        <button
-          type="button"
-          className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[color:var(--color-matcha-600)] px-3 py-2 text-white transition-colors duration-200 hover:bg-[color:var(--color-matcha-700)] disabled:cursor-not-allowed disabled:opacity-60 sm:w-fit sm:px-4"
-          onClick={onCreateInvite}
-          disabled={isCreatingInvite}
-        >
-          <Send size={16} aria-hidden="true" />
-          <span>{isCreatingInvite ? "発行中..." : "招待コード発行"}</span>
-        </button>
-        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-sm">
-          <span>発行コード:</span>
-          <code className="rounded bg-stone-100 px-1.5 py-0.5 font-mono text-[11px] tracking-wide">
-            {inviteCode || "未発行"}
-          </code>
-          <button
-            type="button"
-            className="flex h-8 w-8 items-center justify-center rounded-md text-stone-600 transition-colors duration-200 hover:bg-stone-100 hover:text-stone-800 disabled:cursor-not-allowed disabled:opacity-60"
-            onClick={() => {
-              void handleCopyInviteCode();
-            }}
-            disabled={!inviteCode}
-            aria-label={
-              copied ? "招待コードをコピー済み" : "招待コードをコピー"
-            }
-            title={copied ? "コピー済み" : "コピー"}
-          >
-            {copied ? (
-              <Check size={14} aria-hidden="true" />
-            ) : (
-              <Copy size={14} aria-hidden="true" />
-            )}
-          </button>
-        </div>
-      </div>
+    <section className="space-y-4 pb-2">
+      <header className="px-1 py-1">
+        <h2 className="text-lg font-semibold text-stone-900">設定</h2>
+        <p className="mt-1 text-sm text-stone-600">
+          チーム設定とアカウント設定を管理できます。
+        </p>
+      </header>
 
-      <div className="mt-5 border-t border-stone-200 pt-5">
-        <label className="text-sm text-stone-700" htmlFor="join-code">
-          招待コード
-        </label>
-        <div className="mt-3 flex gap-2">
-          <input
-            id="join-code"
-            className="min-h-11 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 focus-visible:border-[color:var(--color-matcha-500)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-matcha-200)]"
-            value={joinCode}
-            onChange={(event) => onJoinCodeChange(event.target.value)}
-            placeholder="招待コード入力"
-            disabled={isJoiningTeam}
+      <article className="rounded-2xl border border-stone-200 bg-white/90 p-4 shadow-sm md:p-6">
+        <h2 className="text-base font-semibold text-stone-900">チーム設定</h2>
+        <div className="mt-4 space-y-5">
+          <TeamNameSection
+            teamName={teamName}
+            teamNameError={teamNameError}
+            isSavingTeamName={isSavingTeamName}
+            onTeamNameChange={onTeamNameChange}
+            onSaveTeamName={onSaveTeamName}
           />
-          <button
-            type="button"
-            className="flex min-h-11 items-center gap-2 rounded-lg border border-stone-400 px-3 py-2 whitespace-nowrap transition-colors duration-200 hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
-            onClick={onJoinTeam}
-            disabled={isJoiningTeam || joinCode.trim().length === 0}
-          >
-            <LogIn size={14} aria-hidden="true" />
-            <span>{isJoiningTeam ? "参加中..." : "参加"}</span>
-          </button>
+
+          <div className="border-t border-stone-200 pt-5">
+            <TeamMembersSection
+              members={members}
+              isLeavingTeam={isLeavingTeam}
+              onLeaveTeam={onLeaveTeam}
+            />
+          </div>
+
+          <div className="border-t border-stone-200 pt-5">
+            <InviteCodeIssueSection
+              invite={invite}
+              inviteExpired={inviteExpired}
+              copied={copied}
+              isCreatingInvite={isCreatingInvite}
+              onCreateInvite={onCreateInvite}
+              onCopyInviteCode={() => {
+                void handleCopyInviteCode();
+              }}
+            />
+          </div>
+
+          <div className="border-t border-stone-200 pt-5">
+            <JoinTeamSection
+              joinCode={joinCode}
+              isJoiningTeam={isJoiningTeam}
+              onJoinCodeChange={onJoinCodeChange}
+              onJoinTeam={onJoinTeam}
+            />
+          </div>
         </div>
-      </div>
-    </article>
+      </article>
+
+      <article className="rounded-2xl border border-stone-200 bg-white/90 p-4 shadow-sm md:p-6">
+        <h2 className="text-base font-semibold text-stone-900">
+          アカウント設定
+        </h2>
+        <div className="mt-4">
+          <AccountSettingsSection
+            nickname={nickname}
+            nicknameError={nicknameError}
+            isSavingNickname={isSavingNickname}
+            onNicknameChange={onNicknameChange}
+            onSaveNickname={onSaveNickname}
+          />
+        </div>
+      </article>
+    </section>
   );
 }
