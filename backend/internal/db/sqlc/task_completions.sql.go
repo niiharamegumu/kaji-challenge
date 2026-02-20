@@ -11,84 +11,209 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const countTaskCompletionsInRange = `-- name: CountTaskCompletionsInRange :one
-SELECT COUNT(*)::bigint
-FROM task_completions
-WHERE task_id = $1
-  AND target_date >= $2
-  AND target_date <= $3
+const createTaskCompletionDaily = `-- name: CreateTaskCompletionDaily :exec
+INSERT INTO task_completion_daily (task_id, target_date, created_at)
+VALUES ($1, $2, NOW())
+ON CONFLICT (task_id, target_date) DO NOTHING
 `
 
-type CountTaskCompletionsInRangeParams struct {
-	TaskID       string      `json:"task_id"`
-	TargetDate   pgtype.Date `json:"target_date"`
-	TargetDate_2 pgtype.Date `json:"target_date_2"`
+type CreateTaskCompletionDailyParams struct {
+	TaskID     string      `json:"task_id"`
+	TargetDate pgtype.Date `json:"target_date"`
 }
 
-func (q *Queries) CountTaskCompletionsInRange(ctx context.Context, arg CountTaskCompletionsInRangeParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countTaskCompletionsInRange, arg.TaskID, arg.TargetDate, arg.TargetDate_2)
+func (q *Queries) CreateTaskCompletionDaily(ctx context.Context, arg CreateTaskCompletionDailyParams) error {
+	_, err := q.db.Exec(ctx, createTaskCompletionDaily, arg.TaskID, arg.TargetDate)
+	return err
+}
+
+const decrementTaskCompletionWeekly = `-- name: DecrementTaskCompletionWeekly :one
+INSERT INTO task_completion_weekly (task_id, week_start, completion_count, created_at, updated_at)
+VALUES ($1, $2, 0, NOW(), NOW())
+ON CONFLICT (task_id, week_start) DO UPDATE
+SET completion_count = GREATEST(0, task_completion_weekly.completion_count - 1),
+    updated_at = NOW()
+RETURNING completion_count::bigint
+`
+
+type DecrementTaskCompletionWeeklyParams struct {
+	TaskID    string      `json:"task_id"`
+	WeekStart pgtype.Date `json:"week_start"`
+}
+
+func (q *Queries) DecrementTaskCompletionWeekly(ctx context.Context, arg DecrementTaskCompletionWeeklyParams) (int64, error) {
+	row := q.db.QueryRow(ctx, decrementTaskCompletionWeekly, arg.TaskID, arg.WeekStart)
+	var completion_count int64
+	err := row.Scan(&completion_count)
+	return completion_count, err
+}
+
+const deleteTaskCompletionDaily = `-- name: DeleteTaskCompletionDaily :exec
+DELETE FROM task_completion_daily
+WHERE task_id = $1 AND target_date = $2
+`
+
+type DeleteTaskCompletionDailyParams struct {
+	TaskID     string      `json:"task_id"`
+	TargetDate pgtype.Date `json:"target_date"`
+}
+
+func (q *Queries) DeleteTaskCompletionDaily(ctx context.Context, arg DeleteTaskCompletionDailyParams) error {
+	_, err := q.db.Exec(ctx, deleteTaskCompletionDaily, arg.TaskID, arg.TargetDate)
+	return err
+}
+
+const deleteTaskCompletionDailyByTaskID = `-- name: DeleteTaskCompletionDailyByTaskID :exec
+DELETE FROM task_completion_daily
+WHERE task_id = $1
+`
+
+func (q *Queries) DeleteTaskCompletionDailyByTaskID(ctx context.Context, taskID string) error {
+	_, err := q.db.Exec(ctx, deleteTaskCompletionDailyByTaskID, taskID)
+	return err
+}
+
+const deleteTaskCompletionWeekly = `-- name: DeleteTaskCompletionWeekly :exec
+DELETE FROM task_completion_weekly
+WHERE task_id = $1 AND week_start = $2
+`
+
+type DeleteTaskCompletionWeeklyParams struct {
+	TaskID    string      `json:"task_id"`
+	WeekStart pgtype.Date `json:"week_start"`
+}
+
+func (q *Queries) DeleteTaskCompletionWeekly(ctx context.Context, arg DeleteTaskCompletionWeeklyParams) error {
+	_, err := q.db.Exec(ctx, deleteTaskCompletionWeekly, arg.TaskID, arg.WeekStart)
+	return err
+}
+
+const deleteTaskCompletionWeeklyByTaskID = `-- name: DeleteTaskCompletionWeeklyByTaskID :exec
+DELETE FROM task_completion_weekly
+WHERE task_id = $1
+`
+
+func (q *Queries) DeleteTaskCompletionWeeklyByTaskID(ctx context.Context, taskID string) error {
+	_, err := q.db.Exec(ctx, deleteTaskCompletionWeeklyByTaskID, taskID)
+	return err
+}
+
+const deleteTaskCompletionWeeklyIfZero = `-- name: DeleteTaskCompletionWeeklyIfZero :exec
+DELETE FROM task_completion_weekly
+WHERE task_id = $1 AND week_start = $2 AND completion_count = 0
+`
+
+type DeleteTaskCompletionWeeklyIfZeroParams struct {
+	TaskID    string      `json:"task_id"`
+	WeekStart pgtype.Date `json:"week_start"`
+}
+
+func (q *Queries) DeleteTaskCompletionWeeklyIfZero(ctx context.Context, arg DeleteTaskCompletionWeeklyIfZeroParams) error {
+	_, err := q.db.Exec(ctx, deleteTaskCompletionWeeklyIfZero, arg.TaskID, arg.WeekStart)
+	return err
+}
+
+const getTaskCompletionWeeklyCount = `-- name: GetTaskCompletionWeeklyCount :one
+SELECT COALESCE((
+  SELECT completion_count
+  FROM task_completion_weekly
+  WHERE task_id = $1 AND week_start = $2
+), 0)::bigint
+`
+
+type GetTaskCompletionWeeklyCountParams struct {
+	TaskID    string      `json:"task_id"`
+	WeekStart pgtype.Date `json:"week_start"`
+}
+
+func (q *Queries) GetTaskCompletionWeeklyCount(ctx context.Context, arg GetTaskCompletionWeeklyCountParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getTaskCompletionWeeklyCount, arg.TaskID, arg.WeekStart)
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
 }
 
-const createTaskCompletion = `-- name: CreateTaskCompletion :exec
-INSERT INTO task_completions (task_id, target_date, created_at)
-VALUES ($1, $2, NOW())
-ON CONFLICT (task_id, target_date) DO NOTHING
-`
-
-type CreateTaskCompletionParams struct {
-	TaskID     string      `json:"task_id"`
-	TargetDate pgtype.Date `json:"target_date"`
-}
-
-func (q *Queries) CreateTaskCompletion(ctx context.Context, arg CreateTaskCompletionParams) error {
-	_, err := q.db.Exec(ctx, createTaskCompletion, arg.TaskID, arg.TargetDate)
-	return err
-}
-
-const deleteTaskCompletion = `-- name: DeleteTaskCompletion :exec
-DELETE FROM task_completions
-WHERE task_id = $1 AND target_date = $2
-`
-
-type DeleteTaskCompletionParams struct {
-	TaskID     string      `json:"task_id"`
-	TargetDate pgtype.Date `json:"target_date"`
-}
-
-func (q *Queries) DeleteTaskCompletion(ctx context.Context, arg DeleteTaskCompletionParams) error {
-	_, err := q.db.Exec(ctx, deleteTaskCompletion, arg.TaskID, arg.TargetDate)
-	return err
-}
-
-const deleteTaskCompletionsByTaskID = `-- name: DeleteTaskCompletionsByTaskID :exec
-DELETE FROM task_completions
-WHERE task_id = $1
-`
-
-func (q *Queries) DeleteTaskCompletionsByTaskID(ctx context.Context, taskID string) error {
-	_, err := q.db.Exec(ctx, deleteTaskCompletionsByTaskID, taskID)
-	return err
-}
-
-const hasTaskCompletion = `-- name: HasTaskCompletion :one
+const hasTaskCompletionDaily = `-- name: HasTaskCompletionDaily :one
 SELECT EXISTS (
   SELECT 1
-  FROM task_completions
+  FROM task_completion_daily
   WHERE task_id = $1 AND target_date = $2
 )
 `
 
-type HasTaskCompletionParams struct {
+type HasTaskCompletionDailyParams struct {
 	TaskID     string      `json:"task_id"`
 	TargetDate pgtype.Date `json:"target_date"`
 }
 
-func (q *Queries) HasTaskCompletion(ctx context.Context, arg HasTaskCompletionParams) (bool, error) {
-	row := q.db.QueryRow(ctx, hasTaskCompletion, arg.TaskID, arg.TargetDate)
+func (q *Queries) HasTaskCompletionDaily(ctx context.Context, arg HasTaskCompletionDailyParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasTaskCompletionDaily, arg.TaskID, arg.TargetDate)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
+}
+
+const incrementTaskCompletionWeekly = `-- name: IncrementTaskCompletionWeekly :one
+INSERT INTO task_completion_weekly (task_id, week_start, completion_count, created_at, updated_at)
+VALUES ($1, $2, 1, NOW(), NOW())
+ON CONFLICT (task_id, week_start) DO UPDATE
+SET completion_count = LEAST($3::integer, task_completion_weekly.completion_count + 1),
+    updated_at = NOW()
+RETURNING completion_count::bigint
+`
+
+type IncrementTaskCompletionWeeklyParams struct {
+	TaskID        string      `json:"task_id"`
+	WeekStart     pgtype.Date `json:"week_start"`
+	MaxCompletion int32       `json:"max_completion"`
+}
+
+func (q *Queries) IncrementTaskCompletionWeekly(ctx context.Context, arg IncrementTaskCompletionWeeklyParams) (int64, error) {
+	row := q.db.QueryRow(ctx, incrementTaskCompletionWeekly, arg.TaskID, arg.WeekStart, arg.MaxCompletion)
+	var completion_count int64
+	err := row.Scan(&completion_count)
+	return completion_count, err
+}
+
+const toggleTaskCompletionWeeklyBinary = `-- name: ToggleTaskCompletionWeeklyBinary :one
+INSERT INTO task_completion_weekly (task_id, week_start, completion_count, created_at, updated_at)
+VALUES ($1, $2, 1, NOW(), NOW())
+ON CONFLICT (task_id, week_start) DO UPDATE
+SET completion_count = CASE
+  WHEN task_completion_weekly.completion_count > 0 THEN 0
+  ELSE 1
+END,
+    updated_at = NOW()
+RETURNING completion_count::bigint
+`
+
+type ToggleTaskCompletionWeeklyBinaryParams struct {
+	TaskID    string      `json:"task_id"`
+	WeekStart pgtype.Date `json:"week_start"`
+}
+
+func (q *Queries) ToggleTaskCompletionWeeklyBinary(ctx context.Context, arg ToggleTaskCompletionWeeklyBinaryParams) (int64, error) {
+	row := q.db.QueryRow(ctx, toggleTaskCompletionWeeklyBinary, arg.TaskID, arg.WeekStart)
+	var completion_count int64
+	err := row.Scan(&completion_count)
+	return completion_count, err
+}
+
+const upsertTaskCompletionWeeklyCount = `-- name: UpsertTaskCompletionWeeklyCount :exec
+INSERT INTO task_completion_weekly (task_id, week_start, completion_count, created_at, updated_at)
+VALUES ($1, $2, $3, NOW(), NOW())
+ON CONFLICT (task_id, week_start) DO UPDATE
+SET completion_count = EXCLUDED.completion_count,
+    updated_at = NOW()
+`
+
+type UpsertTaskCompletionWeeklyCountParams struct {
+	TaskID          string      `json:"task_id"`
+	WeekStart       pgtype.Date `json:"week_start"`
+	CompletionCount int32       `json:"completion_count"`
+}
+
+func (q *Queries) UpsertTaskCompletionWeeklyCount(ctx context.Context, arg UpsertTaskCompletionWeeklyCountParams) error {
+	_, err := q.db.Exec(ctx, upsertTaskCompletionWeeklyCount, arg.TaskID, arg.WeekStart, arg.CompletionCount)
+	return err
 }

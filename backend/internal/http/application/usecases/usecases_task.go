@@ -23,6 +23,6 @@ func (u taskUsecase) DeleteTask(ctx context.Context, userID, taskID string) erro
 	return u.repo.DeleteTask(ctx, userID, taskID)
 }
 
-func (u taskUsecase) ToggleTaskCompletion(ctx context.Context, userID, taskID string, target time.Time) (api.TaskCompletionResponse, error) {
-	return u.repo.ToggleTaskCompletion(ctx, userID, taskID, target)
+func (u taskUsecase) ToggleTaskCompletion(ctx context.Context, userID, taskID string, target time.Time, action *api.ToggleTaskCompletionRequestAction) (api.TaskCompletionResponse, error) {
+	return u.repo.ToggleTaskCompletion(ctx, userID, taskID, target, action)
 }

@@ -56,7 +56,7 @@ func (m mockTaskService) PatchTask(context.Context, string, string, api.UpdateTa
 	return api.Task{}, nil
 }
 func (m mockTaskService) DeleteTask(context.Context, string, string) error { return nil }
-func (m mockTaskService) ToggleTaskCompletion(context.Context, string, string, time.Time) (api.TaskCompletionResponse, error) {
+func (m mockTaskService) ToggleTaskCompletion(context.Context, string, string, time.Time, *api.ToggleTaskCompletionRequestAction) (api.TaskCompletionResponse, error) {
 	return api.TaskCompletionResponse{}, nil
 }
 

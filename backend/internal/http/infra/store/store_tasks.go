@@ -161,13 +161,16 @@ func (s *Store) DeleteTask(ctx context.Context, userID, taskID string) error {
 	if err != nil || task.TeamID != teamID {
 		return errors.New("task not found")
 	}
-	if err := s.q.DeleteTaskCompletionsByTaskID(ctx, taskID); err != nil {
+	if err := s.q.DeleteTaskCompletionDailyByTaskID(ctx, taskID); err != nil {
+		return err
+	}
+	if err := s.q.DeleteTaskCompletionWeeklyByTaskID(ctx, taskID); err != nil {
 		return err
 	}
 	return s.q.DeleteTask(ctx, taskID)
 }
 
-func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string, target time.Time) (api.TaskCompletionResponse, error) {
+func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string, target time.Time, action *api.ToggleTaskCompletionRequestAction) (api.TaskCompletionResponse, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return api.TaskCompletionResponse{}, err
@@ -197,39 +200,104 @@ func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string,
 		}
 	}
 
-	targetPg := toPgDate(targetDate)
-	exists, err := s.q.HasTaskCompletion(ctx, dbsqlc.HasTaskCompletionParams{
-		TaskID:     taskID,
-		TargetDate: targetPg,
-	})
-	if err != nil {
-		return api.TaskCompletionResponse{}, err
+	mode := api.Toggle
+	if action != nil {
+		mode = *action
+		if mode == "" {
+			mode = api.Toggle
+		}
 	}
-	completed := !exists
-	if completed {
-		if err := s.q.CreateTaskCompletion(ctx, dbsqlc.CreateTaskCompletionParams{
+
+	targetPg := toPgDate(targetDate)
+	if task.Type == api.Daily {
+		if mode != api.Toggle {
+			return api.TaskCompletionResponse{}, errors.New("daily tasks only support toggle action")
+		}
+		exists, err := s.q.HasTaskCompletionDaily(ctx, dbsqlc.HasTaskCompletionDailyParams{
 			TaskID:     taskID,
 			TargetDate: targetPg,
-		}); err != nil {
+		})
+		if err != nil {
+			return api.TaskCompletionResponse{}, err
+		}
+		if exists {
+			if err := s.q.DeleteTaskCompletionDaily(ctx, dbsqlc.DeleteTaskCompletionDailyParams{
+				TaskID:     taskID,
+				TargetDate: targetPg,
+			}); err != nil {
+				return api.TaskCompletionResponse{}, err
+			}
+		} else {
+			if err := s.q.CreateTaskCompletionDaily(ctx, dbsqlc.CreateTaskCompletionDailyParams{
+				TaskID:     taskID,
+				TargetDate: targetPg,
+			}); err != nil {
+				return api.TaskCompletionResponse{}, err
+			}
+		}
+		return api.TaskCompletionResponse{
+			TaskId:               taskID,
+			TargetDate:           toDate(targetDate),
+			Completed:            !exists,
+			WeeklyCompletedCount: 0,
+		}, nil
+	}
+
+	weekStart := startOfWeek(targetDate, s.loc)
+	weekStartPg := toPgDate(weekStart)
+	var nextCount int64
+	if task.Required <= 1 {
+		if mode != api.Toggle {
+			return api.TaskCompletionResponse{}, errors.New("weekly tasks with required completions of 1 only support toggle action")
+		}
+		nextCount, err = s.q.ToggleTaskCompletionWeeklyBinary(ctx, dbsqlc.ToggleTaskCompletionWeeklyBinaryParams{
+			TaskID:    taskID,
+			WeekStart: weekStartPg,
+		})
+		if err != nil {
 			return api.TaskCompletionResponse{}, err
 		}
 	} else {
-		if err := s.q.DeleteTaskCompletion(ctx, dbsqlc.DeleteTaskCompletionParams{
-			TaskID:     taskID,
-			TargetDate: targetPg,
+		required32, err := safeInt32(task.Required, "required completions")
+		if err != nil {
+			return api.TaskCompletionResponse{}, err
+		}
+		switch mode {
+		case api.Toggle, api.Increment:
+			nextCount, err = s.q.IncrementTaskCompletionWeekly(ctx, dbsqlc.IncrementTaskCompletionWeeklyParams{
+				TaskID:        taskID,
+				WeekStart:     weekStartPg,
+				MaxCompletion: required32,
+			})
+			if err != nil {
+				return api.TaskCompletionResponse{}, err
+			}
+		case api.Decrement:
+			nextCount, err = s.q.DecrementTaskCompletionWeekly(ctx, dbsqlc.DecrementTaskCompletionWeeklyParams{
+				TaskID:    taskID,
+				WeekStart: weekStartPg,
+			})
+			if err != nil {
+				return api.TaskCompletionResponse{}, err
+			}
+		default:
+			return api.TaskCompletionResponse{}, errors.New("invalid completion action")
+		}
+	}
+
+	if nextCount <= 0 {
+		if err := s.q.DeleteTaskCompletionWeeklyIfZero(ctx, dbsqlc.DeleteTaskCompletionWeeklyIfZeroParams{
+			TaskID:    taskID,
+			WeekStart: weekStartPg,
 		}); err != nil {
 			return api.TaskCompletionResponse{}, err
 		}
 	}
 
-	count, err := s.weeklyCompletionCountLocked(ctx, taskID, startOfWeek(targetDate, s.loc))
-	if err != nil {
-		return api.TaskCompletionResponse{}, err
-	}
 	return api.TaskCompletionResponse{
 		TaskId:               taskID,
 		TargetDate:           toDate(targetDate),
-		Completed:            completed,
-		WeeklyCompletedCount: count,
+		Completed:            nextCount > 0,
+		WeeklyCompletedCount: int(nextCount),
 	}, nil
 }

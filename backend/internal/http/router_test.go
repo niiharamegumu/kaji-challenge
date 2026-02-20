@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -238,6 +239,211 @@ func TestTaskLifecycleAndTaskOverview(t *testing.T) {
 	if len(taskOverview.DailyTasks) == 0 {
 		t.Fatalf("expected at least one daily task in task overview response")
 	}
+}
+
+func TestWeeklyTaskIncrementDecrement(t *testing.T) {
+	r := newTestRouter(t)
+	token := login(t, r)
+
+	taskRes := doRequest(t, r, http.MethodPost, "/v1/tasks", `{"title":"シンク洗い","type":"weekly","penaltyPoints":2,"requiredCompletionsPerWeek":3}`, token)
+	if taskRes.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", taskRes.Code, taskRes.Body.String())
+	}
+
+	var task api.Task
+	if err := json.Unmarshal(taskRes.Body.Bytes(), &task); err != nil {
+		t.Fatalf("failed to parse task: %v", err)
+	}
+
+	loc, _ := time.LoadLocation("Asia/Tokyo")
+	if loc == nil {
+		loc = time.FixedZone("JST", 9*60*60)
+	}
+	today := time.Now().In(loc).Format("2006-01-02")
+
+	increment := func() api.TaskCompletionResponse {
+		req := `{"targetDate":"` + today + `","action":"increment"}`
+		res := doRequest(t, r, http.MethodPost, "/v1/tasks/"+task.Id+"/completions/toggle", req, token)
+		if res.Code != http.StatusOK {
+			t.Fatalf("increment expected 200, got %d: %s", res.Code, res.Body.String())
+		}
+		var body api.TaskCompletionResponse
+		if err := json.Unmarshal(res.Body.Bytes(), &body); err != nil {
+			t.Fatalf("failed to parse increment response: %v", err)
+		}
+		return body
+	}
+
+	decrement := func() api.TaskCompletionResponse {
+		req := `{"targetDate":"` + today + `","action":"decrement"}`
+		res := doRequest(t, r, http.MethodPost, "/v1/tasks/"+task.Id+"/completions/toggle", req, token)
+		if res.Code != http.StatusOK {
+			t.Fatalf("decrement expected 200, got %d: %s", res.Code, res.Body.String())
+		}
+		var body api.TaskCompletionResponse
+		if err := json.Unmarshal(res.Body.Bytes(), &body); err != nil {
+			t.Fatalf("failed to parse decrement response: %v", err)
+		}
+		return body
+	}
+
+	if c := increment().WeeklyCompletedCount; c != 1 {
+		t.Fatalf("expected count 1, got %d", c)
+	}
+	if c := increment().WeeklyCompletedCount; c != 2 {
+		t.Fatalf("expected count 2, got %d", c)
+	}
+	if c := increment().WeeklyCompletedCount; c != 3 {
+		t.Fatalf("expected count 3, got %d", c)
+	}
+	if c := increment().WeeklyCompletedCount; c != 3 {
+		t.Fatalf("expected count to stay 3, got %d", c)
+	}
+
+	if c := decrement().WeeklyCompletedCount; c != 2 {
+		t.Fatalf("expected count 2, got %d", c)
+	}
+	if c := decrement().WeeklyCompletedCount; c != 1 {
+		t.Fatalf("expected count 1, got %d", c)
+	}
+	if c := decrement().WeeklyCompletedCount; c != 0 {
+		t.Fatalf("expected count 0, got %d", c)
+	}
+	if c := decrement().WeeklyCompletedCount; c != 0 {
+		t.Fatalf("expected count to stay 0, got %d", c)
+	}
+}
+
+func TestWeeklyTaskWithSingleRequiredRejectsIncrement(t *testing.T) {
+	r := newTestRouter(t)
+	token := login(t, r)
+
+	taskRes := doRequest(t, r, http.MethodPost, "/v1/tasks", `{"title":"皿洗い","type":"weekly","penaltyPoints":2,"requiredCompletionsPerWeek":1}`, token)
+	if taskRes.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", taskRes.Code, taskRes.Body.String())
+	}
+
+	var task api.Task
+	if err := json.Unmarshal(taskRes.Body.Bytes(), &task); err != nil {
+		t.Fatalf("failed to parse task: %v", err)
+	}
+
+	loc, _ := time.LoadLocation("Asia/Tokyo")
+	if loc == nil {
+		loc = time.FixedZone("JST", 9*60*60)
+	}
+	today := time.Now().In(loc).Format("2006-01-02")
+
+	req := `{"targetDate":"` + today + `","action":"increment"}`
+	res := doRequest(t, r, http.MethodPost, "/v1/tasks/"+task.Id+"/completions/toggle", req, token)
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", res.Code, res.Body.String())
+	}
+}
+
+func TestWeeklyTaskToggleWithoutActionDefaultsToIncrement(t *testing.T) {
+	r := newTestRouter(t)
+	token := login(t, r)
+
+	taskRes := doRequest(t, r, http.MethodPost, "/v1/tasks", `{"title":"風呂掃除","type":"weekly","penaltyPoints":2,"requiredCompletionsPerWeek":3}`, token)
+	if taskRes.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", taskRes.Code, taskRes.Body.String())
+	}
+
+	var task api.Task
+	if err := json.Unmarshal(taskRes.Body.Bytes(), &task); err != nil {
+		t.Fatalf("failed to parse task: %v", err)
+	}
+
+	loc, _ := time.LoadLocation("Asia/Tokyo")
+	if loc == nil {
+		loc = time.FixedZone("JST", 9*60*60)
+	}
+	today := time.Now().In(loc).Format("2006-01-02")
+
+	toggleWithoutAction := func() api.TaskCompletionResponse {
+		req := `{"targetDate":"` + today + `"}`
+		res := doRequest(t, r, http.MethodPost, "/v1/tasks/"+task.Id+"/completions/toggle", req, token)
+		if res.Code != http.StatusOK {
+			t.Fatalf("toggle expected 200, got %d: %s", res.Code, res.Body.String())
+		}
+		var body api.TaskCompletionResponse
+		if err := json.Unmarshal(res.Body.Bytes(), &body); err != nil {
+			t.Fatalf("failed to parse toggle response: %v", err)
+		}
+		return body
+	}
+
+	if c := toggleWithoutAction().WeeklyCompletedCount; c != 1 {
+		t.Fatalf("expected count 1, got %d", c)
+	}
+	if c := toggleWithoutAction().WeeklyCompletedCount; c != 2 {
+		t.Fatalf("expected count 2, got %d", c)
+	}
+}
+
+func TestWeeklyTaskIncrementIsAtomicUnderConcurrency(t *testing.T) {
+	r := newTestRouter(t)
+	token := login(t, r)
+
+	const workers = 20
+	taskRes := doRequest(t, r, http.MethodPost, "/v1/tasks", `{"title":"洗濯","type":"weekly","penaltyPoints":2,"requiredCompletionsPerWeek":100}`, token)
+	if taskRes.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", taskRes.Code, taskRes.Body.String())
+	}
+
+	var task api.Task
+	if err := json.Unmarshal(taskRes.Body.Bytes(), &task); err != nil {
+		t.Fatalf("failed to parse task: %v", err)
+	}
+
+	loc, _ := time.LoadLocation("Asia/Tokyo")
+	if loc == nil {
+		loc = time.FixedZone("JST", 9*60*60)
+	}
+	today := time.Now().In(loc).Format("2006-01-02")
+	req := `{"targetDate":"` + today + `","action":"increment"}`
+
+	start := make(chan struct{})
+	errCh := make(chan string, workers)
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			res := doRequest(t, r, http.MethodPost, "/v1/tasks/"+task.Id+"/completions/toggle", req, token)
+			if res.Code != http.StatusOK {
+				errCh <- "increment request failed"
+				return
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(errCh)
+	for msg := range errCh {
+		t.Fatal(msg)
+	}
+
+	overviewRes := doRequest(t, r, http.MethodGet, "/v1/tasks/overview", "", token)
+	if overviewRes.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", overviewRes.Code, overviewRes.Body.String())
+	}
+	var overview api.TaskOverviewResponse
+	if err := json.Unmarshal(overviewRes.Body.Bytes(), &overview); err != nil {
+		t.Fatalf("failed to parse task overview: %v", err)
+	}
+
+	for _, item := range overview.WeeklyTasks {
+		if item.Task.Id == task.Id {
+			if item.WeekCompletedCount != workers {
+				t.Fatalf("expected weekly count %d, got %d", workers, item.WeekCompletedCount)
+			}
+			return
+		}
+	}
+	t.Fatalf("weekly task not found in overview")
 }
 
 func TestProtectedWriteRejectsInvalidOrigin(t *testing.T) {
