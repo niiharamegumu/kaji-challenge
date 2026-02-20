@@ -89,10 +89,18 @@ type Task struct {
 	UpdatedAt                  pgtype.Timestamptz `json:"updated_at"`
 }
 
-type TaskCompletion struct {
+type TaskCompletionDaily struct {
 	TaskID     string             `json:"task_id"`
 	TargetDate pgtype.Date        `json:"target_date"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}
+
+type TaskCompletionWeekly struct {
+	TaskID          string             `json:"task_id"`
+	WeekStart       pgtype.Date        `json:"week_start"`
+	CompletionCount int32              `json:"completion_count"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 }
 
 type Team struct {

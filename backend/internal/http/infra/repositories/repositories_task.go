@@ -26,7 +26,7 @@ func (r taskRepo) DeleteTask(ctx context.Context, userID, taskID string) error {
 	return mapInfraErr(r.store.DeleteTask(ctx, userID, taskID))
 }
 
-func (r taskRepo) ToggleTaskCompletion(ctx context.Context, userID, taskID string, target time.Time) (api.TaskCompletionResponse, error) {
-	res, err := r.store.ToggleTaskCompletion(ctx, userID, taskID, target)
+func (r taskRepo) ToggleTaskCompletion(ctx context.Context, userID, taskID string, target time.Time, action *api.ToggleTaskCompletionRequestAction) (api.TaskCompletionResponse, error) {
+	res, err := r.store.ToggleTaskCompletion(ctx, userID, taskID, target, action)
 	return res, mapInfraErr(err)
 }

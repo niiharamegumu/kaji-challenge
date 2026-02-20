@@ -37,7 +37,7 @@ func (s *Store) GetTaskOverview(ctx context.Context, userID string) (api.TaskOve
 	for _, row := range tasks {
 		t := taskFromActiveListRow(row, s.loc)
 		if t.Type == api.Daily {
-			done, err := s.q.HasTaskCompletion(ctx, dbsqlc.HasTaskCompletionParams{
+			done, err := s.q.HasTaskCompletionDaily(ctx, dbsqlc.HasTaskCompletionDailyParams{
 				TaskID:     t.ID,
 				TargetDate: toPgDate(today),
 			})

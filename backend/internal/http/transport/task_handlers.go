@@ -75,7 +75,7 @@ func (h *Handler) PostTaskCompletionToggle(c *gin.Context, taskID string) {
 	if !ok {
 		return
 	}
-	res, err := h.services.Task.ToggleTaskCompletion(c.Request.Context(), userID, taskID, req.TargetDate.Time)
+	res, err := h.services.Task.ToggleTaskCompletion(c.Request.Context(), userID, taskID, req.TargetDate.Time, req.Action)
 	if err != nil {
 		writeAppError(c, err, http.StatusBadRequest)
 		return

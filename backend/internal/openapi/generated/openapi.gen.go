@@ -29,6 +29,13 @@ const (
 	Owner  TeamMembershipRole = "owner"
 )
 
+// Defines values for ToggleTaskCompletionRequestAction.
+const (
+	Decrement ToggleTaskCompletionRequestAction = "decrement"
+	Increment ToggleTaskCompletionRequestAction = "increment"
+	Toggle    ToggleTaskCompletionRequestAction = "toggle"
+)
+
 // AuthCallbackResponse defines model for AuthCallbackResponse.
 type AuthCallbackResponse struct {
 	ExchangeCode string `json:"exchangeCode"`
@@ -193,8 +200,12 @@ type TeamMembershipRole string
 
 // ToggleTaskCompletionRequest defines model for ToggleTaskCompletionRequest.
 type ToggleTaskCompletionRequest struct {
-	TargetDate openapi_types.Date `json:"targetDate"`
+	Action     *ToggleTaskCompletionRequestAction `json:"action,omitempty"`
+	TargetDate openapi_types.Date                 `json:"targetDate"`
 }
+
+// ToggleTaskCompletionRequestAction defines model for ToggleTaskCompletionRequest.Action.
+type ToggleTaskCompletionRequestAction string
 
 // UpdatePenaltyRuleRequest defines model for UpdatePenaltyRuleRequest.
 type UpdatePenaltyRuleRequest struct {
@@ -321,7 +332,7 @@ type ServerInterface interface {
 	// Update task
 	// (PATCH /v1/tasks/{taskId})
 	PatchTask(c *gin.Context, taskId string)
-	// Toggle task completion in target period
+	// Update task completion in target period
 	// (POST /v1/tasks/{taskId}/completions/toggle)
 	PostTaskCompletionToggle(c *gin.Context, taskId string)
 	// Create invite code

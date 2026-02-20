@@ -13,22 +13,25 @@ type Querier interface {
 	AddTriggeredRuleForMonth(ctx context.Context, arg AddTriggeredRuleForMonthParams) error
 	CloseMonthlyPenaltySummary(ctx context.Context, arg CloseMonthlyPenaltySummaryParams) error
 	ConsumeExchangeCode(ctx context.Context, code string) error
-	CountTaskCompletionsInRange(ctx context.Context, arg CountTaskCompletionsInRangeParams) (int64, error)
 	CreateInviteCode(ctx context.Context, arg CreateInviteCodeParams) error
 	CreatePenaltyRule(ctx context.Context, arg CreatePenaltyRuleParams) error
 	CreateSession(ctx context.Context, arg CreateSessionParams) error
 	CreateTask(ctx context.Context, arg CreateTaskParams) error
-	CreateTaskCompletion(ctx context.Context, arg CreateTaskCompletionParams) error
+	CreateTaskCompletionDaily(ctx context.Context, arg CreateTaskCompletionDailyParams) error
 	CreateTeam(ctx context.Context, arg CreateTeamParams) error
 	CreateUser(ctx context.Context, arg CreateUserParams) error
+	DecrementTaskCompletionWeekly(ctx context.Context, arg DecrementTaskCompletionWeeklyParams) (int64, error)
 	DeleteAuthRequest(ctx context.Context, state string) error
 	DeleteInviteCode(ctx context.Context, code string) (int64, error)
 	DeleteInviteCodesByTeamID(ctx context.Context, teamID string) error
 	DeletePenaltyRule(ctx context.Context, id string) error
 	DeleteSession(ctx context.Context, token string) error
 	DeleteTask(ctx context.Context, id string) error
-	DeleteTaskCompletion(ctx context.Context, arg DeleteTaskCompletionParams) error
-	DeleteTaskCompletionsByTaskID(ctx context.Context, taskID string) error
+	DeleteTaskCompletionDaily(ctx context.Context, arg DeleteTaskCompletionDailyParams) error
+	DeleteTaskCompletionDailyByTaskID(ctx context.Context, taskID string) error
+	DeleteTaskCompletionWeekly(ctx context.Context, arg DeleteTaskCompletionWeeklyParams) error
+	DeleteTaskCompletionWeeklyByTaskID(ctx context.Context, taskID string) error
+	DeleteTaskCompletionWeeklyIfZero(ctx context.Context, arg DeleteTaskCompletionWeeklyIfZeroParams) error
 	DeleteTriggeredRulesByMonth(ctx context.Context, arg DeleteTriggeredRulesByMonthParams) error
 	GetAuthRequest(ctx context.Context, state string) (OauthAuthRequest, error)
 	GetExchangeCode(ctx context.Context, code string) (OauthExchangeCode, error)
@@ -37,10 +40,12 @@ type Querier interface {
 	GetPenaltyRuleByID(ctx context.Context, id string) (PenaltyRule, error)
 	GetSessionByToken(ctx context.Context, token string) (Session, error)
 	GetTaskByID(ctx context.Context, id string) (GetTaskByIDRow, error)
+	GetTaskCompletionWeeklyCount(ctx context.Context, arg GetTaskCompletionWeeklyCountParams) (int64, error)
 	GetUserByEmail(ctx context.Context, lower string) (User, error)
 	GetUserByID(ctx context.Context, id string) (User, error)
-	HasTaskCompletion(ctx context.Context, arg HasTaskCompletionParams) (bool, error)
+	HasTaskCompletionDaily(ctx context.Context, arg HasTaskCompletionDailyParams) (bool, error)
 	IncrementDailyPenalty(ctx context.Context, arg IncrementDailyPenaltyParams) error
+	IncrementTaskCompletionWeekly(ctx context.Context, arg IncrementTaskCompletionWeeklyParams) (int64, error)
 	IncrementWeeklyPenalty(ctx context.Context, arg IncrementWeeklyPenaltyParams) error
 	InsertAuthRequest(ctx context.Context, arg InsertAuthRequestParams) error
 	InsertCloseExecution(ctx context.Context, arg InsertCloseExecutionParams) (int64, error)
@@ -51,10 +56,12 @@ type Querier interface {
 	ListPenaltyRulesByTeamID(ctx context.Context, teamID string) ([]PenaltyRule, error)
 	ListTasksByTeamID(ctx context.Context, teamID string) ([]ListTasksByTeamIDRow, error)
 	ListTriggeredRuleIDsByMonth(ctx context.Context, arg ListTriggeredRuleIDsByMonthParams) ([]string, error)
+	ToggleTaskCompletionWeeklyBinary(ctx context.Context, arg ToggleTaskCompletionWeeklyBinaryParams) (int64, error)
 	UpdatePenaltyRule(ctx context.Context, arg UpdatePenaltyRuleParams) error
 	UpdateTask(ctx context.Context, arg UpdateTaskParams) error
 	UpdateUserDisplayName(ctx context.Context, arg UpdateUserDisplayNameParams) error
 	UpsertMonthlyPenaltySummary(ctx context.Context, arg UpsertMonthlyPenaltySummaryParams) error
+	UpsertTaskCompletionWeeklyCount(ctx context.Context, arg UpsertTaskCompletionWeeklyCountParams) error
 }
 
 var _ Querier = (*Queries)(nil)

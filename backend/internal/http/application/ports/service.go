@@ -40,7 +40,7 @@ type TaskService interface {
 	CreateTask(ctx context.Context, userID string, req api.CreateTaskRequest) (api.Task, error)
 	PatchTask(ctx context.Context, userID, taskID string, req api.UpdateTaskRequest) (api.Task, error)
 	DeleteTask(ctx context.Context, userID, taskID string) error
-	ToggleTaskCompletion(ctx context.Context, userID, taskID string, target time.Time) (api.TaskCompletionResponse, error)
+	ToggleTaskCompletion(ctx context.Context, userID, taskID string, target time.Time, action *api.ToggleTaskCompletionRequestAction) (api.TaskCompletionResponse, error)
 }
 
 type PenaltyService interface {

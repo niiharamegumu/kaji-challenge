@@ -107,7 +107,7 @@ func (s *Store) closeDayLocked(ctx context.Context, now time.Time, teamID string
 		if penRows == 0 {
 			continue
 		}
-		done, err := s.q.HasTaskCompletion(ctx, dbsqlc.HasTaskCompletionParams{
+		done, err := s.q.HasTaskCompletionDaily(ctx, dbsqlc.HasTaskCompletionDailyParams{
 			TaskID:     t.ID,
 			TargetDate: toPgDate(targetDate),
 		})
@@ -267,11 +267,9 @@ func (s *Store) closeMonthLocked(ctx context.Context, now time.Time, teamID stri
 }
 
 func (s *Store) weeklyCompletionCountLocked(ctx context.Context, taskID string, weekStart time.Time) (int, error) {
-	weekEnd := weekStart.AddDate(0, 0, 6)
-	count, err := s.q.CountTaskCompletionsInRange(ctx, dbsqlc.CountTaskCompletionsInRangeParams{
-		TaskID:       taskID,
-		TargetDate:   toPgDate(weekStart),
-		TargetDate_2: toPgDate(weekEnd),
+	count, err := s.q.GetTaskCompletionWeeklyCount(ctx, dbsqlc.GetTaskCompletionWeeklyCountParams{
+		TaskID:    taskID,
+		WeekStart: toPgDate(weekStart),
 	})
 	if err != nil {
 		return 0, err

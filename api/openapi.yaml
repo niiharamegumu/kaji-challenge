@@ -210,7 +210,7 @@ paths:
   /v1/tasks/{taskId}/completions/toggle:
     post:
       operationId: postTaskCompletionToggle
-      summary: Toggle task completion in target period
+      summary: Update task completion in target period
       parameters:
         - in: path
           name: taskId
@@ -594,6 +594,10 @@ components:
         targetDate:
           type: string
           format: date
+        action:
+          type: string
+          enum: [toggle, increment, decrement]
+          default: toggle
 
     TaskCompletionResponse:
       type: object
