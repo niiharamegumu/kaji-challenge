@@ -154,8 +154,18 @@ export interface UpdateTaskRequest {
   requiredCompletionsPerWeek?: number;
 }
 
+export type ToggleTaskCompletionRequestAction = typeof ToggleTaskCompletionRequestAction[keyof typeof ToggleTaskCompletionRequestAction];
+
+
+export const ToggleTaskCompletionRequestAction = {
+  toggle: 'toggle',
+  increment: 'increment',
+  decrement: 'decrement',
+} as const;
+
 export interface ToggleTaskCompletionRequest {
   targetDate: string;
+  action?: ToggleTaskCompletionRequestAction;
 }
 
 export interface TaskCompletionResponse {
@@ -715,7 +725,7 @@ export const deleteTask = async (taskId: string, options?: RequestInit): Promise
 
 
 /**
- * @summary Toggle task completion in target period
+ * @summary Update task completion in target period
  */
 export type postTaskCompletionToggleResponse200 = {
   data: TaskCompletionResponse

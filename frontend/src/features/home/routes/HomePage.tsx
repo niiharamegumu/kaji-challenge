@@ -1,5 +1,4 @@
-import { useAtom } from "jotai";
-import { useAtomValue } from "jotai";
+import { useAtom, useAtomValue } from "jotai";
 import { useMemo } from "react";
 
 import { isLoggedInAtom } from "../../../state/session";
@@ -23,17 +22,11 @@ export function HomePage() {
     if (home == null) {
       return "0/0";
     }
-    const done = home.weeklyTasks.reduce(
-      (acc, item) =>
-        acc +
-        Math.min(item.weekCompletedCount, item.requiredCompletionsPerWeek),
-      0,
-    );
-    const total = home.weeklyTasks.reduce(
-      (acc, item) => acc + item.requiredCompletionsPerWeek,
-      0,
-    );
-    return `${done}/${total}`;
+    const completedTasks = home.weeklyTasks.filter(
+      (item) => item.weekCompletedCount >= item.requiredCompletionsPerWeek,
+    ).length;
+    const totalTasks = home.weeklyTasks.length;
+    return `${completedTasks}/${totalTasks}`;
   }, [home]);
 
   return (
@@ -41,7 +34,7 @@ export function HomePage() {
       <DailyTasksPanel
         items={home?.dailyTasks ?? []}
         onToggle={(taskId) => {
-          void toggleMutation.mutateAsync(taskId);
+          void toggleMutation.mutateAsync({ taskId, action: "toggle" });
         }}
       />
       <WeeklyTasksPanel
@@ -49,7 +42,13 @@ export function HomePage() {
         elapsedDaysInWeek={home?.elapsedDaysInWeek ?? 0}
         weeklyProgress={weeklyProgress}
         onToggle={(taskId) => {
-          void toggleMutation.mutateAsync(taskId);
+          void toggleMutation.mutateAsync({ taskId, action: "toggle" });
+        }}
+        onIncrement={(taskId) => {
+          void toggleMutation.mutateAsync({ taskId, action: "increment" });
+        }}
+        onDecrement={(taskId) => {
+          void toggleMutation.mutateAsync({ taskId, action: "decrement" });
         }}
       />
     </section>
