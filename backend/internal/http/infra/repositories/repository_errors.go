@@ -18,10 +18,13 @@ func mapInfraErr(err error) error {
 		strings.Contains(msg, "missing session cookie"),
 		strings.Contains(msg, "invalid session cookie"):
 		return fmt.Errorf("%w: %v", application.ErrUnauthorized, err)
+	case strings.Contains(msg, "forbidden"):
+		return fmt.Errorf("%w: %v", application.ErrForbidden, err)
 	case strings.Contains(msg, "not found"):
 		return fmt.Errorf("%w: %v", application.ErrNotFound, err)
 	case strings.Contains(msg, "max uses exceeded"),
 		strings.Contains(msg, "already belongs to a team"),
+		strings.Contains(msg, "already joined team"),
 		strings.Contains(msg, "duplicate key value violates unique constraint"):
 		return fmt.Errorf("%w: %v", application.ErrConflict, err)
 	case strings.Contains(msg, "violates foreign key constraint"),
