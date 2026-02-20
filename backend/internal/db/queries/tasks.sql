@@ -33,3 +33,9 @@ WHERE id = $1;
 -- name: DeleteTask :exec
 DELETE FROM tasks
 WHERE id = $1;
+
+-- name: ClearTaskAssigneeByTeamAndUser :exec
+UPDATE tasks
+SET assignee_user_id = NULL
+WHERE team_id = $1
+  AND assignee_user_id = NULLIF($2, '')::uuid;

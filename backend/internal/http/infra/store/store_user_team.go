@@ -3,8 +3,10 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 	dbsqlc "github.com/megu/kaji-challenge/backend/internal/db/sqlc"
@@ -42,6 +44,7 @@ func (s *Store) getOrCreateUserLocked(ctx context.Context, email, displayName st
 	}
 	if err := s.q.CreateTeam(ctx, dbsqlc.CreateTeamParams{
 		ID:        teamID,
+		Name:      defaultOwnTeamName(user.Name),
 		CreatedAt: toPgTimestamptz(now),
 	}); err != nil {
 		return "", userRecord{}, err
@@ -49,7 +52,7 @@ func (s *Store) getOrCreateUserLocked(ctx context.Context, email, displayName st
 	if err := s.q.AddTeamMember(ctx, dbsqlc.AddTeamMemberParams{
 		TeamID:    teamID,
 		UserID:    user.ID,
-		Role:      string(api.Owner),
+		Role:      string(api.TeamMembershipRoleOwner),
 		CreatedAt: toPgTimestamptz(now),
 	}); err != nil {
 		return "", userRecord{}, err
@@ -68,11 +71,11 @@ func (s *Store) GetMe(ctx context.Context, userID string) (api.MeResponse, error
 	}
 	memberships := make([]api.TeamMembership, 0, len(mRows))
 	for _, m := range mRows {
-		role := api.Member
-		if m.Role == string(api.Owner) {
-			role = api.Owner
+		role := api.TeamMembershipRoleMember
+		if m.Role == string(api.TeamMembershipRoleOwner) {
+			role = api.TeamMembershipRoleOwner
 		}
-		memberships = append(memberships, api.TeamMembership{TeamId: m.TeamID, Role: role})
+		memberships = append(memberships, api.TeamMembership{TeamId: m.TeamID, Role: role, TeamName: m.TeamName})
 	}
 	return api.MeResponse{
 		User: api.User{
@@ -85,20 +88,29 @@ func (s *Store) GetMe(ctx context.Context, userID string) (api.MeResponse, error
 	}, nil
 }
 
+func (s *Store) PatchMeNickname(ctx context.Context, userID string, req api.UpdateNicknameRequest) (api.UpdateNicknameResponse, error) {
+	nickname, err := normalizeNickname(req.Nickname)
+	if err != nil {
+		return api.UpdateNicknameResponse{}, err
+	}
+	if err := s.q.UpdateUserNickname(ctx, dbsqlc.UpdateUserNicknameParams{ID: userID, Column2: nickname}); err != nil {
+		return api.UpdateNicknameResponse{}, err
+	}
+	return api.UpdateNicknameResponse{Nickname: nickname, EffectiveName: nickname}, nil
+}
+
 func (s *Store) CreateInvite(ctx context.Context, userID string, req api.CreateInviteRequest) (api.InviteCodeResponse, error) {
-	teamID, err := s.primaryTeamLocked(ctx, userID)
+	membership, err := s.primaryMembershipLocked(ctx, userID)
 	if err != nil {
 		return api.InviteCodeResponse{}, err
 	}
+	if membership.Role != string(api.TeamMembershipRoleOwner) {
+		return api.InviteCodeResponse{}, errors.New("forbidden: owner role required")
+	}
 
-	maxUses := 1
 	expiresInHours := 72
 	if req.ExpiresInHours != nil {
 		expiresInHours = *req.ExpiresInHours
-	}
-	maxUses32, err := safeInt32(maxUses, "max uses")
-	if err != nil {
-		return api.InviteCodeResponse{}, err
 	}
 
 	raw, err := randomToken()
@@ -115,15 +127,13 @@ func (s *Store) CreateInvite(ctx context.Context, userID string, req api.CreateI
 		_ = tx.Rollback(ctx)
 	}()
 	qtx := s.q.WithTx(tx)
-	if err := qtx.DeleteInviteCodesByTeamID(ctx, teamID); err != nil {
+	if err := qtx.DeleteInviteCodesByTeamID(ctx, membership.TeamID); err != nil {
 		return api.InviteCodeResponse{}, err
 	}
 	if err := qtx.CreateInviteCode(ctx, dbsqlc.CreateInviteCodeParams{
 		Code:      code,
-		TeamID:    teamID,
+		TeamID:    membership.TeamID,
 		ExpiresAt: toPgTimestamptz(expiresAt),
-		MaxUses:   maxUses32,
-		UsedCount: 0,
 	}); err != nil {
 		return api.InviteCodeResponse{}, err
 	}
@@ -133,11 +143,76 @@ func (s *Store) CreateInvite(ctx context.Context, userID string, req api.CreateI
 
 	return api.InviteCodeResponse{
 		Code:      code,
-		TeamId:    teamID,
+		TeamId:    membership.TeamID,
 		ExpiresAt: expiresAt,
-		MaxUses:   maxUses,
-		UsedCount: 0,
 	}, nil
+}
+
+func (s *Store) GetTeamCurrentInvite(ctx context.Context, userID string) (api.InviteCodeResponse, error) {
+	teamID, err := s.primaryTeamLocked(ctx, userID)
+	if err != nil {
+		return api.InviteCodeResponse{}, err
+	}
+	invite, err := s.q.GetLatestInviteCodeByTeamID(ctx, teamID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return api.InviteCodeResponse{}, errors.New("invite code not found")
+		}
+		return api.InviteCodeResponse{}, err
+	}
+	return api.InviteCodeResponse{
+		Code:      invite.Code,
+		TeamId:    invite.TeamID,
+		ExpiresAt: invite.ExpiresAt.Time.In(s.loc),
+	}, nil
+}
+
+func (s *Store) PatchTeamCurrent(ctx context.Context, userID string, req api.UpdateCurrentTeamRequest) (api.TeamInfoResponse, error) {
+	membership, err := s.primaryMembershipLocked(ctx, userID)
+	if err != nil {
+		return api.TeamInfoResponse{}, err
+	}
+	teamName, err := normalizeTeamName(req.Name)
+	if err != nil {
+		return api.TeamInfoResponse{}, err
+	}
+	if err := s.q.UpdateTeamName(ctx, dbsqlc.UpdateTeamNameParams{ID: membership.TeamID, Name: teamName}); err != nil {
+		return api.TeamInfoResponse{}, err
+	}
+	return api.TeamInfoResponse{TeamId: membership.TeamID, Name: teamName}, nil
+}
+
+func (s *Store) GetTeamCurrentMembers(ctx context.Context, userID string) (api.TeamMembersResponse, error) {
+	teamID, err := s.primaryTeamLocked(ctx, userID)
+	if err != nil {
+		return api.TeamMembersResponse{}, err
+	}
+	rows, err := s.q.ListTeamMembersByTeamID(ctx, teamID)
+	if err != nil {
+		return api.TeamMembersResponse{}, err
+	}
+	items := make([]api.TeamMember, 0, len(rows))
+	for _, row := range rows {
+		role := api.TeamMemberRoleMember
+		if row.Role == string(api.TeamMembershipRoleOwner) {
+			role = api.TeamMemberRoleOwner
+		}
+		effective := effectiveName(row.DisplayName, row.Nickname)
+		var nickname *string
+		if strings.TrimSpace(row.Nickname) != "" {
+			n := row.Nickname
+			nickname = &n
+		}
+		items = append(items, api.TeamMember{
+			UserId:        row.UserID,
+			DisplayName:   row.DisplayName,
+			Nickname:      nickname,
+			EffectiveName: effective,
+			JoinedAt:      row.CreatedAt.Time.In(s.loc),
+			Role:          role,
+		})
+	}
+	return api.TeamMembersResponse{Items: items}, nil
 }
 
 func (s *Store) JoinTeam(ctx context.Context, userID, code string) (api.JoinTeamResponse, error) {
@@ -150,21 +225,16 @@ func (s *Store) JoinTeam(ctx context.Context, userID, code string) (api.JoinTeam
 	if invite.ExpiresAt.Time.In(s.loc).Before(now) {
 		return api.JoinTeamResponse{}, errors.New("invite code expired")
 	}
-	if invite.UsedCount >= invite.MaxUses {
-		return api.JoinTeamResponse{}, errors.New("invite code max uses exceeded")
-	}
 
 	memberships, err := s.q.ListMembershipsByUserID(ctx, userID)
 	if err != nil {
 		return api.JoinTeamResponse{}, err
 	}
+
 	for _, m := range memberships {
 		if m.TeamID == invite.TeamID {
-			return api.JoinTeamResponse{TeamId: invite.TeamID}, nil
+			return api.JoinTeamResponse{}, errors.New("already joined team")
 		}
-	}
-	if len(memberships) > 0 {
-		return api.JoinTeamResponse{}, errors.New("user already belongs to a team")
 	}
 
 	tx, err := s.db.Begin(ctx)
@@ -175,17 +245,24 @@ func (s *Store) JoinTeam(ctx context.Context, userID, code string) (api.JoinTeam
 		_ = tx.Rollback(ctx)
 	}()
 	qtx := s.q.WithTx(tx)
-	rows, err := qtx.DeleteInviteCode(ctx, code)
-	if err != nil {
-		return api.JoinTeamResponse{}, err
+
+	if len(memberships) > 0 {
+		current := memberships[0]
+		deletedOldTeam, err := s.detachFromCurrentTeam(ctx, qtx, userID, current.TeamID, current.Role)
+		if err != nil {
+			return api.JoinTeamResponse{}, err
+		}
+		if !deletedOldTeam {
+			if err := qtx.DeleteTeamMember(ctx, dbsqlc.DeleteTeamMemberParams{TeamID: current.TeamID, UserID: userID}); err != nil {
+				return api.JoinTeamResponse{}, err
+			}
+		}
 	}
-	if rows == 0 {
-		return api.JoinTeamResponse{}, errors.New("invite code max uses exceeded")
-	}
+
 	if err := qtx.AddTeamMember(ctx, dbsqlc.AddTeamMemberParams{
 		TeamID:    invite.TeamID,
 		UserID:    userID,
-		Role:      string(api.Member),
+		Role:      string(api.TeamMembershipRoleMember),
 		CreatedAt: toPgTimestamptz(now),
 	}); err != nil {
 		return api.JoinTeamResponse{}, err
@@ -196,13 +273,152 @@ func (s *Store) JoinTeam(ctx context.Context, userID, code string) (api.JoinTeam
 	return api.JoinTeamResponse{TeamId: invite.TeamID}, nil
 }
 
+func (s *Store) PostTeamLeave(ctx context.Context, userID string) (api.JoinTeamResponse, error) {
+	memberships, err := s.q.ListMembershipsByUserID(ctx, userID)
+	if err != nil {
+		return api.JoinTeamResponse{}, err
+	}
+	if len(memberships) == 0 {
+		return api.JoinTeamResponse{}, errors.New("user has no team membership")
+	}
+	current := memberships[0]
+	user, err := s.q.GetUserByID(ctx, userID)
+	if err != nil {
+		return api.JoinTeamResponse{}, err
+	}
+
+	now := time.Now().In(s.loc)
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return api.JoinTeamResponse{}, err
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+	qtx := s.q.WithTx(tx)
+
+	deletedOldTeam, err := s.detachFromCurrentTeam(ctx, qtx, userID, current.TeamID, current.Role)
+	if err != nil {
+		return api.JoinTeamResponse{}, err
+	}
+	if !deletedOldTeam {
+		if err := qtx.DeleteTeamMember(ctx, dbsqlc.DeleteTeamMemberParams{TeamID: current.TeamID, UserID: userID}); err != nil {
+			return api.JoinTeamResponse{}, err
+		}
+	}
+
+	newTeamID := s.nextID("team")
+	if err := qtx.CreateTeam(ctx, dbsqlc.CreateTeamParams{
+		ID:        newTeamID,
+		Name:      defaultOwnTeamName(effectiveName(user.DisplayName, user.Nickname)),
+		CreatedAt: toPgTimestamptz(now),
+	}); err != nil {
+		return api.JoinTeamResponse{}, err
+	}
+	if err := qtx.AddTeamMember(ctx, dbsqlc.AddTeamMemberParams{
+		TeamID:    newTeamID,
+		UserID:    userID,
+		Role:      string(api.TeamMembershipRoleOwner),
+		CreatedAt: toPgTimestamptz(now),
+	}); err != nil {
+		return api.JoinTeamResponse{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return api.JoinTeamResponse{}, err
+	}
+	return api.JoinTeamResponse{TeamId: newTeamID}, nil
+}
+
+func (s *Store) detachFromCurrentTeam(ctx context.Context, qtx *dbsqlc.Queries, userID, teamID, role string) (bool, error) {
+	if err := qtx.ClearTaskAssigneeByTeamAndUser(ctx, dbsqlc.ClearTaskAssigneeByTeamAndUserParams{TeamID: teamID, Column2: userID}); err != nil {
+		return false, err
+	}
+
+	if role != string(api.TeamMembershipRoleOwner) {
+		return false, nil
+	}
+
+	oldestOtherUserID, err := qtx.GetOldestOtherTeamMember(ctx, dbsqlc.GetOldestOtherTeamMemberParams{TeamID: teamID, UserID: userID})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			if err := qtx.DeleteTeam(ctx, teamID); err != nil {
+				return false, err
+			}
+			return true, nil
+		}
+		return false, err
+	}
+
+	if err := qtx.UpdateTeamMemberRole(ctx, dbsqlc.UpdateTeamMemberRoleParams{TeamID: teamID, UserID: oldestOtherUserID, Role: string(api.TeamMembershipRoleOwner)}); err != nil {
+		return false, err
+	}
+
+	return false, nil
+}
+
 func (s *Store) primaryTeamLocked(ctx context.Context, userID string) (string, error) {
-	list, err := s.q.ListMembershipsByUserID(ctx, userID)
+	membership, err := s.primaryMembershipLocked(ctx, userID)
 	if err != nil {
 		return "", err
 	}
-	if len(list) == 0 {
-		return "", errors.New("user has no team membership")
+	return membership.TeamID, nil
+}
+
+func (s *Store) primaryMembershipLocked(ctx context.Context, userID string) (dbsqlc.ListMembershipsByUserIDRow, error) {
+	list, err := s.q.ListMembershipsByUserID(ctx, userID)
+	if err != nil {
+		return dbsqlc.ListMembershipsByUserIDRow{}, err
 	}
-	return list[0].TeamID, nil
+	if len(list) == 0 {
+		return dbsqlc.ListMembershipsByUserIDRow{}, errors.New("user has no team membership")
+	}
+	return list[0], nil
+}
+
+func normalizeNickname(raw string) (string, error) {
+	nickname := strings.TrimSpace(raw)
+	if nickname == "" {
+		return "", errors.New("nickname is required")
+	}
+	if count := utf8.RuneCountInString(nickname); count < 1 || count > 30 {
+		return "", fmt.Errorf("nickname must be between %d and %d characters", 1, 30)
+	}
+	return nickname, nil
+}
+
+func normalizeTeamName(raw string) (string, error) {
+	name := strings.TrimSpace(raw)
+	if name == "" {
+		return "", errors.New("team name is required")
+	}
+	if count := utf8.RuneCountInString(name); count < 1 || count > 50 {
+		return "", fmt.Errorf("team name must be between %d and %d characters", 1, 50)
+	}
+	return name, nil
+}
+
+func effectiveName(displayName, nickname string) string {
+	trimmedNickname := strings.TrimSpace(nickname)
+	if trimmedNickname != "" {
+		return trimmedNickname
+	}
+	trimmedDisplayName := strings.TrimSpace(displayName)
+	if trimmedDisplayName != "" {
+		return trimmedDisplayName
+	}
+	return "User"
+}
+
+func defaultOwnTeamName(base string) string {
+	name := strings.TrimSpace(base)
+	if name == "" {
+		name = "My Team"
+	}
+	name = name + " Team"
+	if utf8.RuneCountInString(name) > 50 {
+		runes := []rune(name)
+		name = string(runes[:50])
+	}
+	return name
 }

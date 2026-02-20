@@ -37,10 +37,25 @@ func (m mockTeamService) GetMe(context.Context, string) (api.MeResponse, error) 
 	}
 	return api.MeResponse{}, nil
 }
+func (m mockTeamService) PatchMeNickname(context.Context, string, api.UpdateNicknameRequest) (api.UpdateNicknameResponse, error) {
+	return api.UpdateNicknameResponse{}, nil
+}
 func (m mockTeamService) CreateInvite(context.Context, string, api.CreateInviteRequest) (api.InviteCodeResponse, error) {
 	return api.InviteCodeResponse{}, nil
 }
+func (m mockTeamService) GetTeamCurrentInvite(context.Context, string) (api.InviteCodeResponse, error) {
+	return api.InviteCodeResponse{}, nil
+}
+func (m mockTeamService) PatchTeamCurrent(context.Context, string, api.UpdateCurrentTeamRequest) (api.TeamInfoResponse, error) {
+	return api.TeamInfoResponse{}, nil
+}
+func (m mockTeamService) GetTeamCurrentMembers(context.Context, string) (api.TeamMembersResponse, error) {
+	return api.TeamMembersResponse{}, nil
+}
 func (m mockTeamService) JoinTeam(context.Context, string, string) (api.JoinTeamResponse, error) {
+	return api.JoinTeamResponse{}, nil
+}
+func (m mockTeamService) PostTeamLeave(context.Context, string) (api.JoinTeamResponse, error) {
 	return api.JoinTeamResponse{}, nil
 }
 

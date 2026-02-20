@@ -11,6 +11,23 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const clearTaskAssigneeByTeamAndUser = `-- name: ClearTaskAssigneeByTeamAndUser :exec
+UPDATE tasks
+SET assignee_user_id = NULL
+WHERE team_id = $1
+  AND assignee_user_id = NULLIF($2, '')::uuid
+`
+
+type ClearTaskAssigneeByTeamAndUserParams struct {
+	TeamID  string      `json:"team_id"`
+	Column2 interface{} `json:"column_2"`
+}
+
+func (q *Queries) ClearTaskAssigneeByTeamAndUser(ctx context.Context, arg ClearTaskAssigneeByTeamAndUserParams) error {
+	_, err := q.db.Exec(ctx, clearTaskAssigneeByTeamAndUser, arg.TeamID, arg.Column2)
+	return err
+}
+
 const createTask = `-- name: CreateTask :exec
 INSERT INTO tasks (id, team_id, title, notes, type, penalty_points, assignee_user_id, is_active, required_completions_per_week, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, '')::uuid, $8, $9, $10, $11)

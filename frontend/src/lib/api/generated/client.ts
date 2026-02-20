@@ -48,6 +48,7 @@ export const TeamMembershipRole = {
 export interface TeamMembership {
   teamId: string;
   role: TeamMembershipRole;
+  teamName: string;
 }
 
 export interface MeResponse {
@@ -61,19 +62,12 @@ export interface CreateInviteRequest {
    * @maximum 720
    */
   expiresInHours?: number;
-  /**
-   * @minimum 1
-   * @maximum 100
-   */
-  maxUses?: number;
 }
 
 export interface InviteCodeResponse {
   code: string;
   teamId: string;
   expiresAt: string;
-  maxUses: number;
-  usedCount: number;
 }
 
 export interface JoinTeamRequest {
@@ -86,6 +80,54 @@ export interface JoinTeamRequest {
 
 export interface JoinTeamResponse {
   teamId: string;
+}
+
+export interface UpdateCurrentTeamRequest {
+  /**
+   * @minLength 1
+   * @maxLength 50
+   */
+  name: string;
+}
+
+export interface TeamInfoResponse {
+  teamId: string;
+  name: string;
+}
+
+export type TeamMemberRole = typeof TeamMemberRole[keyof typeof TeamMemberRole];
+
+
+export const TeamMemberRole = {
+  owner: 'owner',
+  member: 'member',
+} as const;
+
+export interface TeamMember {
+  userId: string;
+  displayName: string;
+  /** @nullable */
+  nickname?: string | null;
+  effectiveName: string;
+  joinedAt: string;
+  role: TeamMemberRole;
+}
+
+export interface TeamMembersResponse {
+  items: TeamMember[];
+}
+
+export interface UpdateNicknameRequest {
+  /**
+   * @minLength 1
+   * @maxLength 30
+   */
+  nickname: string;
+}
+
+export interface UpdateNicknameResponse {
+  nickname: string;
+  effectiveName: string;
 }
 
 export type TaskType = typeof TaskType[keyof typeof TaskType];
@@ -497,6 +539,43 @@ export const getMe = async ( options?: RequestInit): Promise<getMeResponse> => {
 
 
 /**
+ * @summary Update current user nickname
+ */
+export type patchMeNicknameResponse200 = {
+  data: UpdateNicknameResponse
+  status: 200
+}
+    
+export type patchMeNicknameResponseSuccess = (patchMeNicknameResponse200) & {
+  headers: Headers;
+};
+;
+
+export type patchMeNicknameResponse = (patchMeNicknameResponseSuccess)
+
+export const getPatchMeNicknameUrl = () => {
+
+
+  
+
+  return `/v1/me/nickname`
+}
+
+export const patchMeNickname = async (updateNicknameRequest: UpdateNicknameRequest, options?: RequestInit): Promise<patchMeNicknameResponse> => {
+  
+  return customFetch<patchMeNicknameResponse>(getPatchMeNicknameUrl(),
+  {      
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      updateNicknameRequest,)
+  }
+);}
+
+
+
+/**
  * @summary Create invite code
  */
 export type postTeamInviteResponse201 = {
@@ -534,6 +613,115 @@ export const postTeamInvite = async (createInviteRequest?: CreateInviteRequest, 
 
 
 /**
+ * @summary Get current team invite code
+ */
+export type getTeamCurrentInviteResponse200 = {
+  data: InviteCodeResponse
+  status: 200
+}
+    
+export type getTeamCurrentInviteResponseSuccess = (getTeamCurrentInviteResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getTeamCurrentInviteResponse = (getTeamCurrentInviteResponseSuccess)
+
+export const getGetTeamCurrentInviteUrl = () => {
+
+
+  
+
+  return `/v1/teams/invites/current`
+}
+
+export const getTeamCurrentInvite = async ( options?: RequestInit): Promise<getTeamCurrentInviteResponse> => {
+  
+  return customFetch<getTeamCurrentInviteResponse>(getGetTeamCurrentInviteUrl(),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+
+
+
+/**
+ * @summary Update current team name
+ */
+export type patchTeamCurrentResponse200 = {
+  data: TeamInfoResponse
+  status: 200
+}
+    
+export type patchTeamCurrentResponseSuccess = (patchTeamCurrentResponse200) & {
+  headers: Headers;
+};
+;
+
+export type patchTeamCurrentResponse = (patchTeamCurrentResponseSuccess)
+
+export const getPatchTeamCurrentUrl = () => {
+
+
+  
+
+  return `/v1/teams/current`
+}
+
+export const patchTeamCurrent = async (updateCurrentTeamRequest: UpdateCurrentTeamRequest, options?: RequestInit): Promise<patchTeamCurrentResponse> => {
+  
+  return customFetch<patchTeamCurrentResponse>(getPatchTeamCurrentUrl(),
+  {      
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      updateCurrentTeamRequest,)
+  }
+);}
+
+
+
+/**
+ * @summary List current team members by joined date
+ */
+export type getTeamCurrentMembersResponse200 = {
+  data: TeamMembersResponse
+  status: 200
+}
+    
+export type getTeamCurrentMembersResponseSuccess = (getTeamCurrentMembersResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getTeamCurrentMembersResponse = (getTeamCurrentMembersResponseSuccess)
+
+export const getGetTeamCurrentMembersUrl = () => {
+
+
+  
+
+  return `/v1/teams/current/members`
+}
+
+export const getTeamCurrentMembers = async ( options?: RequestInit): Promise<getTeamCurrentMembersResponse> => {
+  
+  return customFetch<getTeamCurrentMembersResponse>(getGetTeamCurrentMembersUrl(),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+
+
+
+/**
  * @summary Join team by invite code
  */
 export type postTeamJoinResponse200 = {
@@ -565,6 +753,42 @@ export const postTeamJoin = async (joinTeamRequest: JoinTeamRequest, options?: R
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(
       joinTeamRequest,)
+  }
+);}
+
+
+
+/**
+ * @summary Leave current team and create a new own team
+ */
+export type postTeamLeaveResponse200 = {
+  data: JoinTeamResponse
+  status: 200
+}
+    
+export type postTeamLeaveResponseSuccess = (postTeamLeaveResponse200) & {
+  headers: Headers;
+};
+;
+
+export type postTeamLeaveResponse = (postTeamLeaveResponseSuccess)
+
+export const getPostTeamLeaveUrl = () => {
+
+
+  
+
+  return `/v1/teams/leave`
+}
+
+export const postTeamLeave = async ( options?: RequestInit): Promise<postTeamLeaveResponse> => {
+  
+  return customFetch<postTeamLeaveResponse>(getPostTeamLeaveUrl(),
+  {      
+    ...options,
+    method: 'POST'
+    
+    
   }
 );}
 

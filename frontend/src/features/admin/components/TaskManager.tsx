@@ -133,7 +133,7 @@ export function TaskManager({
             </div>
           )}
         </div>
-        <div className="mt-1 flex justify-end">
+        <div className="mt-1 flex justify-start">
           <button
             type="button"
             className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 py-2 text-white transition-colors duration-200 hover:bg-stone-800 sm:w-auto sm:min-w-44"

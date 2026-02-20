@@ -95,6 +95,23 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MeResponse'
+  /v1/me/nickname:
+    patch:
+      operationId: patchMeNickname
+      summary: Update current user nickname
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateNicknameRequest'
+      responses:
+        '200':
+          description: Nickname updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateNicknameResponse'
 
   /v1/teams/invites:
     post:
@@ -113,6 +130,45 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/InviteCodeResponse'
+  /v1/teams/invites/current:
+    get:
+      operationId: getTeamCurrentInvite
+      summary: Get current team invite code
+      responses:
+        '200':
+          description: Current invite
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InviteCodeResponse'
+  /v1/teams/current:
+    patch:
+      operationId: patchTeamCurrent
+      summary: Update current team name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCurrentTeamRequest'
+      responses:
+        '200':
+          description: Team updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamInfoResponse'
+  /v1/teams/current/members:
+    get:
+      operationId: getTeamCurrentMembers
+      summary: List current team members by joined date
+      responses:
+        '200':
+          description: Team members
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamMembersResponse'
 
   /v1/teams/join:
     post:
@@ -127,6 +183,17 @@ paths:
       responses:
         '200':
           description: Joined
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JoinTeamResponse'
+  /v1/teams/leave:
+    post:
+      operationId: postTeamLeave
+      summary: Leave current team and create a new own team
+      responses:
+        '200':
+          description: Left and recreated own team
           content:
             application/json:
               schema:
@@ -448,13 +515,15 @@ components:
 
     TeamMembership:
       type: object
-      required: [teamId, role]
+      required: [teamId, role, teamName]
       properties:
         teamId:
           type: string
         role:
           type: string
           enum: [owner, member]
+        teamName:
+          type: string
 
     CreateInviteRequest:
       type: object
@@ -464,15 +533,10 @@ components:
           minimum: 1
           maximum: 720
           default: 72
-        maxUses:
-          type: integer
-          minimum: 1
-          maximum: 100
-          default: 1
 
     InviteCodeResponse:
       type: object
-      required: [code, teamId, expiresAt, maxUses, usedCount]
+      required: [code, teamId, expiresAt]
       properties:
         code:
           type: string
@@ -481,10 +545,6 @@ components:
         expiresAt:
           type: string
           format: date-time
-        maxUses:
-          type: integer
-        usedCount:
-          type: integer
 
     JoinTeamRequest:
       type: object
@@ -500,6 +560,71 @@ components:
       required: [teamId]
       properties:
         teamId:
+          type: string
+
+    UpdateCurrentTeamRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 50
+
+    TeamInfoResponse:
+      type: object
+      required: [teamId, name]
+      properties:
+        teamId:
+          type: string
+        name:
+          type: string
+
+    TeamMember:
+      type: object
+      required: [userId, displayName, effectiveName, joinedAt, role]
+      properties:
+        userId:
+          type: string
+        displayName:
+          type: string
+        nickname:
+          type: string
+          nullable: true
+        effectiveName:
+          type: string
+        joinedAt:
+          type: string
+          format: date-time
+        role:
+          type: string
+          enum: [owner, member]
+
+    TeamMembersResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TeamMember'
+
+    UpdateNicknameRequest:
+      type: object
+      required: [nickname]
+      properties:
+        nickname:
+          type: string
+          minLength: 1
+          maxLength: 30
+
+    UpdateNicknameResponse:
+      type: object
+      required: [nickname, effectiveName]
+      properties:
+        nickname:
+          type: string
+        effectiveName:
           type: string
 
     TaskType:

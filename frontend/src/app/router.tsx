@@ -62,12 +62,16 @@ export const router = createBrowserRouter([
         ),
       },
       {
-        path: "admin/invites",
+        path: "admin/settings",
         element: (
           <Suspense fallback={adminFallback}>
             <AdminInvitesPage />
           </Suspense>
         ),
+      },
+      {
+        path: "admin/invites",
+        element: <Navigate to="/admin/settings" replace />,
       },
       {
         path: "admin/summary",

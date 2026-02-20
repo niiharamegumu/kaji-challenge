@@ -60,8 +60,6 @@ type inviteCode struct {
 	Code      string
 	TeamID    string
 	ExpiresAt time.Time
-	MaxUses   int
-	UsedCount int
 }
 
 type taskRecord struct {

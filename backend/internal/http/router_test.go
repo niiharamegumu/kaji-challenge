@@ -95,8 +95,8 @@ func TestProtectedRouteRejectsExpiredSession(t *testing.T) {
 
 func TestInviteJoinFlow(t *testing.T) {
 	r := newTestRouter(t)
-	ownerToken := login(t, r)
-	inviteRes := doRequest(t, r, http.MethodPost, "/v1/teams/invites", `{"maxUses":2,"expiresInHours":72}`, ownerToken)
+	ownerToken := loginAs(t, r, "invite-flow-owner@example.com")
+	inviteRes := doRequest(t, r, http.MethodPost, "/v1/teams/invites", `{"expiresInHours":72}`, ownerToken)
 	if inviteRes.Code != http.StatusCreated {
 		t.Fatalf("expected 201 invite create, got %d: %s", inviteRes.Code, inviteRes.Body.String())
 	}
@@ -109,10 +109,29 @@ func TestInviteJoinFlow(t *testing.T) {
 		t.Fatalf("expected invite code")
 	}
 
-	memberToken := login(t, r)
+	memberToken := loginAs(t, r, "invite-flow-member@example.com")
 	joinRes := doRequest(t, r, http.MethodPost, "/v1/teams/join", `{"code":"`+invite.Code+`"}`, memberToken)
 	if joinRes.Code != http.StatusOK {
 		t.Fatalf("expected 200 join, got %d: %s", joinRes.Code, joinRes.Body.String())
+	}
+}
+
+func TestJoinOwnTeamInviteReturnsConflict(t *testing.T) {
+	r := newTestRouter(t)
+	ownerToken := loginAs(t, r, "owner-join-own-team@example.com")
+	inviteRes := doRequest(t, r, http.MethodPost, "/v1/teams/invites", `{"expiresInHours":72}`, ownerToken)
+	if inviteRes.Code != http.StatusCreated {
+		t.Fatalf("expected 201 invite create, got %d: %s", inviteRes.Code, inviteRes.Body.String())
+	}
+
+	var invite api.InviteCodeResponse
+	if err := json.Unmarshal(inviteRes.Body.Bytes(), &invite); err != nil {
+		t.Fatalf("failed to parse invite response: %v", err)
+	}
+
+	joinRes := doRequest(t, r, http.MethodPost, "/v1/teams/join", `{"code":"`+invite.Code+`"}`, ownerToken)
+	if joinRes.Code != http.StatusConflict {
+		t.Fatalf("expected 409 join own team, got %d: %s", joinRes.Code, joinRes.Body.String())
 	}
 }
 
@@ -120,7 +139,7 @@ func TestInviteCreateRotatesCodeByHardDelete(t *testing.T) {
 	r := newTestRouter(t)
 	ownerToken := loginAs(t, r, "invite-owner-rotate@example.com")
 
-	firstInviteRes := doRequest(t, r, http.MethodPost, "/v1/teams/invites", `{"maxUses":100,"expiresInHours":72}`, ownerToken)
+	firstInviteRes := doRequest(t, r, http.MethodPost, "/v1/teams/invites", `{"expiresInHours":72}`, ownerToken)
 	if firstInviteRes.Code != http.StatusCreated {
 		t.Fatalf("expected first invite create 201, got %d: %s", firstInviteRes.Code, firstInviteRes.Body.String())
 	}
@@ -129,7 +148,7 @@ func TestInviteCreateRotatesCodeByHardDelete(t *testing.T) {
 		t.Fatalf("failed to parse first invite response: %v", err)
 	}
 
-	secondInviteRes := doRequest(t, r, http.MethodPost, "/v1/teams/invites", `{"maxUses":100,"expiresInHours":72}`, ownerToken)
+	secondInviteRes := doRequest(t, r, http.MethodPost, "/v1/teams/invites", `{"expiresInHours":72}`, ownerToken)
 	if secondInviteRes.Code != http.StatusCreated {
 		t.Fatalf("expected second invite create 201, got %d: %s", secondInviteRes.Code, secondInviteRes.Body.String())
 	}
@@ -156,11 +175,11 @@ func TestInviteCreateRotatesCodeByHardDelete(t *testing.T) {
 	}
 }
 
-func TestInviteIsSingleUseByHardDelete(t *testing.T) {
+func TestInviteIsMultiUseUntilExpiration(t *testing.T) {
 	r := newTestRouter(t)
 	ownerToken := loginAs(t, r, "invite-owner-single-use@example.com")
 
-	inviteRes := doRequest(t, r, http.MethodPost, "/v1/teams/invites", `{"maxUses":100,"expiresInHours":72}`, ownerToken)
+	inviteRes := doRequest(t, r, http.MethodPost, "/v1/teams/invites", `{"expiresInHours":72}`, ownerToken)
 	if inviteRes.Code != http.StatusCreated {
 		t.Fatalf("expected invite create 201, got %d: %s", inviteRes.Code, inviteRes.Body.String())
 	}
@@ -181,16 +200,16 @@ func TestInviteIsSingleUseByHardDelete(t *testing.T) {
 	secondMemberID := fetchMeUserID(t, r, secondMemberToken)
 	clearTeamMembershipsForTest(t, secondMemberID)
 	secondJoinRes := doRequest(t, r, http.MethodPost, "/v1/teams/join", `{"code":"`+invite.Code+`"}`, secondMemberToken)
-	if secondJoinRes.Code < 400 || secondJoinRes.Code >= 500 {
-		t.Fatalf("expected second invite join 4xx, got %d: %s", secondJoinRes.Code, secondJoinRes.Body.String())
+	if secondJoinRes.Code != http.StatusOK {
+		t.Fatalf("expected second invite join 200, got %d: %s", secondJoinRes.Code, secondJoinRes.Body.String())
 	}
 }
 
-func TestInviteResponseMaxUsesIsOne(t *testing.T) {
+func TestInviteResponseHasExpiresAt(t *testing.T) {
 	r := newTestRouter(t)
 	ownerToken := loginAs(t, r, "invite-owner-max-uses@example.com")
 
-	inviteRes := doRequest(t, r, http.MethodPost, "/v1/teams/invites", `{"maxUses":100,"expiresInHours":72}`, ownerToken)
+	inviteRes := doRequest(t, r, http.MethodPost, "/v1/teams/invites", `{"expiresInHours":72}`, ownerToken)
 	if inviteRes.Code != http.StatusCreated {
 		t.Fatalf("expected invite create 201, got %d: %s", inviteRes.Code, inviteRes.Body.String())
 	}
@@ -198,8 +217,145 @@ func TestInviteResponseMaxUsesIsOne(t *testing.T) {
 	if err := json.Unmarshal(inviteRes.Body.Bytes(), &invite); err != nil {
 		t.Fatalf("failed to parse invite response: %v", err)
 	}
-	if invite.MaxUses != 1 {
-		t.Fatalf("expected maxUses to be 1, got %d", invite.MaxUses)
+	if invite.ExpiresAt.IsZero() {
+		t.Fatalf("expected expiresAt to be set")
+	}
+}
+
+func TestGetCurrentInviteReturnsLatestForTeam(t *testing.T) {
+	r := newTestRouter(t)
+	ownerToken := loginAs(t, r, "invite-current-owner@example.com")
+
+	inviteRes := doRequest(t, r, http.MethodPost, "/v1/teams/invites", `{"expiresInHours":72}`, ownerToken)
+	if inviteRes.Code != http.StatusCreated {
+		t.Fatalf("expected invite create 201, got %d: %s", inviteRes.Code, inviteRes.Body.String())
+	}
+	var invite api.InviteCodeResponse
+	if err := json.Unmarshal(inviteRes.Body.Bytes(), &invite); err != nil {
+		t.Fatalf("failed to parse invite response: %v", err)
+	}
+
+	currentRes := doRequest(t, r, http.MethodGet, "/v1/teams/invites/current", "", ownerToken)
+	if currentRes.Code != http.StatusOK {
+		t.Fatalf("expected current invite 200, got %d: %s", currentRes.Code, currentRes.Body.String())
+	}
+	var current api.InviteCodeResponse
+	if err := json.Unmarshal(currentRes.Body.Bytes(), &current); err != nil {
+		t.Fatalf("failed to parse current invite response: %v", err)
+	}
+	if current.Code != invite.Code {
+		t.Fatalf("expected current code %s, got %s", invite.Code, current.Code)
+	}
+}
+
+func TestGetCurrentInviteReturnsExpiredInvite(t *testing.T) {
+	r := newTestRouter(t)
+	ownerToken := loginAs(t, r, "invite-current-expired-owner@example.com")
+
+	inviteRes := doRequest(t, r, http.MethodPost, "/v1/teams/invites", `{"expiresInHours":-1}`, ownerToken)
+	if inviteRes.Code != http.StatusCreated {
+		t.Fatalf("expected invite create 201, got %d: %s", inviteRes.Code, inviteRes.Body.String())
+	}
+
+	currentRes := doRequest(t, r, http.MethodGet, "/v1/teams/invites/current", "", ownerToken)
+	if currentRes.Code != http.StatusOK {
+		t.Fatalf("expected current invite 200, got %d: %s", currentRes.Code, currentRes.Body.String())
+	}
+	var current api.InviteCodeResponse
+	if err := json.Unmarshal(currentRes.Body.Bytes(), &current); err != nil {
+		t.Fatalf("failed to parse current invite response: %v", err)
+	}
+	if !current.ExpiresAt.Before(time.Now()) {
+		t.Fatalf("expected expired invite, got expiresAt=%s", current.ExpiresAt)
+	}
+}
+
+func TestPatchMeNicknameAndListMembers(t *testing.T) {
+	r := newTestRouter(t)
+	token := loginAs(t, r, "nickname-owner@example.com")
+
+	patchRes := doRequest(t, r, http.MethodPatch, "/v1/me/nickname", `{"nickname":"にっく"}`, token)
+	if patchRes.Code != http.StatusOK {
+		t.Fatalf("expected nickname patch 200, got %d: %s", patchRes.Code, patchRes.Body.String())
+	}
+
+	membersRes := doRequest(t, r, http.MethodGet, "/v1/teams/current/members", "", token)
+	if membersRes.Code != http.StatusOK {
+		t.Fatalf("expected members 200, got %d: %s", membersRes.Code, membersRes.Body.String())
+	}
+	var members api.TeamMembersResponse
+	if err := json.Unmarshal(membersRes.Body.Bytes(), &members); err != nil {
+		t.Fatalf("failed to parse members response: %v", err)
+	}
+	if len(members.Items) == 0 {
+		t.Fatalf("expected at least one member")
+	}
+	if members.Items[0].EffectiveName != "にっく" {
+		t.Fatalf("expected nickname to be preferred, got %q", members.Items[0].EffectiveName)
+	}
+	if members.Items[0].JoinedAt.IsZero() {
+		t.Fatalf("expected joinedAt")
+	}
+}
+
+func TestPatchTeamCurrentName(t *testing.T) {
+	r := newTestRouter(t)
+	token := loginAs(t, r, "team-name-owner@example.com")
+
+	patchRes := doRequest(t, r, http.MethodPatch, "/v1/teams/current", `{"name":"チーム名テスト"}`, token)
+	if patchRes.Code != http.StatusOK {
+		t.Fatalf("expected team patch 200, got %d: %s", patchRes.Code, patchRes.Body.String())
+	}
+
+	meRes := doRequest(t, r, http.MethodGet, "/v1/me", "", token)
+	if meRes.Code != http.StatusOK {
+		t.Fatalf("expected me 200, got %d: %s", meRes.Code, meRes.Body.String())
+	}
+	var me api.MeResponse
+	if err := json.Unmarshal(meRes.Body.Bytes(), &me); err != nil {
+		t.Fatalf("failed to parse me response: %v", err)
+	}
+	if len(me.Memberships) == 0 || me.Memberships[0].TeamName != "チーム名テスト" {
+		t.Fatalf("expected team name to be updated")
+	}
+}
+
+func TestJoinMovesMembershipAndLeaveRecreatesOwnerTeam(t *testing.T) {
+	r := newTestRouter(t)
+	ownerToken := loginAs(t, r, "move-owner@example.com")
+	joinerToken := loginAs(t, r, "move-joiner@example.com")
+
+	inviteRes := doRequest(t, r, http.MethodPost, "/v1/teams/invites", `{"expiresInHours":72}`, ownerToken)
+	if inviteRes.Code != http.StatusCreated {
+		t.Fatalf("expected invite create 201, got %d: %s", inviteRes.Code, inviteRes.Body.String())
+	}
+	var invite api.InviteCodeResponse
+	if err := json.Unmarshal(inviteRes.Body.Bytes(), &invite); err != nil {
+		t.Fatalf("failed to parse invite response: %v", err)
+	}
+
+	joinRes := doRequest(t, r, http.MethodPost, "/v1/teams/join", `{"code":"`+invite.Code+`"}`, joinerToken)
+	if joinRes.Code != http.StatusOK {
+		t.Fatalf("expected join 200, got %d: %s", joinRes.Code, joinRes.Body.String())
+	}
+	var joined api.JoinTeamResponse
+	if err := json.Unmarshal(joinRes.Body.Bytes(), &joined); err != nil {
+		t.Fatalf("failed to parse join response: %v", err)
+	}
+	if joined.TeamId != invite.TeamId {
+		t.Fatalf("expected join target team %s, got %s", invite.TeamId, joined.TeamId)
+	}
+
+	leaveRes := doRequest(t, r, http.MethodPost, "/v1/teams/leave", "", joinerToken)
+	if leaveRes.Code != http.StatusOK {
+		t.Fatalf("expected leave 200, got %d: %s", leaveRes.Code, leaveRes.Body.String())
+	}
+	var leave api.JoinTeamResponse
+	if err := json.Unmarshal(leaveRes.Body.Bytes(), &leave); err != nil {
+		t.Fatalf("failed to parse leave response: %v", err)
+	}
+	if leave.TeamId == invite.TeamId {
+		t.Fatalf("expected recreated own team id to differ from joined team")
 	}
 }
 
@@ -450,7 +606,7 @@ func TestProtectedWriteRejectsInvalidOrigin(t *testing.T) {
 	r := newTestRouter(t)
 	token := login(t, r)
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/teams/invites", strings.NewReader(`{"maxUses":1}`))
+	req := httptest.NewRequest(http.MethodPost, "/v1/teams/invites", strings.NewReader(`{"expiresInHours":72}`))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Origin", "https://evil.example")
 	req.AddCookie(&http.Cookie{Name: "kaji_session", Value: token})
@@ -530,13 +686,11 @@ func loginAs(t *testing.T, r http.Handler, email string) string {
 	if err != nil {
 		t.Fatalf("failed to parse authorization url: %v", err)
 	}
-	callbackPath := u.RequestURI()
-	sep := "&"
-	if !strings.Contains(callbackPath, "?") {
-		sep = "?"
-	}
-	callbackPath += sep + "mock_email=" + url.QueryEscape(email) + "&mock_name=" + url.QueryEscape("Test User")
-	callbackRes := doRequest(t, r, http.MethodGet, callbackPath, "", "")
+	q := u.Query()
+	q.Set("mock_email", email)
+	q.Set("mock_name", "Test User")
+	u.RawQuery = q.Encode()
+	callbackRes := doRequest(t, r, http.MethodGet, u.RequestURI(), "", "")
 	if callbackRes.Code != http.StatusOK && callbackRes.Code != http.StatusFound {
 		t.Fatalf("auth callback failed: %d %s", callbackRes.Code, callbackRes.Body.String())
 	}

@@ -23,10 +23,16 @@ const (
 	Weekly TaskType = "weekly"
 )
 
+// Defines values for TeamMemberRole.
+const (
+	TeamMemberRoleMember TeamMemberRole = "member"
+	TeamMemberRoleOwner  TeamMemberRole = "owner"
+)
+
 // Defines values for TeamMembershipRole.
 const (
-	Member TeamMembershipRole = "member"
-	Owner  TeamMembershipRole = "owner"
+	TeamMembershipRoleMember TeamMembershipRole = "member"
+	TeamMembershipRoleOwner  TeamMembershipRole = "owner"
 )
 
 // Defines values for ToggleTaskCompletionRequestAction.
@@ -65,7 +71,6 @@ type CloseResponse struct {
 // CreateInviteRequest defines model for CreateInviteRequest.
 type CreateInviteRequest struct {
 	ExpiresInHours *int `json:"expiresInHours,omitempty"`
-	MaxUses        *int `json:"maxUses,omitempty"`
 }
 
 // CreatePenaltyRuleRequest defines model for CreatePenaltyRuleRequest.
@@ -96,9 +101,7 @@ type HealthResponse struct {
 type InviteCodeResponse struct {
 	Code      string    `json:"code"`
 	ExpiresAt time.Time `json:"expiresAt"`
-	MaxUses   int       `json:"maxUses"`
 	TeamId    string    `json:"teamId"`
-	UsedCount int       `json:"usedCount"`
 }
 
 // JoinTeamRequest defines model for JoinTeamRequest.
@@ -189,10 +192,35 @@ type TaskOverviewWeeklyTask struct {
 // TaskType defines model for TaskType.
 type TaskType string
 
+// TeamInfoResponse defines model for TeamInfoResponse.
+type TeamInfoResponse struct {
+	Name   string `json:"name"`
+	TeamId string `json:"teamId"`
+}
+
+// TeamMember defines model for TeamMember.
+type TeamMember struct {
+	DisplayName   string         `json:"displayName"`
+	EffectiveName string         `json:"effectiveName"`
+	JoinedAt      time.Time      `json:"joinedAt"`
+	Nickname      *string        `json:"nickname"`
+	Role          TeamMemberRole `json:"role"`
+	UserId        string         `json:"userId"`
+}
+
+// TeamMemberRole defines model for TeamMember.Role.
+type TeamMemberRole string
+
+// TeamMembersResponse defines model for TeamMembersResponse.
+type TeamMembersResponse struct {
+	Items []TeamMember `json:"items"`
+}
+
 // TeamMembership defines model for TeamMembership.
 type TeamMembership struct {
-	Role   TeamMembershipRole `json:"role"`
-	TeamId string             `json:"teamId"`
+	Role     TeamMembershipRole `json:"role"`
+	TeamId   string             `json:"teamId"`
+	TeamName string             `json:"teamName"`
 }
 
 // TeamMembershipRole defines model for TeamMembership.Role.
@@ -206,6 +234,22 @@ type ToggleTaskCompletionRequest struct {
 
 // ToggleTaskCompletionRequestAction defines model for ToggleTaskCompletionRequest.Action.
 type ToggleTaskCompletionRequestAction string
+
+// UpdateCurrentTeamRequest defines model for UpdateCurrentTeamRequest.
+type UpdateCurrentTeamRequest struct {
+	Name string `json:"name"`
+}
+
+// UpdateNicknameRequest defines model for UpdateNicknameRequest.
+type UpdateNicknameRequest struct {
+	Nickname string `json:"nickname"`
+}
+
+// UpdateNicknameResponse defines model for UpdateNicknameResponse.
+type UpdateNicknameResponse struct {
+	EffectiveName string `json:"effectiveName"`
+	Nickname      string `json:"nickname"`
+}
 
 // UpdatePenaltyRuleRequest defines model for UpdatePenaltyRuleRequest.
 type UpdatePenaltyRuleRequest struct {
@@ -252,6 +296,9 @@ type ListTasksParams struct {
 // PostAuthSessionsExchangeJSONRequestBody defines body for PostAuthSessionsExchange for application/json ContentType.
 type PostAuthSessionsExchangeJSONRequestBody = AuthSessionExchangeRequest
 
+// PatchMeNicknameJSONRequestBody defines body for PatchMeNickname for application/json ContentType.
+type PatchMeNicknameJSONRequestBody = UpdateNicknameRequest
+
 // PostPenaltyRuleJSONRequestBody defines body for PostPenaltyRule for application/json ContentType.
 type PostPenaltyRuleJSONRequestBody = CreatePenaltyRuleRequest
 
@@ -266,6 +313,9 @@ type PatchTaskJSONRequestBody = UpdateTaskRequest
 
 // PostTaskCompletionToggleJSONRequestBody defines body for PostTaskCompletionToggle for application/json ContentType.
 type PostTaskCompletionToggleJSONRequestBody = ToggleTaskCompletionRequest
+
+// PatchTeamCurrentJSONRequestBody defines body for PatchTeamCurrent for application/json ContentType.
+type PatchTeamCurrentJSONRequestBody = UpdateCurrentTeamRequest
 
 // PostTeamInviteJSONRequestBody defines body for PostTeamInvite for application/json ContentType.
 type PostTeamInviteJSONRequestBody = CreateInviteRequest
@@ -302,6 +352,9 @@ type ServerInterface interface {
 	// Current user
 	// (GET /v1/me)
 	GetMe(c *gin.Context)
+	// Update current user nickname
+	// (PATCH /v1/me/nickname)
+	PatchMeNickname(c *gin.Context)
 	// List penalty rules in current team
 	// (GET /v1/penalty-rules)
 	ListPenaltyRules(c *gin.Context)
@@ -335,12 +388,24 @@ type ServerInterface interface {
 	// Update task completion in target period
 	// (POST /v1/tasks/{taskId}/completions/toggle)
 	PostTaskCompletionToggle(c *gin.Context, taskId string)
+	// Update current team name
+	// (PATCH /v1/teams/current)
+	PatchTeamCurrent(c *gin.Context)
+	// List current team members by joined date
+	// (GET /v1/teams/current/members)
+	GetTeamCurrentMembers(c *gin.Context)
 	// Create invite code
 	// (POST /v1/teams/invites)
 	PostTeamInvite(c *gin.Context)
+	// Get current team invite code
+	// (GET /v1/teams/invites/current)
+	GetTeamCurrentInvite(c *gin.Context)
 	// Join team by invite code
 	// (POST /v1/teams/join)
 	PostTeamJoin(c *gin.Context)
+	// Leave current team and create a new own team
+	// (POST /v1/teams/leave)
+	PostTeamLeave(c *gin.Context)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -512,6 +577,21 @@ func (siw *ServerInterfaceWrapper) GetMe(c *gin.Context) {
 	}
 
 	siw.Handler.GetMe(c)
+}
+
+// PatchMeNickname operation middleware
+func (siw *ServerInterfaceWrapper) PatchMeNickname(c *gin.Context) {
+
+	c.Set(CookieAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.PatchMeNickname(c)
 }
 
 // ListPenaltyRules operation middleware
@@ -760,6 +840,36 @@ func (siw *ServerInterfaceWrapper) PostTaskCompletionToggle(c *gin.Context) {
 	siw.Handler.PostTaskCompletionToggle(c, taskId)
 }
 
+// PatchTeamCurrent operation middleware
+func (siw *ServerInterfaceWrapper) PatchTeamCurrent(c *gin.Context) {
+
+	c.Set(CookieAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.PatchTeamCurrent(c)
+}
+
+// GetTeamCurrentMembers operation middleware
+func (siw *ServerInterfaceWrapper) GetTeamCurrentMembers(c *gin.Context) {
+
+	c.Set(CookieAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.GetTeamCurrentMembers(c)
+}
+
 // PostTeamInvite operation middleware
 func (siw *ServerInterfaceWrapper) PostTeamInvite(c *gin.Context) {
 
@@ -775,6 +885,21 @@ func (siw *ServerInterfaceWrapper) PostTeamInvite(c *gin.Context) {
 	siw.Handler.PostTeamInvite(c)
 }
 
+// GetTeamCurrentInvite operation middleware
+func (siw *ServerInterfaceWrapper) GetTeamCurrentInvite(c *gin.Context) {
+
+	c.Set(CookieAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.GetTeamCurrentInvite(c)
+}
+
 // PostTeamJoin operation middleware
 func (siw *ServerInterfaceWrapper) PostTeamJoin(c *gin.Context) {
 
@@ -788,6 +913,21 @@ func (siw *ServerInterfaceWrapper) PostTeamJoin(c *gin.Context) {
 	}
 
 	siw.Handler.PostTeamJoin(c)
+}
+
+// PostTeamLeave operation middleware
+func (siw *ServerInterfaceWrapper) PostTeamLeave(c *gin.Context) {
+
+	c.Set(CookieAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.PostTeamLeave(c)
 }
 
 // GinServerOptions provides options for the Gin server.
@@ -826,6 +966,7 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	router.POST(options.BaseURL+"/v1/auth/logout", wrapper.PostAuthLogout)
 	router.POST(options.BaseURL+"/v1/auth/sessions/exchange", wrapper.PostAuthSessionsExchange)
 	router.GET(options.BaseURL+"/v1/me", wrapper.GetMe)
+	router.PATCH(options.BaseURL+"/v1/me/nickname", wrapper.PatchMeNickname)
 	router.GET(options.BaseURL+"/v1/penalty-rules", wrapper.ListPenaltyRules)
 	router.POST(options.BaseURL+"/v1/penalty-rules", wrapper.PostPenaltyRule)
 	router.DELETE(options.BaseURL+"/v1/penalty-rules/:ruleId", wrapper.DeletePenaltyRule)
@@ -837,6 +978,10 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	router.DELETE(options.BaseURL+"/v1/tasks/:taskId", wrapper.DeleteTask)
 	router.PATCH(options.BaseURL+"/v1/tasks/:taskId", wrapper.PatchTask)
 	router.POST(options.BaseURL+"/v1/tasks/:taskId/completions/toggle", wrapper.PostTaskCompletionToggle)
+	router.PATCH(options.BaseURL+"/v1/teams/current", wrapper.PatchTeamCurrent)
+	router.GET(options.BaseURL+"/v1/teams/current/members", wrapper.GetTeamCurrentMembers)
 	router.POST(options.BaseURL+"/v1/teams/invites", wrapper.PostTeamInvite)
+	router.GET(options.BaseURL+"/v1/teams/invites/current", wrapper.GetTeamCurrentInvite)
 	router.POST(options.BaseURL+"/v1/teams/join", wrapper.PostTeamJoin)
+	router.POST(options.BaseURL+"/v1/teams/leave", wrapper.PostTeamLeave)
 }

@@ -34,36 +34,54 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) error {
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, display_name, created_at
+SELECT id, email, display_name, COALESCE(nickname, '') AS nickname, created_at
 FROM users
 WHERE LOWER(email) = LOWER($1)
 `
 
-func (q *Queries) GetUserByEmail(ctx context.Context, lower string) (User, error) {
+type GetUserByEmailRow struct {
+	ID          string             `json:"id"`
+	Email       string             `json:"email"`
+	DisplayName string             `json:"display_name"`
+	Nickname    string             `json:"nickname"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) GetUserByEmail(ctx context.Context, lower string) (GetUserByEmailRow, error) {
 	row := q.db.QueryRow(ctx, getUserByEmail, lower)
-	var i User
+	var i GetUserByEmailRow
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
 		&i.DisplayName,
+		&i.Nickname,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, email, display_name, created_at
+SELECT id, email, display_name, COALESCE(nickname, '') AS nickname, created_at
 FROM users
 WHERE id = $1
 `
 
-func (q *Queries) GetUserByID(ctx context.Context, id string) (User, error) {
+type GetUserByIDRow struct {
+	ID          string             `json:"id"`
+	Email       string             `json:"email"`
+	DisplayName string             `json:"display_name"`
+	Nickname    string             `json:"nickname"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) GetUserByID(ctx context.Context, id string) (GetUserByIDRow, error) {
 	row := q.db.QueryRow(ctx, getUserByID, id)
-	var i User
+	var i GetUserByIDRow
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
 		&i.DisplayName,
+		&i.Nickname,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -82,5 +100,21 @@ type UpdateUserDisplayNameParams struct {
 
 func (q *Queries) UpdateUserDisplayName(ctx context.Context, arg UpdateUserDisplayNameParams) error {
 	_, err := q.db.Exec(ctx, updateUserDisplayName, arg.ID, arg.DisplayName)
+	return err
+}
+
+const updateUserNickname = `-- name: UpdateUserNickname :exec
+UPDATE users
+SET nickname = NULLIF($2, '')
+WHERE id = $1
+`
+
+type UpdateUserNicknameParams struct {
+	ID      string      `json:"id"`
+	Column2 interface{} `json:"column_2"`
+}
+
+func (q *Queries) UpdateUserNickname(ctx context.Context, arg UpdateUserNicknameParams) error {
+	_, err := q.db.Exec(ctx, updateUserNickname, arg.ID, arg.Column2)
 	return err
 }
