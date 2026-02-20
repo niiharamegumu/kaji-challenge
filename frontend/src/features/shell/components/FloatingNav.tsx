@@ -3,9 +3,9 @@ import {
   CirclePlus,
   House,
   LogOut,
+  Settings,
   Shield,
   ShieldAlert,
-  ShieldPlus,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
@@ -85,9 +85,9 @@ export function FloatingNav({ onLogout }: Props) {
               <ShieldAlert size={18} aria-hidden="true" />
               <span>ペナルティ</span>
             </NavLink>
-            <NavLink to="/admin/invites" className={linkClass}>
-              <ShieldPlus size={18} aria-hidden="true" />
-              <span>招待</span>
+            <NavLink to="/admin/settings" className={linkClass}>
+              <Settings size={18} aria-hidden="true" />
+              <span>設定</span>
             </NavLink>
             <button
               type="button"
