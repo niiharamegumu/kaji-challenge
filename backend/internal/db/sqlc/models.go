@@ -21,8 +21,6 @@ type InviteCode struct {
 	Code      string             `json:"code"`
 	TeamID    string             `json:"team_id"`
 	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
-	MaxUses   int32              `json:"max_uses"`
-	UsedCount int32              `json:"used_count"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
@@ -106,6 +104,7 @@ type TaskCompletionWeekly struct {
 type Team struct {
 	ID        string             `json:"id"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	Name      string             `json:"name"`
 }
 
 type TeamMember struct {
@@ -120,4 +119,5 @@ type User struct {
 	Email       string             `json:"email"`
 	DisplayName string             `json:"display_name"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	Nickname    pgtype.Text        `json:"nickname"`
 }

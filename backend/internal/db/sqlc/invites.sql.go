@@ -12,26 +12,18 @@ import (
 )
 
 const createInviteCode = `-- name: CreateInviteCode :exec
-INSERT INTO invite_codes (code, team_id, expires_at, max_uses, used_count, created_at)
-VALUES ($1, $2, $3, $4, $5, NOW())
+INSERT INTO invite_codes (code, team_id, expires_at, created_at)
+VALUES ($1, $2, $3, NOW())
 `
 
 type CreateInviteCodeParams struct {
 	Code      string             `json:"code"`
 	TeamID    string             `json:"team_id"`
 	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
-	MaxUses   int32              `json:"max_uses"`
-	UsedCount int32              `json:"used_count"`
 }
 
 func (q *Queries) CreateInviteCode(ctx context.Context, arg CreateInviteCodeParams) error {
-	_, err := q.db.Exec(ctx, createInviteCode,
-		arg.Code,
-		arg.TeamID,
-		arg.ExpiresAt,
-		arg.MaxUses,
-		arg.UsedCount,
-	)
+	_, err := q.db.Exec(ctx, createInviteCode, arg.Code, arg.TeamID, arg.ExpiresAt)
 	return err
 }
 
@@ -59,7 +51,7 @@ func (q *Queries) DeleteInviteCodesByTeamID(ctx context.Context, teamID string) 
 }
 
 const getInviteCode = `-- name: GetInviteCode :one
-SELECT code, team_id, expires_at, max_uses, used_count, created_at
+SELECT code, team_id, expires_at, created_at
 FROM invite_codes
 WHERE code = $1
 `
@@ -71,8 +63,26 @@ func (q *Queries) GetInviteCode(ctx context.Context, code string) (InviteCode, e
 		&i.Code,
 		&i.TeamID,
 		&i.ExpiresAt,
-		&i.MaxUses,
-		&i.UsedCount,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getLatestInviteCodeByTeamID = `-- name: GetLatestInviteCodeByTeamID :one
+SELECT code, team_id, expires_at, created_at
+FROM invite_codes
+WHERE team_id = $1
+ORDER BY created_at DESC
+LIMIT 1
+`
+
+func (q *Queries) GetLatestInviteCodeByTeamID(ctx context.Context, teamID string) (InviteCode, error) {
+	row := q.db.QueryRow(ctx, getLatestInviteCodeByTeamID, teamID)
+	var i InviteCode
+	err := row.Scan(
+		&i.Code,
+		&i.TeamID,
+		&i.ExpiresAt,
 		&i.CreatedAt,
 	)
 	return i, err

@@ -35,29 +35,79 @@ func (q *Queries) AddTeamMember(ctx context.Context, arg AddTeamMemberParams) er
 }
 
 const createTeam = `-- name: CreateTeam :exec
-INSERT INTO teams (id, created_at)
-VALUES ($1, $2)
+INSERT INTO teams (id, name, created_at)
+VALUES ($1, $2, $3)
 `
 
 type CreateTeamParams struct {
 	ID        string             `json:"id"`
+	Name      string             `json:"name"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 func (q *Queries) CreateTeam(ctx context.Context, arg CreateTeamParams) error {
-	_, err := q.db.Exec(ctx, createTeam, arg.ID, arg.CreatedAt)
+	_, err := q.db.Exec(ctx, createTeam, arg.ID, arg.Name, arg.CreatedAt)
 	return err
 }
 
-const listMembershipsByUserID = `-- name: ListMembershipsByUserID :many
-SELECT team_id, role
+const deleteTeam = `-- name: DeleteTeam :exec
+DELETE FROM teams
+WHERE id = $1
+`
+
+func (q *Queries) DeleteTeam(ctx context.Context, id string) error {
+	_, err := q.db.Exec(ctx, deleteTeam, id)
+	return err
+}
+
+const deleteTeamMember = `-- name: DeleteTeamMember :exec
+DELETE FROM team_members
+WHERE team_id = $1
+  AND user_id = $2
+`
+
+type DeleteTeamMemberParams struct {
+	TeamID string `json:"team_id"`
+	UserID string `json:"user_id"`
+}
+
+func (q *Queries) DeleteTeamMember(ctx context.Context, arg DeleteTeamMemberParams) error {
+	_, err := q.db.Exec(ctx, deleteTeamMember, arg.TeamID, arg.UserID)
+	return err
+}
+
+const getOldestOtherTeamMember = `-- name: GetOldestOtherTeamMember :one
+SELECT user_id
 FROM team_members
-WHERE user_id = $1
+WHERE team_id = $1
+  AND user_id <> $2
+ORDER BY created_at ASC
+LIMIT 1
+`
+
+type GetOldestOtherTeamMemberParams struct {
+	TeamID string `json:"team_id"`
+	UserID string `json:"user_id"`
+}
+
+func (q *Queries) GetOldestOtherTeamMember(ctx context.Context, arg GetOldestOtherTeamMemberParams) (string, error) {
+	row := q.db.QueryRow(ctx, getOldestOtherTeamMember, arg.TeamID, arg.UserID)
+	var user_id string
+	err := row.Scan(&user_id)
+	return user_id, err
+}
+
+const listMembershipsByUserID = `-- name: ListMembershipsByUserID :many
+SELECT tm.team_id, tm.role, t.name AS team_name
+FROM team_members tm
+INNER JOIN teams t ON t.id = tm.team_id
+WHERE tm.user_id = $1
 `
 
 type ListMembershipsByUserIDRow struct {
-	TeamID string `json:"team_id"`
-	Role   string `json:"role"`
+	TeamID   string `json:"team_id"`
+	Role     string `json:"role"`
+	TeamName string `json:"team_name"`
 }
 
 func (q *Queries) ListMembershipsByUserID(ctx context.Context, userID string) ([]ListMembershipsByUserIDRow, error) {
@@ -69,7 +119,7 @@ func (q *Queries) ListMembershipsByUserID(ctx context.Context, userID string) ([
 	var items []ListMembershipsByUserIDRow
 	for rows.Next() {
 		var i ListMembershipsByUserIDRow
-		if err := rows.Scan(&i.TeamID, &i.Role); err != nil {
+		if err := rows.Scan(&i.TeamID, &i.Role, &i.TeamName); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -78,4 +128,88 @@ func (q *Queries) ListMembershipsByUserID(ctx context.Context, userID string) ([
 		return nil, err
 	}
 	return items, nil
+}
+
+const listTeamMembersByTeamID = `-- name: ListTeamMembersByTeamID :many
+SELECT
+  tm.team_id,
+  tm.user_id,
+  tm.role,
+  tm.created_at,
+  u.display_name,
+  COALESCE(u.nickname, '') AS nickname
+FROM team_members tm
+INNER JOIN users u ON u.id = tm.user_id
+WHERE tm.team_id = $1
+ORDER BY tm.created_at ASC
+`
+
+type ListTeamMembersByTeamIDRow struct {
+	TeamID      string             `json:"team_id"`
+	UserID      string             `json:"user_id"`
+	Role        string             `json:"role"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	DisplayName string             `json:"display_name"`
+	Nickname    string             `json:"nickname"`
+}
+
+func (q *Queries) ListTeamMembersByTeamID(ctx context.Context, teamID string) ([]ListTeamMembersByTeamIDRow, error) {
+	rows, err := q.db.Query(ctx, listTeamMembersByTeamID, teamID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTeamMembersByTeamIDRow
+	for rows.Next() {
+		var i ListTeamMembersByTeamIDRow
+		if err := rows.Scan(
+			&i.TeamID,
+			&i.UserID,
+			&i.Role,
+			&i.CreatedAt,
+			&i.DisplayName,
+			&i.Nickname,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const updateTeamMemberRole = `-- name: UpdateTeamMemberRole :exec
+UPDATE team_members
+SET role = $3
+WHERE team_id = $1
+  AND user_id = $2
+`
+
+type UpdateTeamMemberRoleParams struct {
+	TeamID string `json:"team_id"`
+	UserID string `json:"user_id"`
+	Role   string `json:"role"`
+}
+
+func (q *Queries) UpdateTeamMemberRole(ctx context.Context, arg UpdateTeamMemberRoleParams) error {
+	_, err := q.db.Exec(ctx, updateTeamMemberRole, arg.TeamID, arg.UserID, arg.Role)
+	return err
+}
+
+const updateTeamName = `-- name: UpdateTeamName :exec
+UPDATE teams
+SET name = $2
+WHERE id = $1
+`
+
+type UpdateTeamNameParams struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+func (q *Queries) UpdateTeamName(ctx context.Context, arg UpdateTeamNameParams) error {
+	_, err := q.db.Exec(ctx, updateTeamName, arg.ID, arg.Name)
+	return err
 }
