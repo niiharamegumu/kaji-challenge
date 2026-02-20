@@ -6,17 +6,45 @@ import {
   type PenaltyRule,
   deletePenaltyRule,
   deleteTask,
+  patchMeNickname,
   patchPenaltyRule,
   patchTask,
+  patchTeamCurrent,
   postPenaltyRule,
   postTask,
   postTeamInvite,
   postTeamJoin,
+  postTeamLeave,
 } from "../../../lib/api/generated/client";
 import { queryKeys } from "../../../shared/query/queryKeys";
-import { formatError } from "../../../shared/utils/errors";
+import { extractHttpStatus, formatError } from "../../../shared/utils/errors";
+import { INVITE_CODE_EXPIRES_IN_HOURS } from "../constants/invite";
 
 type StatusSetter = (message: string) => void;
+
+const teamMembershipRelatedQueryKeys = [
+  queryKeys.me,
+  queryKeys.teamMembers,
+  queryKeys.home,
+  queryKeys.tasks,
+  queryKeys.rules,
+  queryKeys.monthlySummary,
+] as const;
+
+const profileRelatedQueryKeys = [queryKeys.me, queryKeys.teamMembers] as const;
+
+async function invalidateQueryKeys(
+  queryClient: ReturnType<typeof useQueryClient>,
+  queryKeyList: readonly (readonly string[])[],
+) {
+  await Promise.all(
+    queryKeyList.map((key) =>
+      queryClient.invalidateQueries({
+        queryKey: key,
+      }),
+    ),
+  );
+}
 
 export function useTaskMutations(setStatus: StatusSetter) {
   const queryClient = useQueryClient();
@@ -120,7 +148,13 @@ export function useInviteMutations(setStatus: StatusSetter) {
   const queryClient = useQueryClient();
 
   const createInvite = useMutation({
-    mutationFn: async () => postTeamInvite({ expiresInHours: 72 }),
+    mutationFn: async () =>
+      postTeamInvite({ expiresInHours: INVITE_CODE_EXPIRES_IN_HOURS }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.currentInvite,
+      });
+    },
     onError: (error) => {
       setStatus(`招待コード発行に失敗しました: ${formatError(error)}`);
     },
@@ -130,18 +164,61 @@ export function useInviteMutations(setStatus: StatusSetter) {
     mutationFn: async (code: string) => postTeamJoin({ code }),
     onSuccess: async () => {
       setStatus("チーム参加に成功しました");
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.me }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.home }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.tasks }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.rules }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.monthlySummary }),
-      ]);
+      await invalidateQueryKeys(queryClient, teamMembershipRelatedQueryKeys);
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.currentInvite,
+      });
     },
     onError: (error) => {
+      if (extractHttpStatus(error) === 409) {
+        setStatus("すでに参加しています");
+        return;
+      }
       setStatus(`チーム参加に失敗しました: ${formatError(error)}`);
     },
   });
 
-  return { createInvite, joinTeam };
+  const leaveTeam = useMutation({
+    mutationFn: async () => postTeamLeave(),
+    onSuccess: async () => {
+      setStatus("新しい自分のチームを作成しました");
+      await invalidateQueryKeys(queryClient, teamMembershipRelatedQueryKeys);
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.currentInvite,
+      });
+    },
+    onError: (error) => {
+      setStatus(`チーム離脱に失敗しました: ${formatError(error)}`);
+    },
+  });
+
+  return { createInvite, joinTeam, leaveTeam };
+}
+
+export function useProfileMutations(setStatus: StatusSetter) {
+  const queryClient = useQueryClient();
+
+  const updateNickname = useMutation({
+    mutationFn: async (nickname: string) => patchMeNickname({ nickname }),
+    onSuccess: async () => {
+      setStatus("ニックネームを更新しました");
+      await invalidateQueryKeys(queryClient, profileRelatedQueryKeys);
+    },
+    onError: (error) => {
+      setStatus(`ニックネーム更新に失敗しました: ${formatError(error)}`);
+    },
+  });
+
+  const updateTeamName = useMutation({
+    mutationFn: async (name: string) => patchTeamCurrent({ name }),
+    onSuccess: async () => {
+      setStatus("チーム名を更新しました");
+      await invalidateQueryKeys(queryClient, profileRelatedQueryKeys);
+    },
+    onError: (error) => {
+      setStatus(`チーム名更新に失敗しました: ${formatError(error)}`);
+    },
+  });
+
+  return { updateNickname, updateTeamName };
 }
