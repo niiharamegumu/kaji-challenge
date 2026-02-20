@@ -6,11 +6,13 @@ import {
   Settings,
   Shield,
   ShieldAlert,
+  UserCircle2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 
 type Props = {
+  currentUserName: string;
   onLogout: () => void;
 };
 
@@ -24,7 +26,7 @@ const linkClass = ({ isActive }: { isActive: boolean }) =>
       : "border-stone-200 bg-white text-stone-800 hover:bg-stone-50 hover:text-stone-900"
   }`;
 
-export function FloatingNav({ onLogout }: Props) {
+export function FloatingNav({ currentUserName, onLogout }: Props) {
   const [open, setOpen] = useState(false);
   const location = useLocation();
 
@@ -68,6 +70,12 @@ export function FloatingNav({ onLogout }: Props) {
               : "pointer-events-none translate-y-2 opacity-0"
           }`}
         >
+          <div className="mb-2 flex justify-start">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-stone-100 px-3 py-1 text-xs text-stone-700">
+              <UserCircle2 size={14} aria-hidden="true" />
+              {currentUserName}
+            </span>
+          </div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             <NavLink to="/" end className={linkClass}>
               <House size={18} aria-hidden="true" />
