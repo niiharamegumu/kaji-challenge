@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAtom, useAtomValue } from "jotai";
-import { AlertTriangle, CalendarRange, TriangleAlert } from "lucide-react";
+import { AlertTriangle, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import {
@@ -17,14 +17,6 @@ const monthPattern = /^\d{4}-\d{2}$/;
 const initialMonth = () => {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-};
-
-const formatMonthLabel = (month: string) => {
-  if (!monthPattern.test(month)) {
-    return month;
-  }
-  const [year, monthPart] = month.split("-");
-  return `${year}年${monthPart}月`;
 };
 
 export function AdminSummaryPage() {
@@ -98,9 +90,7 @@ export function AdminSummaryPage() {
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
             <h2 className="text-lg font-semibold">月次サマリー</h2>
-            <p className="mt-1 text-sm text-stone-600">
-              {formatMonthLabel(month)} の減点状況
-            </p>
+            <p className="mt-1 text-sm text-stone-600">減点状況</p>
           </div>
           <div className="grid gap-1">
             <label className="text-sm text-stone-700" htmlFor="summary-month">
@@ -116,22 +106,12 @@ export function AdminSummaryPage() {
           </div>
         </div>
 
-        <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2">
-          <div className="rounded-xl border border-[color:var(--color-matcha-300)] bg-[color:var(--color-matcha-50)] p-4">
+        <div className="mt-5">
+          <div className="rounded-xl border border-stone-200 bg-white p-4">
             <p className="text-sm text-stone-700">合計減点</p>
             <p className="mt-2 text-3xl font-bold text-stone-900">
               {summaryQuery.data?.totalPenalty ?? 0}
             </p>
-          </div>
-          <div className="rounded-xl border border-stone-200 bg-white p-4">
-            <div className="flex items-center gap-2 text-stone-700">
-              <CalendarRange size={16} aria-hidden="true" />
-              <p className="text-sm">対象月</p>
-            </div>
-            <p className="mt-2 text-xl font-semibold text-stone-900">
-              {formatMonthLabel(month)}
-            </p>
-            <p className="mt-1 text-xs text-stone-500">API送信値: {month}</p>
           </div>
         </div>
 
