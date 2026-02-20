@@ -1,9 +1,10 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAtom, useAtomValue } from "jotai";
 import { useSetAtom } from "jotai";
 import { useEffect, useRef, useState } from "react";
 import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 
+import { getTeamCurrentMembers } from "../../../lib/api/generated/client";
 import { queryKeys } from "../../../shared/query/queryKeys";
 import { extractHttpStatus, formatError } from "../../../shared/utils/errors";
 import { isLoggedInAtom, sessionAtom } from "../../../state/session";
@@ -28,6 +29,8 @@ import { statusMessageAtom } from "../state/status";
 
 const protectedQueryKeys = [
   queryKeys.me,
+  queryKeys.teamMembers,
+  queryKeys.currentInvite,
   queryKeys.home,
   queryKeys.tasks,
   queryKeys.rules,
@@ -50,8 +53,23 @@ export function RootLayout() {
   const setJoinCode = useSetAtom(joinCodeAtom);
 
   const meQuery = useMeQuery(true);
+  const currentUserID = meQuery.data?.user.id;
+  const teamMembersQuery = useQuery({
+    queryKey: queryKeys.teamMembers,
+    queryFn: async () => (await getTeamCurrentMembers()).data.items,
+    enabled: currentUserID != null,
+  });
   const login = useLoginAction(setStatus);
   const logoutAction = useLogoutAction(setStatus, setSession);
+  const currentTeamName = meQuery.data?.memberships?.[0]?.teamName ?? "チーム";
+  const meMember = teamMembersQuery.data?.find(
+    (member) => member.userId === currentUserID,
+  );
+  const preferredUserName = meMember?.nickname?.trim();
+  const currentUserName =
+    preferredUserName != null && preferredUserName.length > 0
+      ? preferredUserName
+      : (meQuery.data?.user.displayName ?? "ログイン中");
 
   useEffect(() => {
     if (!meQuery.isFetching) {
@@ -117,13 +135,13 @@ export function RootLayout() {
     await logoutAction();
     setTaskForm(initialTaskFormState);
     setRuleForm(initialRuleFormState);
-    setInviteCode("");
+    setInviteCode(null);
     setJoinCode("");
   };
 
   if (!authChecked) {
     return (
-      <main className="min-h-screen bg-[radial-gradient(circle_at_top,_var(--color-washi-50),_#fff,_var(--color-matcha-50))] p-6 text-stone-700">
+      <main className="min-h-screen bg-[radial-gradient(circle_at_top,_var(--color-washi-50),_#fff,_var(--color-kohaku-50))] p-6 text-stone-700">
         <p>認証状態を確認中です...</p>
       </main>
     );
@@ -141,11 +159,13 @@ export function RootLayout() {
       <StatusToast message={status} onDismiss={() => setStatus("")} />
 
       <div className="mx-auto max-w-6xl">
-        <header className="rounded-2xl border border-[color:var(--color-matcha-300)] bg-white/90 p-4 shadow-sm backdrop-blur">
+        <header className="rounded-2xl border border-stone-200 bg-white/90 p-4 shadow-sm backdrop-blur">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h1 className="text-2xl font-bold tracking-wide">KajiChalle</h1>
-            <span className="rounded-full bg-[color:var(--color-matcha-100)] px-3 py-2 text-sm">
-              {meQuery.data?.user.displayName ?? "ログイン中"}
+            <h1 className="text-2xl font-bold tracking-wide">
+              {currentTeamName}
+            </h1>
+            <span className="rounded-full bg-stone-100 px-3 py-2 text-sm text-stone-800">
+              {currentUserName}
             </span>
           </div>
         </header>
