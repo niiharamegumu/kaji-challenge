@@ -17,7 +17,12 @@ export function WeeklyTasksPanel({
   onIncrement,
   onDecrement,
 }: Props) {
-  const remainingDaysInWeek = Math.max(0, 7 - elapsedDaysInWeek);
+  const normalizedElapsedDaysInWeek = Math.min(
+    7,
+    Math.max(0, elapsedDaysInWeek),
+  );
+  const elapsedDaysBeforeToday = Math.max(0, normalizedElapsedDaysInWeek - 1);
+  const remainingDaysInWeek = Math.max(0, 7 - elapsedDaysBeforeToday);
 
   return (
     <article className="rounded-2xl border border-stone-200 bg-white/90 p-4 shadow-sm animate-enter">
@@ -25,7 +30,7 @@ export function WeeklyTasksPanel({
       <dl className="mt-3 flex flex-wrap items-center gap-2 text-sm">
         <div className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-3 py-1.5 text-stone-700">
           <dt className="text-xs text-stone-500">経過</dt>
-          <dd className="font-medium">{elapsedDaysInWeek}日</dd>
+          <dd className="font-medium">{elapsedDaysBeforeToday}日</dd>
         </div>
         <div className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-3 py-1.5 text-stone-700">
           <dt className="text-xs text-stone-500">残り</dt>
