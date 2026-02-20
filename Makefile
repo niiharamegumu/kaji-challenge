@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: dev up down down-reset gen gen-backend gen-frontend lint lint-backend lint-frontend test test-backend test-frontend security security-backend security-frontend check diff-gen db-migrate-up db-migrate-down db-migrate-create
+.PHONY: dev up down down-reset gen gen-backend gen-frontend lint lint-backend lint-frontend test test-backend test-frontend security security-backend security-frontend check diff-gen db-migrate-up db-migrate-down db-migrate-create seed-monthly-dummy backend-cmd-seeder
 
 ifneq (,$(wildcard .env))
 include .env
@@ -102,3 +102,10 @@ db-migrate-down:
 db-migrate-create:
 	@test -n "$(name)" || (echo "usage: make db-migrate-create name=add_xxx" && exit 1)
 	$(MIGRATE_RUN) create -ext sql -dir /app/backend/migrations -seq $(name)
+
+seed-monthly-dummy: backend-cmd-seeder
+
+backend-cmd-seeder:
+	@test -n "$(month)" || (echo "usage: make seed-monthly-dummy month=YYYY-MM email=user@example.com" && exit 1)
+	@test -n "$(email)" || (echo "usage: make seed-monthly-dummy month=YYYY-MM email=user@example.com" && exit 1)
+	$(BACKEND_RUN) go -C /app/backend run ./cmd/seeder --month "$(month)" --email "$(email)"
