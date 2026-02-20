@@ -103,7 +103,7 @@ func (s *Store) PatchTask(ctx context.Context, userID, taskID string, req api.Up
 		return api.Task{}, errors.New("task not found")
 	}
 	task := taskFromGetRow(row, s.loc)
-	if task.TeamID != teamID {
+	if task.TeamID != teamID || task.DeletedAt != nil {
 		return api.Task{}, errors.New("task not found")
 	}
 	if req.Title != nil {
@@ -157,15 +157,13 @@ func (s *Store) DeleteTask(ctx context.Context, userID, taskID string) error {
 	if err != nil {
 		return err
 	}
-	task, err := s.q.GetTaskByID(ctx, taskID)
-	if err != nil || task.TeamID != teamID {
+	row, err := s.q.GetTaskByID(ctx, taskID)
+	if err != nil {
 		return errors.New("task not found")
 	}
-	if err := s.q.DeleteTaskCompletionDailyByTaskID(ctx, taskID); err != nil {
-		return err
-	}
-	if err := s.q.DeleteTaskCompletionWeeklyByTaskID(ctx, taskID); err != nil {
-		return err
+	task := taskFromGetRow(row, s.loc)
+	if task.TeamID != teamID || task.DeletedAt != nil {
+		return errors.New("task not found")
 	}
 	return s.q.DeleteTask(ctx, taskID)
 }
@@ -180,7 +178,7 @@ func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string,
 		return api.TaskCompletionResponse{}, errors.New("task not found")
 	}
 	task := taskFromGetRow(row, s.loc)
-	if task.TeamID != teamID {
+	if task.TeamID != teamID || task.DeletedAt != nil {
 		return api.TaskCompletionResponse{}, errors.New("task not found")
 	}
 	if !task.IsActive {

@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAtom, useAtomValue } from "jotai";
 import { useSetAtom } from "jotai";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { getTeamCurrentMembers } from "../../../lib/api/generated/client";
@@ -70,6 +70,18 @@ export function RootLayout() {
     preferredUserName != null && preferredUserName.length > 0
       ? preferredUserName
       : (meQuery.data?.user.displayName ?? "ログイン中");
+  const todayLabel = useMemo(() => {
+    const now = new Date();
+    const fullDate = new Intl.DateTimeFormat("ja-JP", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    }).format(now);
+    const weekday = new Intl.DateTimeFormat("ja-JP", {
+      weekday: "short",
+    }).format(now);
+    return `${fullDate}（${weekday}）`;
+  }, []);
 
   useEffect(() => {
     if (!meQuery.isFetching) {
@@ -164,8 +176,8 @@ export function RootLayout() {
             <h1 className="text-2xl font-bold tracking-wide">
               {currentTeamName}
             </h1>
-            <span className="rounded-full bg-stone-100 px-3 py-2 text-sm text-stone-800">
-              {currentUserName}
+            <span className="rounded-full bg-stone-100 px-3 py-2 text-sm text-stone-700">
+              {todayLabel}
             </span>
           </div>
         </header>
@@ -173,7 +185,10 @@ export function RootLayout() {
         <Outlet />
       </div>
 
-      <FloatingNav onLogout={() => void logout()} />
+      <FloatingNav
+        currentUserName={currentUserName}
+        onLogout={() => void logout()}
+      />
     </main>
   );
 }

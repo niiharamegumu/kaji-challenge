@@ -122,13 +122,30 @@ type MeResponse struct {
 
 // MonthlyPenaltySummary defines model for MonthlyPenaltySummary.
 type MonthlyPenaltySummary struct {
-	DailyPenaltyTotal       int      `json:"dailyPenaltyTotal"`
-	IsClosed                bool     `json:"isClosed"`
-	Month                   string   `json:"month"`
-	TeamId                  string   `json:"teamId"`
-	TotalPenalty            int      `json:"totalPenalty"`
-	TriggeredPenaltyRuleIds []string `json:"triggeredPenaltyRuleIds"`
-	WeeklyPenaltyTotal      int      `json:"weeklyPenaltyTotal"`
+	DailyPenaltyTotal       int                      `json:"dailyPenaltyTotal"`
+	IsClosed                bool                     `json:"isClosed"`
+	Month                   string                   `json:"month"`
+	TaskStatusByDate        []MonthlyTaskStatusGroup `json:"taskStatusByDate"`
+	TeamId                  string                   `json:"teamId"`
+	TotalPenalty            int                      `json:"totalPenalty"`
+	TriggeredPenaltyRuleIds []string                 `json:"triggeredPenaltyRuleIds"`
+	WeeklyPenaltyTotal      int                      `json:"weeklyPenaltyTotal"`
+}
+
+// MonthlyTaskStatusGroup defines model for MonthlyTaskStatusGroup.
+type MonthlyTaskStatusGroup struct {
+	Date  openapi_types.Date      `json:"date"`
+	Items []MonthlyTaskStatusItem `json:"items"`
+}
+
+// MonthlyTaskStatusItem defines model for MonthlyTaskStatusItem.
+type MonthlyTaskStatusItem struct {
+	Completed     bool     `json:"completed"`
+	IsDeleted     bool     `json:"isDeleted"`
+	PenaltyPoints int      `json:"penaltyPoints"`
+	TaskId        string   `json:"taskId"`
+	Title         string   `json:"title"`
+	Type          TaskType `json:"type"`
 }
 
 // PenaltyRule defines model for PenaltyRule.

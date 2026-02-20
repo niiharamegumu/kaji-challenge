@@ -839,9 +839,38 @@ components:
           items:
             $ref: '#/components/schemas/TaskOverviewWeeklyTask'
 
+    MonthlyTaskStatusItem:
+      type: object
+      required: [taskId, title, type, penaltyPoints, completed, isDeleted]
+      properties:
+        taskId:
+          type: string
+        title:
+          type: string
+        type:
+          $ref: '#/components/schemas/TaskType'
+        penaltyPoints:
+          type: integer
+        completed:
+          type: boolean
+        isDeleted:
+          type: boolean
+
+    MonthlyTaskStatusGroup:
+      type: object
+      required: [date, items]
+      properties:
+        date:
+          type: string
+          format: date
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MonthlyTaskStatusItem'
+
     MonthlyPenaltySummary:
       type: object
-      required: [month, teamId, dailyPenaltyTotal, weeklyPenaltyTotal, totalPenalty, isClosed, triggeredPenaltyRuleIds]
+      required: [month, teamId, dailyPenaltyTotal, weeklyPenaltyTotal, totalPenalty, isClosed, triggeredPenaltyRuleIds, taskStatusByDate]
       properties:
         month:
           type: string
@@ -859,6 +888,10 @@ components:
           type: array
           items:
             type: string
+        taskStatusByDate:
+          type: array
+          items:
+            $ref: '#/components/schemas/MonthlyTaskStatusGroup'
 
     CloseResponse:
       type: object

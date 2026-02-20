@@ -85,6 +85,7 @@ type Task struct {
 	RequiredCompletionsPerWeek int32              `json:"required_completions_per_week"`
 	CreatedAt                  pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt                  pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt                  pgtype.Timestamptz `json:"deleted_at"`
 }
 
 type TaskCompletionDaily struct {
