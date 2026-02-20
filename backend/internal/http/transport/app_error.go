@@ -47,6 +47,8 @@ func mapErrorStatus(err error, defaultStatus int) int {
 	switch {
 	case errors.Is(err, application.ErrUnauthorized):
 		return http.StatusUnauthorized
+	case errors.Is(err, application.ErrForbidden):
+		return http.StatusForbidden
 	case errors.Is(err, application.ErrNotFound):
 		return http.StatusNotFound
 	case errors.Is(err, application.ErrInvalid):
