@@ -74,6 +74,7 @@ func runClose(args []string, logger *log.Logger, runner closeRunner) int {
 	}
 
 	logger.Printf("ops close started: scope=%s targets=%d", *scope, len(targets))
+	logger.Printf("ops close catch-up mode: pending periods are processed continuously")
 	processed := 0
 	succeeded := 0
 	failed := 0

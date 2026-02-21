@@ -65,6 +65,8 @@ Cloud Run Job運用推奨（3分割）:
 - `close-week`: command=`/app/ops`, args=`close --scope week --all-teams`
 - `close-month`: command=`/app/ops`, args=`close --scope month --all-teams`
 
+`ops close` は catch-up モードで動作し、未処理期間を連続で補完します（例: day 実行時は未処理の全日を昨日まで処理）。
+過去期間の判定対象タスクは `created_at` / `deleted_at` を使って対象時点で有効だったものを再現します。
 いずれも終了コードで成否を返します。対象の一部で失敗した場合も他対象は継続し、最後に非0終了となります（監視しやすい設計）。
 内部実装として、冪等キー管理は `close_executions` から `close_runs` / `task_evaluation_dedupes` に責務分離されています。
 
