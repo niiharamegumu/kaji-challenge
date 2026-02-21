@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sort"
 	"time"
 
@@ -10,6 +11,8 @@ import (
 	dbsqlc "github.com/megu/kaji-challenge/backend/internal/db/sqlc"
 	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 )
+
+var errMonthAlreadyClosed = errors.New("monthly summary is already closed")
 
 func (s *Store) CloseDayForUser(ctx context.Context, userID string) (api.CloseResponse, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
@@ -65,6 +68,15 @@ func (s *Store) ListClosableTeamIDs(ctx context.Context) ([]string, error) {
 }
 
 func (s *Store) closeDayForTargetLocked(ctx context.Context, targetDate time.Time, teamID string) (bool, error) {
+	month := monthKeyFromTime(targetDate, s.loc)
+	summary, err := s.ensureMonthSummaryLocked(ctx, teamID, month)
+	if err != nil {
+		return false, err
+	}
+	if summary.IsClosed {
+		return false, fmt.Errorf("%w: scope=day month=%s", errMonthAlreadyClosed, month)
+	}
+
 	rows, err := s.q.InsertCloseRun(ctx, dbsqlc.InsertCloseRunParams{
 		TeamID:     teamID,
 		Scope:      "close_day",
@@ -77,12 +89,8 @@ func (s *Store) closeDayForTargetLocked(ctx context.Context, targetDate time.Tim
 		return false, nil
 	}
 
-	month := monthKeyFromTime(targetDate, s.loc)
 	monthStart, err := monthStartFromKey(month, s.loc)
 	if err != nil {
-		return false, err
-	}
-	if _, err := s.ensureMonthSummaryLocked(ctx, teamID, month); err != nil {
 		return false, err
 	}
 	cutoff := dateOnly(targetDate, s.loc).AddDate(0, 0, 1)
@@ -133,6 +141,16 @@ func (s *Store) closeDayForTargetLocked(ctx context.Context, targetDate time.Tim
 }
 
 func (s *Store) closeWeekForTargetLocked(ctx context.Context, previousWeekStart time.Time, teamID string) (bool, error) {
+	weekEnd := dateOnly(previousWeekStart, s.loc).AddDate(0, 0, 6)
+	month := monthKeyFromTime(weekEnd, s.loc)
+	summary, err := s.ensureMonthSummaryLocked(ctx, teamID, month)
+	if err != nil {
+		return false, err
+	}
+	if summary.IsClosed {
+		return false, fmt.Errorf("%w: scope=week month=%s", errMonthAlreadyClosed, month)
+	}
+
 	rows, err := s.q.InsertCloseRun(ctx, dbsqlc.InsertCloseRunParams{
 		TeamID:     teamID,
 		Scope:      "close_week",
@@ -145,12 +163,8 @@ func (s *Store) closeWeekForTargetLocked(ctx context.Context, previousWeekStart 
 		return false, nil
 	}
 
-	month := monthKeyFromTime(previousWeekStart, s.loc)
 	monthStart, err := monthStartFromKey(month, s.loc)
 	if err != nil {
-		return false, err
-	}
-	if _, err := s.ensureMonthSummaryLocked(ctx, teamID, month); err != nil {
 		return false, err
 	}
 	cutoff := dateOnly(previousWeekStart, s.loc).AddDate(0, 0, 7)
