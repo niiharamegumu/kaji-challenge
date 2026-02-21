@@ -65,6 +65,16 @@ backend は `air` で起動され、`backend/` 配下の変更を自動リロー
 
 - `VITE_API_BASE_URL`: APIベースURL（推奨: `/api`）
 - `API_ORIGIN`: Workerが転送するbackend APIのオリジン（例: `https://kaji-backend-xxxx.run.app`）
+- `RELEASE_BASIC_AUTH_ENABLED`: 初回リリース向けベーシック認証を有効化（`true/false`）
+- `RELEASE_BASIC_AUTH_USERNAME`: ベーシック認証ユーザー名
+- `RELEASE_BASIC_AUTH_PASSWORD`: ベーシック認証パスワード（Cloudflare secret 推奨）
+
+Cloudflare secret 設定例:
+
+```bash
+cd frontend
+npx wrangler secret put RELEASE_BASIC_AUTH_PASSWORD
+```
 
 GitHub Actions デプロイで必要な secrets:
 
@@ -98,6 +108,28 @@ Cookieセッション認証:
 - 認証は `HttpOnly` Cookie (`kaji_session`) で管理します（Bearer tokenは非対応）。
 - backend は `FRONTEND_ORIGIN` を許可オリジンとして使用します。
 - `COOKIE_SECURE=true` で `Secure` Cookie を強制します（ローカルHTTP開発時は `false`）。
+
+初回リリース向け新規アカウント作成ガード:
+
+- `SIGNUP_GUARD_ENABLED=true` で新規アカウント作成を許可メール制にします。
+- `SIGNUP_ALLOWED_EMAILS` にカンマ区切りで許可メールを設定します（例: `me@example.com,wife@example.com`）。
+- 既存ユーザーは allowlist から外れてもログイン可能です。
+- `SIGNUP_GUARD_ENABLED=true` かつ `SIGNUP_ALLOWED_EMAILS` が空の場合、backend は起動失敗します（fail-fast）。
+
+## 初回リリースの推奨設定（クローズド運用）
+
+- frontend Worker:
+  - `RELEASE_BASIC_AUTH_ENABLED=true`
+  - `RELEASE_BASIC_AUTH_USERNAME=<任意>`
+  - `RELEASE_BASIC_AUTH_PASSWORD` は Cloudflare secret
+- backend:
+  - `SIGNUP_GUARD_ENABLED=true`
+  - `SIGNUP_ALLOWED_EMAILS=<あなたのGoogleメール>,<奥様のGoogleメール>`
+
+緊急時に公開制限を解除する場合:
+
+- Worker 側: `RELEASE_BASIC_AUTH_ENABLED=false`
+- backend 側: `SIGNUP_GUARD_ENABLED=false`
 
 ## Git Hooks
 

@@ -31,6 +31,9 @@ func (s *Store) getOrCreateUserLocked(ctx context.Context, email, displayName st
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return "", userRecord{}, err
 	}
+	if !isSignupAllowedEmail(email) {
+		return "", userRecord{}, errors.New("forbidden: signup is disabled for this email")
+	}
 	userID := s.nextID("usr")
 	teamID := s.nextID("team")
 	user := userRecord{ID: userID, Email: email, Name: displayName, CreatedAt: now}

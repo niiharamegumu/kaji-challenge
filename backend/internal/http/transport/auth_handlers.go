@@ -1,11 +1,14 @@
 package transport
 
 import (
+	"errors"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/megu/kaji-challenge/backend/internal/http/application"
 	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 )
 
@@ -21,18 +24,38 @@ func (h *Handler) GetAuthGoogleStart(c *gin.Context) {
 func (h *Handler) GetAuthGoogleCallback(c *gin.Context, params api.GetAuthGoogleCallbackParams) {
 	exchangeCode, redirectTo, err := h.services.Auth.CompleteGoogleAuth(c.Request.Context(), params.Code, params.State, c.Query("mock_email"), c.Query("mock_name"), c.Query("mock_sub"))
 	if err != nil {
+		frontendCallbackURL := strings.TrimSpace(os.Getenv("FRONTEND_CALLBACK_URL"))
+		if frontendCallbackURL != "" {
+			c.Redirect(http.StatusFound, appendRedirectQuery(frontendCallbackURL, "errorCode", authCallbackErrorCode(err)))
+			return
+		}
 		writeAppError(c, err, http.StatusBadRequest)
 		return
 	}
 	if redirectTo != "" {
-		sep := "?"
-		if strings.Contains(redirectTo, "?") {
-			sep = "&"
-		}
-		c.Redirect(http.StatusFound, redirectTo+sep+"exchangeCode="+url.QueryEscape(exchangeCode))
+		c.Redirect(http.StatusFound, appendRedirectQuery(redirectTo, "exchangeCode", exchangeCode))
 		return
 	}
 	c.JSON(http.StatusOK, api.AuthCallbackResponse{ExchangeCode: exchangeCode})
+}
+
+func authCallbackErrorCode(err error) string {
+	switch {
+	case errors.Is(err, application.ErrForbidden):
+		return "signup_forbidden"
+	case errors.Is(err, application.ErrUnauthorized):
+		return "unauthorized"
+	default:
+		return "invalid_auth"
+	}
+}
+
+func appendRedirectQuery(redirectTo, key, value string) string {
+	sep := "?"
+	if strings.Contains(redirectTo, "?") {
+		sep = "&"
+	}
+	return redirectTo + sep + url.QueryEscape(key) + "=" + url.QueryEscape(value)
 }
 
 func (h *Handler) PostAuthSessionsExchange(c *gin.Context) {

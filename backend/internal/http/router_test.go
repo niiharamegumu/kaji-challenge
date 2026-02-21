@@ -60,6 +60,18 @@ func TestNewRouterPanicsWhenStrictModeMissingOIDCEnv(t *testing.T) {
 	_ = NewRouter()
 }
 
+func TestNewRouterPanicsWhenSignupGuardEnabledWithoutAllowlist(t *testing.T) {
+	t.Setenv("SIGNUP_GUARD_ENABLED", "true")
+	t.Setenv("SIGNUP_ALLOWED_EMAILS", "")
+
+	defer func() {
+		if recover() == nil {
+			t.Fatalf("expected panic when signup guard is enabled without allowlist")
+		}
+	}()
+	_ = NewRouter()
+}
+
 func TestCompleteGoogleAuthRejectsMockParamsInStrictMode(t *testing.T) {
 	t.Setenv("OIDC_STRICT_MODE", "true")
 	loc, _ := time.LoadLocation("Asia/Tokyo")
@@ -70,6 +82,51 @@ func TestCompleteGoogleAuthRejectsMockParamsInStrictMode(t *testing.T) {
 	err := infra.RejectMockParamsInStrictModeForTest(context.Background(), loc)
 	if err == nil || !strings.Contains(err.Error(), "disabled") {
 		t.Fatalf("expected strict mode mock rejection, got: %v", err)
+	}
+}
+
+func TestSignupGuardAllowsListedEmailAndRejectsOthers(t *testing.T) {
+	r := newTestRouter(t)
+	t.Setenv("SIGNUP_GUARD_ENABLED", "true")
+	t.Setenv("SIGNUP_ALLOWED_EMAILS", "allowed@example.com")
+
+	_ = loginAs(t, r, "allowed@example.com")
+
+	callbackRes := startGoogleAuthCallbackWithMockEmail(t, r, "blocked@example.com")
+	if callbackRes.Code != http.StatusForbidden {
+		t.Fatalf("expected callback 403 for blocked signup, got %d: %s", callbackRes.Code, callbackRes.Body.String())
+	}
+}
+
+func TestSignupGuardAllowsExistingUserEvenAfterAllowlistChange(t *testing.T) {
+	r := newTestRouter(t)
+	t.Setenv("SIGNUP_GUARD_ENABLED", "true")
+	t.Setenv("SIGNUP_ALLOWED_EMAILS", "existing@example.com")
+
+	_ = loginAs(t, r, "existing@example.com")
+
+	t.Setenv("SIGNUP_ALLOWED_EMAILS", "other@example.com")
+	_ = loginAs(t, r, "existing@example.com")
+}
+
+func TestAuthCallbackFailureRedirectsToFrontendWithErrorCode(t *testing.T) {
+	r := newTestRouter(t)
+	t.Setenv("SIGNUP_GUARD_ENABLED", "true")
+	t.Setenv("SIGNUP_ALLOWED_EMAILS", "allowed@example.com")
+	t.Setenv("FRONTEND_CALLBACK_URL", "http://localhost:5173/auth/callback")
+
+	callbackRes := startGoogleAuthCallbackWithMockEmail(t, r, "blocked@example.com")
+	if callbackRes.Code != http.StatusFound {
+		t.Fatalf("expected callback 302 for blocked signup, got %d: %s", callbackRes.Code, callbackRes.Body.String())
+	}
+
+	loc := callbackRes.Header().Get("Location")
+	redirectURL, err := url.Parse(loc)
+	if err != nil {
+		t.Fatalf("failed to parse redirect location: %v", err)
+	}
+	if redirectURL.Query().Get("errorCode") != "signup_forbidden" {
+		t.Fatalf("expected errorCode=signup_forbidden, got %q", redirectURL.Query().Get("errorCode"))
 	}
 }
 
@@ -785,25 +842,7 @@ func login(t *testing.T, r http.Handler) string {
 func loginAs(t *testing.T, r http.Handler, email string) string {
 	t.Helper()
 
-	startRes := doRequest(t, r, http.MethodGet, "/v1/auth/google/start", "", "")
-	if startRes.Code != http.StatusOK {
-		t.Fatalf("auth start failed: %d %s", startRes.Code, startRes.Body.String())
-	}
-
-	var start api.AuthStartResponse
-	if err := json.Unmarshal(startRes.Body.Bytes(), &start); err != nil {
-		t.Fatalf("failed to parse auth start response: %v", err)
-	}
-
-	u, err := url.Parse(start.AuthorizationUrl)
-	if err != nil {
-		t.Fatalf("failed to parse authorization url: %v", err)
-	}
-	q := u.Query()
-	q.Set("mock_email", email)
-	q.Set("mock_name", "Test User")
-	u.RawQuery = q.Encode()
-	callbackRes := doRequest(t, r, http.MethodGet, u.RequestURI(), "", "")
+	callbackRes := startGoogleAuthCallbackWithMockEmail(t, r, email)
 	if callbackRes.Code != http.StatusOK && callbackRes.Code != http.StatusFound {
 		t.Fatalf("auth callback failed: %d %s", callbackRes.Code, callbackRes.Body.String())
 	}
@@ -841,6 +880,30 @@ func loginAs(t *testing.T, r http.Handler, email string) string {
 	}
 	t.Fatalf("expected kaji_session cookie in exchange response")
 	return ""
+}
+
+func startGoogleAuthCallbackWithMockEmail(t *testing.T, r http.Handler, email string) *httptest.ResponseRecorder {
+	t.Helper()
+
+	startRes := doRequest(t, r, http.MethodGet, "/v1/auth/google/start", "", "")
+	if startRes.Code != http.StatusOK {
+		t.Fatalf("auth start failed: %d %s", startRes.Code, startRes.Body.String())
+	}
+
+	var start api.AuthStartResponse
+	if err := json.Unmarshal(startRes.Body.Bytes(), &start); err != nil {
+		t.Fatalf("failed to parse auth start response: %v", err)
+	}
+
+	u, err := url.Parse(start.AuthorizationUrl)
+	if err != nil {
+		t.Fatalf("failed to parse authorization url: %v", err)
+	}
+	q := u.Query()
+	q.Set("mock_email", email)
+	q.Set("mock_name", "Test User")
+	u.RawQuery = q.Encode()
+	return doRequest(t, r, http.MethodGet, u.RequestURI(), "", "")
 }
 
 func fetchMeUserID(t *testing.T, r http.Handler, token string) string {
@@ -932,5 +995,8 @@ func newTestRouter(t *testing.T) *gin.Engine {
 	t.Setenv("OIDC_CLIENT_ID", "")
 	t.Setenv("OIDC_CLIENT_SECRET", "")
 	t.Setenv("OIDC_REDIRECT_URL", "")
+	t.Setenv("SIGNUP_GUARD_ENABLED", "false")
+	t.Setenv("SIGNUP_ALLOWED_EMAILS", "")
+	t.Setenv("FRONTEND_CALLBACK_URL", "")
 	return NewRouter()
 }
