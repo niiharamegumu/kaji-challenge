@@ -17,10 +17,6 @@ func (s *Store) GetTaskOverview(ctx context.Context, userID string) (api.TaskOve
 	}
 
 	now := time.Now().In(s.loc)
-	if err := s.autoCloseLocked(ctx, now, teamID); err != nil {
-		return api.TaskOverviewResponse{}, err
-	}
-
 	today := dateOnly(now, s.loc)
 	weekStart := startOfWeek(today, s.loc)
 	monthKey := monthKeyFromTime(today, s.loc)
