@@ -66,6 +66,9 @@ Cloud Run Job運用推奨（3分割）:
 - `close-week`: command=`/app/ops`, args=`close --scope week --all-teams`
 - `close-month`: command=`/app/ops`, args=`close --scope month --all-teams`
 
+実行順序は `close-day` → `close-week` → `close-month` の直列実行を推奨します（同時実行しない）。
+`close-month` は月跨ぎ週の集計を取りこぼさないため、毎月6日実行を推奨します。
+
 `ops close` は catch-up モードで動作し、未処理期間を連続で補完します（例: day 実行時は未処理の全日を昨日まで処理）。
 過去期間の判定対象タスクは `created_at` / `deleted_at` を使って対象時点で有効だったものを再現します。
 `seed-monthly-dummy` は月次サマリーを直接作成せず、集計は `ops close` に委譲します。
