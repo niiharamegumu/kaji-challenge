@@ -491,7 +491,7 @@ func TestDeleteTaskSoftDeleteExcludesFromList(t *testing.T) {
 	}
 }
 
-func TestMonthlySummaryKeepsDeletedTaskStatus(t *testing.T) {
+func TestMonthlySummaryOmitsTaskAfterSameDayDelete(t *testing.T) {
 	r := newTestRouter(t)
 	token := login(t, r)
 
@@ -545,25 +545,15 @@ func TestMonthlySummaryKeepsDeletedTaskStatus(t *testing.T) {
 		t.Fatalf("monthly penalty totals should remain unchanged after task soft delete")
 	}
 
-	found := false
 	for _, group := range after.TaskStatusByDate {
 		if group.Date.Time.Format("2006-01-02") != today {
 			continue
 		}
 		for _, item := range group.Items {
 			if item.TaskId == task.Id {
-				found = true
-				if !item.IsDeleted {
-					t.Fatalf("expected deleted task marker in monthly summary")
-				}
-				if !item.Completed {
-					t.Fatalf("expected completion status to remain true after delete")
-				}
+				t.Fatalf("task should not appear in summary on/after delete date")
 			}
 		}
-	}
-	if !found {
-		t.Fatalf("expected deleted task item in monthly summary date group")
 	}
 }
 

@@ -27,12 +27,12 @@ func (s *Store) GetTaskOverview(ctx context.Context, userID string) (api.TaskOve
 	daily := []api.TaskOverviewDailyTask{}
 	weekly := []api.TaskOverviewWeeklyTask{}
 
-	tasks, err := s.q.ListActiveTasksByTeamID(ctx, teamID)
+	tasks, err := s.q.ListUndeletedTasksByTeamID(ctx, teamID)
 	if err != nil {
 		return api.TaskOverviewResponse{}, err
 	}
 	for _, row := range tasks {
-		t := taskFromActiveListRow(row, s.loc)
+		t := taskFromUndeletedListRow(row, s.loc)
 		if t.Type == api.Daily {
 			done, err := s.q.HasTaskCompletionDaily(ctx, dbsqlc.HasTaskCompletionDailyParams{
 				TaskID:     t.ID,
@@ -200,19 +200,25 @@ func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month 
 		items := []api.MonthlyTaskStatusItem{}
 
 		for _, task := range tasks {
-			if task.CreatedAt.In(s.loc).After(dayEnd.Add(-time.Nanosecond)) {
-				continue
-			}
-			if task.DeletedAt != nil && !task.DeletedAt.After(dayStart) {
-				continue
-			}
-
 			completed := false
 			switch task.Type {
 			case api.Daily:
+				if task.CreatedAt.In(s.loc).After(dayEnd.Add(-time.Nanosecond)) {
+					continue
+				}
+				if task.DeletedAt != nil && task.DeletedAt.Before(dayEnd) {
+					continue
+				}
 				completed = dailyDone[dayKey] != nil && dailyDone[dayKey][task.ID]
 			case api.Weekly:
 				if !sameDate(startOfWeek(dayStart, s.loc), dayStart) {
+					continue
+				}
+				weekEnd := dayStart.AddDate(0, 0, 7)
+				if task.CreatedAt.In(s.loc).After(weekEnd.Add(-time.Nanosecond)) {
+					continue
+				}
+				if task.DeletedAt != nil && task.DeletedAt.Before(weekEnd) {
 					continue
 				}
 				completed = weeklyDone[dayKey] != nil && weeklyDone[dayKey][task.ID]
