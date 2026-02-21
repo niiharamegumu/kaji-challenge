@@ -70,7 +70,6 @@ type taskRecord struct {
 	Type       api.TaskType
 	Penalty    int
 	AssigneeID *string
-	IsActive   bool
 	Required   int
 	CreatedAt  time.Time
 	UpdatedAt  time.Time

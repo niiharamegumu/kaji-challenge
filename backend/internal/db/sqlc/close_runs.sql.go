@@ -43,11 +43,7 @@ type InsertCloseRunParams struct {
 }
 
 func (q *Queries) InsertCloseRun(ctx context.Context, arg InsertCloseRunParams) (int64, error) {
-	result, err := q.db.Exec(ctx, insertCloseRun,
-		arg.TeamID,
-		arg.Scope,
-		arg.TargetDate,
-	)
+	result, err := q.db.Exec(ctx, insertCloseRun, arg.TeamID, arg.Scope, arg.TargetDate)
 	if err != nil {
 		return 0, err
 	}

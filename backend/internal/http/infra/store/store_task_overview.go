@@ -27,12 +27,12 @@ func (s *Store) GetTaskOverview(ctx context.Context, userID string) (api.TaskOve
 	daily := []api.TaskOverviewDailyTask{}
 	weekly := []api.TaskOverviewWeeklyTask{}
 
-	tasks, err := s.q.ListActiveTasksByTeamID(ctx, teamID)
+	tasks, err := s.q.ListUndeletedTasksByTeamID(ctx, teamID)
 	if err != nil {
 		return api.TaskOverviewResponse{}, err
 	}
 	for _, row := range tasks {
-		t := taskFromActiveListRow(row, s.loc)
+		t := taskFromUndeletedListRow(row, s.loc)
 		if t.Type == api.Daily {
 			done, err := s.q.HasTaskCompletionDaily(ctx, dbsqlc.HasTaskCompletionDailyParams{
 				TaskID:     t.ID,
@@ -177,7 +177,7 @@ func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month 
 
 	weeklyRows, err := s.q.ListTaskCompletionWeeklyByMonthAndTeam(ctx, dbsqlc.ListTaskCompletionWeeklyByMonthAndTeamParams{
 		TeamID:      teamID,
-		WeekStart:   toPgDate(monthStart),
+		WeekStart:   toPgDate(startOfWeek(monthStart, s.loc)),
 		WeekStart_2: toPgDate(monthEnd),
 	})
 	if err != nil {
@@ -185,11 +185,24 @@ func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month 
 	}
 	weeklyDone := map[string]map[string]bool{}
 	for _, row := range weeklyRows {
-		dateKey := row.WeekStart.Time.In(s.loc).Format("2006-01-02")
-		if weeklyDone[dateKey] == nil {
-			weeklyDone[dateKey] = map[string]bool{}
+		weekStartKey := row.WeekStart.Time.In(s.loc).Format("2006-01-02")
+		if weeklyDone[weekStartKey] == nil {
+			weeklyDone[weekStartKey] = map[string]bool{}
 		}
-		weeklyDone[dateKey][row.TaskID] = row.CompletionCount > 0
+		weeklyDone[weekStartKey][row.TaskID] = row.CompletionCount > 0
+	}
+
+	weeklyAnchorByDay := map[string]time.Time{}
+	for weekStart := startOfWeek(monthStart, s.loc); weekStart.Before(monthEnd); weekStart = weekStart.AddDate(0, 0, 7) {
+		weekEnd := weekStart.AddDate(0, 0, 6)
+		if monthKeyFromTime(weekEnd, s.loc) != month {
+			continue
+		}
+		anchor := weekStart
+		if anchor.Before(monthStart) {
+			anchor = monthStart
+		}
+		weeklyAnchorByDay[anchor.Format("2006-01-02")] = weekStart
 	}
 
 	groups := []api.MonthlyTaskStatusGroup{}
@@ -200,22 +213,30 @@ func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month 
 		items := []api.MonthlyTaskStatusItem{}
 
 		for _, task := range tasks {
-			if task.CreatedAt.In(s.loc).After(dayEnd.Add(-time.Nanosecond)) {
-				continue
-			}
-			if task.DeletedAt != nil && !task.DeletedAt.After(dayStart) {
-				continue
-			}
-
 			completed := false
 			switch task.Type {
 			case api.Daily:
-				completed = dailyDone[dayKey] != nil && dailyDone[dayKey][task.ID]
-			case api.Weekly:
-				if !sameDate(startOfWeek(dayStart, s.loc), dayStart) {
+				if task.CreatedAt.In(s.loc).After(dayEnd.Add(-time.Nanosecond)) {
 					continue
 				}
-				completed = weeklyDone[dayKey] != nil && weeklyDone[dayKey][task.ID]
+				if task.DeletedAt != nil && task.DeletedAt.Before(dayEnd) {
+					continue
+				}
+				completed = dailyDone[dayKey] != nil && dailyDone[dayKey][task.ID]
+			case api.Weekly:
+				weekStart, ok := weeklyAnchorByDay[dayKey]
+				if !ok {
+					continue
+				}
+				weekEnd := weekStart.AddDate(0, 0, 7)
+				if task.CreatedAt.In(s.loc).After(weekEnd.Add(-time.Nanosecond)) {
+					continue
+				}
+				if task.DeletedAt != nil && task.DeletedAt.Before(weekEnd) {
+					continue
+				}
+				weekStartKey := weekStart.Format("2006-01-02")
+				completed = weeklyDone[weekStartKey] != nil && weeklyDone[weekStartKey][task.ID]
 			default:
 				return nil, fmt.Errorf("unknown task type: %s", task.Type)
 			}

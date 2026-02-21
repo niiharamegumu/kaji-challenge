@@ -114,16 +114,15 @@ func main() {
 	for _, t := range tasks {
 		if _, err := tx.Exec(ctx, `
 INSERT INTO tasks (
-  id, team_id, title, notes, type, penalty_points, assignee_user_id, is_active,
+  id, team_id, title, notes, type, penalty_points, assignee_user_id,
   required_completions_per_week, created_at, updated_at, deleted_at
 )
-VALUES ($1, $2, $3, $4, $5, $6, NULL, TRUE, $7, $8, $9, NULL)
+VALUES ($1, $2, $3, $4, $5, $6, NULL, $7, $8, $9, NULL)
 ON CONFLICT (id) DO UPDATE SET
   title = EXCLUDED.title,
   notes = EXCLUDED.notes,
   type = EXCLUDED.type,
   penalty_points = EXCLUDED.penalty_points,
-  is_active = TRUE,
   required_completions_per_week = EXCLUDED.required_completions_per_week,
   updated_at = EXCLUDED.updated_at,
   deleted_at = NULL

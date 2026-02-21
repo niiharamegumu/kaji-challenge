@@ -1,10 +1,4 @@
-import {
-  CheckCircle2,
-  ChevronDown,
-  CircleMinus,
-  CirclePlus,
-  Trash2,
-} from "lucide-react";
+import { ChevronDown, CirclePlus, Trash2 } from "lucide-react";
 import type { ChangeEvent } from "react";
 import { useMemo } from "react";
 
@@ -23,7 +17,6 @@ type Props = {
   tasks: Task[];
   onFormChange: (updater: (prev: TaskFormState) => TaskFormState) => void;
   onCreate: () => void;
-  onToggleActive: (taskId: string, isActive: boolean) => void;
   onDelete: (taskId: string) => void;
 };
 
@@ -32,7 +25,6 @@ export function TaskManager({
   tasks,
   onFormChange,
   onCreate,
-  onToggleActive,
   onDelete,
 }: Props) {
   const handleChange =
@@ -156,32 +148,13 @@ export function TaskManager({
               {dailyTasks.map((task) => (
                 <li
                   key={task.id}
-                  className={`rounded-xl border p-3 ${task.isActive ? "border-[color:var(--color-matcha-300)] bg-[color:var(--color-matcha-50)]" : "border-stone-300 bg-stone-100"}`}
+                  className="rounded-xl border border-[color:var(--color-matcha-300)] bg-[color:var(--color-matcha-50)] p-3"
                 >
-                  <div
-                    className={`font-medium ${task.isActive ? "text-stone-900" : "text-stone-700"}`}
-                  >
-                    {task.title}
-                  </div>
-                  <div
-                    className={`mt-1 text-xs ${task.isActive ? "text-stone-600" : "text-stone-500"}`}
-                  >
-                    {taskTypeLabel(task.type)} / 減点 {task.penaltyPoints} /{" "}
-                    {task.isActive ? "有効" : "無効"}
+                  <div className="font-medium text-stone-900">{task.title}</div>
+                  <div className="mt-1 text-xs text-stone-600">
+                    {taskTypeLabel(task.type)} / 減点 {task.penaltyPoints}
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      className="flex min-h-11 items-center gap-1 rounded-lg border border-stone-300 bg-white px-3 py-2 text-xs transition-colors duration-200 hover:bg-stone-50"
-                      onClick={() => onToggleActive(task.id, task.isActive)}
-                    >
-                      {task.isActive ? (
-                        <CircleMinus size={14} aria-hidden="true" />
-                      ) : (
-                        <CheckCircle2 size={14} aria-hidden="true" />
-                      )}
-                      <span>{task.isActive ? "無効化" : "有効化"}</span>
-                    </button>
                     <button
                       type="button"
                       className="flex min-h-11 items-center gap-1 rounded-lg border border-rose-300 bg-white px-3 py-2 text-xs text-rose-700 transition-colors duration-200 hover:bg-rose-50"
@@ -208,33 +181,14 @@ export function TaskManager({
               {weeklyTasks.map((task) => (
                 <li
                   key={task.id}
-                  className={`rounded-xl border p-3 ${task.isActive ? "border-[color:var(--color-matcha-300)] bg-[color:var(--color-matcha-50)]" : "border-stone-300 bg-stone-100"}`}
+                  className="rounded-xl border border-[color:var(--color-matcha-300)] bg-[color:var(--color-matcha-50)] p-3"
                 >
-                  <div
-                    className={`font-medium ${task.isActive ? "text-stone-900" : "text-stone-700"}`}
-                  >
-                    {task.title}
-                  </div>
-                  <div
-                    className={`mt-1 text-xs ${task.isActive ? "text-stone-600" : "text-stone-500"}`}
-                  >
+                  <div className="font-medium text-stone-900">{task.title}</div>
+                  <div className="mt-1 text-xs text-stone-600">
                     {taskTypeLabel(task.type)} / 減点 {task.penaltyPoints} /
-                    必要 {task.requiredCompletionsPerWeek}回/週 /{" "}
-                    {task.isActive ? "有効" : "無効"}
+                    必要 {task.requiredCompletionsPerWeek}回/週
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      className="flex min-h-11 items-center gap-1 rounded-lg border border-stone-300 bg-white px-3 py-2 text-xs transition-colors duration-200 hover:bg-stone-50"
-                      onClick={() => onToggleActive(task.id, task.isActive)}
-                    >
-                      {task.isActive ? (
-                        <CircleMinus size={14} aria-hidden="true" />
-                      ) : (
-                        <CheckCircle2 size={14} aria-hidden="true" />
-                      )}
-                      <span>{task.isActive ? "無効化" : "有効化"}</span>
-                    </button>
                     <button
                       type="button"
                       className="flex min-h-11 items-center gap-1 rounded-lg border border-rose-300 bg-white px-3 py-2 text-xs text-rose-700 transition-colors duration-200 hover:bg-rose-50"

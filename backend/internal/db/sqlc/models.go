@@ -8,13 +8,11 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type CloseExecution struct {
-	TeamID        string             `json:"team_id"`
-	Scope         string             `json:"scope"`
-	TargetDate    pgtype.Date        `json:"target_date"`
-	TaskID        string             `json:"task_id"`
-	DedupeTaskKey pgtype.Text        `json:"dedupe_task_key"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+type CloseRun struct {
+	TeamID     string             `json:"team_id"`
+	Scope      string             `json:"scope"`
+	TargetDate pgtype.Date        `json:"target_date"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 }
 
 type InviteCode struct {
@@ -81,7 +79,6 @@ type Task struct {
 	Type                       string             `json:"type"`
 	PenaltyPoints              int32              `json:"penalty_points"`
 	AssigneeUserID             string             `json:"assignee_user_id"`
-	IsActive                   bool               `json:"is_active"`
 	RequiredCompletionsPerWeek int32              `json:"required_completions_per_week"`
 	CreatedAt                  pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt                  pgtype.Timestamptz `json:"updated_at"`
@@ -100,6 +97,14 @@ type TaskCompletionWeekly struct {
 	CompletionCount int32              `json:"completion_count"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
+type TaskEvaluationDedupe struct {
+	TeamID     string             `json:"team_id"`
+	Scope      string             `json:"scope"`
+	TargetDate pgtype.Date        `json:"target_date"`
+	TaskID     string             `json:"task_id"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 }
 
 type Team struct {

@@ -84,7 +84,6 @@ type CreatePenaltyRuleRequest struct {
 // CreateTaskRequest defines model for CreateTaskRequest.
 type CreateTaskRequest struct {
 	AssigneeUserId             *string  `json:"assigneeUserId,omitempty"`
-	IsActive                   *bool    `json:"isActive,omitempty"`
 	Notes                      *string  `json:"notes,omitempty"`
 	PenaltyPoints              int      `json:"penaltyPoints"`
 	RequiredCompletionsPerWeek *int     `json:"requiredCompletionsPerWeek,omitempty"`
@@ -165,7 +164,6 @@ type Task struct {
 	AssigneeUserId             *string   `json:"assigneeUserId,omitempty"`
 	CreatedAt                  time.Time `json:"createdAt"`
 	Id                         string    `json:"id"`
-	IsActive                   bool      `json:"isActive"`
 	Notes                      *string   `json:"notes,omitempty"`
 	PenaltyPoints              int       `json:"penaltyPoints"`
 	RequiredCompletionsPerWeek int       `json:"requiredCompletionsPerWeek"`
@@ -279,7 +277,6 @@ type UpdatePenaltyRuleRequest struct {
 // UpdateTaskRequest defines model for UpdateTaskRequest.
 type UpdateTaskRequest struct {
 	AssigneeUserId             *string `json:"assigneeUserId,omitempty"`
-	IsActive                   *bool   `json:"isActive,omitempty"`
 	Notes                      *string `json:"notes,omitempty"`
 	PenaltyPoints              *int    `json:"penaltyPoints,omitempty"`
 	RequiredCompletionsPerWeek *int    `json:"requiredCompletionsPerWeek,omitempty"`
