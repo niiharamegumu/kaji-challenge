@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -178,6 +179,98 @@ func TestCatchUpWeekLockedProcessesMissingWeeks(t *testing.T) {
 	jan := getMonthSummary(t, s, teamID, "2026-01")
 	if jan.WeeklyPenaltyTotal != 12 {
 		t.Fatalf("expected weekly total=12 after catch-up, got %d", jan.WeeklyPenaltyTotal)
+	}
+}
+
+func TestCloseWeekForTargetLockedAddsPenaltyToWeekEndMonth(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	createdAt := time.Date(2026, 1, 1, 10, 0, 0, 0, s.loc)
+	teamID, userID := createTeamWithMember(t, s, "week-end-month@example.com", createdAt)
+	createTaskAt(t, s, teamID, api.Weekly, 4, 1, createdAt)
+
+	didRun, err := s.closeWeekForTargetLocked(ctx, time.Date(2025, 12, 29, 0, 0, 0, 0, s.loc), teamID)
+	if err != nil {
+		t.Fatalf("closeWeekForTargetLocked failed: %v", err)
+	}
+	if !didRun {
+		t.Fatalf("expected closeWeekForTargetLocked to run")
+	}
+
+	jan := getMonthSummary(t, s, teamID, "2026-01")
+	if jan.WeeklyPenaltyTotal != 4 {
+		t.Fatalf("expected weekly total=4 in 2026-01, got %d", jan.WeeklyPenaltyTotal)
+	}
+
+	targetMonth := "2026-01"
+	apiSummary, err := s.GetMonthlySummary(ctx, userID, &targetMonth)
+	if err != nil {
+		t.Fatalf("GetMonthlySummary failed: %v", err)
+	}
+	if apiSummary.WeeklyPenaltyTotal != 4 {
+		t.Fatalf("expected api weekly total=4 in 2026-01, got %d", apiSummary.WeeklyPenaltyTotal)
+	}
+	if apiSummary.TotalPenalty != 4 {
+		t.Fatalf("expected api total penalty=4 in 2026-01, got %d", apiSummary.TotalPenalty)
+	}
+}
+
+func TestCloseDayForTargetLockedFailsWhenMonthAlreadyClosed(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	createdAt := time.Date(2025, 12, 15, 10, 0, 0, 0, s.loc)
+	teamID, _ := createTeamWithMember(t, s, "closed-month-day@example.com", createdAt)
+	createTaskAt(t, s, teamID, api.Daily, 2, 1, createdAt)
+
+	if _, _, err := s.closeMonthForTargetLocked(ctx, time.Date(2025, 12, 1, 0, 0, 0, 0, s.loc), teamID); err != nil {
+		t.Fatalf("closeMonthForTargetLocked failed: %v", err)
+	}
+
+	_, err := s.closeDayForTargetLocked(ctx, time.Date(2025, 12, 31, 0, 0, 0, 0, s.loc), teamID)
+	if !errors.Is(err, errMonthAlreadyClosed) {
+		t.Fatalf("expected errMonthAlreadyClosed, got %v", err)
+	}
+
+	latest, latestErr := s.q.GetLatestCloseRunTargetDate(ctx, dbsqlc.GetLatestCloseRunTargetDateParams{
+		TeamID: teamID,
+		Scope:  "close_day",
+	})
+	if latestErr != nil {
+		t.Fatalf("GetLatestCloseRunTargetDate failed: %v", latestErr)
+	}
+	if latest.Valid {
+		t.Fatalf("close_day run must not be recorded when month is already closed")
+	}
+}
+
+func TestCloseWeekForTargetLockedFailsWhenTargetMonthAlreadyClosed(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	createdAt := time.Date(2026, 1, 1, 10, 0, 0, 0, s.loc)
+	teamID, _ := createTeamWithMember(t, s, "closed-month-week@example.com", createdAt)
+	createTaskAt(t, s, teamID, api.Weekly, 3, 1, createdAt)
+
+	if _, _, err := s.closeMonthForTargetLocked(ctx, time.Date(2026, 1, 1, 0, 0, 0, 0, s.loc), teamID); err != nil {
+		t.Fatalf("closeMonthForTargetLocked failed: %v", err)
+	}
+
+	_, err := s.closeWeekForTargetLocked(ctx, time.Date(2025, 12, 29, 0, 0, 0, 0, s.loc), teamID)
+	if !errors.Is(err, errMonthAlreadyClosed) {
+		t.Fatalf("expected errMonthAlreadyClosed, got %v", err)
+	}
+
+	latest, latestErr := s.q.GetLatestCloseRunTargetDate(ctx, dbsqlc.GetLatestCloseRunTargetDateParams{
+		TeamID: teamID,
+		Scope:  "close_week",
+	})
+	if latestErr != nil {
+		t.Fatalf("GetLatestCloseRunTargetDate failed: %v", latestErr)
+	}
+	if latest.Valid {
+		t.Fatalf("close_week run must not be recorded when month is already closed")
 	}
 }
 
