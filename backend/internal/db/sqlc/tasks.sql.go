@@ -119,6 +119,19 @@ func (q *Queries) GetTaskByID(ctx context.Context, id string) (GetTaskByIDRow, e
 	return i, err
 }
 
+const getEarliestTaskCreatedAtByTeam = `-- name: GetEarliestTaskCreatedAtByTeam :one
+SELECT MIN(created_at)::timestamptz AS created_at
+FROM tasks
+WHERE team_id = $1
+`
+
+func (q *Queries) GetEarliestTaskCreatedAtByTeam(ctx context.Context, teamID string) (pgtype.Timestamptz, error) {
+	row := q.db.QueryRow(ctx, getEarliestTaskCreatedAtByTeam, teamID)
+	var created_at pgtype.Timestamptz
+	err := row.Scan(&created_at)
+	return created_at, err
+}
+
 const listActiveTasksByTeamID = `-- name: ListActiveTasksByTeamID :many
 SELECT id, team_id, title, notes, type, penalty_points, COALESCE(assignee_user_id::text, '') AS assignee_user_id, is_active, required_completions_per_week, created_at, updated_at, deleted_at
 FROM tasks
@@ -152,6 +165,70 @@ func (q *Queries) ListActiveTasksByTeamID(ctx context.Context, teamID string) ([
 	var items []ListActiveTasksByTeamIDRow
 	for rows.Next() {
 		var i ListActiveTasksByTeamIDRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TeamID,
+			&i.Title,
+			&i.Notes,
+			&i.Type,
+			&i.PenaltyPoints,
+			&i.AssigneeUserID,
+			&i.IsActive,
+			&i.RequiredCompletionsPerWeek,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTasksEffectiveForCloseByTeamAndType = `-- name: ListTasksEffectiveForCloseByTeamAndType :many
+SELECT id, team_id, title, notes, type, penalty_points, COALESCE(assignee_user_id::text, '') AS assignee_user_id, is_active, required_completions_per_week, created_at, updated_at, deleted_at
+FROM tasks
+WHERE team_id = $1
+  AND type = $2
+  AND created_at < $3
+  AND (deleted_at IS NULL OR deleted_at >= $3)
+ORDER BY created_at
+`
+
+type ListTasksEffectiveForCloseByTeamAndTypeParams struct {
+	TeamID    string             `json:"team_id"`
+	Type      string             `json:"type"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+type ListTasksEffectiveForCloseByTeamAndTypeRow struct {
+	ID                         string             `json:"id"`
+	TeamID                     string             `json:"team_id"`
+	Title                      string             `json:"title"`
+	Notes                      pgtype.Text        `json:"notes"`
+	Type                       string             `json:"type"`
+	PenaltyPoints              int32              `json:"penalty_points"`
+	AssigneeUserID             interface{}        `json:"assignee_user_id"`
+	IsActive                   bool               `json:"is_active"`
+	RequiredCompletionsPerWeek int32              `json:"required_completions_per_week"`
+	CreatedAt                  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt                  pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt                  pgtype.Timestamptz `json:"deleted_at"`
+}
+
+func (q *Queries) ListTasksEffectiveForCloseByTeamAndType(ctx context.Context, arg ListTasksEffectiveForCloseByTeamAndTypeParams) ([]ListTasksEffectiveForCloseByTeamAndTypeRow, error) {
+	rows, err := q.db.Query(ctx, listTasksEffectiveForCloseByTeamAndType, arg.TeamID, arg.Type, arg.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTasksEffectiveForCloseByTeamAndTypeRow
+	for rows.Next() {
+		var i ListTasksEffectiveForCloseByTeamAndTypeRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.TeamID,
