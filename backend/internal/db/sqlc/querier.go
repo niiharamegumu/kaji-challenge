@@ -39,6 +39,7 @@ type Querier interface {
 	DeleteTeamMember(ctx context.Context, arg DeleteTeamMemberParams) error
 	DeleteTriggeredRulesByMonth(ctx context.Context, arg DeleteTriggeredRulesByMonthParams) error
 	GetAuthRequest(ctx context.Context, state string) (OauthAuthRequest, error)
+	GetEarliestTaskCreatedAtByTeam(ctx context.Context, teamID string) (pgtype.Timestamptz, error)
 	GetExchangeCode(ctx context.Context, code string) (OauthExchangeCode, error)
 	GetInviteCode(ctx context.Context, code string) (InviteCode, error)
 	GetLatestCloseRunTargetDate(ctx context.Context, arg GetLatestCloseRunTargetDateParams) (pgtype.Date, error)
@@ -48,7 +49,6 @@ type Querier interface {
 	GetPenaltyRuleByID(ctx context.Context, id string) (PenaltyRule, error)
 	GetSessionByToken(ctx context.Context, token string) (Session, error)
 	GetTaskByID(ctx context.Context, id string) (GetTaskByIDRow, error)
-	GetEarliestTaskCreatedAtByTeam(ctx context.Context, teamID string) (pgtype.Timestamptz, error)
 	GetTaskCompletionWeeklyCount(ctx context.Context, arg GetTaskCompletionWeeklyCountParams) (int64, error)
 	GetUserByEmail(ctx context.Context, lower string) (GetUserByEmailRow, error)
 	GetUserByID(ctx context.Context, id string) (GetUserByIDRow, error)
@@ -61,7 +61,6 @@ type Querier interface {
 	InsertExchangeCode(ctx context.Context, arg InsertExchangeCodeParams) error
 	InsertTaskEvaluationDedupe(ctx context.Context, arg InsertTaskEvaluationDedupeParams) (int64, error)
 	ListActivePenaltyRulesByTeamID(ctx context.Context, teamID string) ([]PenaltyRule, error)
-	ListActiveTasksByTeamID(ctx context.Context, teamID string) ([]ListActiveTasksByTeamIDRow, error)
 	ListMembershipsByUserID(ctx context.Context, userID string) ([]ListMembershipsByUserIDRow, error)
 	ListPenaltyRulesByTeamID(ctx context.Context, teamID string) ([]PenaltyRule, error)
 	ListTaskCompletionDailyByMonthAndTeam(ctx context.Context, arg ListTaskCompletionDailyByMonthAndTeamParams) ([]ListTaskCompletionDailyByMonthAndTeamRow, error)
@@ -72,6 +71,7 @@ type Querier interface {
 	ListTeamIDsForClose(ctx context.Context) ([]string, error)
 	ListTeamMembersByTeamID(ctx context.Context, teamID string) ([]ListTeamMembersByTeamIDRow, error)
 	ListTriggeredRuleIDsByMonth(ctx context.Context, arg ListTriggeredRuleIDsByMonthParams) ([]string, error)
+	ListUndeletedTasksByTeamID(ctx context.Context, teamID string) ([]ListUndeletedTasksByTeamIDRow, error)
 	ToggleTaskCompletionWeeklyBinary(ctx context.Context, arg ToggleTaskCompletionWeeklyBinaryParams) (int64, error)
 	UpdatePenaltyRule(ctx context.Context, arg UpdatePenaltyRuleParams) error
 	UpdateTask(ctx context.Context, arg UpdateTaskParams) error

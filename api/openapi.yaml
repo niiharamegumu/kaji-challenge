@@ -634,7 +634,7 @@ components:
     Task:
       type: object
       required:
-        [id, teamId, title, type, penaltyPoints, isActive, requiredCompletionsPerWeek, createdAt, updatedAt]
+        [id, teamId, title, type, penaltyPoints, requiredCompletionsPerWeek, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -652,8 +652,6 @@ components:
           maximum: 1000
         assigneeUserId:
           type: string
-        isActive:
-          type: boolean
         requiredCompletionsPerWeek:
           type: integer
           minimum: 1
@@ -683,9 +681,6 @@ components:
           maximum: 1000
         assigneeUserId:
           type: string
-        isActive:
-          type: boolean
-          default: true
         requiredCompletionsPerWeek:
           type: integer
           minimum: 1
@@ -706,8 +701,6 @@ components:
           maximum: 1000
         assigneeUserId:
           type: string
-        isActive:
-          type: boolean
         requiredCompletionsPerWeek:
           type: integer
           minimum: 1

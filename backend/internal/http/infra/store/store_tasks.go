@@ -56,10 +56,6 @@ func (s *Store) CreateTask(ctx context.Context, userID string, req api.CreateTas
 		return api.Task{}, err
 	}
 
-	active := true
-	if req.IsActive != nil {
-		active = *req.IsActive
-	}
 	now := time.Now().In(s.loc)
 	taskID := s.nextID("tsk")
 	task := taskRecord{
@@ -70,7 +66,6 @@ func (s *Store) CreateTask(ctx context.Context, userID string, req api.CreateTas
 		Type:       req.Type,
 		Penalty:    req.PenaltyPoints,
 		AssigneeID: req.AssigneeUserId,
-		IsActive:   active,
 		Required:   required,
 		CreatedAt:  now,
 		UpdatedAt:  now,
@@ -83,7 +78,6 @@ func (s *Store) CreateTask(ctx context.Context, userID string, req api.CreateTas
 		Type:                       string(task.Type),
 		PenaltyPoints:              penalty32,
 		Column7:                    uuidStringFromPtr(task.AssigneeID),
-		IsActive:                   task.IsActive,
 		RequiredCompletionsPerWeek: required32,
 		CreatedAt:                  toPgTimestamptz(task.CreatedAt),
 		UpdatedAt:                  toPgTimestamptz(task.UpdatedAt),
@@ -122,9 +116,6 @@ func (s *Store) PatchTask(ctx context.Context, userID, taskID string, req api.Up
 	if req.AssigneeUserId != nil {
 		task.AssigneeID = req.AssigneeUserId
 	}
-	if req.IsActive != nil {
-		task.IsActive = *req.IsActive
-	}
 	if req.RequiredCompletionsPerWeek != nil && task.Type == api.Weekly {
 		task.Required = *req.RequiredCompletionsPerWeek
 	}
@@ -143,7 +134,6 @@ func (s *Store) PatchTask(ctx context.Context, userID, taskID string, req api.Up
 		Notes:                      textFromPtr(task.Notes),
 		PenaltyPoints:              penalty32,
 		Column5:                    uuidStringFromPtr(task.AssigneeID),
-		IsActive:                   task.IsActive,
 		RequiredCompletionsPerWeek: required32,
 		UpdatedAt:                  toPgTimestamptz(task.UpdatedAt),
 	}); err != nil {
@@ -181,10 +171,6 @@ func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string,
 	if task.TeamID != teamID || task.DeletedAt != nil {
 		return api.TaskCompletionResponse{}, errors.New("task not found")
 	}
-	if !task.IsActive {
-		return api.TaskCompletionResponse{}, errors.New("task is inactive")
-	}
-
 	today := dateOnly(time.Now().In(s.loc), s.loc)
 	targetDate := dateOnly(target.In(s.loc), s.loc)
 	if task.Type == api.Daily && !sameDate(targetDate, today) {

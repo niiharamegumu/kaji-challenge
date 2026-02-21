@@ -8,7 +8,6 @@ import {
   deleteTask,
   patchMeNickname,
   patchPenaltyRule,
-  patchTask,
   patchTeamCurrent,
   postPenaltyRule,
   postTask,
@@ -68,23 +67,6 @@ export function useTaskMutations(setStatus: StatusSetter) {
     },
   });
 
-  const toggleTask = useMutation({
-    mutationFn: async ({
-      taskId,
-      isActive,
-    }: {
-      taskId: string;
-      isActive: boolean;
-    }) => patchTask(taskId, { isActive: !isActive }),
-    onSuccess: async () => {
-      setStatus("タスク状態を更新しました");
-      await invalidate();
-    },
-    onError: (error) => {
-      setStatus(`タスク更新に失敗しました: ${formatError(error)}`);
-    },
-  });
-
   const removeTask = useMutation({
     mutationFn: async (taskId: string) => deleteTask(taskId),
     onSuccess: async () => {
@@ -96,7 +78,7 @@ export function useTaskMutations(setStatus: StatusSetter) {
     },
   });
 
-  return { createTask, toggleTask, removeTask };
+  return { createTask, removeTask };
 }
 
 export function usePenaltyRuleMutations(setStatus: StatusSetter) {
