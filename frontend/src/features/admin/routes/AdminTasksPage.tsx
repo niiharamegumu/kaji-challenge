@@ -17,7 +17,7 @@ export function AdminTasksPage() {
 
   const [taskForm, setTaskForm] = useAtom(taskFormAtom);
   const [, setStatus] = useAtom(statusMessageAtom);
-  const { createTask, toggleTask, removeTask } = useTaskMutations(setStatus);
+  const { createTask, removeTask } = useTaskMutations(setStatus);
 
   const handleCreateTask = async () => {
     const payload: CreateTaskRequest = {
@@ -41,9 +41,6 @@ export function AdminTasksPage() {
         onFormChange={(updater) => setTaskForm((prev) => updater(prev))}
         onCreate={() => {
           void handleCreateTask();
-        }}
-        onToggleActive={(taskId, isActive) => {
-          void toggleTask.mutateAsync({ taskId, isActive });
         }}
         onDelete={(taskId) => {
           void removeTask.mutateAsync(taskId);

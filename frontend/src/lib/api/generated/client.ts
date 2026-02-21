@@ -150,7 +150,6 @@ export interface Task {
    */
   penaltyPoints: number;
   assigneeUserId?: string;
-  isActive: boolean;
   /** @minimum 1 */
   requiredCompletionsPerWeek: number;
   createdAt: string;
@@ -172,7 +171,6 @@ export interface CreateTaskRequest {
    */
   penaltyPoints: number;
   assigneeUserId?: string;
-  isActive?: boolean;
   /** @minimum 1 */
   requiredCompletionsPerWeek?: number;
 }
@@ -191,7 +189,6 @@ export interface UpdateTaskRequest {
    */
   penaltyPoints?: number;
   assigneeUserId?: string;
-  isActive?: boolean;
   /** @minimum 1 */
   requiredCompletionsPerWeek?: number;
 }
