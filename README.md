@@ -31,6 +31,8 @@
 - `make security`: backend/frontend の脆弱性チェック（Critical fail）
 - `make check`: `gen + lint + test`
 - `make diff-gen`: 生成差分チェック
+- `make seed-monthly-dummy month=YYYY-MM email=user@example.com`: ダミータスク/完了記録を投入（集計は行わない）
+- `make ops-close scope=day|week|month [team_id=<uuid>]`: close処理をCLI実行（既定は全チーム対象）
 
 backend の Critical 判定は `backend/security/critical_goids.txt` の GO-ID allowlist で管理します。
 
@@ -55,6 +57,20 @@ APIを変更する場合は、必ず `api/openapi.yaml` を先に更新してか
 
 backend は `air` で起動され、`backend/` 配下の変更を自動リロードします。
 `DATABASE_URL` は全環境で必須です（未設定時は backend 起動失敗）。
+
+## 定期closeのCLI実行（Cloud Run Job向け）
+
+Cloud Run Job運用推奨（3分割）:
+
+- `close-day`: command=`/app/ops`, args=`close --scope day --all-teams`
+- `close-week`: command=`/app/ops`, args=`close --scope week --all-teams`
+- `close-month`: command=`/app/ops`, args=`close --scope month --all-teams`
+
+`ops close` は catch-up モードで動作し、未処理期間を連続で補完します（例: day 実行時は未処理の全日を昨日まで処理）。
+過去期間の判定対象タスクは `created_at` / `deleted_at` を使って対象時点で有効だったものを再現します。
+`seed-monthly-dummy` は月次サマリーを直接作成せず、集計は `ops close` に委譲します。
+いずれも終了コードで成否を返します。対象の一部で失敗した場合も他対象は継続し、最後に非0終了となります（監視しやすい設計）。
+内部実装として、冪等キー管理は `close_executions` から `close_runs` / `task_evaluation_dedupes` に責務分離されています。
 
 ## Frontend (Cloudflare Workers)
 

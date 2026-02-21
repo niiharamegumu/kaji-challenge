@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: dev up down down-reset gen gen-backend gen-frontend lint lint-backend lint-frontend test test-backend test-frontend security security-backend security-frontend check diff-gen db-migrate-up db-migrate-down db-migrate-create seed-monthly-dummy backend-cmd-seeder
+.PHONY: dev up down down-reset gen gen-backend gen-frontend lint lint-backend lint-frontend test test-backend test-frontend security security-backend security-frontend check diff-gen db-migrate-up db-migrate-down db-migrate-create seed-monthly-dummy backend-cmd-seeder ops-close backend-cmd-ops-close
 
 ifneq (,$(wildcard .env))
 include .env
@@ -109,3 +109,13 @@ backend-cmd-seeder:
 	@test -n "$(month)" || (echo "usage: make seed-monthly-dummy month=YYYY-MM email=user@example.com" && exit 1)
 	@test -n "$(email)" || (echo "usage: make seed-monthly-dummy month=YYYY-MM email=user@example.com" && exit 1)
 	$(BACKEND_RUN) go -C /app/backend run ./cmd/seeder --month "$(month)" --email "$(email)"
+
+ops-close: backend-cmd-ops-close
+
+backend-cmd-ops-close:
+	@test -n "$(scope)" || (echo "usage: make ops-close scope=day|week|month [team_id=<uuid>]" && exit 1)
+	@if [ -n "$(team_id)" ]; then \
+		$(BACKEND_RUN) go -C /app/backend run ./cmd/ops close --scope "$(scope)" --all-teams=false --team-id "$(team_id)"; \
+	else \
+		$(BACKEND_RUN) go -C /app/backend run ./cmd/ops close --scope "$(scope)" --all-teams=true; \
+	fi

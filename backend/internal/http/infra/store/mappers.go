@@ -109,6 +109,23 @@ func taskFromActiveListRow(row dbsqlc.ListActiveTasksByTeamIDRow, loc *time.Loca
 	}
 }
 
+func taskFromEffectiveCloseRow(row dbsqlc.ListTasksEffectiveForCloseByTeamAndTypeRow, loc *time.Location) taskRecord {
+	return taskRecord{
+		ID:         row.ID,
+		TeamID:     row.TeamID,
+		Title:      row.Title,
+		Notes:      ptrFromText(row.Notes),
+		Type:       api.TaskType(row.Type),
+		Penalty:    int(row.PenaltyPoints),
+		AssigneeID: ptrFromAny(row.AssigneeUserID),
+		IsActive:   row.IsActive,
+		Required:   int(row.RequiredCompletionsPerWeek),
+		CreatedAt:  row.CreatedAt.Time.In(loc),
+		UpdatedAt:  row.UpdatedAt.Time.In(loc),
+		DeletedAt:  ptrFromTimestamptz(row.DeletedAt, loc),
+	}
+}
+
 func ruleFromDB(row dbsqlc.PenaltyRule, loc *time.Location) ruleRecord {
 	return ruleRecord{
 		ID:          row.ID,
