@@ -13,6 +13,20 @@ WHERE team_id = $1
   AND deleted_at IS NULL
 ORDER BY created_at;
 
+-- name: GetEarliestTaskCreatedAtByTeam :one
+SELECT MIN(created_at)::timestamptz AS created_at
+FROM tasks
+WHERE team_id = $1;
+
+-- name: ListTasksEffectiveForCloseByTeamAndType :many
+SELECT id, team_id, title, notes, type, penalty_points, COALESCE(assignee_user_id::text, '') AS assignee_user_id, is_active, required_completions_per_week, created_at, updated_at, deleted_at
+FROM tasks
+WHERE team_id = $1
+  AND type = $2
+  AND created_at < $3
+  AND (deleted_at IS NULL OR deleted_at >= $3)
+ORDER BY created_at;
+
 -- name: GetTaskByID :one
 SELECT id, team_id, title, notes, type, penalty_points, COALESCE(assignee_user_id::text, '') AS assignee_user_id, is_active, required_completions_per_week, created_at, updated_at, deleted_at
 FROM tasks
