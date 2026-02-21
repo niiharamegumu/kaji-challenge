@@ -84,6 +84,39 @@ func TestBuildMonthlyTaskStatusByDateWeeklyOmitFromDeleteWeek(t *testing.T) {
 	}
 }
 
+func TestBuildMonthlyTaskStatusByDateWeeklyCrossMonthShownOnMonthStart(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	base := time.Date(2026, 1, 1, 9, 0, 0, 0, s.loc)
+	teamID, _ := createTeamWithMember(t, s, "summary-weekly-cross-month@example.com", base)
+	taskID := createTaskAtWithID(t, s, teamID, api.Weekly, 3, 1, base)
+
+	if err := s.q.UpsertTaskCompletionWeeklyCount(ctx, dbsqlc.UpsertTaskCompletionWeeklyCountParams{
+		TaskID:          taskID,
+		WeekStart:       toPgDate(time.Date(2025, 12, 29, 0, 0, 0, 0, s.loc)),
+		CompletionCount: 1,
+	}); err != nil {
+		t.Fatalf("failed to create cross-month weekly completion: %v", err)
+	}
+
+	groups, err := s.buildMonthlyTaskStatusByDate(ctx, teamID, "2026-01")
+	if err != nil {
+		t.Fatalf("buildMonthlyTaskStatusByDate failed: %v", err)
+	}
+
+	if !containsTaskOnDate(groups, "2026-01-01", taskID) {
+		t.Fatalf("weekly cross-month task should be shown on month start date")
+	}
+	completed, ok := taskCompletedOnDate(groups, "2026-01-01", taskID)
+	if !ok {
+		t.Fatalf("weekly cross-month task should exist on 2026-01-01")
+	}
+	if !completed {
+		t.Fatalf("weekly cross-month task should be marked completed")
+	}
+}
+
 func createTaskAtWithID(t *testing.T, s *Store, teamID string, taskType api.TaskType, penalty, required int, createdAt time.Time) string {
 	t.Helper()
 	taskID := s.nextID("task")
@@ -116,4 +149,18 @@ func containsTaskOnDate(groups []api.MonthlyTaskStatusGroup, date, taskID string
 		}
 	}
 	return false
+}
+
+func taskCompletedOnDate(groups []api.MonthlyTaskStatusGroup, date, taskID string) (bool, bool) {
+	for _, group := range groups {
+		if group.Date.Time.Format("2006-01-02") != date {
+			continue
+		}
+		for _, item := range group.Items {
+			if item.TaskId == taskID {
+				return item.Completed, true
+			}
+		}
+	}
+	return false, false
 }

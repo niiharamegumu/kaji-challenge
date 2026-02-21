@@ -47,6 +47,17 @@ const formatMonthLabel = (month: string) => {
   return `${yearPart}年${monthPart}月`;
 };
 
+const dateFromDateKey = (dateKey: string) => {
+  const [yearPart, monthPart, dayPart] = dateKey.split("-");
+  const year = Number(yearPart);
+  const month = Number(monthPart);
+  const day = Number(dayPart);
+  if (Number.isNaN(year) || Number.isNaN(month) || Number.isNaN(day)) {
+    return new Date(`${dateKey}T00:00:00`);
+  }
+  return new Date(year, month - 1, day);
+};
+
 export function AdminSummaryPage() {
   const loggedIn = useAtomValue(isLoggedInAtom);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -381,75 +392,97 @@ export function AdminSummaryPage() {
             </p>
           ) : (
             <div className="mt-3 space-y-4">
-              {monthlyTaskStatusGroups.map((group) => (
-                <section key={group.date} className="px-1">
-                  <h4
-                    className={`flex items-center gap-2 text-sm font-semibold ${
-                      group.date < currentDateKey
-                        ? "text-stone-400"
-                        : "text-stone-800"
-                    }`}
-                  >
-                    <span>
-                      {(() => {
-                        const date = new Date(`${group.date}T00:00:00`);
-                        const weekday = new Intl.DateTimeFormat("ja-JP", {
-                          weekday: "short",
-                        }).format(date);
-                        return `${date.getMonth() + 1}月${date.getDate()}日（${weekday}）`;
-                      })()}
-                    </span>
-                    {group.date === currentDateKey ? (
-                      <span className="rounded-full bg-stone-900 px-2 py-0.5 text-[10px] font-semibold leading-4 text-white">
-                        今日
+              {monthlyTaskStatusGroups.map((group) => {
+                const date = dateFromDateKey(group.date);
+                const weekday = new Intl.DateTimeFormat("ja-JP", {
+                  weekday: "short",
+                }).format(date);
+                const isCrossMonthWeek = date.getDay() !== 1;
+
+                return (
+                  <section key={group.date} className="px-1">
+                    <h4
+                      className={`flex items-center gap-2 text-sm font-semibold ${
+                        group.date < currentDateKey
+                          ? "text-stone-400"
+                          : "text-stone-800"
+                      }`}
+                    >
+                      <span>
+                        {`${date.getMonth() + 1}月${date.getDate()}日（${weekday}）`}
                       </span>
-                    ) : null}
-                  </h4>
-                  <ul className="mt-2 divide-y divide-stone-200 overflow-hidden rounded-xl border border-stone-200 bg-white">
-                    {group.items.map((item) => (
-                      <li
-                        key={`${group.date}-${item.taskId}`}
-                        className={`p-3 text-sm ${
-                          item.completed
-                            ? "bg-[color:var(--color-matcha-50)]"
-                            : "bg-rose-50"
-                        }`}
-                      >
-                        <div className="min-w-0">
-                          <p
-                            className={`font-medium text-stone-900 ${item.completed ? "line-through text-stone-500" : ""}`}
-                          >
-                            {item.title}
-                            {item.isDeleted ? "（削除済み）" : ""}
-                          </p>
-                          <p
-                            className={`text-xs text-stone-500 ${item.completed ? "line-through" : ""}`}
-                          >
-                            {item.type === "daily" ? "日間" : "週間"} / 減点{" "}
-                            {item.penaltyPoints} 点
-                          </p>
-                        </div>
-                        <div className="mt-2">
-                          <span
-                            className={`inline-flex items-center gap-1 whitespace-nowrap text-xs ${
+                      {group.date === currentDateKey ? (
+                        <span className="rounded-full bg-stone-900 px-2 py-0.5 text-[10px] font-semibold leading-4 text-white">
+                          今日
+                        </span>
+                      ) : null}
+                    </h4>
+                    <ul className="mt-2 divide-y divide-stone-200 overflow-hidden rounded-xl border border-stone-200 bg-white">
+                      {group.items.map((item) => {
+                        const isWeekly = item.type === "weekly";
+                        const showCrossMonthBadge =
+                          isWeekly && isCrossMonthWeek;
+                        return (
+                          <li
+                            key={`${group.date}-${item.taskId}`}
+                            className={`p-3 text-sm ${
                               item.completed
-                                ? "text-[color:var(--color-matcha-700)]"
-                                : "text-rose-700"
+                                ? "bg-[color:var(--color-matcha-50)]"
+                                : "bg-rose-50"
                             }`}
                           >
-                            {item.completed ? (
-                              <CheckCircle2 size={14} aria-hidden="true" />
-                            ) : (
-                              <Circle size={14} aria-hidden="true" />
-                            )}
-                            {item.completed ? "完了" : "未完了"}
-                          </span>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              ))}
+                            <div className="min-w-0">
+                              <p
+                                className={`font-medium text-stone-900 ${item.completed ? "line-through text-stone-500" : ""}`}
+                              >
+                                {item.title}
+                                {item.isDeleted ? "（削除済み）" : ""}
+                              </p>
+                              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                                <span
+                                  className={`inline-flex items-center rounded-full px-2 py-0.5 font-semibold leading-4 ${
+                                    isWeekly
+                                      ? "bg-stone-900 text-white"
+                                      : "border border-stone-300 bg-white text-stone-900"
+                                  }`}
+                                >
+                                  {isWeekly ? "週間" : "日間"}
+                                </span>
+                                <span
+                                  className={`text-stone-500 ${item.completed ? "line-through" : ""}`}
+                                >
+                                  減点 {item.penaltyPoints} 点
+                                </span>
+                                {showCrossMonthBadge ? (
+                                  <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 font-semibold leading-4 text-amber-800">
+                                    週は前月から継続
+                                  </span>
+                                ) : null}
+                              </div>
+                            </div>
+                            <div className="mt-2">
+                              <span
+                                className={`inline-flex items-center gap-1 whitespace-nowrap text-xs ${
+                                  item.completed
+                                    ? "text-[color:var(--color-matcha-700)]"
+                                    : "text-rose-700"
+                                }`}
+                              >
+                                {item.completed ? (
+                                  <CheckCircle2 size={14} aria-hidden="true" />
+                                ) : (
+                                  <Circle size={14} aria-hidden="true" />
+                                )}
+                                {item.completed ? "完了" : "未完了"}
+                              </span>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </section>
+                );
+              })}
             </div>
           )}
         </div>
