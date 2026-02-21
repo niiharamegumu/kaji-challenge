@@ -48,7 +48,6 @@ func main() {
 	}
 	monthStart = time.Date(monthStart.Year(), monthStart.Month(), 1, 0, 0, 0, 0, loc)
 	monthEnd := monthStart.AddDate(0, 1, 0)
-	daysInMonth := int(monthEnd.Sub(monthStart).Hours() / 24)
 
 	databaseURL := strings.TrimSpace(os.Getenv("DATABASE_URL"))
 	if databaseURL == "" {
@@ -165,28 +164,13 @@ ON CONFLICT (task_id, week_start) DO UPDATE SET
 		}
 	}
 
-	// 月次サマリーの減点値は close 処理で蓄積されるため、シード時に分かりやすい値を投入する。
-	evenDayCompletions := countEvenDaysInMonth(monthStart, monthEnd)
-	dailyPenaltyTotal := (daysInMonth-evenDayCompletions)*tasks[0].penalty + daysInMonth*tasks[1].penalty
-	weeklyPenaltyTotal := countMondaysInMonth(monthStart, monthEnd, loc) * tasks[3].penalty
-	if _, err := tx.Exec(ctx, `
-INSERT INTO monthly_penalty_summaries (team_id, month_start, daily_penalty_total, weekly_penalty_total, is_closed)
-VALUES ($1, $2, $3, $4, FALSE)
-ON CONFLICT (team_id, month_start) DO UPDATE SET
-  daily_penalty_total = EXCLUDED.daily_penalty_total,
-  weekly_penalty_total = EXCLUDED.weekly_penalty_total,
-  is_closed = EXCLUDED.is_closed
-`, teamID, monthStart, dailyPenaltyTotal, weeklyPenaltyTotal); err != nil {
-		log.Fatalf("failed to upsert monthly summary: %v", err)
-	}
-
 	if err := tx.Commit(ctx); err != nil {
 		log.Fatalf("failed to commit: %v", err)
 	}
 
 	log.Printf("seed completed: month=%s team_id=%s email=%s", *month, teamID, *email)
 	log.Printf("tasks: daily(complete/pending), weekly(complete/pending)")
-	log.Printf("monthly summary seeded: daily=%d weekly=%d total=%d", dailyPenaltyTotal, weeklyPenaltyTotal, dailyPenaltyTotal+weeklyPenaltyTotal)
+	log.Printf("monthly summary is not seeded; run ops close(day/week/month) to aggregate")
 }
 
 func resolveTeamID(ctx context.Context, db *pgxpool.Pool, email string) (string, error) {
@@ -213,24 +197,4 @@ func startOfWeek(t time.Time, loc *time.Location) time.Time {
 	day := time.Date(tt.Year(), tt.Month(), tt.Day(), 0, 0, 0, 0, loc)
 	offset := (int(day.Weekday()) + 6) % 7
 	return day.AddDate(0, 0, -offset)
-}
-
-func countEvenDaysInMonth(monthStart, monthEnd time.Time) int {
-	count := 0
-	for d := monthStart; d.Before(monthEnd); d = d.AddDate(0, 0, 1) {
-		if d.Day()%2 == 0 {
-			count++
-		}
-	}
-	return count
-}
-
-func countMondaysInMonth(monthStart, monthEnd time.Time, loc *time.Location) int {
-	count := 0
-	for d := monthStart; d.Before(monthEnd); d = d.AddDate(0, 0, 1) {
-		if startOfWeek(d, loc).Equal(d) {
-			count++
-		}
-	}
-	return count
 }
