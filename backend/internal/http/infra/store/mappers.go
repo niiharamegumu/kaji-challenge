@@ -25,7 +25,6 @@ func (t taskRecord) toAPI() api.Task {
 		Type:                       t.Type,
 		PenaltyPoints:              t.Penalty,
 		AssigneeUserId:             t.AssigneeID,
-		IsActive:                   t.IsActive,
 		RequiredCompletionsPerWeek: t.Required,
 		CreatedAt:                  t.CreatedAt,
 		UpdatedAt:                  t.UpdatedAt,
@@ -67,7 +66,6 @@ func taskFromGetRow(row dbsqlc.GetTaskByIDRow, loc *time.Location) taskRecord {
 		Type:       api.TaskType(row.Type),
 		Penalty:    int(row.PenaltyPoints),
 		AssigneeID: ptrFromAny(row.AssigneeUserID),
-		IsActive:   row.IsActive,
 		Required:   int(row.RequiredCompletionsPerWeek),
 		CreatedAt:  row.CreatedAt.Time.In(loc),
 		UpdatedAt:  row.UpdatedAt.Time.In(loc),
@@ -84,7 +82,6 @@ func taskFromListRow(row dbsqlc.ListTasksByTeamIDRow, loc *time.Location) taskRe
 		Type:       api.TaskType(row.Type),
 		Penalty:    int(row.PenaltyPoints),
 		AssigneeID: ptrFromAny(row.AssigneeUserID),
-		IsActive:   row.IsActive,
 		Required:   int(row.RequiredCompletionsPerWeek),
 		CreatedAt:  row.CreatedAt.Time.In(loc),
 		UpdatedAt:  row.UpdatedAt.Time.In(loc),
@@ -92,7 +89,7 @@ func taskFromListRow(row dbsqlc.ListTasksByTeamIDRow, loc *time.Location) taskRe
 	}
 }
 
-func taskFromActiveListRow(row dbsqlc.ListActiveTasksByTeamIDRow, loc *time.Location) taskRecord {
+func taskFromUndeletedListRow(row dbsqlc.ListUndeletedTasksByTeamIDRow, loc *time.Location) taskRecord {
 	return taskRecord{
 		ID:         row.ID,
 		TeamID:     row.TeamID,
@@ -101,7 +98,6 @@ func taskFromActiveListRow(row dbsqlc.ListActiveTasksByTeamIDRow, loc *time.Loca
 		Type:       api.TaskType(row.Type),
 		Penalty:    int(row.PenaltyPoints),
 		AssigneeID: ptrFromAny(row.AssigneeUserID),
-		IsActive:   row.IsActive,
 		Required:   int(row.RequiredCompletionsPerWeek),
 		CreatedAt:  row.CreatedAt.Time.In(loc),
 		UpdatedAt:  row.UpdatedAt.Time.In(loc),
@@ -118,7 +114,6 @@ func taskFromEffectiveCloseRow(row dbsqlc.ListTasksEffectiveForCloseByTeamAndTyp
 		Type:       api.TaskType(row.Type),
 		Penalty:    int(row.PenaltyPoints),
 		AssigneeID: ptrFromAny(row.AssigneeUserID),
-		IsActive:   row.IsActive,
 		Required:   int(row.RequiredCompletionsPerWeek),
 		CreatedAt:  row.CreatedAt.Time.In(loc),
 		UpdatedAt:  row.UpdatedAt.Time.In(loc),
