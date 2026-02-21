@@ -177,7 +177,7 @@ func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month 
 
 	weeklyRows, err := s.q.ListTaskCompletionWeeklyByMonthAndTeam(ctx, dbsqlc.ListTaskCompletionWeeklyByMonthAndTeamParams{
 		TeamID:      teamID,
-		WeekStart:   toPgDate(monthStart),
+		WeekStart:   toPgDate(startOfWeek(monthStart, s.loc)),
 		WeekStart_2: toPgDate(monthEnd),
 	})
 	if err != nil {
@@ -185,11 +185,24 @@ func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month 
 	}
 	weeklyDone := map[string]map[string]bool{}
 	for _, row := range weeklyRows {
-		dateKey := row.WeekStart.Time.In(s.loc).Format("2006-01-02")
-		if weeklyDone[dateKey] == nil {
-			weeklyDone[dateKey] = map[string]bool{}
+		weekStartKey := row.WeekStart.Time.In(s.loc).Format("2006-01-02")
+		if weeklyDone[weekStartKey] == nil {
+			weeklyDone[weekStartKey] = map[string]bool{}
 		}
-		weeklyDone[dateKey][row.TaskID] = row.CompletionCount > 0
+		weeklyDone[weekStartKey][row.TaskID] = row.CompletionCount > 0
+	}
+
+	weeklyAnchorByDay := map[string]time.Time{}
+	for weekStart := startOfWeek(monthStart, s.loc); weekStart.Before(monthEnd); weekStart = weekStart.AddDate(0, 0, 7) {
+		weekEnd := weekStart.AddDate(0, 0, 6)
+		if monthKeyFromTime(weekEnd, s.loc) != month {
+			continue
+		}
+		anchor := weekStart
+		if anchor.Before(monthStart) {
+			anchor = monthStart
+		}
+		weeklyAnchorByDay[anchor.Format("2006-01-02")] = weekStart
 	}
 
 	groups := []api.MonthlyTaskStatusGroup{}
@@ -211,17 +224,19 @@ func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month 
 				}
 				completed = dailyDone[dayKey] != nil && dailyDone[dayKey][task.ID]
 			case api.Weekly:
-				if !sameDate(startOfWeek(dayStart, s.loc), dayStart) {
+				weekStart, ok := weeklyAnchorByDay[dayKey]
+				if !ok {
 					continue
 				}
-				weekEnd := dayStart.AddDate(0, 0, 7)
+				weekEnd := weekStart.AddDate(0, 0, 7)
 				if task.CreatedAt.In(s.loc).After(weekEnd.Add(-time.Nanosecond)) {
 					continue
 				}
 				if task.DeletedAt != nil && task.DeletedAt.Before(weekEnd) {
 					continue
 				}
-				completed = weeklyDone[dayKey] != nil && weeklyDone[dayKey][task.ID]
+				weekStartKey := weekStart.Format("2006-01-02")
+				completed = weeklyDone[weekStartKey] != nil && weeklyDone[weekStartKey][task.ID]
 			default:
 				return nil, fmt.Errorf("unknown task type: %s", task.Type)
 			}
