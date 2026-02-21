@@ -65,7 +65,6 @@ CREATE TABLE IF NOT EXISTS tasks (
   type TEXT NOT NULL CHECK (type IN ('daily', 'weekly')),
   penalty_points INTEGER NOT NULL CHECK (penalty_points BETWEEN 0 AND 1000),
   assignee_user_id UUID,
-  is_active BOOLEAN NOT NULL DEFAULT TRUE,
   required_completions_per_week INTEGER NOT NULL DEFAULT 1 CHECK (required_completions_per_week >= 1),
   created_at TIMESTAMPTZ NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL,
@@ -75,7 +74,6 @@ CREATE TABLE IF NOT EXISTS tasks (
     ON DELETE RESTRICT
 );
 CREATE INDEX IF NOT EXISTS idx_tasks_team_created ON tasks (team_id, created_at);
-CREATE INDEX IF NOT EXISTS idx_tasks_team_active_created ON tasks (team_id, is_active, created_at);
 
 CREATE TABLE IF NOT EXISTS task_completions (
   task_id UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
