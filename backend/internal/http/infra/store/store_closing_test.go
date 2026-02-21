@@ -62,8 +62,11 @@ func TestCloseWeekAndMonthForTeam(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 
-	teamID, userID := createTeamWithMember(t, s, "weekly@example.com", time.Now().In(s.loc))
-	createTask(t, s, teamID, api.Weekly, 5, 2)
+	now := time.Now().In(s.loc)
+	thisWeekStart := startOfWeek(dateOnly(now, s.loc), s.loc)
+	base := thisWeekStart.AddDate(0, 0, -6)
+	teamID, userID := createTeamWithMember(t, s, "weekly@example.com", base)
+	createTaskAt(t, s, teamID, api.Weekly, 5, 2, base)
 
 	weekResA, err := s.CloseWeekForTeam(ctx, teamID)
 	if err != nil {
@@ -270,7 +273,6 @@ func createTaskAt(t *testing.T, s *Store, teamID string, taskType api.TaskType, 
 		Type:                       string(taskType),
 		PenaltyPoints:              int32(penalty),
 		Column7:                    "",
-		IsActive:                   true,
 		RequiredCompletionsPerWeek: int32(required),
 		CreatedAt:                  toPgTimestamptz(createdAt),
 		UpdatedAt:                  toPgTimestamptz(createdAt),
