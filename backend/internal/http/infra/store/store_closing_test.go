@@ -177,8 +177,13 @@ func TestCatchUpWeekLockedProcessesMissingWeeks(t *testing.T) {
 	}
 
 	jan := getMonthSummary(t, s, teamID, "2026-01")
-	if jan.WeeklyPenaltyTotal != 12 {
-		t.Fatalf("expected weekly total=12 after catch-up, got %d", jan.WeeklyPenaltyTotal)
+	if jan.WeeklyPenaltyTotal != 9 {
+		t.Fatalf("expected weekly total=9 in 2026-01 after catch-up, got %d", jan.WeeklyPenaltyTotal)
+	}
+
+	feb := getMonthSummary(t, s, teamID, "2026-02")
+	if feb.WeeklyPenaltyTotal != 3 {
+		t.Fatalf("expected weekly total=3 in 2026-02 after catch-up, got %d", feb.WeeklyPenaltyTotal)
 	}
 }
 
