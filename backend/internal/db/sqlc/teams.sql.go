@@ -130,6 +130,37 @@ func (q *Queries) ListMembershipsByUserID(ctx context.Context, userID string) ([
 	return items, nil
 }
 
+const listTeamIDsForClose = `-- name: ListTeamIDsForClose :many
+SELECT t.id
+FROM teams t
+WHERE EXISTS (
+  SELECT 1
+  FROM team_members tm
+  WHERE tm.team_id = t.id
+)
+ORDER BY t.created_at ASC, t.id ASC
+`
+
+func (q *Queries) ListTeamIDsForClose(ctx context.Context) ([]string, error) {
+	rows, err := q.db.Query(ctx, listTeamIDsForClose)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTeamMembersByTeamID = `-- name: ListTeamMembersByTeamID :many
 SELECT
   tm.team_id,

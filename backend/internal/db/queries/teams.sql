@@ -53,3 +53,13 @@ FROM team_members tm
 INNER JOIN users u ON u.id = tm.user_id
 WHERE tm.team_id = $1
 ORDER BY tm.created_at ASC;
+
+-- name: ListTeamIDsForClose :many
+SELECT t.id
+FROM teams t
+WHERE EXISTS (
+  SELECT 1
+  FROM team_members tm
+  WHERE tm.team_id = t.id
+)
+ORDER BY t.created_at ASC, t.id ASC;
