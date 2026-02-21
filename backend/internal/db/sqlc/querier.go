@@ -6,6 +6,8 @@ package dbsqlc
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Querier interface {
@@ -39,12 +41,14 @@ type Querier interface {
 	GetAuthRequest(ctx context.Context, state string) (OauthAuthRequest, error)
 	GetExchangeCode(ctx context.Context, code string) (OauthExchangeCode, error)
 	GetInviteCode(ctx context.Context, code string) (InviteCode, error)
+	GetLatestCloseRunTargetDate(ctx context.Context, arg GetLatestCloseRunTargetDateParams) (pgtype.Date, error)
 	GetLatestInviteCodeByTeamID(ctx context.Context, teamID string) (InviteCode, error)
 	GetMonthlyPenaltySummary(ctx context.Context, arg GetMonthlyPenaltySummaryParams) (MonthlyPenaltySummary, error)
 	GetOldestOtherTeamMember(ctx context.Context, arg GetOldestOtherTeamMemberParams) (string, error)
 	GetPenaltyRuleByID(ctx context.Context, id string) (PenaltyRule, error)
 	GetSessionByToken(ctx context.Context, token string) (Session, error)
 	GetTaskByID(ctx context.Context, id string) (GetTaskByIDRow, error)
+	GetEarliestTaskCreatedAtByTeam(ctx context.Context, teamID string) (pgtype.Timestamptz, error)
 	GetTaskCompletionWeeklyCount(ctx context.Context, arg GetTaskCompletionWeeklyCountParams) (int64, error)
 	GetUserByEmail(ctx context.Context, lower string) (GetUserByEmailRow, error)
 	GetUserByID(ctx context.Context, id string) (GetUserByIDRow, error)
@@ -63,6 +67,7 @@ type Querier interface {
 	ListTaskCompletionDailyByMonthAndTeam(ctx context.Context, arg ListTaskCompletionDailyByMonthAndTeamParams) ([]ListTaskCompletionDailyByMonthAndTeamRow, error)
 	ListTaskCompletionWeeklyByMonthAndTeam(ctx context.Context, arg ListTaskCompletionWeeklyByMonthAndTeamParams) ([]ListTaskCompletionWeeklyByMonthAndTeamRow, error)
 	ListTasksByTeamID(ctx context.Context, teamID string) ([]ListTasksByTeamIDRow, error)
+	ListTasksEffectiveForCloseByTeamAndType(ctx context.Context, arg ListTasksEffectiveForCloseByTeamAndTypeParams) ([]ListTasksEffectiveForCloseByTeamAndTypeRow, error)
 	ListTasksForMonthlyStatusByTeam(ctx context.Context, arg ListTasksForMonthlyStatusByTeamParams) ([]ListTasksForMonthlyStatusByTeamRow, error)
 	ListTeamIDsForClose(ctx context.Context) ([]string, error)
 	ListTeamMembersByTeamID(ctx context.Context, teamID string) ([]ListTeamMembersByTeamIDRow, error)

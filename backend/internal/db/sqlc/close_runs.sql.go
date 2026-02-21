@@ -11,6 +11,25 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const getLatestCloseRunTargetDate = `-- name: GetLatestCloseRunTargetDate :one
+SELECT MAX(target_date)::date AS target_date
+FROM close_runs
+WHERE team_id = $1
+  AND scope = $2
+`
+
+type GetLatestCloseRunTargetDateParams struct {
+	TeamID string `json:"team_id"`
+	Scope  string `json:"scope"`
+}
+
+func (q *Queries) GetLatestCloseRunTargetDate(ctx context.Context, arg GetLatestCloseRunTargetDateParams) (pgtype.Date, error) {
+	row := q.db.QueryRow(ctx, getLatestCloseRunTargetDate, arg.TeamID, arg.Scope)
+	var target_date pgtype.Date
+	err := row.Scan(&target_date)
+	return target_date, err
+}
+
 const insertCloseRun = `-- name: InsertCloseRun :execrows
 INSERT INTO close_runs (team_id, scope, target_date, created_at)
 VALUES ($1, $2, $3, NOW())
