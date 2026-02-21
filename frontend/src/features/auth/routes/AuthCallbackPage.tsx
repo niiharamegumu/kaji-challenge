@@ -7,8 +7,13 @@ import { writeFlashStatus } from "../state/flash";
 export async function authCallbackLoader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const exchangeCode = url.searchParams.get("exchangeCode");
+  const errorCode = url.searchParams.get("errorCode");
 
   if (exchangeCode == null || exchangeCode === "") {
+    if (errorCode != null && errorCode !== "") {
+      writeFlashStatus(authCallbackErrorMessage(errorCode));
+      return redirect("/");
+    }
     writeFlashStatus("ログイン情報が見つかりませんでした");
     return redirect("/");
   }
@@ -21,6 +26,17 @@ export async function authCallbackLoader({ request }: LoaderFunctionArgs) {
   }
 
   return redirect("/");
+}
+
+function authCallbackErrorMessage(errorCode: string) {
+  switch (errorCode) {
+    case "signup_forbidden":
+      return "このアカウントは現在の招待制リリース対象外です。";
+    case "unauthorized":
+      return "認証に失敗しました。再度ログインしてください。";
+    default:
+      return "ログインに失敗しました。";
+  }
 }
 
 export function AuthCallbackPage() {

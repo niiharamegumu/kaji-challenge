@@ -49,4 +49,22 @@ describe("authCallbackLoader", () => {
     );
     expect(response.status).toBe(302);
   });
+
+  it("writes forbidden flash when callback carries signup_forbidden", async () => {
+    const response = await authCallbackLoader({
+      request: new Request(
+        "http://localhost/auth/callback?errorCode=signup_forbidden",
+      ),
+      params: {},
+      context: undefined,
+      unstable_pattern: "",
+    });
+
+    expect(mockExchange).not.toHaveBeenCalled();
+    expect(mockWriteFlash).toHaveBeenCalledWith(
+      "このアカウントは現在の招待制リリース対象外です。",
+    );
+    expect(response.status).toBe(302);
+    expect(response.headers.get("Location")).toBe("/");
+  });
 });

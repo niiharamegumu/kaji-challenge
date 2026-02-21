@@ -38,6 +38,9 @@ func newStore() *Store {
 	if err := validateOIDCSettings(); err != nil {
 		panic(err)
 	}
+	if err := validateSignupGuardSettings(); err != nil {
+		panic(err)
+	}
 	if err := s.initPersistence(); err != nil {
 		panic(err)
 	}
