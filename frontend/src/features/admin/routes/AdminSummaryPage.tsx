@@ -77,8 +77,9 @@ export function AdminSummaryPage() {
   });
 
   const rulesQuery = useQuery({
-    queryKey: queryKeys.rules,
-    queryFn: async () => (await listPenaltyRules()).data.items,
+    queryKey: [...queryKeys.rules, "withDeleted"],
+    queryFn: async () =>
+      (await listPenaltyRules({ includeDeleted: true })).data.items,
     enabled: loggedIn,
   });
 

@@ -3,11 +3,9 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   type CreatePenaltyRuleRequest,
   type CreateTaskRequest,
-  type PenaltyRule,
   deletePenaltyRule,
   deleteTask,
   patchMeNickname,
-  patchPenaltyRule,
   patchTeamCurrent,
   postPenaltyRule,
   postTask,
@@ -85,7 +83,12 @@ export function usePenaltyRuleMutations(setStatus: StatusSetter) {
   const queryClient = useQueryClient();
 
   const invalidate = async () => {
-    await queryClient.invalidateQueries({ queryKey: queryKeys.rules });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.rules }),
+      queryClient.invalidateQueries({
+        queryKey: [...queryKeys.rules, "withDeleted"],
+      }),
+    ]);
   };
 
   const createRule = useMutation({
@@ -100,18 +103,6 @@ export function usePenaltyRuleMutations(setStatus: StatusSetter) {
     },
   });
 
-  const toggleRule = useMutation({
-    mutationFn: async (rule: PenaltyRule) =>
-      patchPenaltyRule(rule.id, { isActive: !rule.isActive }),
-    onSuccess: async () => {
-      setStatus("ルール状態を更新しました");
-      await invalidate();
-    },
-    onError: (error) => {
-      setStatus(`ルール更新に失敗しました: ${formatError(error)}`);
-    },
-  });
-
   const removeRule = useMutation({
     mutationFn: async (ruleId: string) => deletePenaltyRule(ruleId),
     onSuccess: async () => {
@@ -123,7 +114,7 @@ export function usePenaltyRuleMutations(setStatus: StatusSetter) {
     },
   });
 
-  return { createRule, toggleRule, removeRule };
+  return { createRule, removeRule };
 }
 
 export function useInviteMutations(setStatus: StatusSetter) {
