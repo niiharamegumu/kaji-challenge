@@ -557,6 +557,97 @@ func TestMonthlySummaryOmitsTaskAfterSameDayDelete(t *testing.T) {
 	}
 }
 
+func TestPenaltyRuleIgnoresLegacyIsActiveField(t *testing.T) {
+	r := newTestRouter(t)
+	token := login(t, r)
+
+	createRes := doRequest(t, r, http.MethodPost, "/v1/penalty-rules", `{"name":"遅刻","threshold":3,"isActive":false}`, token)
+	if createRes.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", createRes.Code, createRes.Body.String())
+	}
+
+	var created map[string]any
+	if err := json.Unmarshal(createRes.Body.Bytes(), &created); err != nil {
+		t.Fatalf("failed to parse create penalty response: %v", err)
+	}
+	if _, exists := created["isActive"]; exists {
+		t.Fatalf("penalty rule response must not contain isActive")
+	}
+
+	var createdRule api.PenaltyRule
+	if err := json.Unmarshal(createRes.Body.Bytes(), &createdRule); err != nil {
+		t.Fatalf("failed to parse created penalty rule: %v", err)
+	}
+
+	patchRes := doRequest(t, r, http.MethodPatch, "/v1/penalty-rules/"+createdRule.Id, `{"name":"遅刻(更新)","isActive":true}`, token)
+	if patchRes.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", patchRes.Code, patchRes.Body.String())
+	}
+	var patched map[string]any
+	if err := json.Unmarshal(patchRes.Body.Bytes(), &patched); err != nil {
+		t.Fatalf("failed to parse patch penalty response: %v", err)
+	}
+	if _, exists := patched["isActive"]; exists {
+		t.Fatalf("patched penalty rule response must not contain isActive")
+	}
+}
+
+func TestDeletePenaltyRuleSoftDeleteExcludesFromDefaultList(t *testing.T) {
+	r := newTestRouter(t)
+	token := login(t, r)
+
+	createRes := doRequest(t, r, http.MethodPost, "/v1/penalty-rules", `{"name":"深夜帰宅","threshold":5}`, token)
+	if createRes.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", createRes.Code, createRes.Body.String())
+	}
+	var created api.PenaltyRule
+	if err := json.Unmarshal(createRes.Body.Bytes(), &created); err != nil {
+		t.Fatalf("failed to parse created penalty rule: %v", err)
+	}
+
+	deleteRes := doRequest(t, r, http.MethodDelete, "/v1/penalty-rules/"+created.Id, "", token)
+	if deleteRes.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d: %s", deleteRes.Code, deleteRes.Body.String())
+	}
+
+	listRes := doRequest(t, r, http.MethodGet, "/v1/penalty-rules", "", token)
+	if listRes.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", listRes.Code, listRes.Body.String())
+	}
+	var listed struct {
+		Items []api.PenaltyRule `json:"items"`
+	}
+	if err := json.Unmarshal(listRes.Body.Bytes(), &listed); err != nil {
+		t.Fatalf("failed to parse list penalty response: %v", err)
+	}
+	for _, item := range listed.Items {
+		if item.Id == created.Id {
+			t.Fatalf("deleted penalty rule should not appear in default list")
+		}
+	}
+
+	listWithDeletedRes := doRequest(t, r, http.MethodGet, "/v1/penalty-rules?includeDeleted=true", "", token)
+	if listWithDeletedRes.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", listWithDeletedRes.Code, listWithDeletedRes.Body.String())
+	}
+	if err := json.Unmarshal(listWithDeletedRes.Body.Bytes(), &listed); err != nil {
+		t.Fatalf("failed to parse list(includeDeleted) response: %v", err)
+	}
+	foundDeleted := false
+	for _, item := range listed.Items {
+		if item.Id != created.Id {
+			continue
+		}
+		foundDeleted = true
+		if item.DeletedAt == nil {
+			t.Fatalf("includeDeleted list must expose deletedAt for soft-deleted rule")
+		}
+	}
+	if !foundDeleted {
+		t.Fatalf("expected soft-deleted rule in includeDeleted list")
+	}
+}
+
 func TestWeeklyTaskIncrementDecrement(t *testing.T) {
 	r := newTestRouter(t)
 	token := login(t, r)

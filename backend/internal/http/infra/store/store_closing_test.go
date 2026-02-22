@@ -279,6 +279,85 @@ func TestCloseWeekForTargetLockedFailsWhenTargetMonthAlreadyClosed(t *testing.T)
 	}
 }
 
+func TestCloseMonthForTargetLockedUsesRuleSnapshotAtMonthEnd(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	createdAt := time.Date(2026, 1, 1, 9, 0, 0, 0, s.loc)
+	teamID, _ := createTeamWithMember(t, s, "rule-snapshot-close@example.com", createdAt)
+	monthStart := time.Date(2026, 1, 1, 0, 0, 0, 0, s.loc)
+
+	if err := s.q.UpsertMonthlyPenaltySummary(ctx, dbsqlc.UpsertMonthlyPenaltySummaryParams{
+		TeamID:             teamID,
+		MonthStart:         toPgDate(monthStart),
+		DailyPenaltyTotal:  10,
+		WeeklyPenaltyTotal: 0,
+		IsClosed:           false,
+	}); err != nil {
+		t.Fatalf("failed to seed monthly summary: %v", err)
+	}
+
+	ruleDeletedBeforeMonthEnd := createPenaltyRuleAt(t, s, teamID, 5, "削除済みルール", createdAt)
+	softDeletePenaltyRuleAt(t, s, ruleDeletedBeforeMonthEnd, time.Date(2026, 1, 20, 0, 0, 0, 0, s.loc))
+	ruleActiveAtMonthEnd := createPenaltyRuleAt(t, s, teamID, 8, "有効ルール", createdAt)
+
+	didRun, gotMonth, err := s.closeMonthForTargetLocked(ctx, monthStart, teamID)
+	if err != nil {
+		t.Fatalf("closeMonthForTargetLocked failed: %v", err)
+	}
+	if !didRun {
+		t.Fatalf("expected closeMonthForTargetLocked to run")
+	}
+	if gotMonth != "2026-01" {
+		t.Fatalf("expected month 2026-01, got %s", gotMonth)
+	}
+
+	triggered, err := s.q.ListTriggeredRuleIDsByMonth(ctx, dbsqlc.ListTriggeredRuleIDsByMonthParams{
+		TeamID:     teamID,
+		MonthStart: toPgDate(monthStart),
+	})
+	if err != nil {
+		t.Fatalf("ListTriggeredRuleIDsByMonth failed: %v", err)
+	}
+	if len(triggered) != 1 || triggered[0] != ruleActiveAtMonthEnd {
+		t.Fatalf("expected only active-at-month-end rule to trigger, got %v", triggered)
+	}
+}
+
+func TestGetMonthlySummaryUsesAsOfSnapshotForUnclosedMonth(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	createdAt := time.Date(2026, 1, 1, 9, 0, 0, 0, s.loc)
+	teamID, userID := createTeamWithMember(t, s, "rule-snapshot-summary@example.com", createdAt)
+	monthStart := time.Date(2026, 1, 1, 0, 0, 0, 0, s.loc)
+
+	if err := s.q.UpsertMonthlyPenaltySummary(ctx, dbsqlc.UpsertMonthlyPenaltySummaryParams{
+		TeamID:             teamID,
+		MonthStart:         toPgDate(monthStart),
+		DailyPenaltyTotal:  10,
+		WeeklyPenaltyTotal: 0,
+		IsClosed:           false,
+	}); err != nil {
+		t.Fatalf("failed to seed monthly summary: %v", err)
+	}
+
+	ruleDeletedBeforeMonthEnd := createPenaltyRuleAt(t, s, teamID, 5, "削除済みルール", createdAt)
+	softDeletePenaltyRuleAt(t, s, ruleDeletedBeforeMonthEnd, time.Date(2026, 1, 20, 0, 0, 0, 0, s.loc))
+	ruleDeletedAfterMonthEnd := createPenaltyRuleAt(t, s, teamID, 8, "翌月削除ルール", createdAt)
+	softDeletePenaltyRuleAt(t, s, ruleDeletedAfterMonthEnd, time.Date(2026, 2, 2, 0, 0, 0, 0, s.loc))
+
+	targetMonth := "2026-01"
+	summary, err := s.GetMonthlySummary(ctx, userID, &targetMonth)
+	if err != nil {
+		t.Fatalf("GetMonthlySummary failed: %v", err)
+	}
+
+	if len(summary.TriggeredPenaltyRuleIds) != 1 || summary.TriggeredPenaltyRuleIds[0] != ruleDeletedAfterMonthEnd {
+		t.Fatalf("expected only rule effective at month end to trigger, got %v", summary.TriggeredPenaltyRuleIds)
+	}
+}
+
 func TestCatchUpMonthLockedProcessesMissingMonths(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
@@ -376,6 +455,37 @@ func createTaskAt(t *testing.T, s *Store, teamID string, taskType api.TaskType, 
 		UpdatedAt:                  toPgTimestamptz(createdAt),
 	}); err != nil {
 		t.Fatalf("failed to create task: %v", err)
+	}
+}
+
+func createPenaltyRuleAt(t *testing.T, s *Store, teamID string, threshold int, name string, createdAt time.Time) string {
+	t.Helper()
+	ruleID := s.nextID("pr")
+	if err := s.q.CreatePenaltyRule(context.Background(), dbsqlc.CreatePenaltyRuleParams{
+		ID:          ruleID,
+		TeamID:      teamID,
+		Threshold:   int32(threshold),
+		Name:        name,
+		Description: pgtype.Text{},
+		CreatedAt:   toPgTimestamptz(createdAt),
+		UpdatedAt:   toPgTimestamptz(createdAt),
+	}); err != nil {
+		t.Fatalf("failed to create penalty rule: %v", err)
+	}
+	return ruleID
+}
+
+func softDeletePenaltyRuleAt(t *testing.T, s *Store, ruleID string, deletedAt time.Time) {
+	t.Helper()
+	rows, err := s.q.SoftDeletePenaltyRule(context.Background(), dbsqlc.SoftDeletePenaltyRuleParams{
+		ID:        ruleID,
+		DeletedAt: toPgTimestamptz(deletedAt),
+	})
+	if err != nil {
+		t.Fatalf("failed to soft-delete penalty rule: %v", err)
+	}
+	if rows != 1 {
+		t.Fatalf("expected one soft-deleted rule, got %d", rows)
 	}
 }
 
