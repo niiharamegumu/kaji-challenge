@@ -10,12 +10,17 @@ import (
 	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 )
 
-func (s *Store) ListPenaltyRules(ctx context.Context, userID string) ([]api.PenaltyRule, error) {
+func (s *Store) ListPenaltyRules(ctx context.Context, userID string, includeDeleted bool) ([]api.PenaltyRule, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.q.ListPenaltyRulesByTeamID(ctx, teamID)
+	var rows []dbsqlc.PenaltyRule
+	if includeDeleted {
+		rows, err = s.q.ListPenaltyRulesByTeamID(ctx, teamID)
+	} else {
+		rows, err = s.q.ListUndeletedPenaltyRulesByTeamID(ctx, teamID)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -32,17 +37,12 @@ func (s *Store) CreatePenaltyRule(ctx context.Context, userID string, req api.Cr
 		return api.PenaltyRule{}, err
 	}
 	now := time.Now().In(s.loc)
-	active := true
-	if req.IsActive != nil {
-		active = *req.IsActive
-	}
 	r := ruleRecord{
 		ID:          s.nextID("pr"),
 		TeamID:      teamID,
 		Threshold:   req.Threshold,
 		Name:        req.Name,
 		Description: req.Description,
-		IsActive:    active,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
@@ -56,7 +56,6 @@ func (s *Store) CreatePenaltyRule(ctx context.Context, userID string, req api.Cr
 		Threshold:   threshold32,
 		Name:        r.Name,
 		Description: textFromPtr(r.Description),
-		IsActive:    r.IsActive,
 		CreatedAt:   toPgTimestamptz(r.CreatedAt),
 		UpdatedAt:   toPgTimestamptz(r.UpdatedAt),
 	}); err != nil {
@@ -70,7 +69,7 @@ func (s *Store) PatchPenaltyRule(ctx context.Context, userID, ruleID string, req
 	if err != nil {
 		return api.PenaltyRule{}, err
 	}
-	row, err := s.q.GetPenaltyRuleByID(ctx, ruleID)
+	row, err := s.q.GetUndeletedPenaltyRuleByID(ctx, ruleID)
 	if err != nil {
 		return api.PenaltyRule{}, errors.New("rule not found")
 	}
@@ -87,9 +86,6 @@ func (s *Store) PatchPenaltyRule(ctx context.Context, userID, ruleID string, req
 	if req.Description != nil {
 		rule.Description = req.Description
 	}
-	if req.IsActive != nil {
-		rule.IsActive = *req.IsActive
-	}
 	rule.UpdatedAt = time.Now().In(s.loc)
 	threshold32, err := safeInt32(rule.Threshold, "threshold")
 	if err != nil {
@@ -100,7 +96,6 @@ func (s *Store) PatchPenaltyRule(ctx context.Context, userID, ruleID string, req
 		Threshold:   threshold32,
 		Name:        rule.Name,
 		Description: textFromPtr(rule.Description),
-		IsActive:    rule.IsActive,
 		UpdatedAt:   toPgTimestamptz(rule.UpdatedAt),
 	}); err != nil {
 		return api.PenaltyRule{}, err
@@ -113,9 +108,20 @@ func (s *Store) DeletePenaltyRule(ctx context.Context, userID, ruleID string) er
 	if err != nil {
 		return err
 	}
-	rule, err := s.q.GetPenaltyRuleByID(ctx, ruleID)
+	rule, err := s.q.GetUndeletedPenaltyRuleByID(ctx, ruleID)
 	if err != nil || rule.TeamID != teamID {
 		return errors.New("rule not found")
 	}
-	return s.q.DeletePenaltyRule(ctx, ruleID)
+	now := time.Now().In(s.loc)
+	rows, err := s.q.SoftDeletePenaltyRule(ctx, dbsqlc.SoftDeletePenaltyRuleParams{
+		ID:        ruleID,
+		DeletedAt: toPgTimestamptz(now),
+	})
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return errors.New("rule not found")
+	}
+	return nil
 }

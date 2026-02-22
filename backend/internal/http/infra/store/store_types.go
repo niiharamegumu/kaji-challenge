@@ -82,7 +82,7 @@ type ruleRecord struct {
 	Threshold   int
 	Name        string
 	Description *string
-	IsActive    bool
+	DeletedAt   *time.Time
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }

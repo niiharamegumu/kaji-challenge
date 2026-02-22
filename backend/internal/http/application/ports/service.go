@@ -49,7 +49,7 @@ type TaskService interface {
 }
 
 type PenaltyService interface {
-	ListPenaltyRules(ctx context.Context, userID string) ([]api.PenaltyRule, error)
+	ListPenaltyRules(ctx context.Context, userID string, includeDeleted bool) ([]api.PenaltyRule, error)
 	CreatePenaltyRule(ctx context.Context, userID string, req api.CreatePenaltyRuleRequest) (api.PenaltyRule, error)
 	PatchPenaltyRule(ctx context.Context, userID, ruleID string, req api.UpdatePenaltyRuleRequest) (api.PenaltyRule, error)
 	DeletePenaltyRule(ctx context.Context, userID, ruleID string) error

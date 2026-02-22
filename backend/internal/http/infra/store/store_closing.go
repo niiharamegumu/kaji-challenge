@@ -233,12 +233,16 @@ func (s *Store) closeMonthForTargetLocked(ctx context.Context, monthStart time.T
 		return true, month, nil
 	}
 
-	activeRules, err := s.q.ListActivePenaltyRulesByTeamID(ctx, teamID)
+	asOf := monthStart.AddDate(0, 1, 0)
+	effectiveRules, err := s.q.ListPenaltyRulesEffectiveAtByTeamID(ctx, dbsqlc.ListPenaltyRulesEffectiveAtByTeamIDParams{
+		TeamID: teamID,
+		AsOf:   toPgTimestamptz(asOf),
+	})
 	if err != nil {
 		return false, "", err
 	}
-	rules := make([]ruleRecord, 0, len(activeRules))
-	for _, row := range activeRules {
+	rules := make([]ruleRecord, 0, len(effectiveRules))
+	for _, row := range effectiveRules {
 		rules = append(rules, ruleFromDB(row, s.loc))
 	}
 	sort.Slice(rules, func(i, j int) bool { return rules[i].Threshold < rules[j].Threshold })
