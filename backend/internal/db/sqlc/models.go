@@ -59,7 +59,7 @@ type PenaltyRule struct {
 	Threshold   int32              `json:"threshold"`
 	Name        string             `json:"name"`
 	Description pgtype.Text        `json:"description"`
-	IsActive    bool               `json:"is_active"`
+	DeletedAt   pgtype.Timestamptz `json:"deleted_at"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }

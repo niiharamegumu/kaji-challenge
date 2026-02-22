@@ -76,7 +76,6 @@ type CreateInviteRequest struct {
 // CreatePenaltyRuleRequest defines model for CreatePenaltyRuleRequest.
 type CreatePenaltyRuleRequest struct {
 	Description *string `json:"description,omitempty"`
-	IsActive    *bool   `json:"isActive,omitempty"`
 	Name        string  `json:"name"`
 	Threshold   int     `json:"threshold"`
 }
@@ -149,14 +148,14 @@ type MonthlyTaskStatusItem struct {
 
 // PenaltyRule defines model for PenaltyRule.
 type PenaltyRule struct {
-	CreatedAt   time.Time `json:"createdAt"`
-	Description *string   `json:"description,omitempty"`
-	Id          string    `json:"id"`
-	IsActive    bool      `json:"isActive"`
-	Name        string    `json:"name"`
-	TeamId      string    `json:"teamId"`
-	Threshold   int       `json:"threshold"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	CreatedAt   time.Time  `json:"createdAt"`
+	DeletedAt   *time.Time `json:"deletedAt"`
+	Description *string    `json:"description,omitempty"`
+	Id          string     `json:"id"`
+	Name        string     `json:"name"`
+	TeamId      string     `json:"teamId"`
+	Threshold   int        `json:"threshold"`
+	UpdatedAt   time.Time  `json:"updatedAt"`
 }
 
 // Task defines model for Task.
@@ -269,7 +268,6 @@ type UpdateNicknameResponse struct {
 // UpdatePenaltyRuleRequest defines model for UpdatePenaltyRuleRequest.
 type UpdatePenaltyRuleRequest struct {
 	Description *string `json:"description,omitempty"`
-	IsActive    *bool   `json:"isActive,omitempty"`
 	Name        *string `json:"name,omitempty"`
 	Threshold   *int    `json:"threshold,omitempty"`
 }
@@ -295,6 +293,11 @@ type User struct {
 type GetAuthGoogleCallbackParams struct {
 	Code  string `form:"code" json:"code"`
 	State string `form:"state" json:"state"`
+}
+
+// ListPenaltyRulesParams defines parameters for ListPenaltyRules.
+type ListPenaltyRulesParams struct {
+	IncludeDeleted *bool `form:"includeDeleted,omitempty" json:"includeDeleted,omitempty"`
 }
 
 // GetPenaltySummaryMonthlyParams defines parameters for GetPenaltySummaryMonthly.
@@ -371,7 +374,7 @@ type ServerInterface interface {
 	PatchMeNickname(c *gin.Context)
 	// List penalty rules in current team
 	// (GET /v1/penalty-rules)
-	ListPenaltyRules(c *gin.Context)
+	ListPenaltyRules(c *gin.Context, params ListPenaltyRulesParams)
 	// Create penalty rule
 	// (POST /v1/penalty-rules)
 	PostPenaltyRule(c *gin.Context)
@@ -611,7 +614,20 @@ func (siw *ServerInterfaceWrapper) PatchMeNickname(c *gin.Context) {
 // ListPenaltyRules operation middleware
 func (siw *ServerInterfaceWrapper) ListPenaltyRules(c *gin.Context) {
 
+	var err error
+
 	c.Set(CookieAuthScopes, []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListPenaltyRulesParams
+
+	// ------------- Optional query parameter "includeDeleted" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "includeDeleted", c.Request.URL.Query(), &params.IncludeDeleted)
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter includeDeleted: %w", err), http.StatusBadRequest)
+		return
+	}
 
 	for _, middleware := range siw.HandlerMiddlewares {
 		middleware(c)
@@ -620,7 +636,7 @@ func (siw *ServerInterfaceWrapper) ListPenaltyRules(c *gin.Context) {
 		}
 	}
 
-	siw.Handler.ListPenaltyRules(c)
+	siw.Handler.ListPenaltyRules(c, params)
 }
 
 // PostPenaltyRule operation middleware
