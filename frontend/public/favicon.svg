@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Kaji icon</title>
+  <desc id="desc">A house with sparkles icon, no text.</desc>
+
+  <rect x="72" y="72" width="880" height="880" rx="190" fill="#BEE7FF" />
+
+  <g>
+    <path d="M236 430 L512 220 L788 430" fill="none" stroke="#E67722" stroke-width="56" stroke-linecap="round" stroke-linejoin="round" />
+    <rect x="274" y="392" width="476" height="372" rx="46" fill="#FFF4E2" stroke="#EECF9F" stroke-width="18" />
+    <rect x="462" y="528" width="108" height="236" rx="28" fill="#FFC74A" />
+    <circle cx="546" cy="646" r="10" fill="#D88B14" />
+  </g>
+
+  <g fill="#FFF2B3" opacity="0.98">
+    <path d="M216 226 l24 54 54 24 -54 24 -24 54 -24 -54 -54 -24 54 -24z" />
+    <path d="M796 238 l18 40 40 18 -40 18 -18 40 -18 -40 -40 -18 40 -18z" />
+    <path d="M834 606 l14 32 32 14 -32 14 -14 32 -14 -32 -32 -14 32 -14z" />
+    <path d="M186 588 l12 26 26 12 -26 12 -12 26 -12 -26 -26 -12 26 -12z" />
+  </g>
+</svg>
