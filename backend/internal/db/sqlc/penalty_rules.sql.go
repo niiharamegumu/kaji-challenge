@@ -12,8 +12,8 @@ import (
 )
 
 const createPenaltyRule = `-- name: CreatePenaltyRule :exec
-INSERT INTO penalty_rules (id, team_id, threshold, name, description, is_active, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO penalty_rules (id, team_id, threshold, name, description, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 `
 
 type CreatePenaltyRuleParams struct {
@@ -22,7 +22,6 @@ type CreatePenaltyRuleParams struct {
 	Threshold   int32              `json:"threshold"`
 	Name        string             `json:"name"`
 	Description pgtype.Text        `json:"description"`
-	IsActive    bool               `json:"is_active"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
@@ -34,25 +33,14 @@ func (q *Queries) CreatePenaltyRule(ctx context.Context, arg CreatePenaltyRulePa
 		arg.Threshold,
 		arg.Name,
 		arg.Description,
-		arg.IsActive,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)
 	return err
 }
 
-const deletePenaltyRule = `-- name: DeletePenaltyRule :exec
-DELETE FROM penalty_rules
-WHERE id = $1
-`
-
-func (q *Queries) DeletePenaltyRule(ctx context.Context, id string) error {
-	_, err := q.db.Exec(ctx, deletePenaltyRule, id)
-	return err
-}
-
 const getPenaltyRuleByID = `-- name: GetPenaltyRuleByID :one
-SELECT id, team_id, threshold, name, description, is_active, created_at, updated_at
+SELECT id, team_id, threshold, name, description, deleted_at, created_at, updated_at
 FROM penalty_rules
 WHERE id = $1
 `
@@ -66,51 +54,37 @@ func (q *Queries) GetPenaltyRuleByID(ctx context.Context, id string) (PenaltyRul
 		&i.Threshold,
 		&i.Name,
 		&i.Description,
-		&i.IsActive,
+		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
 	return i, err
 }
 
-const listActivePenaltyRulesByTeamID = `-- name: ListActivePenaltyRulesByTeamID :many
-SELECT id, team_id, threshold, name, description, is_active, created_at, updated_at
+const getUndeletedPenaltyRuleByID = `-- name: GetUndeletedPenaltyRuleByID :one
+SELECT id, team_id, threshold, name, description, deleted_at, created_at, updated_at
 FROM penalty_rules
-WHERE team_id = $1 AND is_active = TRUE
-ORDER BY threshold
+WHERE id = $1 AND deleted_at IS NULL
 `
 
-func (q *Queries) ListActivePenaltyRulesByTeamID(ctx context.Context, teamID string) ([]PenaltyRule, error) {
-	rows, err := q.db.Query(ctx, listActivePenaltyRulesByTeamID, teamID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []PenaltyRule
-	for rows.Next() {
-		var i PenaltyRule
-		if err := rows.Scan(
-			&i.ID,
-			&i.TeamID,
-			&i.Threshold,
-			&i.Name,
-			&i.Description,
-			&i.IsActive,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+func (q *Queries) GetUndeletedPenaltyRuleByID(ctx context.Context, id string) (PenaltyRule, error) {
+	row := q.db.QueryRow(ctx, getUndeletedPenaltyRuleByID, id)
+	var i PenaltyRule
+	err := row.Scan(
+		&i.ID,
+		&i.TeamID,
+		&i.Threshold,
+		&i.Name,
+		&i.Description,
+		&i.DeletedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const listPenaltyRulesByTeamID = `-- name: ListPenaltyRulesByTeamID :many
-SELECT id, team_id, threshold, name, description, is_active, created_at, updated_at
+SELECT id, team_id, threshold, name, description, deleted_at, created_at, updated_at
 FROM penalty_rules
 WHERE team_id = $1
 ORDER BY threshold
@@ -131,7 +105,7 @@ func (q *Queries) ListPenaltyRulesByTeamID(ctx context.Context, teamID string) (
 			&i.Threshold,
 			&i.Name,
 			&i.Description,
-			&i.IsActive,
+			&i.DeletedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -145,14 +119,112 @@ func (q *Queries) ListPenaltyRulesByTeamID(ctx context.Context, teamID string) (
 	return items, nil
 }
 
+const listPenaltyRulesEffectiveAtByTeamID = `-- name: ListPenaltyRulesEffectiveAtByTeamID :many
+SELECT id, team_id, threshold, name, description, deleted_at, created_at, updated_at
+FROM penalty_rules
+WHERE team_id = $1
+  AND created_at < $2
+  AND (deleted_at IS NULL OR deleted_at >= $2)
+ORDER BY threshold
+`
+
+type ListPenaltyRulesEffectiveAtByTeamIDParams struct {
+	TeamID string             `json:"team_id"`
+	AsOf   pgtype.Timestamptz `json:"as_of"`
+}
+
+func (q *Queries) ListPenaltyRulesEffectiveAtByTeamID(ctx context.Context, arg ListPenaltyRulesEffectiveAtByTeamIDParams) ([]PenaltyRule, error) {
+	rows, err := q.db.Query(ctx, listPenaltyRulesEffectiveAtByTeamID, arg.TeamID, arg.AsOf)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PenaltyRule
+	for rows.Next() {
+		var i PenaltyRule
+		if err := rows.Scan(
+			&i.ID,
+			&i.TeamID,
+			&i.Threshold,
+			&i.Name,
+			&i.Description,
+			&i.DeletedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUndeletedPenaltyRulesByTeamID = `-- name: ListUndeletedPenaltyRulesByTeamID :many
+SELECT id, team_id, threshold, name, description, deleted_at, created_at, updated_at
+FROM penalty_rules
+WHERE team_id = $1 AND deleted_at IS NULL
+ORDER BY threshold
+`
+
+func (q *Queries) ListUndeletedPenaltyRulesByTeamID(ctx context.Context, teamID string) ([]PenaltyRule, error) {
+	rows, err := q.db.Query(ctx, listUndeletedPenaltyRulesByTeamID, teamID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PenaltyRule
+	for rows.Next() {
+		var i PenaltyRule
+		if err := rows.Scan(
+			&i.ID,
+			&i.TeamID,
+			&i.Threshold,
+			&i.Name,
+			&i.Description,
+			&i.DeletedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const softDeletePenaltyRule = `-- name: SoftDeletePenaltyRule :execrows
+UPDATE penalty_rules
+SET deleted_at = $2,
+    updated_at = $2
+WHERE id = $1 AND deleted_at IS NULL
+`
+
+type SoftDeletePenaltyRuleParams struct {
+	ID        string             `json:"id"`
+	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
+}
+
+func (q *Queries) SoftDeletePenaltyRule(ctx context.Context, arg SoftDeletePenaltyRuleParams) (int64, error) {
+	result, err := q.db.Exec(ctx, softDeletePenaltyRule, arg.ID, arg.DeletedAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const updatePenaltyRule = `-- name: UpdatePenaltyRule :exec
 UPDATE penalty_rules
 SET threshold = $2,
     name = $3,
     description = $4,
-    is_active = $5,
-    updated_at = $6
-WHERE id = $1
+    updated_at = $5
+WHERE id = $1 AND deleted_at IS NULL
 `
 
 type UpdatePenaltyRuleParams struct {
@@ -160,7 +232,6 @@ type UpdatePenaltyRuleParams struct {
 	Threshold   int32              `json:"threshold"`
 	Name        string             `json:"name"`
 	Description pgtype.Text        `json:"description"`
-	IsActive    bool               `json:"is_active"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
@@ -170,7 +241,6 @@ func (q *Queries) UpdatePenaltyRule(ctx context.Context, arg UpdatePenaltyRulePa
 		arg.Threshold,
 		arg.Name,
 		arg.Description,
-		arg.IsActive,
 		arg.UpdatedAt,
 	)
 	return err

@@ -6,8 +6,8 @@ import (
 	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 )
 
-func (r penaltyRepo) ListPenaltyRules(ctx context.Context, userID string) ([]api.PenaltyRule, error) {
-	items, err := r.store.ListPenaltyRules(ctx, userID)
+func (r penaltyRepo) ListPenaltyRules(ctx context.Context, userID string, includeDeleted bool) ([]api.PenaltyRule, error) {
+	items, err := r.store.ListPenaltyRules(ctx, userID, includeDeleted)
 	return items, mapInfraErr(err)
 }
 

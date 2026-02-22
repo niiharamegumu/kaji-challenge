@@ -7,12 +7,16 @@ import (
 	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 )
 
-func (h *Handler) ListPenaltyRules(c *gin.Context) {
+func (h *Handler) ListPenaltyRules(c *gin.Context, params api.ListPenaltyRulesParams) {
 	userID, ok := mustUserID(c)
 	if !ok {
 		return
 	}
-	items, err := h.services.Penalty.ListPenaltyRules(c.Request.Context(), userID)
+	includeDeleted := false
+	if params.IncludeDeleted != nil {
+		includeDeleted = *params.IncludeDeleted
+	}
+	items, err := h.services.Penalty.ListPenaltyRules(c.Request.Context(), userID, includeDeleted)
 	if err != nil {
 		writeAppError(c, err, http.StatusBadRequest)
 		return

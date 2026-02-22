@@ -302,6 +302,13 @@ paths:
     get:
       operationId: listPenaltyRules
       summary: List penalty rules in current team
+      parameters:
+        - in: query
+          name: includeDeleted
+          required: false
+          schema:
+            type: boolean
+            default: false
       responses:
         '200':
           description: Penalty rules
@@ -733,7 +740,7 @@ components:
 
     PenaltyRule:
       type: object
-      required: [id, teamId, threshold, name, isActive, createdAt, updatedAt]
+      required: [id, teamId, threshold, name, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -746,8 +753,10 @@ components:
           type: string
         description:
           type: string
-        isActive:
-          type: boolean
+        deletedAt:
+          type: string
+          format: date-time
+          nullable: true
         createdAt:
           type: string
           format: date-time
@@ -769,9 +778,6 @@ components:
         description:
           type: string
           maxLength: 500
-        isActive:
-          type: boolean
-          default: true
 
     UpdatePenaltyRuleRequest:
       type: object
@@ -786,8 +792,6 @@ components:
         description:
           type: string
           maxLength: 500
-        isActive:
-          type: boolean
 
     TaskOverviewDailyTask:
       type: object

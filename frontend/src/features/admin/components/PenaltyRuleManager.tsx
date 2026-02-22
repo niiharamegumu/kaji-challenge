@@ -1,4 +1,4 @@
-import { CheckCircle2, CircleMinus, CirclePlus, Trash2 } from "lucide-react";
+import { CirclePlus, Trash2 } from "lucide-react";
 import type { ChangeEvent } from "react";
 import { useMemo } from "react";
 
@@ -10,7 +10,6 @@ type Props = {
   rules: PenaltyRule[];
   onFormChange: (updater: (prev: RuleFormState) => RuleFormState) => void;
   onCreate: () => void;
-  onToggle: (rule: PenaltyRule) => void;
   onDelete: (ruleId: string) => void;
 };
 
@@ -19,7 +18,6 @@ export function PenaltyRuleManager({
   rules,
   onFormChange,
   onCreate,
-  onToggle,
   onDelete,
 }: Props) {
   const handleChange =
@@ -79,32 +77,13 @@ export function PenaltyRuleManager({
             {sortedRules.map((rule) => (
               <li
                 key={rule.id}
-                className={`rounded-xl border p-3 ${rule.isActive ? "border-[color:var(--color-matcha-300)] bg-[color:var(--color-matcha-50)]" : "border-stone-300 bg-stone-100"}`}
+                className="rounded-xl border border-[color:var(--color-matcha-300)] bg-[color:var(--color-matcha-50)] p-3"
               >
-                <div
-                  className={`font-medium ${rule.isActive ? "text-stone-900" : "text-stone-700"}`}
-                >
-                  {rule.name}
-                </div>
-                <div
-                  className={`mt-1 text-xs ${rule.isActive ? "text-stone-600" : "text-stone-500"}`}
-                >
-                  発動しきい値 {rule.threshold} /{" "}
-                  {rule.isActive ? "有効" : "無効"}
+                <div className="font-medium text-stone-900">{rule.name}</div>
+                <div className="mt-1 text-xs text-stone-600">
+                  発動しきい値 {rule.threshold}
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    className="flex min-h-11 items-center gap-1 rounded-lg border border-stone-300 bg-white px-3 py-2 text-xs transition-colors duration-200 hover:bg-stone-50"
-                    onClick={() => onToggle(rule)}
-                  >
-                    {rule.isActive ? (
-                      <CircleMinus size={14} aria-hidden="true" />
-                    ) : (
-                      <CheckCircle2 size={14} aria-hidden="true" />
-                    )}
-                    <span>{rule.isActive ? "無効化" : "有効化"}</span>
-                  </button>
                   <button
                     type="button"
                     className="flex min-h-11 items-center gap-1 rounded-lg border border-rose-300 bg-white px-3 py-2 text-xs text-rose-700 transition-colors duration-200 hover:bg-rose-50"

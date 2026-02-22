@@ -38,7 +38,7 @@ func (r ruleRecord) toAPI() api.PenaltyRule {
 		Threshold:   r.Threshold,
 		Name:        r.Name,
 		Description: r.Description,
-		IsActive:    r.IsActive,
+		DeletedAt:   r.DeletedAt,
 		CreatedAt:   r.CreatedAt,
 		UpdatedAt:   r.UpdatedAt,
 	}
@@ -128,7 +128,7 @@ func ruleFromDB(row dbsqlc.PenaltyRule, loc *time.Location) ruleRecord {
 		Threshold:   int(row.Threshold),
 		Name:        row.Name,
 		Description: ptrFromText(row.Description),
-		IsActive:    row.IsActive,
+		DeletedAt:   ptrFromTimestamptz(row.DeletedAt, loc),
 		CreatedAt:   row.CreatedAt.Time.In(loc),
 		UpdatedAt:   row.UpdatedAt.Time.In(loc),
 	}

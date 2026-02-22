@@ -77,7 +77,7 @@ func (m mockTaskService) ToggleTaskCompletion(context.Context, string, string, t
 
 type mockPenaltyService struct{}
 
-func (m mockPenaltyService) ListPenaltyRules(context.Context, string) ([]api.PenaltyRule, error) {
+func (m mockPenaltyService) ListPenaltyRules(context.Context, string, bool) ([]api.PenaltyRule, error) {
 	return nil, nil
 }
 func (m mockPenaltyService) CreatePenaltyRule(context.Context, string, api.CreatePenaltyRuleRequest) (api.PenaltyRule, error) {

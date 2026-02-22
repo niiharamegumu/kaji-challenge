@@ -95,13 +95,25 @@ func (s *Store) GetMonthlySummary(ctx context.Context, userID string, month *str
 			return api.MonthlyPenaltySummary{}, err
 		}
 	} else {
-		activeRules, err := s.q.ListActivePenaltyRulesByTeamID(ctx, teamID)
+		monthStart, err := monthStartFromKey(targetMonth, s.loc)
+		if err != nil {
+			return api.MonthlyPenaltySummary{}, err
+		}
+		monthEnd := monthStart.AddDate(0, 1, 0)
+		asOf := time.Now().In(s.loc)
+		if asOf.After(monthEnd) {
+			asOf = monthEnd
+		}
+		effectiveRules, err := s.q.ListPenaltyRulesEffectiveAtByTeamID(ctx, dbsqlc.ListPenaltyRulesEffectiveAtByTeamIDParams{
+			TeamID: teamID,
+			AsOf:   toPgTimestamptz(asOf),
+		})
 		if err != nil {
 			return api.MonthlyPenaltySummary{}, err
 		}
 		total := int(summary.DailyPenaltyTotal + summary.WeeklyPenaltyTotal)
-		triggered = make([]string, 0, len(activeRules))
-		for _, rule := range activeRules {
+		triggered = make([]string, 0, len(effectiveRules))
+		for _, rule := range effectiveRules {
 			if total >= int(rule.Threshold) {
 				triggered = append(triggered, rule.ID)
 			}

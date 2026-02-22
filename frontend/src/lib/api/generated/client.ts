@@ -221,7 +221,8 @@ export interface PenaltyRule {
   threshold: number;
   name: string;
   description?: string;
-  isActive: boolean;
+  /** @nullable */
+  deletedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -236,7 +237,6 @@ export interface CreatePenaltyRuleRequest {
   name: string;
   /** @maxLength 500 */
   description?: string;
-  isActive?: boolean;
 }
 
 export interface UpdatePenaltyRuleRequest {
@@ -249,7 +249,6 @@ export interface UpdatePenaltyRuleRequest {
   name?: string;
   /** @maxLength 500 */
   description?: string;
-  isActive?: boolean;
 }
 
 export interface TaskOverviewDailyTask {
@@ -313,6 +312,10 @@ type?: TaskType;
 
 export type ListTasks200 = {
   items: Task[];
+};
+
+export type ListPenaltyRulesParams = {
+includeDeleted?: boolean;
 };
 
 export type ListPenaltyRules200 = {
@@ -1013,17 +1016,24 @@ export type listPenaltyRulesResponseSuccess = (listPenaltyRulesResponse200) & {
 
 export type listPenaltyRulesResponse = (listPenaltyRulesResponseSuccess)
 
-export const getListPenaltyRulesUrl = () => {
+export const getListPenaltyRulesUrl = (params?: ListPenaltyRulesParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
+    
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
 
-  
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/v1/penalty-rules`
+  return stringifiedParams.length > 0 ? `/v1/penalty-rules?${stringifiedParams}` : `/v1/penalty-rules`
 }
 
-export const listPenaltyRules = async ( options?: RequestInit): Promise<listPenaltyRulesResponse> => {
+export const listPenaltyRules = async (params?: ListPenaltyRulesParams, options?: RequestInit): Promise<listPenaltyRulesResponse> => {
   
-  return customFetch<listPenaltyRulesResponse>(getListPenaltyRulesUrl(),
+  return customFetch<listPenaltyRulesResponse>(getListPenaltyRulesUrl(params),
   {      
     ...options,
     method: 'GET'

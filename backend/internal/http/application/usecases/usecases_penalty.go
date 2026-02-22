@@ -6,8 +6,8 @@ import (
 	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 )
 
-func (u penaltyUsecase) ListPenaltyRules(ctx context.Context, userID string) ([]api.PenaltyRule, error) {
-	return u.repo.ListPenaltyRules(ctx, userID)
+func (u penaltyUsecase) ListPenaltyRules(ctx context.Context, userID string, includeDeleted bool) ([]api.PenaltyRule, error) {
+	return u.repo.ListPenaltyRules(ctx, userID, includeDeleted)
 }
 
 func (u penaltyUsecase) CreatePenaltyRule(ctx context.Context, userID string, req api.CreatePenaltyRuleRequest) (api.PenaltyRule, error) {

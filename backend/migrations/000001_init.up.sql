@@ -88,14 +88,21 @@ CREATE TABLE IF NOT EXISTS penalty_rules (
   threshold INTEGER NOT NULL CHECK (threshold >= 1),
   name TEXT NOT NULL,
   description TEXT,
-  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  deleted_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL,
-  updated_at TIMESTAMPTZ NOT NULL,
-  UNIQUE (team_id, threshold),
-  UNIQUE (team_id, name)
+  updated_at TIMESTAMPTZ NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_penalty_rules_team_active_threshold ON penalty_rules (team_id, is_active, threshold);
-CREATE INDEX IF NOT EXISTS idx_penalty_rules_team_threshold ON penalty_rules (team_id, threshold);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_penalty_rules_team_threshold_undeleted
+  ON penalty_rules (team_id, threshold)
+  WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_penalty_rules_team_name_undeleted
+  ON penalty_rules (team_id, name)
+  WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_penalty_rules_team_threshold_undeleted
+  ON penalty_rules (team_id, threshold)
+  WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_penalty_rules_team_effective_window
+  ON penalty_rules (team_id, created_at, deleted_at);
 
 CREATE TABLE IF NOT EXISTS monthly_penalty_summaries (
   team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
