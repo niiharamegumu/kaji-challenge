@@ -63,5 +63,11 @@ SELECT id, title, type, penalty_points, created_at, deleted_at
 FROM tasks
 WHERE team_id = $1
   AND created_at < $3
-  AND (deleted_at IS NULL OR deleted_at >= $2)
+  AND deleted_at IS NULL
+UNION ALL
+SELECT id, title, type, penalty_points, created_at, deleted_at
+FROM tasks
+WHERE team_id = $1
+  AND created_at < $3
+  AND deleted_at >= $2
 ORDER BY created_at, id;
