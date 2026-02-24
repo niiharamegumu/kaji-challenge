@@ -25,7 +25,7 @@ export function WeeklyTasksPanel({
   const remainingDaysInWeek = Math.max(0, 7 - elapsedDaysBeforeToday);
 
   return (
-    <article className="rounded-2xl border border-stone-200 bg-white/90 p-4 shadow-sm animate-enter">
+    <article className="animate-enter rounded-xl border border-stone-200 bg-white/90 p-3 shadow-sm md:rounded-2xl md:p-4">
       <h2 className="text-lg font-semibold">今週の週間タスク</h2>
       <dl className="mt-3 flex flex-wrap items-center gap-2 text-sm">
         <div className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-3 py-1.5 text-stone-700">
