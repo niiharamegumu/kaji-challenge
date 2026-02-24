@@ -30,7 +30,7 @@ export function AdminPenaltiesPage() {
   };
 
   return (
-    <section className="mt-4 w-full pb-2">
+    <section className="mt-3 w-full pb-2 md:mt-4">
       <PenaltyRuleManager
         form={ruleForm}
         rules={activeRules}

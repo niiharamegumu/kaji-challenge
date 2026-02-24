@@ -95,15 +95,15 @@ export function InviteManager({
   };
 
   return (
-    <section className="space-y-4 pb-2">
-      <header className="px-1 py-1">
+    <section className="space-y-3 pb-2 md:space-y-4">
+      <header className="py-1">
         <h2 className="text-lg font-semibold text-stone-900">設定</h2>
         <p className="mt-1 text-sm text-stone-600">
           チーム設定とアカウント設定を管理できます。
         </p>
       </header>
 
-      <article className="rounded-2xl border border-stone-200 bg-white/90 p-4 shadow-sm md:p-6">
+      <article className="rounded-xl border border-stone-200 bg-white/90 p-3 shadow-sm md:rounded-2xl md:p-6">
         <h2 className="text-base font-semibold text-stone-900">チーム設定</h2>
         <div className="mt-4 space-y-5">
           <TeamNameSection
@@ -146,7 +146,7 @@ export function InviteManager({
         </div>
       </article>
 
-      <article className="rounded-2xl border border-stone-200 bg-white/90 p-4 shadow-sm md:p-6">
+      <article className="rounded-xl border border-stone-200 bg-white/90 p-3 shadow-sm md:rounded-2xl md:p-6">
         <h2 className="text-base font-semibold text-stone-900">
           アカウント設定
         </h2>
