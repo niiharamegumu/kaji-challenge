@@ -7,8 +7,3 @@ keep_vars = true
 directory = "./dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
-
-[vars]
-API_ORIGIN = "https://kaji-backend.example.com"
-RELEASE_BASIC_AUTH_ENABLED = "false"
-RELEASE_BASIC_AUTH_USERNAME = ""
