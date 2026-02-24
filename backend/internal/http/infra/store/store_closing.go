@@ -68,6 +68,12 @@ func (s *Store) ListClosableTeamIDs(ctx context.Context) ([]string, error) {
 }
 
 func (s *Store) closeDayForTargetLocked(ctx context.Context, targetDate time.Time, teamID string) (bool, error) {
+	startedAt := time.Now()
+	queryCount := 0
+	defer func() {
+		s.logSQLPerformance("close_day_for_target", startedAt, queryCount, fmt.Sprintf("team_id=%s target_date=%s", teamID, targetDate.Format("2006-01-02")))
+	}()
+
 	month := monthKeyFromTime(targetDate, s.loc)
 	summary, err := s.ensureMonthSummaryLocked(ctx, teamID, month)
 	if err != nil {
@@ -82,6 +88,7 @@ func (s *Store) closeDayForTargetLocked(ctx context.Context, targetDate time.Tim
 		Scope:      "close_day",
 		TargetDate: toPgDate(targetDate),
 	})
+	queryCount++
 	if err != nil {
 		return false, err
 	}
@@ -94,53 +101,41 @@ func (s *Store) closeDayForTargetLocked(ctx context.Context, targetDate time.Tim
 		return false, err
 	}
 	cutoff := dateOnly(targetDate, s.loc).AddDate(0, 0, 1)
-	tasks, err := s.q.ListTasksEffectiveForCloseByTeamAndType(ctx, dbsqlc.ListTasksEffectiveForCloseByTeamAndTypeParams{
-		TeamID:    teamID,
-		Type:      string(api.Daily),
-		CreatedAt: toPgTimestamptz(cutoff),
+	totalPenalty, err := s.q.SumDailyPenaltyForClose(ctx, dbsqlc.SumDailyPenaltyForCloseParams{
+		TeamID:     teamID,
+		TargetDate: toPgDate(targetDate),
+		CreatedAt:  toPgTimestamptz(cutoff),
 	})
+	queryCount++
 	if err != nil {
 		return false, err
 	}
-	for _, row := range tasks {
-		t := taskFromEffectiveCloseRow(row, s.loc)
-		penRows, err := s.q.InsertTaskEvaluationDedupe(ctx, dbsqlc.InsertTaskEvaluationDedupeParams{
-			TeamID:     teamID,
-			Scope:      "penalty_day",
-			TargetDate: toPgDate(targetDate),
-			TaskID:     t.ID,
-		})
-		if err != nil {
-			return false, err
-		}
-		if penRows == 0 {
-			continue
-		}
-		done, err := s.q.HasTaskCompletionDaily(ctx, dbsqlc.HasTaskCompletionDailyParams{
-			TaskID:     t.ID,
-			TargetDate: toPgDate(targetDate),
-		})
-		if err != nil {
-			return false, err
-		}
-		if !done {
-			penalty32, err := safeInt32(t.Penalty, "daily penalty")
-			if err != nil {
-				return false, err
-			}
-			if err := s.q.IncrementDailyPenalty(ctx, dbsqlc.IncrementDailyPenaltyParams{
-				TeamID:            teamID,
-				MonthStart:        toPgDate(monthStart),
-				DailyPenaltyTotal: penalty32,
-			}); err != nil {
-				return false, err
-			}
-		}
+
+	if totalPenalty <= 0 {
+		return true, nil
 	}
+	penalty32, err := safeInt64ToInt32(totalPenalty, "daily penalty")
+	if err != nil {
+		return false, err
+	}
+	if err := s.q.IncrementDailyPenalty(ctx, dbsqlc.IncrementDailyPenaltyParams{
+		TeamID:            teamID,
+		MonthStart:        toPgDate(monthStart),
+		DailyPenaltyTotal: penalty32,
+	}); err != nil {
+		return false, err
+	}
+	queryCount++
 	return true, nil
 }
 
 func (s *Store) closeWeekForTargetLocked(ctx context.Context, previousWeekStart time.Time, teamID string) (bool, error) {
+	startedAt := time.Now()
+	queryCount := 0
+	defer func() {
+		s.logSQLPerformance("close_week_for_target", startedAt, queryCount, fmt.Sprintf("team_id=%s week_start=%s", teamID, previousWeekStart.Format("2006-01-02")))
+	}()
+
 	weekEnd := dateOnly(previousWeekStart, s.loc).AddDate(0, 0, 6)
 	month := monthKeyFromTime(weekEnd, s.loc)
 	summary, err := s.ensureMonthSummaryLocked(ctx, teamID, month)
@@ -156,6 +151,7 @@ func (s *Store) closeWeekForTargetLocked(ctx context.Context, previousWeekStart 
 		Scope:      "close_week",
 		TargetDate: toPgDate(previousWeekStart),
 	})
+	queryCount++
 	if err != nil {
 		return false, err
 	}
@@ -168,46 +164,31 @@ func (s *Store) closeWeekForTargetLocked(ctx context.Context, previousWeekStart 
 		return false, err
 	}
 	cutoff := dateOnly(previousWeekStart, s.loc).AddDate(0, 0, 7)
-	tasks, err := s.q.ListTasksEffectiveForCloseByTeamAndType(ctx, dbsqlc.ListTasksEffectiveForCloseByTeamAndTypeParams{
+	totalPenalty, err := s.q.SumWeeklyPenaltyForClose(ctx, dbsqlc.SumWeeklyPenaltyForCloseParams{
 		TeamID:    teamID,
-		Type:      string(api.Weekly),
+		WeekStart: toPgDate(previousWeekStart),
 		CreatedAt: toPgTimestamptz(cutoff),
 	})
+	queryCount++
 	if err != nil {
 		return false, err
 	}
-	for _, row := range tasks {
-		t := taskFromEffectiveCloseRow(row, s.loc)
-		penRows, err := s.q.InsertTaskEvaluationDedupe(ctx, dbsqlc.InsertTaskEvaluationDedupeParams{
-			TeamID:     teamID,
-			Scope:      "penalty_week",
-			TargetDate: toPgDate(previousWeekStart),
-			TaskID:     t.ID,
-		})
-		if err != nil {
-			return false, err
-		}
-		if penRows == 0 {
-			continue
-		}
-		count, err := s.weeklyCompletionCountLocked(ctx, t.ID, previousWeekStart)
-		if err != nil {
-			return false, err
-		}
-		if count < t.Required {
-			penalty32, err := safeInt32(t.Penalty, "weekly penalty")
-			if err != nil {
-				return false, err
-			}
-			if err := s.q.IncrementWeeklyPenalty(ctx, dbsqlc.IncrementWeeklyPenaltyParams{
-				TeamID:             teamID,
-				MonthStart:         toPgDate(monthStart),
-				WeeklyPenaltyTotal: penalty32,
-			}); err != nil {
-				return false, err
-			}
-		}
+
+	if totalPenalty <= 0 {
+		return true, nil
 	}
+	penalty32, err := safeInt64ToInt32(totalPenalty, "weekly penalty")
+	if err != nil {
+		return false, err
+	}
+	if err := s.q.IncrementWeeklyPenalty(ctx, dbsqlc.IncrementWeeklyPenaltyParams{
+		TeamID:             teamID,
+		MonthStart:         toPgDate(monthStart),
+		WeeklyPenaltyTotal: penalty32,
+	}); err != nil {
+		return false, err
+	}
+	queryCount++
 	return true, nil
 }
 
@@ -420,17 +401,6 @@ func (s *Store) seedTargetDateLocked(ctx context.Context, teamID string) (time.T
 		return time.Time{}, false, nil
 	}
 	return dateOnly(createdAt.Time, s.loc), true, nil
-}
-
-func (s *Store) weeklyCompletionCountLocked(ctx context.Context, taskID string, weekStart time.Time) (int, error) {
-	count, err := s.q.GetTaskCompletionWeeklyCount(ctx, dbsqlc.GetTaskCompletionWeeklyCountParams{
-		TaskID:    taskID,
-		WeekStart: toPgDate(weekStart),
-	})
-	if err != nil {
-		return 0, err
-	}
-	return int(count), nil
 }
 
 func (s *Store) ensureMonthSummaryLocked(ctx context.Context, teamID, month string) (dbsqlc.MonthlyPenaltySummary, error) {

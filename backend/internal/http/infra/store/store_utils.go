@@ -78,6 +78,13 @@ func safeInt32(v int, field string) (int32, error) {
 	return int32(v), nil
 }
 
+func safeInt64ToInt32(v int64, field string) (int32, error) {
+	if v < math.MinInt32 || v > math.MaxInt32 {
+		return 0, fmt.Errorf("%s is out of int32 range", field)
+	}
+	return int32(v), nil
+}
+
 func dateOnly(t time.Time, loc *time.Location) time.Time {
 	tt := t.In(loc)
 	return time.Date(tt.Year(), tt.Month(), tt.Day(), 0, 0, 0, 0, loc)
