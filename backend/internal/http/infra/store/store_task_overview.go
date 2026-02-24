@@ -10,11 +10,17 @@ import (
 	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 )
 
-func (s *Store) GetTaskOverview(ctx context.Context, userID string) (api.TaskOverviewResponse, error) {
+func (s *Store) GetTaskOverview(ctx context.Context, userID string) (resp api.TaskOverviewResponse, err error) {
+	startedAt := time.Now()
+	queryCount := 0
+	taskCount := 0
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return api.TaskOverviewResponse{}, err
 	}
+	defer func() {
+		s.logSQLPerformance("get_task_overview", startedAt, queryCount, fmt.Sprintf("team_id=%s task_count=%d error=%t", teamID, taskCount, err != nil))
+	}()
 
 	now := time.Now().In(s.loc)
 	today := dateOnly(now, s.loc)
@@ -28,32 +34,50 @@ func (s *Store) GetTaskOverview(ctx context.Context, userID string) (api.TaskOve
 	weekly := []api.TaskOverviewWeeklyTask{}
 
 	tasks, err := s.q.ListUndeletedTasksByTeamID(ctx, teamID)
+	queryCount++
 	if err != nil {
 		return api.TaskOverviewResponse{}, err
 	}
+	taskCount = len(tasks)
+
+	dailyCompletedTaskIDs, err := s.q.ListCompletedDailyTaskIDsByTeamAndDate(ctx, dbsqlc.ListCompletedDailyTaskIDsByTeamAndDateParams{
+		TeamID:     teamID,
+		TargetDate: toPgDate(today),
+	})
+	queryCount++
+	if err != nil {
+		return api.TaskOverviewResponse{}, err
+	}
+	dailyDone := make(map[string]bool, len(dailyCompletedTaskIDs))
+	for _, taskID := range dailyCompletedTaskIDs {
+		dailyDone[taskID] = true
+	}
+
+	weeklyCompletionRows, err := s.q.ListTaskCompletionWeeklyCountsByTeamAndWeek(ctx, dbsqlc.ListTaskCompletionWeeklyCountsByTeamAndWeekParams{
+		TeamID:    teamID,
+		WeekStart: toPgDate(weekStart),
+	})
+	queryCount++
+	if err != nil {
+		return api.TaskOverviewResponse{}, err
+	}
+	weeklyDone := make(map[string]int, len(weeklyCompletionRows))
+	for _, row := range weeklyCompletionRows {
+		weeklyDone[row.TaskID] = int(row.CompletionCount)
+	}
+
 	for _, row := range tasks {
 		t := taskFromUndeletedListRow(row, s.loc)
 		if t.Type == api.Daily {
-			done, err := s.q.HasTaskCompletionDaily(ctx, dbsqlc.HasTaskCompletionDailyParams{
-				TaskID:     t.ID,
-				TargetDate: toPgDate(today),
-			})
-			if err != nil {
-				return api.TaskOverviewResponse{}, err
-			}
 			daily = append(daily, api.TaskOverviewDailyTask{
 				Task:           t.toAPI(),
-				CompletedToday: done,
+				CompletedToday: dailyDone[t.ID],
 			})
 			continue
 		}
-		count, err := s.weeklyCompletionCountLocked(ctx, t.ID, weekStart)
-		if err != nil {
-			return api.TaskOverviewResponse{}, err
-		}
 		weekly = append(weekly, api.TaskOverviewWeeklyTask{
 			Task:                       t.toAPI(),
-			WeekCompletedCount:         count,
+			WeekCompletedCount:         weeklyDone[t.ID],
 			RequiredCompletionsPerWeek: t.Required,
 		})
 	}
@@ -62,14 +86,15 @@ func (s *Store) GetTaskOverview(ctx context.Context, userID string) (api.TaskOve
 	sort.Slice(weekly, func(i, j int) bool { return weekly[i].Task.CreatedAt.Before(weekly[j].Task.CreatedAt) })
 
 	elapsed := int(today.Sub(weekStart).Hours()/24) + 1
-	return api.TaskOverviewResponse{
+	resp = api.TaskOverviewResponse{
 		Month:               monthKey,
 		Today:               toDate(today),
 		ElapsedDaysInWeek:   elapsed,
 		MonthlyPenaltyTotal: int(monthly.DailyPenaltyTotal + monthly.WeeklyPenaltyTotal),
 		DailyTasks:          daily,
 		WeeklyTasks:         weekly,
-	}, nil
+	}
+	return resp, nil
 }
 
 func (s *Store) GetMonthlySummary(ctx context.Context, userID string, month *string) (api.MonthlyPenaltySummary, error) {

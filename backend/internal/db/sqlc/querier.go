@@ -60,11 +60,13 @@ type Querier interface {
 	InsertCloseRun(ctx context.Context, arg InsertCloseRunParams) (int64, error)
 	InsertExchangeCode(ctx context.Context, arg InsertExchangeCodeParams) error
 	InsertTaskEvaluationDedupe(ctx context.Context, arg InsertTaskEvaluationDedupeParams) (int64, error)
+	ListCompletedDailyTaskIDsByTeamAndDate(ctx context.Context, arg ListCompletedDailyTaskIDsByTeamAndDateParams) ([]string, error)
 	ListMembershipsByUserID(ctx context.Context, userID string) ([]ListMembershipsByUserIDRow, error)
 	ListPenaltyRulesByTeamID(ctx context.Context, teamID string) ([]PenaltyRule, error)
 	ListPenaltyRulesEffectiveAtByTeamID(ctx context.Context, arg ListPenaltyRulesEffectiveAtByTeamIDParams) ([]PenaltyRule, error)
 	ListTaskCompletionDailyByMonthAndTeam(ctx context.Context, arg ListTaskCompletionDailyByMonthAndTeamParams) ([]ListTaskCompletionDailyByMonthAndTeamRow, error)
 	ListTaskCompletionWeeklyByMonthAndTeam(ctx context.Context, arg ListTaskCompletionWeeklyByMonthAndTeamParams) ([]ListTaskCompletionWeeklyByMonthAndTeamRow, error)
+	ListTaskCompletionWeeklyCountsByTeamAndWeek(ctx context.Context, arg ListTaskCompletionWeeklyCountsByTeamAndWeekParams) ([]ListTaskCompletionWeeklyCountsByTeamAndWeekRow, error)
 	ListTasksByTeamID(ctx context.Context, teamID string) ([]ListTasksByTeamIDRow, error)
 	ListTasksEffectiveForCloseByTeamAndType(ctx context.Context, arg ListTasksEffectiveForCloseByTeamAndTypeParams) ([]ListTasksEffectiveForCloseByTeamAndTypeRow, error)
 	ListTasksForMonthlyStatusByTeam(ctx context.Context, arg ListTasksForMonthlyStatusByTeamParams) ([]ListTasksForMonthlyStatusByTeamRow, error)
@@ -74,6 +76,8 @@ type Querier interface {
 	ListUndeletedPenaltyRulesByTeamID(ctx context.Context, teamID string) ([]PenaltyRule, error)
 	ListUndeletedTasksByTeamID(ctx context.Context, teamID string) ([]ListUndeletedTasksByTeamIDRow, error)
 	SoftDeletePenaltyRule(ctx context.Context, arg SoftDeletePenaltyRuleParams) (int64, error)
+	SumDailyPenaltyForClose(ctx context.Context, arg SumDailyPenaltyForCloseParams) (int64, error)
+	SumWeeklyPenaltyForClose(ctx context.Context, arg SumWeeklyPenaltyForCloseParams) (int64, error)
 	ToggleTaskCompletionWeeklyBinary(ctx context.Context, arg ToggleTaskCompletionWeeklyBinaryParams) (int64, error)
 	UpdatePenaltyRule(ctx context.Context, arg UpdatePenaltyRuleParams) error
 	UpdateTask(ctx context.Context, arg UpdateTaskParams) error

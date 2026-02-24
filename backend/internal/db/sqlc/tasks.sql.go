@@ -245,10 +245,16 @@ func (q *Queries) ListTasksEffectiveForCloseByTeamAndType(ctx context.Context, a
 
 const listTasksForMonthlyStatusByTeam = `-- name: ListTasksForMonthlyStatusByTeam :many
 SELECT id, title, type, penalty_points, created_at, deleted_at
-FROM tasks
-WHERE team_id = $1
-  AND created_at < $3
-  AND (deleted_at IS NULL OR deleted_at >= $2)
+FROM tasks t
+WHERE t.team_id = $1
+  AND t.created_at < $3
+  AND t.deleted_at IS NULL
+UNION ALL
+SELECT id, title, type, penalty_points, created_at, deleted_at
+FROM tasks t
+WHERE t.team_id = $1
+  AND t.created_at < $3
+  AND t.deleted_at >= $2
 ORDER BY created_at, id
 `
 

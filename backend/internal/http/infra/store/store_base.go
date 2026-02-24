@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -11,6 +12,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	dbsqlc "github.com/megu/kaji-challenge/backend/internal/db/sqlc"
 )
+
+const dbPoolConnUpperLimit int32 = 100
 
 func newStore() *Store {
 	loc, _ := time.LoadLocation(jstTZ)
@@ -56,9 +59,51 @@ func (s *Store) initPersistence() error {
 	if databaseURL == "" {
 		return errors.New("DATABASE_URL is required")
 	}
+	config, err := pgxpool.ParseConfig(databaseURL)
+	if err != nil {
+		return fmt.Errorf("failed to parse DATABASE_URL: %w", err)
+	}
+	if v := strings.TrimSpace(os.Getenv("DB_POOL_MAX_CONNS")); v != "" {
+		maxConns, err := parseEnvInt32(v, "DB_POOL_MAX_CONNS", false)
+		if err != nil {
+			return err
+		}
+		if err := ensureInt32UpperLimit(maxConns, "DB_POOL_MAX_CONNS", dbPoolConnUpperLimit, v); err != nil {
+			return err
+		}
+		config.MaxConns = maxConns
+	}
+	if v := strings.TrimSpace(os.Getenv("DB_POOL_MIN_CONNS")); v != "" {
+		minConns, err := parseEnvInt32(v, "DB_POOL_MIN_CONNS", true)
+		if err != nil {
+			return err
+		}
+		if err := ensureInt32UpperLimit(minConns, "DB_POOL_MIN_CONNS", dbPoolConnUpperLimit, v); err != nil {
+			return err
+		}
+		config.MinConns = minConns
+	}
+	if v := strings.TrimSpace(os.Getenv("DB_POOL_MAX_CONN_LIFETIME")); v != "" {
+		dur, err := time.ParseDuration(v)
+		if err != nil || dur <= 0 {
+			return fmt.Errorf("DB_POOL_MAX_CONN_LIFETIME must be a positive duration: %q", v)
+		}
+		config.MaxConnLifetime = dur
+	}
+	if v := strings.TrimSpace(os.Getenv("DB_POOL_HEALTH_CHECK_PERIOD")); v != "" {
+		dur, err := time.ParseDuration(v)
+		if err != nil || dur <= 0 {
+			return fmt.Errorf("DB_POOL_HEALTH_CHECK_PERIOD must be a positive duration: %q", v)
+		}
+		config.HealthCheckPeriod = dur
+	}
+	if config.MinConns > config.MaxConns {
+		return fmt.Errorf("DB_POOL_MIN_CONNS (%d) must be <= DB_POOL_MAX_CONNS (%d)", config.MinConns, config.MaxConns)
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	db, err := pgxpool.New(ctx, databaseURL)
+	db, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
 		return err
 	}
