@@ -35,8 +35,7 @@ export function StatusToast({ message, onDismiss }: Props) {
 
   return (
     <output
-      className="fixed right-3 z-50 w-[min(80vw,22rem)] md:w-[22rem]"
-      style={{ bottom: "calc(env(safe-area-inset-bottom) + 6.5rem)" }}
+      className="fixed right-3 bottom-[calc(env(safe-area-inset-bottom)+6.5rem)] z-50 w-[min(80vw,22rem)] md:top-4 md:right-4 md:bottom-auto md:w-[22rem]"
       aria-live="polite"
       data-testid="status-message"
       onMouseEnter={() => setIsHovered(true)}
