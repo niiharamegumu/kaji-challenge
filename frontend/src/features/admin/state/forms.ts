@@ -19,16 +19,16 @@ export type RuleFormState = {
 };
 
 export const initialTaskFormState: TaskFormState = {
-  title: "皿洗い",
+  title: "",
   notes: "",
   type: TaskTypeConst.daily,
-  penaltyPoints: "2",
-  requiredCompletionsPerWeek: "3",
+  penaltyPoints: "1",
+  requiredCompletionsPerWeek: "1",
 };
 
 export const initialRuleFormState: RuleFormState = {
-  name: "買い出し担当",
-  threshold: "10",
+  name: "",
+  threshold: "1",
 };
 
 export const taskFormAtom = atom<TaskFormState>(initialTaskFormState);
