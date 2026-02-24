@@ -14,6 +14,15 @@ SELECT EXISTS (
   WHERE task_id = $1 AND target_date = $2
 );
 
+-- name: ListCompletedDailyTaskIDsByTeamAndDate :many
+SELECT d.task_id
+FROM task_completion_daily d
+JOIN tasks t ON t.id = d.task_id
+WHERE t.team_id = $1
+  AND t.type = 'daily'
+  AND d.target_date = $2
+ORDER BY d.task_id;
+
 -- name: DeleteTaskCompletionDailyByTaskID :exec
 DELETE FROM task_completion_daily
 WHERE task_id = $1;
@@ -24,6 +33,15 @@ SELECT COALESCE((
   FROM task_completion_weekly
   WHERE task_id = $1 AND week_start = $2
 ), 0)::bigint;
+
+-- name: ListTaskCompletionWeeklyCountsByTeamAndWeek :many
+SELECT w.task_id, w.completion_count
+FROM task_completion_weekly w
+JOIN tasks t ON t.id = w.task_id
+WHERE t.team_id = $1
+  AND t.type = 'weekly'
+  AND w.week_start = $2
+ORDER BY w.task_id;
 
 -- name: IncrementTaskCompletionWeekly :one
 INSERT INTO task_completion_weekly (task_id, week_start, completion_count, created_at, updated_at)
