@@ -1,14 +1,13 @@
 name: Deploy Backend to Cloud Run
 
 on:
-  # NOTE: 開発中のため自動デプロイは一時停止中。再開時に push トリガーを有効化する。
   workflow_dispatch:
-  # push:
-  #   branches: ["main"]
-  #   paths:
-  #     - "backend/**"
-  #     - "api/**"
-  #     - ".github/workflows/deploy-backend-cloud-run.yml"
+  push:
+    branches: ["main"]
+    paths:
+      - "backend/**"
+      - "api/**"
+      - ".github/workflows/deploy-backend-cloud-run.yml"
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
@@ -37,11 +36,12 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
 
       - name: Run DB migrations
         run: |
           test -n "$DATABASE_URL" || (echo "DATABASE_URL secret is empty" && exit 1)
-          go run github.com/golang-migrate/migrate/v4/cmd/migrate@v4.19.0 \
+          go run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.19.0 \
             -path backend/migrations \
             -database "$DATABASE_URL" \
             up
