@@ -1,13 +1,12 @@
 name: Deploy Frontend to Cloudflare Workers
 
 on:
-  # NOTE: 開発中のため自動デプロイは一時停止中。再開時に push トリガーを有効化する。
   workflow_dispatch:
-  # push:
-  #   branches: ["main"]
-  #   paths:
-  #     - "frontend/**"
-  #     - ".github/workflows/deploy-frontend-cloudflare.yml"
+  push:
+    branches: ["main"]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/deploy-frontend-cloudflare.yml"
 
 jobs:
   deploy:

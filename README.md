@@ -113,7 +113,7 @@ GitHub Actions デプロイで必要な secrets:
 
 Cloud Run の初期設定:
 
-- Region: `us-central1`
+- Region: `asia-northeast1`
 - Service: `kaji-backend`
 - Deploy mode: `--allow-unauthenticated`（アプリ層で認証）
 

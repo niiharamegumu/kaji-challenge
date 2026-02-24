@@ -15,7 +15,13 @@ export default {
     const basicAuth = getBasicAuthConfig(env);
 
     if (request.method !== "OPTIONS" && basicAuth.enabled) {
-      if (!hasValidBasicAuth(request, basicAuth.username, basicAuth.password)) {
+      if (
+        !(await hasValidBasicAuth(
+          request,
+          basicAuth.username,
+          basicAuth.password,
+        ))
+      ) {
         return new Response("Authentication required", {
           status: 401,
           headers: {
@@ -33,7 +39,10 @@ export default {
       }
       const upstreamURL = `${apiOrigin}${url.pathname.replace(/^\/api/, "")}${url.search}`;
       const upstreamReq = new Request(upstreamURL, request);
-      return fetch(upstreamReq);
+      const headers = new Headers(upstreamReq.headers);
+      headers.delete("authorization");
+      const sanitizedReq = new Request(upstreamReq, { headers });
+      return fetch(sanitizedReq);
     }
     return env.ASSETS.fetch(request);
   },
@@ -53,17 +62,18 @@ function getBasicAuthConfig(env: WorkerEnv) {
   return { enabled, username, password };
 }
 
-function hasValidBasicAuth(
+async function hasValidBasicAuth(
   request: Request,
   expectedUsername: string,
   expectedPassword: string,
 ) {
   const header = request.headers.get("Authorization") ?? "";
-  if (!header.startsWith("Basic ")) {
+  const basicPrefix = "basic ";
+  if (header.slice(0, basicPrefix.length).toLowerCase() !== basicPrefix) {
     return false;
   }
 
-  const encoded = header.slice("Basic ".length).trim();
+  const encoded = header.slice(basicPrefix.length).trim();
   if (encoded === "") {
     return false;
   }
@@ -82,5 +92,42 @@ function hasValidBasicAuth(
 
   const username = decoded.slice(0, sep);
   const password = decoded.slice(sep + 1);
-  return username === expectedUsername && password === expectedPassword;
+  const [userOK, passOK] = await Promise.all([
+    timingSafeStringEqual(username, expectedUsername),
+    timingSafeStringEqual(password, expectedPassword),
+  ]);
+  return userOK && passOK;
+}
+
+async function timingSafeStringEqual(a: string, b: string) {
+  const enc = new TextEncoder();
+  const [aDigest, bDigest] = await Promise.all([
+    crypto.subtle.digest("SHA-256", enc.encode(a)),
+    crypto.subtle.digest("SHA-256", enc.encode(b)),
+  ]);
+  return timingSafeBufferEqual(
+    new Uint8Array(aDigest),
+    new Uint8Array(bDigest),
+  );
+}
+
+function timingSafeBufferEqual(a: Uint8Array, b: Uint8Array) {
+  const subtleWithTimingSafeEqual = crypto.subtle as SubtleCrypto & {
+    timingSafeEqual?: (
+      left: ArrayBufferView | ArrayBuffer,
+      right: ArrayBufferView | ArrayBuffer,
+    ) => boolean;
+  };
+  if (typeof subtleWithTimingSafeEqual.timingSafeEqual === "function") {
+    return subtleWithTimingSafeEqual.timingSafeEqual(a, b);
+  }
+
+  if (a.length !== b.length) {
+    return false;
+  }
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) {
+    diff |= a[i] ^ b[i];
+  }
+  return diff === 0;
 }

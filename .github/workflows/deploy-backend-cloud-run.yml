@@ -13,7 +13,7 @@ on:
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   SERVICE: kaji-backend
-  REGION: us-central1
+  REGION: asia-northeast1
   DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
 jobs:
@@ -47,11 +47,11 @@ jobs:
             up
 
       - name: Configure Docker auth
-        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+        run: gcloud auth configure-docker asia-northeast1-docker.pkg.dev --quiet
 
       - name: Build and push image
         run: |
-          IMAGE="us-central1-docker.pkg.dev/${PROJECT_ID}/kaji/kaji-backend:${GITHUB_SHA}"
+          IMAGE="asia-northeast1-docker.pkg.dev/${PROJECT_ID}/kaji/kaji-backend:${GITHUB_SHA}"
           docker build -t "$IMAGE" backend
           docker push "$IMAGE"
           echo "IMAGE=$IMAGE" >> $GITHUB_ENV
