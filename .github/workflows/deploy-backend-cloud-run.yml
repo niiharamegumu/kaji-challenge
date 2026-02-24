@@ -49,6 +49,12 @@ jobs:
       - name: Configure Docker auth
         run: gcloud auth configure-docker asia-northeast1-docker.pkg.dev --quiet
 
+      - name: Debug auth context
+        run: |
+          gcloud auth list
+          gcloud config get-value project
+          gcloud artifacts repositories describe kaji --location asia-northeast1 --project "${PROJECT_ID}"
+
       - name: Build and push image
         run: |
           IMAGE="asia-northeast1-docker.pkg.dev/${PROJECT_ID}/kaji/kaji-backend:${GITHUB_SHA}"
