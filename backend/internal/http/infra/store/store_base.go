@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -13,6 +12,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	dbsqlc "github.com/megu/kaji-challenge/backend/internal/db/sqlc"
 )
+
+const dbPoolConnUpperLimit int32 = 100
 
 func newStore() *Store {
 	loc, _ := time.LoadLocation(jstTZ)
@@ -63,18 +64,24 @@ func (s *Store) initPersistence() error {
 		return fmt.Errorf("failed to parse DATABASE_URL: %w", err)
 	}
 	if v := strings.TrimSpace(os.Getenv("DB_POOL_MAX_CONNS")); v != "" {
-		maxConns, err := strconv.Atoi(v)
-		if err != nil || maxConns <= 0 {
-			return fmt.Errorf("DB_POOL_MAX_CONNS must be a positive integer: %q", v)
+		maxConns, err := parseEnvInt32(v, "DB_POOL_MAX_CONNS", false)
+		if err != nil {
+			return err
 		}
-		config.MaxConns = int32(maxConns)
+		if err := ensureInt32UpperLimit(maxConns, "DB_POOL_MAX_CONNS", dbPoolConnUpperLimit, v); err != nil {
+			return err
+		}
+		config.MaxConns = maxConns
 	}
 	if v := strings.TrimSpace(os.Getenv("DB_POOL_MIN_CONNS")); v != "" {
-		minConns, err := strconv.Atoi(v)
-		if err != nil || minConns < 0 {
-			return fmt.Errorf("DB_POOL_MIN_CONNS must be a non-negative integer: %q", v)
+		minConns, err := parseEnvInt32(v, "DB_POOL_MIN_CONNS", true)
+		if err != nil {
+			return err
 		}
-		config.MinConns = int32(minConns)
+		if err := ensureInt32UpperLimit(minConns, "DB_POOL_MIN_CONNS", dbPoolConnUpperLimit, v); err != nil {
+			return err
+		}
+		config.MinConns = minConns
 	}
 	if v := strings.TrimSpace(os.Getenv("DB_POOL_MAX_CONN_LIFETIME")); v != "" {
 		dur, err := time.ParseDuration(v)

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
 	"time"
 
@@ -83,6 +84,28 @@ func safeInt64ToInt32(v int64, field string) (int32, error) {
 		return 0, fmt.Errorf("%s is out of int32 range", field)
 	}
 	return int32(v), nil
+}
+
+func parseEnvInt32(value, field string, allowZero bool) (int32, error) {
+	parsed, err := strconv.ParseInt(value, 10, 32)
+	if err != nil {
+		return 0, fmt.Errorf("%s must be a valid int32 integer: %q", field, value)
+	}
+	if allowZero {
+		if parsed < 0 {
+			return 0, fmt.Errorf("%s must be a non-negative integer: %q", field, value)
+		}
+	} else if parsed <= 0 {
+		return 0, fmt.Errorf("%s must be a positive integer: %q", field, value)
+	}
+	return int32(parsed), nil
+}
+
+func ensureInt32UpperLimit(value int32, field string, upperLimit int32, raw string) error {
+	if value > upperLimit {
+		return fmt.Errorf("%s must be <= %d: %q", field, upperLimit, raw)
+	}
+	return nil
 }
 
 func dateOnly(t time.Time, loc *time.Location) time.Time {
