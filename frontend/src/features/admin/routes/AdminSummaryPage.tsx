@@ -7,6 +7,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Circle,
+  LoaderCircle,
   TriangleAlert,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -188,8 +189,8 @@ export function AdminSummaryPage() {
   }, [monthPickerOpen]);
 
   return (
-    <section className="mt-4 w-full pb-2">
-      <article className="rounded-2xl border border-stone-200 bg-white/90 p-4 shadow-sm animate-enter md:p-6">
+    <section className="mt-3 w-full pb-2 md:mt-4">
+      <article className="animate-enter rounded-xl border border-stone-200 bg-white/90 p-3 shadow-sm md:rounded-2xl md:p-6">
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
             <h2 className="text-lg font-semibold">月次サマリー</h2>
@@ -211,15 +212,17 @@ export function AdminSummaryPage() {
               <div className="relative flex-1" ref={monthPickerRef}>
                 <button
                   type="button"
-                  className="relative flex min-h-11 w-full cursor-pointer items-center justify-between rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-800"
+                  className="relative flex min-h-11 w-full cursor-pointer items-center justify-center rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-800"
                   onClick={() => setMonthPickerOpen((open) => !open)}
                   aria-label="対象月を選択"
                 >
-                  <span>{formatMonthLabel(month)}</span>
+                  <span className="w-full text-center">
+                    {formatMonthLabel(month)}
+                  </span>
                 </button>
 
                 {monthPickerOpen ? (
-                  <div className="absolute right-0 top-full z-50 mt-2 w-72 max-w-[calc(100vw-2rem)] rounded-xl border border-stone-200 bg-white p-3 shadow-xl">
+                  <div className="absolute right-0 top-full z-50 mt-2 w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-stone-200 bg-white p-3 shadow-xl">
                     <div className="flex items-center justify-between gap-2">
                       <button
                         type="button"
@@ -304,7 +307,7 @@ export function AdminSummaryPage() {
         </div>
 
         <div className="mt-5">
-          <div className="rounded-xl border border-stone-200 bg-white p-4">
+          <div className="rounded-xl border border-stone-200 bg-white p-3 md:p-4">
             <p className="text-sm text-stone-700">合計減点</p>
             <p className="mt-2 text-3xl font-bold text-stone-900">
               {summaryQuery.data?.totalPenalty ?? 0}
@@ -312,14 +315,14 @@ export function AdminSummaryPage() {
           </div>
         </div>
 
-        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-          <div className="rounded-xl border border-stone-200 bg-white p-4">
+        <div className="mt-3 grid grid-cols-2 gap-2 md:gap-3">
+          <div className="rounded-xl border border-stone-200 bg-white p-3 md:p-4">
             <p className="text-sm text-stone-700">日次減点</p>
             <p className="mt-2 text-2xl font-semibold text-stone-900">
               {summaryQuery.data?.dailyPenaltyTotal ?? 0}
             </p>
           </div>
-          <div className="rounded-xl border border-stone-200 bg-white p-4">
+          <div className="rounded-xl border border-stone-200 bg-white p-3 md:p-4">
             <p className="text-sm text-stone-700">週次減点</p>
             <p className="mt-2 text-2xl font-semibold text-stone-900">
               {summaryQuery.data?.weeklyPenaltyTotal ?? 0}
@@ -331,9 +334,14 @@ export function AdminSummaryPage() {
           <h3 className="text-base font-semibold">発生しているペナルティ</h3>
 
           {summaryQuery.isLoading || rulesQuery.isLoading ? (
-            <p className="mt-3 text-sm text-stone-500">
-              サマリーを読み込み中です...
-            </p>
+            <div className="mt-3 flex justify-center">
+              <LoaderCircle
+                size={22}
+                className="text-stone-500 animate-spin motion-reduce:animate-none"
+                aria-label="読み込み中"
+                role="status"
+              />
+            </div>
           ) : summaryQuery.isError || rulesQuery.isError ? (
             <p className="mt-3 text-sm text-rose-700">
               サマリー情報の取得に失敗しました。時間をおいて再読込してください。
@@ -380,9 +388,14 @@ export function AdminSummaryPage() {
           <h3 className="text-base font-semibold">日次サマリー</h3>
 
           {summaryQuery.isLoading ? (
-            <p className="mt-3 text-sm text-stone-500">
-              一覧を読み込み中です...
-            </p>
+            <div className="mt-3 flex justify-center">
+              <LoaderCircle
+                size={22}
+                className="text-stone-500 animate-spin motion-reduce:animate-none"
+                aria-label="読み込み中"
+                role="status"
+              />
+            </div>
           ) : summaryQuery.isError ? (
             <p className="mt-3 text-sm text-rose-700">
               完了タスク一覧の取得に失敗しました。
