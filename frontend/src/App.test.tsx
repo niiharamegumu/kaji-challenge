@@ -92,6 +92,14 @@ describe("App", () => {
     await waitFor(() => {
       expect(screen.getByText("KajiChalle")).toBeInTheDocument();
       expect(
+        screen.getByText(
+          /家事を見える化して、分担と継続をチームで支えるサービスです。/,
+        ),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("img", { name: "KajiChalleのファビコン" }),
+      ).toBeInTheDocument();
+      expect(
         screen.getByRole("button", { name: "Googleでログイン" }),
       ).toBeInTheDocument();
     });
