@@ -1,20 +1,12 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAtom, useAtomValue } from "jotai";
-import { useSetAtom } from "jotai";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { getTeamCurrentMembers } from "../../../lib/api/generated/client";
 import { queryKeys } from "../../../shared/query/queryKeys";
 import { extractHttpStatus, formatError } from "../../../shared/utils/errors";
 import { isLoggedInAtom, sessionAtom } from "../../../state/session";
-import {
-  initialRuleFormState,
-  initialTaskFormState,
-  ruleFormAtom,
-  taskFormAtom,
-} from "../../admin/state/forms";
-import { inviteCodeAtom, joinCodeAtom } from "../../admin/state/ui";
 import { LoginCard } from "../../auth/components/LoginCard";
 import {
   useLoginAction,
@@ -37,6 +29,12 @@ const protectedQueryKeys = [
   queryKeys.monthlySummary,
 ] as const;
 
+export type RootLayoutOutletContext = {
+  currentUserId: string | null;
+  currentTeamName: string;
+  displayName: string;
+};
+
 export function RootLayout() {
   const queryClient = useQueryClient();
   const [, setSession] = useAtom(sessionAtom);
@@ -44,32 +42,34 @@ export function RootLayout() {
   const loggedIn = useAtomValue(isLoggedInAtom);
   const navigate = useNavigate();
   const location = useLocation();
-  const [authChecked, setAuthChecked] = useState(false);
   const handledInvalidSessionRef = useRef(false);
 
-  const setTaskForm = useSetAtom(taskFormAtom);
-  const setRuleForm = useSetAtom(ruleFormAtom);
-  const setInviteCode = useSetAtom(inviteCodeAtom);
-  const setJoinCode = useSetAtom(joinCodeAtom);
-
   const meQuery = useMeQuery(true);
-  const currentUserID = meQuery.data?.user.id;
-  const teamMembersQuery = useQuery({
+  const currentUserID = meQuery.data?.user.id ?? null;
+  const cachedMembersQuery = useQuery({
     queryKey: queryKeys.teamMembers,
     queryFn: async () => (await getTeamCurrentMembers()).data.items,
-    enabled: currentUserID != null,
+    enabled: false,
   });
   const login = useLoginAction(setStatus);
   const logoutAction = useLogoutAction(setStatus, setSession);
   const currentTeamName = meQuery.data?.memberships?.[0]?.teamName ?? "チーム";
-  const meMember = teamMembersQuery.data?.find(
-    (member) => member.userId === currentUserID,
-  );
-  const preferredUserName = meMember?.nickname?.trim();
+  const preferredNickname =
+    cachedMembersQuery.data
+      ?.find((member) => member.userId === currentUserID)
+      ?.nickname?.trim() ?? "";
   const currentUserName =
-    preferredUserName != null && preferredUserName.length > 0
-      ? preferredUserName
+    preferredNickname.length > 0
+      ? preferredNickname
       : (meQuery.data?.user.displayName ?? "ログイン中");
+  const outletContext = useMemo<RootLayoutOutletContext>(
+    () => ({
+      currentUserId: currentUserID,
+      currentTeamName,
+      displayName: currentUserName,
+    }),
+    [currentTeamName, currentUserID, currentUserName],
+  );
   const todayLabel = useMemo(() => {
     const now = new Date();
     const fullDate = new Intl.DateTimeFormat("ja-JP", {
@@ -82,12 +82,6 @@ export function RootLayout() {
     }).format(now);
     return `${fullDate}（${weekday}）`;
   }, []);
-
-  useEffect(() => {
-    if (!meQuery.isFetching) {
-      setAuthChecked(true);
-    }
-  }, [meQuery.isFetching]);
 
   useEffect(() => {
     if (meQuery.isSuccess) {
@@ -103,6 +97,10 @@ export function RootLayout() {
     const statusCode = extractHttpStatus(meQuery.error);
 
     if (statusCode === 401) {
+      if (!loggedIn && meQuery.data == null) {
+        handledInvalidSessionRef.current = false;
+        return;
+      }
       if (handledInvalidSessionRef.current) {
         return;
       }
@@ -126,8 +124,10 @@ export function RootLayout() {
   }, [
     location.pathname,
     meQuery.error,
+    meQuery.data,
     meQuery.isError,
     meQuery.isSuccess,
+    loggedIn,
     navigate,
     queryClient,
     setSession,
@@ -143,15 +143,22 @@ export function RootLayout() {
     }
   }, [setStatus]);
 
-  const logout = async () => {
-    await logoutAction();
-    setTaskForm(initialTaskFormState);
-    setRuleForm(initialRuleFormState);
-    setInviteCode(null);
-    setJoinCode("");
-  };
+  const onDismissStatus = useCallback(() => {
+    setStatus("");
+  }, [setStatus]);
 
-  if (!authChecked) {
+  const onLogin = useCallback(() => {
+    void login();
+  }, [login]);
+
+  const onLogout = useCallback(() => {
+    void logoutAction();
+  }, [logoutAction]);
+
+  const isAuthChecking =
+    meQuery.status === "pending" && meQuery.data == null && !meQuery.isError;
+
+  if (isAuthChecking) {
     return (
       <main className="min-h-screen bg-[radial-gradient(circle_at_top,_var(--color-washi-50),_#fff,_var(--color-kohaku-50))] p-6 text-stone-700">
         <p>認証状態を確認中です...</p>
@@ -163,12 +170,12 @@ export function RootLayout() {
     if (location.pathname !== "/") {
       return <Navigate to="/" replace />;
     }
-    return <LoginCard status={status} onLogin={() => void login()} />;
+    return <LoginCard status={status} onLogin={onLogin} />;
   }
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,_var(--color-washi-50),_#fff,_var(--color-kohaku-50))] p-4 pb-32 text-stone-800 md:p-8 md:pb-20">
-      <StatusToast message={status} onDismiss={() => setStatus("")} />
+      <StatusToast message={status} onDismiss={onDismissStatus} />
 
       <div className="mx-auto max-w-6xl">
         <header className="rounded-2xl border border-stone-200 bg-white/90 p-4 shadow-sm backdrop-blur">
@@ -182,13 +189,10 @@ export function RootLayout() {
           </div>
         </header>
 
-        <Outlet />
+        <Outlet context={outletContext} />
       </div>
 
-      <FloatingNav
-        currentUserName={currentUserName}
-        onLogout={() => void logout()}
-      />
+      <FloatingNav currentUserName={currentUserName} onLogout={onLogout} />
     </main>
   );
 }

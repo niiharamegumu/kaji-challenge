@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback } from "react";
 
 import {
   getAuthGoogleStart,
@@ -17,22 +18,22 @@ export function useMeQuery(enabled: boolean) {
     queryKey: queryKeys.me,
     queryFn: async () => (await getMe()).data,
     enabled,
-    staleTime: 0,
-    refetchOnMount: "always",
-    refetchOnWindowFocus: true,
+    staleTime: 5 * 60_000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
     retry: false,
   });
 }
 
 export function useLoginAction(setStatus: StatusSetter) {
-  return async () => {
+  return useCallback(async () => {
     try {
       const res = await getAuthGoogleStart();
       window.location.href = res.data.authorizationUrl;
     } catch (error) {
       setStatus(`ログイン開始に失敗しました: ${formatError(error)}`);
     }
-  };
+  }, [setStatus]);
 }
 
 export function useLogoutAction(
@@ -41,7 +42,7 @@ export function useLogoutAction(
 ) {
   const queryClient = useQueryClient();
 
-  return async () => {
+  return useCallback(async () => {
     try {
       await postAuthLogout();
     } catch {
@@ -51,5 +52,5 @@ export function useLogoutAction(
     setSession({ authenticated: false });
     setStatus("ログアウトしました");
     queryClient.removeQueries();
-  };
+  }, [queryClient, setSession, setStatus]);
 }

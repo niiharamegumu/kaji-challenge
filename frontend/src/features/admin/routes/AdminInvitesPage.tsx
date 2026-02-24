@@ -1,7 +1,8 @@
-import { useAtom } from "jotai";
+import { useSetAtom } from "jotai";
 import { useEffect, useState } from "react";
+import { useOutletContext } from "react-router-dom";
 
-import { useMeQuery } from "../../auth/hooks/useAuthActions";
+import type { RootLayoutOutletContext } from "../../shell/routes/RootLayout";
 import { statusMessageAtom } from "../../shell/state/status";
 import { InviteManager } from "../components/InviteManager";
 import {
@@ -12,29 +13,30 @@ import {
   useCurrentInviteQuery,
   useCurrentTeamMembersQuery,
 } from "../hooks/useAdminQueries";
-import { inviteCodeAtom, joinCodeAtom } from "../state/ui";
+import type { InviteState } from "../state/ui";
 
 export function AdminInvitesPage() {
-  const [inviteCode, setInviteCode] = useAtom(inviteCodeAtom);
-  const [joinCode, setJoinCode] = useAtom(joinCodeAtom);
-  const [, setStatus] = useAtom(statusMessageAtom);
+  const { currentUserId, currentTeamName } =
+    useOutletContext<RootLayoutOutletContext>();
+  const [joinCode, setJoinCode] = useState("");
+  const setStatus = useSetAtom(statusMessageAtom);
   const { createInvite, joinTeam, leaveTeam } = useInviteMutations(setStatus);
   const { updateNickname, updateTeamName } = useProfileMutations(setStatus);
-  const meQuery = useMeQuery(true);
-  const membersQuery = useCurrentTeamMembersQuery(
-    Boolean(meQuery.data?.user.id),
-  );
-  const currentInviteQuery = useCurrentInviteQuery(
-    Boolean(meQuery.data?.user.id),
-  );
+  const membersQuery = useCurrentTeamMembersQuery(Boolean(currentUserId));
+  const currentInviteQuery = useCurrentInviteQuery(Boolean(currentUserId));
 
   const [nickname, setNickname] = useState("");
   const [teamName, setTeamName] = useState("");
   const [nicknameDirty, setNicknameDirty] = useState(false);
   const [teamNameDirty, setTeamNameDirty] = useState(false);
 
-  const currentTeamName = meQuery.data?.memberships?.[0]?.teamName ?? "";
-  const currentUserId = meQuery.data?.user.id;
+  const invite: InviteState | null =
+    currentInviteQuery.data == null
+      ? null
+      : {
+          code: currentInviteQuery.data.code,
+          expiresAt: currentInviteQuery.data.expiresAt,
+        };
   const currentNickname =
     membersQuery.data?.find((member) => member.userId === currentUserId)
       ?.nickname ?? "";
@@ -58,24 +60,9 @@ export function AdminInvitesPage() {
     setNickname(currentNickname);
   }, [currentNickname, currentUserId, nicknameDirty]);
 
-  useEffect(() => {
-    if (!currentInviteQuery.isSuccess) {
-      return;
-    }
-    if (currentInviteQuery.data == null) {
-      setInviteCode(null);
-      return;
-    }
-    setInviteCode({
-      code: currentInviteQuery.data.code,
-      expiresAt: currentInviteQuery.data.expiresAt,
-    });
-  }, [currentInviteQuery.data, currentInviteQuery.isSuccess, setInviteCode]);
-
   const handleCreateInvite = async () => {
     try {
-      const res = await createInvite.mutateAsync();
-      setInviteCode({ code: res.data.code, expiresAt: res.data.expiresAt });
+      await createInvite.mutateAsync();
       setStatus("招待コードを発行しました");
     } catch {
       // Error status is handled by mutation onError.
@@ -85,6 +72,7 @@ export function AdminInvitesPage() {
   const handleJoinTeam = async () => {
     try {
       await joinTeam.mutateAsync(joinCode);
+      setJoinCode("");
     } catch {
       // Error status is handled by mutation onError.
     }
@@ -119,7 +107,7 @@ export function AdminInvitesPage() {
   return (
     <section className="mt-4 pb-2">
       <InviteManager
-        invite={inviteCode}
+        invite={invite}
         joinCode={joinCode}
         members={membersQuery.data ?? []}
         nickname={nickname}

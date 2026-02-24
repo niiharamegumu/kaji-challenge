@@ -1,5 +1,5 @@
 import { CircleAlert, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type Props = {
   message: string;
@@ -9,6 +9,11 @@ type Props = {
 export function StatusToast({ message, onDismiss }: Props) {
   const [isHovered, setIsHovered] = useState(false);
   const [isPressing, setIsPressing] = useState(false);
+  const onDismissRef = useRef(onDismiss);
+
+  useEffect(() => {
+    onDismissRef.current = onDismiss;
+  }, [onDismiss]);
 
   useEffect(() => {
     if (!message || isHovered || isPressing) {
@@ -16,13 +21,13 @@ export function StatusToast({ message, onDismiss }: Props) {
     }
 
     const timer = window.setTimeout(() => {
-      onDismiss();
+      onDismissRef.current();
     }, 5000);
 
     return () => {
       window.clearTimeout(timer);
     };
-  }, [isHovered, isPressing, message, onDismiss]);
+  }, [isHovered, isPressing, message]);
 
   if (!message) {
     return null;
@@ -48,7 +53,7 @@ export function StatusToast({ message, onDismiss }: Props) {
         <button
           type="button"
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-stone-200 text-stone-600 transition-colors duration-200 hover:bg-stone-50"
-          onClick={onDismiss}
+          onClick={() => onDismissRef.current()}
           aria-label="ステータスメッセージを閉じる"
         >
           <X size={16} aria-hidden="true" />

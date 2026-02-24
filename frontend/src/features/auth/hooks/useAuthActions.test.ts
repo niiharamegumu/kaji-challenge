@@ -23,9 +23,9 @@ describe("useMeQuery", () => {
       expect.objectContaining({
         queryKey: ["me"],
         enabled: true,
-        staleTime: 0,
-        refetchOnMount: "always",
-        refetchOnWindowFocus: true,
+        staleTime: 300000,
+        refetchOnMount: false,
+        refetchOnWindowFocus: false,
         retry: false,
       }),
     );
