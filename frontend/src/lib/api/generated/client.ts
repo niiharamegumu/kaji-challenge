@@ -118,10 +118,7 @@ export interface TeamMembersResponse {
 }
 
 export interface UpdateNicknameRequest {
-  /**
-   * @minLength 1
-   * @maxLength 30
-   */
+  /** @maxLength 30 */
   nickname: string;
 }
 

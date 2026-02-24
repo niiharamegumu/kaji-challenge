@@ -335,6 +335,13 @@ func TestPatchMeNicknameAndListMembers(t *testing.T) {
 	if patchRes.Code != http.StatusOK {
 		t.Fatalf("expected nickname patch 200, got %d: %s", patchRes.Code, patchRes.Body.String())
 	}
+	var patched api.UpdateNicknameResponse
+	if err := json.Unmarshal(patchRes.Body.Bytes(), &patched); err != nil {
+		t.Fatalf("failed to parse nickname patch response: %v", err)
+	}
+	if patched.Nickname != "にっく" || patched.EffectiveName != "にっく" {
+		t.Fatalf("unexpected patch response: %+v", patched)
+	}
 
 	membersRes := doRequest(t, r, http.MethodGet, "/v1/teams/current/members", "", token)
 	if membersRes.Code != http.StatusOK {
@@ -352,6 +359,38 @@ func TestPatchMeNicknameAndListMembers(t *testing.T) {
 	}
 	if members.Items[0].JoinedAt.IsZero() {
 		t.Fatalf("expected joinedAt")
+	}
+
+	clearRes := doRequest(t, r, http.MethodPatch, "/v1/me/nickname", `{"nickname":""}`, token)
+	if clearRes.Code != http.StatusOK {
+		t.Fatalf("expected nickname clear 200, got %d: %s", clearRes.Code, clearRes.Body.String())
+	}
+	var cleared api.UpdateNicknameResponse
+	if err := json.Unmarshal(clearRes.Body.Bytes(), &cleared); err != nil {
+		t.Fatalf("failed to parse nickname clear response: %v", err)
+	}
+	if cleared.Nickname != "" {
+		t.Fatalf("expected cleared nickname to be empty, got %q", cleared.Nickname)
+	}
+	if cleared.EffectiveName != "Test User" {
+		t.Fatalf("expected effectiveName fallback to displayName, got %q", cleared.EffectiveName)
+	}
+
+	membersRes = doRequest(t, r, http.MethodGet, "/v1/teams/current/members", "", token)
+	if membersRes.Code != http.StatusOK {
+		t.Fatalf("expected members 200 after clear, got %d: %s", membersRes.Code, membersRes.Body.String())
+	}
+	if err := json.Unmarshal(membersRes.Body.Bytes(), &members); err != nil {
+		t.Fatalf("failed to parse members response after clear: %v", err)
+	}
+	if len(members.Items) == 0 {
+		t.Fatalf("expected at least one member after clear")
+	}
+	if members.Items[0].Nickname != nil {
+		t.Fatalf("expected nickname to be null after clear, got %+v", members.Items[0].Nickname)
+	}
+	if members.Items[0].EffectiveName != "Test User" {
+		t.Fatalf("expected displayName fallback after clear, got %q", members.Items[0].EffectiveName)
 	}
 }
 

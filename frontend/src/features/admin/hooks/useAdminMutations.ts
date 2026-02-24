@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   type CreatePenaltyRuleRequest,
   type CreateTaskRequest,
+  type InviteCodeResponse,
   deletePenaltyRule,
   deleteTask,
   patchMeNickname,
@@ -28,7 +29,8 @@ const teamMembershipRelatedQueryKeys = [
   queryKeys.monthlySummary,
 ] as const;
 
-const profileRelatedQueryKeys = [queryKeys.me, queryKeys.teamMembers] as const;
+const nicknameRelatedQueryKeys = [queryKeys.teamMembers] as const;
+const teamNameRelatedQueryKeys = [queryKeys.me] as const;
 
 async function invalidateQueryKeys(
   queryClient: ReturnType<typeof useQueryClient>,
@@ -123,10 +125,11 @@ export function useInviteMutations(setStatus: StatusSetter) {
   const createInvite = useMutation({
     mutationFn: async () =>
       postTeamInvite({ expiresInHours: INVITE_CODE_EXPIRES_IN_HOURS }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.currentInvite,
-      });
+    onSuccess: async (response) => {
+      queryClient.setQueryData<InviteCodeResponse>(
+        queryKeys.currentInvite,
+        response.data,
+      );
     },
     onError: (error) => {
       setStatus(`招待コード発行に失敗しました: ${formatError(error)}`);
@@ -173,9 +176,13 @@ export function useProfileMutations(setStatus: StatusSetter) {
 
   const updateNickname = useMutation({
     mutationFn: async (nickname: string) => patchMeNickname({ nickname }),
-    onSuccess: async () => {
-      setStatus("ニックネームを更新しました");
-      await invalidateQueryKeys(queryClient, profileRelatedQueryKeys);
+    onSuccess: async (_, nickname) => {
+      const message =
+        nickname.trim().length === 0
+          ? "ニックネームをリセットしました"
+          : "ニックネームを更新しました";
+      setStatus(message);
+      await invalidateQueryKeys(queryClient, nicknameRelatedQueryKeys);
     },
     onError: (error) => {
       setStatus(`ニックネーム更新に失敗しました: ${formatError(error)}`);
@@ -186,7 +193,7 @@ export function useProfileMutations(setStatus: StatusSetter) {
     mutationFn: async (name: string) => patchTeamCurrent({ name }),
     onSuccess: async () => {
       setStatus("チーム名を更新しました");
-      await invalidateQueryKeys(queryClient, profileRelatedQueryKeys);
+      await invalidateQueryKeys(queryClient, teamNameRelatedQueryKeys);
     },
     onError: (error) => {
       setStatus(`チーム名更新に失敗しました: ${formatError(error)}`);

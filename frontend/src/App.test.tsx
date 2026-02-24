@@ -12,6 +12,9 @@ const mockListTasks = vi.fn();
 const mockListRules = vi.fn();
 const mockSummary = vi.fn();
 const mockGetMe = vi.fn();
+const mockGetTeamCurrentMembers = vi.fn();
+const mockGetTeamCurrentInvite = vi.fn();
+const mockPostTeamInvite = vi.fn();
 
 vi.mock("./lib/api/generated/client", () => ({
   TaskType: { daily: "daily", weekly: "weekly" },
@@ -23,6 +26,10 @@ vi.mock("./lib/api/generated/client", () => ({
   listPenaltyRules: (...args: unknown[]) => mockListRules(...args),
   getPenaltySummaryMonthly: (...args: unknown[]) => mockSummary(...args),
   getMe: (...args: unknown[]) => mockGetMe(...args),
+  getTeamCurrentMembers: (...args: unknown[]) =>
+    mockGetTeamCurrentMembers(...args),
+  getTeamCurrentInvite: (...args: unknown[]) =>
+    mockGetTeamCurrentInvite(...args),
   postTask: vi.fn(),
   postTaskCompletionToggle: vi.fn(),
   patchTask: vi.fn(),
@@ -30,7 +37,7 @@ vi.mock("./lib/api/generated/client", () => ({
   postPenaltyRule: vi.fn(),
   patchPenaltyRule: vi.fn(),
   deletePenaltyRule: vi.fn(),
-  postTeamInvite: vi.fn(),
+  postTeamInvite: (...args: unknown[]) => mockPostTeamInvite(...args),
   postTeamJoin: vi.fn(),
 }));
 
@@ -50,6 +57,9 @@ describe("App", () => {
     mockListRules.mockReset();
     mockSummary.mockReset();
     mockGetMe.mockReset();
+    mockGetTeamCurrentMembers.mockReset();
+    mockGetTeamCurrentInvite.mockReset();
+    mockPostTeamInvite.mockReset();
 
     mockGetTaskOverview.mockResolvedValue({
       data: {
@@ -64,6 +74,15 @@ describe("App", () => {
     mockListTasks.mockResolvedValue({ data: { items: [] } });
     mockListRules.mockResolvedValue({ data: { items: [] } });
     mockSummary.mockResolvedValue({ data: { totalPenalty: 0 } });
+    mockGetTeamCurrentMembers.mockResolvedValue({ data: { items: [] } });
+    mockGetTeamCurrentInvite.mockResolvedValue({ data: null });
+    mockPostTeamInvite.mockResolvedValue({
+      data: {
+        code: "NEWCODE",
+        expiresAt: "2026-02-28T00:00:00Z",
+        teamId: "team-1",
+      },
+    });
     mockGetMe.mockRejectedValue(new Error("request failed: 401"));
   });
 
@@ -96,7 +115,9 @@ describe("App", () => {
   });
 
   it("shows navigation after authentication", async () => {
-    mockGetMe.mockResolvedValue({ data: { user: { displayName: "Owner" } } });
+    mockGetMe.mockResolvedValue({
+      data: { user: { id: "u1", displayName: "Owner" }, memberships: [] },
+    });
     const user = userEvent.setup();
     render(<App />);
 
@@ -125,25 +146,19 @@ describe("App", () => {
     });
   });
 
-  it("asks for re-login when cached session becomes invalid", async () => {
+  it("uses cached me data without immediate refetch", async () => {
     window.history.pushState({}, "", "/admin");
     appQueryClient.setQueryData(queryKeys.me, {
-      user: { displayName: "Owner" },
+      user: { id: "u1", displayName: "Owner" },
+      memberships: [{ teamName: "Team A" }],
     });
     mockGetMe.mockRejectedValue(new Error("request failed: 401"));
 
     render(<App />);
 
-    expect(
-      screen.queryByRole("link", { name: "ホーム" }),
-    ).not.toBeInTheDocument();
-
     await waitFor(() => {
-      expect(
-        screen.getByText(
-          "アカウント情報が無効になったため、トップページへ戻りました。再ログインしてください。",
-        ),
-      ).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "ホーム" })).toBeInTheDocument();
     });
+    expect(mockGetMe).not.toHaveBeenCalled();
   });
 });
