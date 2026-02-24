@@ -153,6 +153,28 @@ func (q *Queries) HasTaskCompletionDaily(ctx context.Context, arg HasTaskComplet
 	return exists, err
 }
 
+const incrementTaskCompletionWeekly = `-- name: IncrementTaskCompletionWeekly :one
+INSERT INTO task_completion_weekly (task_id, week_start, completion_count, created_at, updated_at)
+VALUES ($1, $2, 1, NOW(), NOW())
+ON CONFLICT (task_id, week_start) DO UPDATE
+SET completion_count = LEAST($3::integer, task_completion_weekly.completion_count + 1),
+    updated_at = NOW()
+RETURNING completion_count::bigint
+`
+
+type IncrementTaskCompletionWeeklyParams struct {
+	TaskID        string      `json:"task_id"`
+	WeekStart     pgtype.Date `json:"week_start"`
+	MaxCompletion int32       `json:"max_completion"`
+}
+
+func (q *Queries) IncrementTaskCompletionWeekly(ctx context.Context, arg IncrementTaskCompletionWeeklyParams) (int64, error) {
+	row := q.db.QueryRow(ctx, incrementTaskCompletionWeekly, arg.TaskID, arg.WeekStart, arg.MaxCompletion)
+	var completion_count int64
+	err := row.Scan(&completion_count)
+	return completion_count, err
+}
+
 const listCompletedDailyTaskIDsByTeamAndDate = `-- name: ListCompletedDailyTaskIDsByTeamAndDate :many
 SELECT d.task_id
 FROM task_completion_daily d
@@ -186,28 +208,6 @@ func (q *Queries) ListCompletedDailyTaskIDsByTeamAndDate(ctx context.Context, ar
 		return nil, err
 	}
 	return items, nil
-}
-
-const incrementTaskCompletionWeekly = `-- name: IncrementTaskCompletionWeekly :one
-INSERT INTO task_completion_weekly (task_id, week_start, completion_count, created_at, updated_at)
-VALUES ($1, $2, 1, NOW(), NOW())
-ON CONFLICT (task_id, week_start) DO UPDATE
-SET completion_count = LEAST($3::integer, task_completion_weekly.completion_count + 1),
-    updated_at = NOW()
-RETURNING completion_count::bigint
-`
-
-type IncrementTaskCompletionWeeklyParams struct {
-	TaskID        string      `json:"task_id"`
-	WeekStart     pgtype.Date `json:"week_start"`
-	MaxCompletion int32       `json:"max_completion"`
-}
-
-func (q *Queries) IncrementTaskCompletionWeekly(ctx context.Context, arg IncrementTaskCompletionWeeklyParams) (int64, error) {
-	row := q.db.QueryRow(ctx, incrementTaskCompletionWeekly, arg.TaskID, arg.WeekStart, arg.MaxCompletion)
-	var completion_count int64
-	err := row.Scan(&completion_count)
-	return completion_count, err
 }
 
 const listTaskCompletionDailyByMonthAndTeam = `-- name: ListTaskCompletionDailyByMonthAndTeam :many

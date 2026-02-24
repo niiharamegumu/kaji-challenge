@@ -11,6 +11,32 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const insertTaskEvaluationDedupe = `-- name: InsertTaskEvaluationDedupe :execrows
+INSERT INTO task_evaluation_dedupes (team_id, scope, target_date, task_id, created_at)
+VALUES ($1, $2, $3, $4, NOW())
+ON CONFLICT (team_id, scope, target_date, task_id) DO NOTHING
+`
+
+type InsertTaskEvaluationDedupeParams struct {
+	TeamID     string      `json:"team_id"`
+	Scope      string      `json:"scope"`
+	TargetDate pgtype.Date `json:"target_date"`
+	TaskID     string      `json:"task_id"`
+}
+
+func (q *Queries) InsertTaskEvaluationDedupe(ctx context.Context, arg InsertTaskEvaluationDedupeParams) (int64, error) {
+	result, err := q.db.Exec(ctx, insertTaskEvaluationDedupe,
+		arg.TeamID,
+		arg.Scope,
+		arg.TargetDate,
+		arg.TaskID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const sumDailyPenaltyForClose = `-- name: SumDailyPenaltyForClose :one
 WITH candidates AS (
   SELECT t.id AS task_id, t.penalty_points
@@ -85,30 +111,4 @@ func (q *Queries) SumWeeklyPenaltyForClose(ctx context.Context, arg SumWeeklyPen
 	var total_penalty int64
 	err := row.Scan(&total_penalty)
 	return total_penalty, err
-}
-
-const insertTaskEvaluationDedupe = `-- name: InsertTaskEvaluationDedupe :execrows
-INSERT INTO task_evaluation_dedupes (team_id, scope, target_date, task_id, created_at)
-VALUES ($1, $2, $3, $4, NOW())
-ON CONFLICT (team_id, scope, target_date, task_id) DO NOTHING
-`
-
-type InsertTaskEvaluationDedupeParams struct {
-	TeamID     string      `json:"team_id"`
-	Scope      string      `json:"scope"`
-	TargetDate pgtype.Date `json:"target_date"`
-	TaskID     string      `json:"task_id"`
-}
-
-func (q *Queries) InsertTaskEvaluationDedupe(ctx context.Context, arg InsertTaskEvaluationDedupeParams) (int64, error) {
-	result, err := q.db.Exec(ctx, insertTaskEvaluationDedupe,
-		arg.TeamID,
-		arg.Scope,
-		arg.TargetDate,
-		arg.TaskID,
-	)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
 }

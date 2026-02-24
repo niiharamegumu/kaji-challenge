@@ -60,8 +60,8 @@ type Querier interface {
 	InsertCloseRun(ctx context.Context, arg InsertCloseRunParams) (int64, error)
 	InsertExchangeCode(ctx context.Context, arg InsertExchangeCodeParams) error
 	InsertTaskEvaluationDedupe(ctx context.Context, arg InsertTaskEvaluationDedupeParams) (int64, error)
-	ListMembershipsByUserID(ctx context.Context, userID string) ([]ListMembershipsByUserIDRow, error)
 	ListCompletedDailyTaskIDsByTeamAndDate(ctx context.Context, arg ListCompletedDailyTaskIDsByTeamAndDateParams) ([]string, error)
+	ListMembershipsByUserID(ctx context.Context, userID string) ([]ListMembershipsByUserIDRow, error)
 	ListPenaltyRulesByTeamID(ctx context.Context, teamID string) ([]PenaltyRule, error)
 	ListPenaltyRulesEffectiveAtByTeamID(ctx context.Context, arg ListPenaltyRulesEffectiveAtByTeamIDParams) ([]PenaltyRule, error)
 	ListTaskCompletionDailyByMonthAndTeam(ctx context.Context, arg ListTaskCompletionDailyByMonthAndTeamParams) ([]ListTaskCompletionDailyByMonthAndTeamRow, error)
