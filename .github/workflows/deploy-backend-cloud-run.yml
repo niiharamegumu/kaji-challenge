@@ -33,6 +33,15 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
 
+      - name: Resolve project id
+        run: |
+          if [[ "${PROJECT_ID}" =~ ^[0-9]+$ ]]; then
+            RESOLVED_PROJECT_ID="$(gcloud projects describe "${PROJECT_ID}" --format='value(projectId)')"
+          else
+            RESOLVED_PROJECT_ID="${PROJECT_ID}"
+          fi
+          echo "PROJECT_ID_RESOLVED=${RESOLVED_PROJECT_ID}" >> "$GITHUB_ENV"
+
       - uses: actions/setup-go@v5
         with:
           go-version-file: backend/go.mod
@@ -53,11 +62,12 @@ jobs:
         run: |
           gcloud auth list
           gcloud config get-value project
-          gcloud artifacts repositories describe kaji --location asia-northeast1 --project "${PROJECT_ID}"
+          echo "PROJECT_ID(resolved)=${PROJECT_ID_RESOLVED}"
+          gcloud artifacts repositories describe kaji --location asia-northeast1 --project "${PROJECT_ID_RESOLVED}"
 
       - name: Build and push image
         run: |
-          IMAGE="asia-northeast1-docker.pkg.dev/${PROJECT_ID}/kaji/kaji-backend:${GITHUB_SHA}"
+          IMAGE="asia-northeast1-docker.pkg.dev/${PROJECT_ID_RESOLVED}/kaji/kaji-backend:${GITHUB_SHA}"
           docker build -t "$IMAGE" backend
           docker push "$IMAGE"
           echo "IMAGE=$IMAGE" >> $GITHUB_ENV
