@@ -99,7 +99,14 @@ func (s *Store) PatchMeNickname(ctx context.Context, userID string, req api.Upda
 	if err := s.q.UpdateUserNickname(ctx, dbsqlc.UpdateUserNicknameParams{ID: userID, Column2: nickname}); err != nil {
 		return api.UpdateNicknameResponse{}, err
 	}
-	return api.UpdateNicknameResponse{Nickname: nickname, EffectiveName: nickname}, nil
+	row, err := s.q.GetUserByID(ctx, userID)
+	if err != nil {
+		return api.UpdateNicknameResponse{}, err
+	}
+	return api.UpdateNicknameResponse{
+		Nickname:      nickname,
+		EffectiveName: effectiveName(row.DisplayName, row.Nickname),
+	}, nil
 }
 
 func (s *Store) CreateInvite(ctx context.Context, userID string, req api.CreateInviteRequest) (api.InviteCodeResponse, error) {
@@ -382,10 +389,10 @@ func (s *Store) primaryMembershipLocked(ctx context.Context, userID string) (dbs
 func normalizeNickname(raw string) (string, error) {
 	nickname := strings.TrimSpace(raw)
 	if nickname == "" {
-		return "", errors.New("nickname is required")
+		return "", nil
 	}
-	if count := utf8.RuneCountInString(nickname); count < 1 || count > 30 {
-		return "", fmt.Errorf("nickname must be between %d and %d characters", 1, 30)
+	if count := utf8.RuneCountInString(nickname); count > 30 {
+		return "", fmt.Errorf("nickname must be %d characters or fewer", 30)
 	}
 	return nickname, nil
 }
