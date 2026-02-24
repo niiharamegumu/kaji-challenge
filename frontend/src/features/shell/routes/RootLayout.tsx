@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAtom, useAtomValue } from "jotai";
+import { LoaderCircle } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 
@@ -43,6 +44,8 @@ export function RootLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const handledInvalidSessionRef = useRef(false);
+  const hasValidatedSessionRef = useRef(false);
+  const retriedAfterLoginRef = useRef(false);
 
   const meQuery = useMeQuery(true);
   const currentUserID = meQuery.data?.user.id ?? null;
@@ -82,10 +85,26 @@ export function RootLayout() {
     }).format(now);
     return `${fullDate}（${weekday}）`;
   }, []);
+  const refetchAfterLogin = useCallback(() => {
+    if (retriedAfterLoginRef.current || loggedIn) {
+      return;
+    }
+    retriedAfterLoginRef.current = true;
+    void meQuery.refetch();
+  }, [loggedIn, meQuery]);
+
+  useEffect(() => {
+    if (!loggedIn) {
+      hasValidatedSessionRef.current = false;
+      retriedAfterLoginRef.current = false;
+    }
+  }, [loggedIn]);
 
   useEffect(() => {
     if (meQuery.isSuccess) {
       handledInvalidSessionRef.current = false;
+      hasValidatedSessionRef.current = true;
+      retriedAfterLoginRef.current = false;
       setSession({ authenticated: true });
       return;
     }
@@ -97,6 +116,10 @@ export function RootLayout() {
     const statusCode = extractHttpStatus(meQuery.error);
 
     if (statusCode === 401) {
+      if (!hasValidatedSessionRef.current) {
+        handledInvalidSessionRef.current = false;
+        return;
+      }
       if (!loggedIn && meQuery.data == null) {
         handledInvalidSessionRef.current = false;
         return;
@@ -134,14 +157,17 @@ export function RootLayout() {
     setStatus,
   ]);
 
-  useExchangeCodeFallback(setSession, setStatus);
+  useExchangeCodeFallback(setSession, setStatus, refetchAfterLogin);
 
   useEffect(() => {
     const flash = consumeFlashStatus();
     if (flash != null) {
-      setStatus(flash);
+      setStatus(flash.message);
+      if (flash.kind === "login_success") {
+        refetchAfterLogin();
+      }
     }
-  }, [setStatus]);
+  }, [refetchAfterLogin, setStatus]);
 
   const onDismissStatus = useCallback(() => {
     setStatus("");
@@ -160,8 +186,15 @@ export function RootLayout() {
 
   if (isAuthChecking) {
     return (
-      <main className="min-h-screen bg-[radial-gradient(circle_at_top,_var(--color-washi-50),_#fff,_var(--color-kohaku-50))] p-6 text-stone-700">
-        <p>認証状態を確認中です...</p>
+      <main className="min-h-screen bg-[radial-gradient(circle_at_top,_var(--color-washi-50),_#fff,_var(--color-kohaku-50))] px-2 py-4 text-stone-700 md:p-6">
+        <div className="flex justify-center">
+          <LoaderCircle
+            size={24}
+            className="text-stone-500 animate-spin motion-reduce:animate-none"
+            aria-label="読み込み中"
+            role="status"
+          />
+        </div>
       </main>
     );
   }
@@ -174,16 +207,16 @@ export function RootLayout() {
   }
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,_var(--color-washi-50),_#fff,_var(--color-kohaku-50))] p-4 pb-32 text-stone-800 md:p-8 md:pb-20">
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top,_var(--color-washi-50),_#fff,_var(--color-kohaku-50))] px-2 py-3 pb-32 text-stone-800 md:p-8 md:pb-20">
       <StatusToast message={status} onDismiss={onDismissStatus} />
 
       <div className="mx-auto max-w-6xl">
-        <header className="rounded-2xl border border-stone-200 bg-white/90 p-4 shadow-sm backdrop-blur">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h1 className="text-2xl font-bold tracking-wide">
+        <header className="rounded-xl border border-stone-200 bg-white/90 p-3 shadow-sm backdrop-blur md:rounded-2xl md:p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 md:gap-3">
+            <h1 className="text-xl font-semibold tracking-normal md:text-2xl md:font-bold md:tracking-wide">
               {currentTeamName}
             </h1>
-            <span className="rounded-full bg-stone-100 px-3 py-2 text-sm text-stone-700">
+            <span className="rounded-full border border-[color:var(--color-kohaku-200)] bg-[color:var(--color-kohaku-50)] px-2.5 py-1.5 text-xs text-stone-700 whitespace-nowrap md:px-3 md:py-2 md:text-sm">
               {todayLabel}
             </span>
           </div>
