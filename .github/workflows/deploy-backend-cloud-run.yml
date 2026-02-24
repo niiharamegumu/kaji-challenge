@@ -37,11 +37,12 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
 
       - name: Run DB migrations
         run: |
           test -n "$DATABASE_URL" || (echo "DATABASE_URL secret is empty" && exit 1)
-          go run github.com/golang-migrate/migrate/v4/cmd/migrate@v4.19.0 \
+          go run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.19.0 \
             -path backend/migrations \
             -database "$DATABASE_URL" \
             up
