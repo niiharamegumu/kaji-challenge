@@ -1,3 +1,4 @@
+import { LoaderCircle } from "lucide-react";
 import { Suspense, lazy } from "react";
 import { Navigate, createBrowserRouter } from "react-router-dom";
 
@@ -29,7 +30,14 @@ const AdminSummaryPage = lazy(async () => {
 });
 
 const adminFallback = (
-  <div className="mt-4 text-sm text-stone-600">管理画面を読み込み中...</div>
+  <div className="mt-4 flex justify-center">
+    <LoaderCircle
+      size={22}
+      className="text-stone-500 animate-spin motion-reduce:animate-none"
+      aria-label="読み込み中"
+      role="status"
+    />
+  </div>
 );
 
 export const router = createBrowserRouter([

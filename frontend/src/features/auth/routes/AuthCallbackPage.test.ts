@@ -29,7 +29,10 @@ describe("authCallbackLoader", () => {
       unstable_pattern: "",
     });
 
-    expect(mockWriteFlash).toHaveBeenCalledWith("ログインしました");
+    expect(mockWriteFlash).toHaveBeenCalledWith(
+      "ログインしました",
+      "login_success",
+    );
     expect(response.status).toBe(302);
     expect(response.headers.get("Location")).toBe("/");
   });

@@ -10,6 +10,7 @@ type SessionSetter = (value: SessionState) => void;
 export function useExchangeCodeFallback(
   setSession: SessionSetter,
   setStatus: StatusSetter,
+  onLoginSuccess: () => void,
 ) {
   const processedRef = useRef<string | null>(null);
 
@@ -38,11 +39,12 @@ export function useExchangeCodeFallback(
         await postAuthSessionsExchange({ exchangeCode });
         setSession({ authenticated: true });
         setStatus("ログインしました");
+        onLoginSuccess();
       } catch (error) {
         setStatus(`ログインに失敗しました: ${formatError(error)}`);
       }
     };
 
     void run();
-  }, [setSession, setStatus]);
+  }, [onLoginSuccess, setSession, setStatus]);
 }

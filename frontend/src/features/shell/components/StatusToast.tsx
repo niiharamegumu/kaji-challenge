@@ -35,7 +35,8 @@ export function StatusToast({ message, onDismiss }: Props) {
 
   return (
     <output
-      className="fixed top-3 right-3 z-50 w-[min(80vw,22rem)] md:w-[22rem]"
+      className="fixed right-3 z-50 w-[min(80vw,22rem)] md:w-[22rem]"
+      style={{ bottom: "calc(env(safe-area-inset-bottom) + 6.5rem)" }}
       aria-live="polite"
       data-testid="status-message"
       onMouseEnter={() => setIsHovered(true)}
@@ -52,7 +53,7 @@ export function StatusToast({ message, onDismiss }: Props) {
         </p>
         <button
           type="button"
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-stone-200 text-stone-600 transition-colors duration-200 hover:bg-stone-50"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-stone-600 transition-colors duration-200 hover:bg-stone-50"
           onClick={() => onDismissRef.current()}
           aria-label="ステータスメッセージを閉じる"
         >

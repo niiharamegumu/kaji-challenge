@@ -7,7 +7,7 @@ type Props = {
 
 export function DailyTasksPanel({ items, onToggle }: Props) {
   return (
-    <article className="rounded-2xl border border-stone-200 bg-white/90 p-4 shadow-sm animate-enter">
+    <article className="animate-enter rounded-xl border border-stone-200 bg-white/90 p-3 shadow-sm md:rounded-2xl md:p-4">
       <h2 className="text-lg font-semibold">今日の毎日タスク</h2>
       <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
         {items.map((item) => (

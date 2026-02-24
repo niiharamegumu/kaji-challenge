@@ -43,7 +43,7 @@ export function TaskManager({
   );
 
   return (
-    <article className="rounded-2xl border border-stone-200 bg-white/90 p-4 shadow-sm animate-enter md:p-6">
+    <article className="animate-enter rounded-xl border border-stone-200 bg-white/90 p-3 shadow-sm md:rounded-2xl md:p-6">
       <h2 className="text-lg font-semibold">タスク管理</h2>
       <div className="mt-4 grid gap-3">
         <label className="text-sm text-stone-700" htmlFor="task-title">
