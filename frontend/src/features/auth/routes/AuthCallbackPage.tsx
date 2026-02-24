@@ -20,7 +20,7 @@ export async function authCallbackLoader({ request }: LoaderFunctionArgs) {
 
   try {
     await postAuthSessionsExchange({ exchangeCode });
-    writeFlashStatus("ログインしました");
+    writeFlashStatus("ログインしました", "login_success");
   } catch (error) {
     writeFlashStatus(`ログインに失敗しました: ${formatError(error)}`);
   }
@@ -41,7 +41,7 @@ function authCallbackErrorMessage(errorCode: string) {
 
 export function AuthCallbackPage() {
   return (
-    <main className="min-h-screen p-6 text-stone-700">
+    <main className="min-h-screen px-2 py-4 text-stone-700 md:p-6">
       <p>ログイン処理中です...</p>
     </main>
   );
