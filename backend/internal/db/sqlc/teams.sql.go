@@ -110,20 +110,6 @@ func (q *Queries) GetTeamStateRevision(ctx context.Context, id string) (int64, e
 	return state_revision, err
 }
 
-const incrementTeamStateRevision = `-- name: IncrementTeamStateRevision :one
-UPDATE teams
-SET state_revision = state_revision + 1
-WHERE id = $1
-RETURNING state_revision
-`
-
-func (q *Queries) IncrementTeamStateRevision(ctx context.Context, id string) (int64, error) {
-	row := q.db.QueryRow(ctx, incrementTeamStateRevision, id)
-	var state_revision int64
-	err := row.Scan(&state_revision)
-	return state_revision, err
-}
-
 const listMembershipsByUserID = `-- name: ListMembershipsByUserID :many
 SELECT tm.team_id, tm.role, t.name AS team_name
 FROM team_members tm
@@ -270,4 +256,24 @@ type UpdateTeamNameParams struct {
 func (q *Queries) UpdateTeamName(ctx context.Context, arg UpdateTeamNameParams) error {
 	_, err := q.db.Exec(ctx, updateTeamName, arg.ID, arg.Name)
 	return err
+}
+
+const updateTeamStateRevisionIfMatch = `-- name: UpdateTeamStateRevisionIfMatch :one
+UPDATE teams
+SET state_revision = state_revision + 1
+WHERE id = $1
+  AND state_revision = $2
+RETURNING state_revision
+`
+
+type UpdateTeamStateRevisionIfMatchParams struct {
+	ID            string `json:"id"`
+	StateRevision int64  `json:"state_revision"`
+}
+
+func (q *Queries) UpdateTeamStateRevisionIfMatch(ctx context.Context, arg UpdateTeamStateRevisionIfMatchParams) (int64, error) {
+	row := q.db.QueryRow(ctx, updateTeamStateRevisionIfMatch, arg.ID, arg.StateRevision)
+	var state_revision int64
+	err := row.Scan(&state_revision)
+	return state_revision, err
 }

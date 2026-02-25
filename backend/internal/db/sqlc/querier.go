@@ -56,7 +56,6 @@ type Querier interface {
 	HasTaskCompletionDaily(ctx context.Context, arg HasTaskCompletionDailyParams) (bool, error)
 	IncrementDailyPenalty(ctx context.Context, arg IncrementDailyPenaltyParams) error
 	IncrementTaskCompletionWeekly(ctx context.Context, arg IncrementTaskCompletionWeeklyParams) (int64, error)
-	IncrementTeamStateRevision(ctx context.Context, id string) (int64, error)
 	IncrementWeeklyPenalty(ctx context.Context, arg IncrementWeeklyPenaltyParams) error
 	InsertAuthRequest(ctx context.Context, arg InsertAuthRequestParams) error
 	InsertCloseRun(ctx context.Context, arg InsertCloseRunParams) (int64, error)
@@ -85,6 +84,7 @@ type Querier interface {
 	UpdateTask(ctx context.Context, arg UpdateTaskParams) error
 	UpdateTeamMemberRole(ctx context.Context, arg UpdateTeamMemberRoleParams) error
 	UpdateTeamName(ctx context.Context, arg UpdateTeamNameParams) error
+	UpdateTeamStateRevisionIfMatch(ctx context.Context, arg UpdateTeamStateRevisionIfMatchParams) (int64, error)
 	UpdateUserDisplayName(ctx context.Context, arg UpdateUserDisplayNameParams) error
 	UpdateUserNickname(ctx context.Context, arg UpdateUserNicknameParams) error
 	UpsertMonthlyPenaltySummary(ctx context.Context, arg UpsertMonthlyPenaltySummaryParams) error

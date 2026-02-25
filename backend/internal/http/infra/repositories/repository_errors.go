@@ -16,6 +16,10 @@ func mapInfraErr(err error) error {
 	if errors.As(err, &preconditionErr) {
 		return err
 	}
+	var preconditionRequiredErr *application.PreconditionRequiredError
+	if errors.As(err, &preconditionRequiredErr) {
+		return err
+	}
 	msg := strings.ToLower(err.Error())
 	switch {
 	case strings.Contains(msg, "missing bearer token"),

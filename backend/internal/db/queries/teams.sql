@@ -69,8 +69,9 @@ SELECT state_revision
 FROM teams
 WHERE id = $1;
 
--- name: IncrementTeamStateRevision :one
+-- name: UpdateTeamStateRevisionIfMatch :one
 UPDATE teams
 SET state_revision = state_revision + 1
 WHERE id = $1
+  AND state_revision = $2
 RETURNING state_revision;
