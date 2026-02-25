@@ -77,7 +77,7 @@ export function PenaltyRuleManager({
             {sortedRules.map((rule) => (
               <li
                 key={rule.id}
-                className="rounded-xl border border-[color:var(--color-matcha-300)] bg-[color:var(--color-matcha-50)] p-3"
+                className="rounded-xl border border-stone-200 bg-white p-3"
               >
                 <div className="font-medium text-stone-900">{rule.name}</div>
                 <div className="mt-1 text-xs text-stone-600">
