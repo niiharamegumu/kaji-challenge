@@ -5,7 +5,11 @@ import {
   postTaskCompletionToggle,
 } from "../../../lib/api/generated/client";
 import { queryKeys } from "../../../shared/query/queryKeys";
-import { formatError, todayString } from "../../../shared/utils/errors";
+import {
+  formatError,
+  isPreconditionFailed,
+  todayString,
+} from "../../../shared/utils/errors";
 
 type CompletionAction = "toggle" | "increment" | "decrement";
 
@@ -14,6 +18,8 @@ export function useHomeQuery(enabled: boolean) {
     queryKey: queryKeys.home,
     queryFn: async () => (await getTaskOverview()).data,
     enabled,
+    refetchInterval: enabled ? 30_000 : false,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -38,6 +44,16 @@ export function useToggleCompletionMutation(
       ]);
     },
     onError: (error) => {
+      if (isPreconditionFailed(error)) {
+        void Promise.all([
+          queryClient.invalidateQueries({ queryKey: queryKeys.home }),
+          queryClient.invalidateQueries({ queryKey: queryKeys.monthlySummary }),
+        ]);
+        setStatus(
+          "他メンバーの更新を検知しました。最新状態に更新したので、もう一度操作してください。",
+        );
+        return;
+      }
       setStatus(`更新失敗: ${formatError(error)}`);
     },
   });
