@@ -35,6 +35,9 @@ func (s *Store) CreateTask(ctx context.Context, userID string, req api.CreateTas
 	if err != nil {
 		return api.Task{}, err
 	}
+	if err := s.checkIfMatchPrecondition(ctx, teamID); err != nil {
+		return api.Task{}, err
+	}
 	title := strings.TrimSpace(req.Title)
 	if title == "" {
 		return api.Task{}, errors.New("title is required")
@@ -84,12 +87,18 @@ func (s *Store) CreateTask(ctx context.Context, userID string, req api.CreateTas
 	}); err != nil {
 		return api.Task{}, err
 	}
+	if _, err := s.bumpRevisionAndPublish(ctx, teamID, "task", map[string]string{"taskId": task.ID, "action": "create"}); err != nil {
+		return api.Task{}, err
+	}
 	return task.toAPI(), nil
 }
 
 func (s *Store) PatchTask(ctx context.Context, userID, taskID string, req api.UpdateTaskRequest) (api.Task, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
+		return api.Task{}, err
+	}
+	if err := s.checkIfMatchPrecondition(ctx, teamID); err != nil {
 		return api.Task{}, err
 	}
 	row, err := s.q.GetTaskByID(ctx, taskID)
@@ -139,12 +148,18 @@ func (s *Store) PatchTask(ctx context.Context, userID, taskID string, req api.Up
 	}); err != nil {
 		return api.Task{}, err
 	}
+	if _, err := s.bumpRevisionAndPublish(ctx, teamID, "task", map[string]string{"taskId": task.ID, "action": "update"}); err != nil {
+		return api.Task{}, err
+	}
 	return task.toAPI(), nil
 }
 
 func (s *Store) DeleteTask(ctx context.Context, userID, taskID string) error {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
+		return err
+	}
+	if err := s.checkIfMatchPrecondition(ctx, teamID); err != nil {
 		return err
 	}
 	row, err := s.q.GetTaskByID(ctx, taskID)
@@ -155,12 +170,19 @@ func (s *Store) DeleteTask(ctx context.Context, userID, taskID string) error {
 	if task.TeamID != teamID || task.DeletedAt != nil {
 		return errors.New("task not found")
 	}
-	return s.q.DeleteTask(ctx, taskID)
+	if err := s.q.DeleteTask(ctx, taskID); err != nil {
+		return err
+	}
+	_, err = s.bumpRevisionAndPublish(ctx, teamID, "task", map[string]string{"taskId": taskID, "action": "delete"})
+	return err
 }
 
 func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string, target time.Time, action *api.ToggleTaskCompletionRequestAction) (api.TaskCompletionResponse, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
+		return api.TaskCompletionResponse{}, err
+	}
+	if err := s.checkIfMatchPrecondition(ctx, teamID); err != nil {
 		return api.TaskCompletionResponse{}, err
 	}
 	row, err := s.q.GetTaskByID(ctx, taskID)
@@ -219,12 +241,16 @@ func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string,
 				return api.TaskCompletionResponse{}, err
 			}
 		}
-		return api.TaskCompletionResponse{
+		res := api.TaskCompletionResponse{
 			TaskId:               taskID,
 			TargetDate:           toDate(targetDate),
 			Completed:            !exists,
 			WeeklyCompletedCount: 0,
-		}, nil
+		}
+		if _, err := s.bumpRevisionAndPublish(ctx, teamID, "task_completion", map[string]string{"taskId": taskID, "action": "toggle"}); err != nil {
+			return api.TaskCompletionResponse{}, err
+		}
+		return res, nil
 	}
 
 	weekStart := startOfWeek(targetDate, s.loc)
@@ -278,10 +304,18 @@ func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string,
 		}
 	}
 
-	return api.TaskCompletionResponse{
+	res := api.TaskCompletionResponse{
 		TaskId:               taskID,
 		TargetDate:           toDate(targetDate),
 		Completed:            nextCount > 0,
 		WeeklyCompletedCount: int(nextCount),
-	}, nil
+	}
+	actionName := "toggle"
+	if action != nil && *action != "" {
+		actionName = string(*action)
+	}
+	if _, err := s.bumpRevisionAndPublish(ctx, teamID, "task_completion", map[string]string{"taskId": taskID, "action": actionName}); err != nil {
+		return api.TaskCompletionResponse{}, err
+	}
+	return res, nil
 }

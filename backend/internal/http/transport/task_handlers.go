@@ -17,6 +17,7 @@ func (h *Handler) ListTasks(c *gin.Context, params api.ListTasksParams) {
 		writeAppError(c, err, http.StatusBadRequest)
 		return
 	}
+	h.writeTeamETag(c, userID)
 	c.JSON(http.StatusOK, gin.H{"items": items})
 }
 
@@ -25,6 +26,7 @@ func (h *Handler) PostTask(c *gin.Context) {
 	if !ok {
 		return
 	}
+	injectIfMatchContext(c)
 	req, ok := bindJSON[api.CreateTaskRequest](c)
 	if !ok {
 		return
@@ -42,6 +44,7 @@ func (h *Handler) PatchTask(c *gin.Context, taskID string) {
 	if !ok {
 		return
 	}
+	injectIfMatchContext(c)
 	req, ok := bindJSON[api.UpdateTaskRequest](c)
 	if !ok {
 		return
@@ -59,6 +62,7 @@ func (h *Handler) DeleteTask(c *gin.Context, taskID string) {
 	if !ok {
 		return
 	}
+	injectIfMatchContext(c)
 	if err := h.services.Task.DeleteTask(c.Request.Context(), userID, taskID); err != nil {
 		writeAppError(c, err, http.StatusBadRequest)
 		return
@@ -71,6 +75,7 @@ func (h *Handler) PostTaskCompletionToggle(c *gin.Context, taskID string) {
 	if !ok {
 		return
 	}
+	injectIfMatchContext(c)
 	req, ok := bindJSON[api.ToggleTaskCompletionRequest](c)
 	if !ok {
 		return
