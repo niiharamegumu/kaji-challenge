@@ -52,9 +52,7 @@ export function AdminPenaltiesPage() {
         onDelete={(ruleId) => {
           void removeRule.mutateAsync(ruleId);
         }}
-        onUpdate={(ruleId, payload) => {
-          void handleUpdateRule(ruleId, payload);
-        }}
+        onUpdate={handleUpdateRule}
       />
     </section>
   );

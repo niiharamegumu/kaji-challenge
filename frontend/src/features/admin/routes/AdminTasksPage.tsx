@@ -53,9 +53,7 @@ export function AdminTasksPage() {
         onDelete={(taskId) => {
           void removeTask.mutateAsync(taskId);
         }}
-        onUpdate={(taskId, payload) => {
-          void handleUpdateTask(taskId, payload);
-        }}
+        onUpdate={handleUpdateTask}
       />
     </section>
   );
