@@ -36,6 +36,9 @@ func (s *Store) CreatePenaltyRule(ctx context.Context, userID string, req api.Cr
 	if err != nil {
 		return api.PenaltyRule{}, err
 	}
+	if err := s.checkIfMatchPrecondition(ctx, teamID); err != nil {
+		return api.PenaltyRule{}, err
+	}
 	now := time.Now().In(s.loc)
 	r := ruleRecord{
 		ID:          s.nextID("pr"),
@@ -61,12 +64,18 @@ func (s *Store) CreatePenaltyRule(ctx context.Context, userID string, req api.Cr
 	}); err != nil {
 		return api.PenaltyRule{}, err
 	}
+	if _, err := s.bumpRevisionAndPublish(ctx, teamID, "penalty_rule", map[string]string{"ruleId": r.ID, "action": "create"}); err != nil {
+		return api.PenaltyRule{}, err
+	}
 	return r.toAPI(), nil
 }
 
 func (s *Store) PatchPenaltyRule(ctx context.Context, userID, ruleID string, req api.UpdatePenaltyRuleRequest) (api.PenaltyRule, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
+		return api.PenaltyRule{}, err
+	}
+	if err := s.checkIfMatchPrecondition(ctx, teamID); err != nil {
 		return api.PenaltyRule{}, err
 	}
 	row, err := s.q.GetUndeletedPenaltyRuleByID(ctx, ruleID)
@@ -100,12 +109,18 @@ func (s *Store) PatchPenaltyRule(ctx context.Context, userID, ruleID string, req
 	}); err != nil {
 		return api.PenaltyRule{}, err
 	}
+	if _, err := s.bumpRevisionAndPublish(ctx, teamID, "penalty_rule", map[string]string{"ruleId": rule.ID, "action": "update"}); err != nil {
+		return api.PenaltyRule{}, err
+	}
 	return rule.toAPI(), nil
 }
 
 func (s *Store) DeletePenaltyRule(ctx context.Context, userID, ruleID string) error {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
+		return err
+	}
+	if err := s.checkIfMatchPrecondition(ctx, teamID); err != nil {
 		return err
 	}
 	rule, err := s.q.GetUndeletedPenaltyRuleByID(ctx, ruleID)
@@ -122,6 +137,9 @@ func (s *Store) DeletePenaltyRule(ctx context.Context, userID, ruleID string) er
 	}
 	if rows == 0 {
 		return errors.New("rule not found")
+	}
+	if _, err := s.bumpRevisionAndPublish(ctx, teamID, "penalty_rule", map[string]string{"ruleId": ruleID, "action": "delete"}); err != nil {
+		return err
 	}
 	return nil
 }
