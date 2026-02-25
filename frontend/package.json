@@ -10,6 +10,7 @@
     "lint": "biome check .",
     "test": "vitest",
     "gen": "orval --config ../api/orval.config.ts",
+    "pwa:assets": "pwa-assets-generator public/app.png -p minimal --override",
     "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
@@ -29,12 +30,14 @@
     "@types/node": "^22.13.5",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
+    "@vite-pwa/assets-generator": "^1.0.2",
     "@vitejs/plugin-react": "^4.4.1",
     "jsdom": "^28.0.0",
     "orval": "^8.3.0",
     "tailwindcss": "^4.1.18",
     "typescript": "~5.7.3",
     "vite": "^6.1.0",
+    "vite-plugin-pwa": "^1.2.0",
     "vitest": "^3.0.5",
     "wrangler": "^4.1.0"
   }
