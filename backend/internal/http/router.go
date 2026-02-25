@@ -11,7 +11,18 @@ import (
 
 func NewRouter() *gin.Engine {
 	s := infra.NewStore()
-	return NewRouterWithServices(infra.NewServices(s))
+	return NewRouterWithStore(infra.NewServices(s), s)
+}
+
+func NewRouterWithStore(svcs *ports.Services, s *infra.Store) *gin.Engine {
+	r := gin.Default()
+	r.Use(middleware.CORS())
+	r.Use(middleware.Auth(svcs.Auth))
+	r.Use(middleware.CSRFSameOrigin())
+	h := transport.NewHandler(svcs, s)
+	api.RegisterHandlers(r, h)
+	r.GET("/v1/events/stream", h.GetEventsStream)
+	return r
 }
 
 func NewRouterWithServices(svcs *ports.Services) *gin.Engine {
@@ -19,6 +30,7 @@ func NewRouterWithServices(svcs *ports.Services) *gin.Engine {
 	r.Use(middleware.CORS())
 	r.Use(middleware.Auth(svcs.Auth))
 	r.Use(middleware.CSRFSameOrigin())
-	api.RegisterHandlers(r, transport.NewHandler(svcs))
+	h := transport.NewHandler(svcs, nil)
+	api.RegisterHandlers(r, h)
 	return r
 }
