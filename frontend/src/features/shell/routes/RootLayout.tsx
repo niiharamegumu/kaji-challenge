@@ -418,11 +418,13 @@ export function RootLayout() {
 
       <div className="mx-auto max-w-6xl">
         <header className="rounded-xl border border-stone-200 bg-white/90 p-2.5 shadow-sm backdrop-blur md:rounded-2xl md:p-4">
-          <div className="flex flex-wrap items-center justify-between gap-2 md:gap-3">
-            <h1 className="text-xl font-semibold tracking-normal md:text-2xl md:font-bold md:tracking-wide">
-              {currentTeamName}
-            </h1>
-            <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between gap-2 md:gap-3">
+            <div className="min-w-0 flex-1 overflow-x-auto">
+              <h1 className="whitespace-nowrap text-xl font-semibold tracking-normal md:text-2xl md:font-bold md:tracking-wide">
+                {currentTeamName}
+              </h1>
+            </div>
+            <div className="shrink-0 flex items-center gap-2">
               <span className="text-xs whitespace-nowrap text-stone-700 md:text-sm">
                 {todayLabel}
               </span>
