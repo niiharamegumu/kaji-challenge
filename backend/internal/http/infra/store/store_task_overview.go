@@ -162,6 +162,7 @@ func (s *Store) GetMonthlySummary(ctx context.Context, userID string, month *str
 type monthlyTaskStatusRecord struct {
 	ID        string
 	Title     string
+	Notes     *string
 	Type      api.TaskType
 	Penalty   int
 	CreatedAt time.Time
@@ -188,6 +189,7 @@ func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month 
 		tasks = append(tasks, monthlyTaskStatusRecord{
 			ID:        row.ID,
 			Title:     row.Title,
+			Notes:     ptrFromText(row.Notes),
 			Type:      api.TaskType(row.Type),
 			Penalty:   int(row.PenaltyPoints),
 			CreatedAt: row.CreatedAt.Time.In(s.loc),
@@ -281,6 +283,7 @@ func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month 
 			items = append(items, api.MonthlyTaskStatusItem{
 				TaskId:        task.ID,
 				Title:         task.Title,
+				Notes:         task.Notes,
 				Type:          task.Type,
 				PenaltyPoints: task.Penalty,
 				Completed:     completed,

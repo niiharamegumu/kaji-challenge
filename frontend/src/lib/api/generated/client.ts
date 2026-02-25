@@ -271,6 +271,8 @@ export interface TaskOverviewResponse {
 export interface MonthlyTaskStatusItem {
   taskId: string;
   title: string;
+  /** @maxLength 500 */
+  notes?: string;
   type: TaskType;
   penaltyPoints: number;
   completed: boolean;

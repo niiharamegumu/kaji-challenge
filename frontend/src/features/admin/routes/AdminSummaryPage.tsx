@@ -452,6 +452,13 @@ export function AdminSummaryPage() {
                                 {item.title}
                                 {item.isDeleted ? "（削除済み）" : ""}
                               </p>
+                              {item.notes != null && item.notes !== "" ? (
+                                <p
+                                  className={`mt-1 whitespace-pre-wrap break-words text-xs text-stone-600 ${item.completed ? "line-through text-stone-400" : ""}`}
+                                >
+                                  {item.notes}
+                                </p>
+                              ) : null}
                               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
                                 <span
                                   className={`inline-flex items-center rounded-full px-2 py-0.5 font-semibold leading-4 ${

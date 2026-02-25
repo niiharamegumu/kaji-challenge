@@ -183,6 +183,7 @@ export function RootLayout() {
 
   const isAuthChecking =
     meQuery.status === "pending" && meQuery.data == null && !meQuery.isError;
+  const isAuthenticated = loggedIn || meQuery.isSuccess || meQuery.data != null;
 
   if (isAuthChecking) {
     return (
@@ -199,7 +200,7 @@ export function RootLayout() {
     );
   }
 
-  if (!loggedIn) {
+  if (!isAuthenticated) {
     if (location.pathname !== "/") {
       return <Navigate to="/" replace />;
     }
@@ -216,7 +217,7 @@ export function RootLayout() {
             <h1 className="text-xl font-semibold tracking-normal md:text-2xl md:font-bold md:tracking-wide">
               {currentTeamName}
             </h1>
-            <span className="rounded-full border border-[color:var(--color-kohaku-200)] bg-[color:var(--color-kohaku-50)] px-2.5 py-1.5 text-xs text-stone-700 whitespace-nowrap md:px-3 md:py-2 md:text-sm">
+            <span className="text-xs whitespace-nowrap text-stone-700 md:text-sm">
               {todayLabel}
             </span>
           </div>

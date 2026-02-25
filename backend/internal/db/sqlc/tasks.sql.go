@@ -244,13 +244,13 @@ func (q *Queries) ListTasksEffectiveForCloseByTeamAndType(ctx context.Context, a
 }
 
 const listTasksForMonthlyStatusByTeam = `-- name: ListTasksForMonthlyStatusByTeam :many
-SELECT id, title, type, penalty_points, created_at, deleted_at
+SELECT id, title, notes, type, penalty_points, created_at, deleted_at
 FROM tasks t
 WHERE t.team_id = $1
   AND t.created_at < $3
   AND t.deleted_at IS NULL
 UNION ALL
-SELECT id, title, type, penalty_points, created_at, deleted_at
+SELECT id, title, notes, type, penalty_points, created_at, deleted_at
 FROM tasks t
 WHERE t.team_id = $1
   AND t.created_at < $3
@@ -267,6 +267,7 @@ type ListTasksForMonthlyStatusByTeamParams struct {
 type ListTasksForMonthlyStatusByTeamRow struct {
 	ID            string             `json:"id"`
 	Title         string             `json:"title"`
+	Notes         pgtype.Text        `json:"notes"`
 	Type          string             `json:"type"`
 	PenaltyPoints int32              `json:"penalty_points"`
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
@@ -285,6 +286,7 @@ func (q *Queries) ListTasksForMonthlyStatusByTeam(ctx context.Context, arg ListT
 		if err := rows.Scan(
 			&i.ID,
 			&i.Title,
+			&i.Notes,
 			&i.Type,
 			&i.PenaltyPoints,
 			&i.CreatedAt,

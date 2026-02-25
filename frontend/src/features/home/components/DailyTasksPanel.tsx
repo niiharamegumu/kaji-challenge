@@ -18,6 +18,11 @@ export function DailyTasksPanel({ items, onToggle }: Props) {
             onClick={() => onToggle(item.task.id)}
           >
             <div className="font-medium">{item.task.title}</div>
+            {item.task.notes != null && item.task.notes !== "" ? (
+              <div className="mt-1 whitespace-pre-wrap break-words text-xs text-stone-600">
+                {item.task.notes}
+              </div>
+            ) : null}
             <div className="text-sm text-stone-600">
               未達減点: {item.task.penaltyPoints}
             </div>

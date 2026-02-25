@@ -111,26 +111,22 @@ export function FloatingNav({ currentUserName, onLogout }: Props) {
         <div className="pointer-events-auto mt-2 flex justify-center">
           <button
             type="button"
-            className="relative flex h-11 w-11 items-center justify-center rounded-full bg-transparent text-stone-900 backdrop-blur-sm transition-transform duration-200 motion-reduce:transition-none"
+            className="relative flex items-center justify-center rounded-full border border-stone-200 bg-white p-3 text-stone-900 shadow-lg transition-transform duration-200 motion-reduce:transition-none"
             onClick={() => setOpen((prev) => !prev)}
             aria-expanded={open}
             aria-label={
               open ? "ナビゲーションを閉じる" : "ナビゲーションを開く"
             }
           >
-            <span className="relative block h-7 w-7" aria-hidden="true">
+            <span className="relative block h-6 w-6" aria-hidden="true">
               <span
-                className={`absolute top-1/2 left-1/2 h-0.5 w-6 -translate-x-1/2 rounded-full bg-current shadow-[0_2px_6px_rgba(0,0,0,0.2)] transition-all duration-200 ease-out motion-reduce:transition-none ${
-                  open
-                    ? "-translate-y-0 rotate-45"
-                    : "-translate-y-1.5 rotate-0"
+                className={`absolute top-1/2 left-1/2 h-0.5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-current transition-transform duration-200 ease-out motion-reduce:transition-none ${
+                  open ? "rotate-45" : "rotate-0"
                 }`}
               />
               <span
-                className={`absolute top-1/2 left-1/2 h-0.5 w-6 -translate-x-1/2 rounded-full bg-current shadow-[0_2px_6px_rgba(0,0,0,0.2)] transition-all duration-200 ease-out motion-reduce:transition-none ${
-                  open
-                    ? "-translate-y-0 -rotate-45"
-                    : "translate-y-1.5 rotate-0"
+                className={`absolute top-1/2 left-1/2 h-0.5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-current transition-transform duration-200 ease-out motion-reduce:transition-none ${
+                  open ? "-rotate-45" : "rotate-90"
                 }`}
               />
             </span>

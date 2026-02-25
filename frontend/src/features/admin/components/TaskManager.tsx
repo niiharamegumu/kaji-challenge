@@ -148,9 +148,14 @@ export function TaskManager({
               {dailyTasks.map((task) => (
                 <li
                   key={task.id}
-                  className="rounded-xl border border-[color:var(--color-matcha-300)] bg-[color:var(--color-matcha-50)] p-3"
+                  className="rounded-xl border border-stone-200 bg-white p-3"
                 >
                   <div className="font-medium text-stone-900">{task.title}</div>
+                  {task.notes != null && task.notes !== "" ? (
+                    <div className="mt-1 whitespace-pre-wrap break-words text-xs text-stone-600">
+                      {task.notes}
+                    </div>
+                  ) : null}
                   <div className="mt-1 text-xs text-stone-600">
                     {taskTypeLabel(task.type)} / 減点 {task.penaltyPoints}
                   </div>
@@ -181,9 +186,14 @@ export function TaskManager({
               {weeklyTasks.map((task) => (
                 <li
                   key={task.id}
-                  className="rounded-xl border border-[color:var(--color-matcha-300)] bg-[color:var(--color-matcha-50)] p-3"
+                  className="rounded-xl border border-stone-200 bg-white p-3"
                 >
                   <div className="font-medium text-stone-900">{task.title}</div>
+                  {task.notes != null && task.notes !== "" ? (
+                    <div className="mt-1 whitespace-pre-wrap break-words text-xs text-stone-600">
+                      {task.notes}
+                    </div>
+                  ) : null}
                   <div className="mt-1 text-xs text-stone-600">
                     {taskTypeLabel(task.type)} / 減点 {task.penaltyPoints} /
                     必要 {task.requiredCompletionsPerWeek}回/週
