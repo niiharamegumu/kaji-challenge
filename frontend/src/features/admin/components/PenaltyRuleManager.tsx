@@ -63,33 +63,37 @@ export function PenaltyRuleManager({
   return (
     <article className="animate-enter rounded-xl border border-stone-200 bg-white/90 p-2.5 shadow-sm md:rounded-2xl md:p-6">
       <h2 className="text-lg font-semibold">ペナルティ管理</h2>
-      <div className="mt-3 grid gap-2">
-        <label className="text-sm text-stone-700" htmlFor="rule-name">
+      <div className="mt-3 grid gap-1.5">
+        <label
+          className="text-xs text-stone-700 sm:text-sm"
+          htmlFor="rule-name"
+        >
           ルール名
         </label>
         <input
           id="rule-name"
-          className="min-h-11 rounded-lg border border-stone-300 bg-white px-3 py-2"
+          className="h-10 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
           value={form.name}
           onChange={handleChange("name")}
-          placeholder="ルール名"
         />
-        <label className="text-sm text-stone-700" htmlFor="rule-threshold">
+        <label
+          className="text-xs text-stone-700 sm:text-sm"
+          htmlFor="rule-threshold"
+        >
           発動しきい値
         </label>
         <input
           id="rule-threshold"
-          className="min-h-11 rounded-lg border border-stone-300 bg-white px-3 py-2"
+          className="h-10 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
           type="number"
           min={1}
           value={form.threshold}
           onChange={handleChange("threshold")}
-          placeholder="閾値"
         />
         <div className="mt-1 flex justify-start">
           <button
             type="button"
-            className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 py-2 text-white transition-colors duration-200 hover:bg-stone-800 sm:w-auto sm:min-w-44"
+            className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-stone-900 px-3 py-2 text-sm text-white transition-colors duration-200 hover:bg-stone-800 sm:h-11 sm:w-auto sm:min-w-40"
             onClick={onCreate}
           >
             <CirclePlus size={16} aria-hidden="true" />
@@ -122,7 +126,7 @@ export function PenaltyRuleManager({
                       </label>
                       <input
                         id={`rule-edit-name-${rule.id}`}
-                        className="min-h-11 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm"
+                        className="h-10 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
                         value={editName}
                         onChange={(event) => setEditName(event.target.value)}
                       />
@@ -132,50 +136,61 @@ export function PenaltyRuleManager({
                       {rule.name}
                     </div>
                   )}
-                  <div className="mt-1 text-xs text-stone-600">
-                    発動しきい値 {rule.threshold}
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {isEditing ? (
-                      <>
+                  {isEditing ? (
+                    <>
+                      <div className="mt-1 text-xs text-stone-600">
+                        しきい値 {rule.threshold}
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <>
+                          <button
+                            type="button"
+                            className="flex h-9 items-center gap-1 rounded-lg border border-emerald-300 bg-white px-2.5 py-1.5 text-xs text-emerald-700 transition-colors duration-200 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50 sm:h-11 sm:px-3 sm:py-2"
+                            onClick={() => {
+                              void saveEdit(rule.id);
+                            }}
+                            disabled={!canSave}
+                          >
+                            <span>保存</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="flex h-9 items-center gap-1 rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 text-xs text-stone-700 transition-colors duration-200 hover:bg-stone-100 sm:h-11 sm:px-3 sm:py-2"
+                            onClick={cancelEdit}
+                          >
+                            <X size={14} aria-hidden="true" />
+                            <span className="sr-only sm:not-sr-only">
+                              キャンセル
+                            </span>
+                          </button>
+                        </>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="mt-1 flex items-center justify-between gap-2">
+                      <div className="text-xs text-stone-600">
+                        しきい値 {rule.threshold}
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1">
                         <button
                           type="button"
-                          className="flex min-h-11 items-center gap-1 rounded-lg border border-emerald-300 bg-white px-3 py-2 text-xs text-emerald-700 transition-colors duration-200 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
-                          onClick={() => {
-                            void saveEdit(rule.id);
-                          }}
-                          disabled={!canSave}
+                          className="flex h-8 w-8 items-center justify-center rounded-md border border-stone-300 bg-white text-stone-700 transition-colors duration-200 hover:bg-stone-100 sm:h-9 sm:w-9"
+                          onClick={() => startEdit(rule)}
                         >
-                          <span>保存</span>
+                          <Pencil size={14} aria-hidden="true" />
+                          <span className="sr-only">編集</span>
                         </button>
                         <button
                           type="button"
-                          className="flex min-h-11 items-center gap-1 rounded-lg border border-stone-300 bg-white px-3 py-2 text-xs text-stone-700 transition-colors duration-200 hover:bg-stone-100"
-                          onClick={cancelEdit}
+                          className="flex h-8 w-8 items-center justify-center rounded-md border border-rose-300 bg-white text-rose-700 transition-colors duration-200 hover:bg-rose-50 sm:h-9 sm:w-9"
+                          onClick={() => onDelete(rule.id)}
                         >
-                          <X size={14} aria-hidden="true" />
-                          <span>キャンセル</span>
+                          <Trash2 size={14} aria-hidden="true" />
+                          <span className="sr-only">削除</span>
                         </button>
-                      </>
-                    ) : (
-                      <button
-                        type="button"
-                        className="flex min-h-11 items-center gap-1 rounded-lg border border-stone-300 bg-white px-3 py-2 text-xs text-stone-700 transition-colors duration-200 hover:bg-stone-100"
-                        onClick={() => startEdit(rule)}
-                      >
-                        <Pencil size={14} aria-hidden="true" />
-                        <span>編集</span>
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      className="flex min-h-11 items-center gap-1 rounded-lg border border-rose-300 bg-white px-3 py-2 text-xs text-rose-700 transition-colors duration-200 hover:bg-rose-50"
-                      onClick={() => onDelete(rule.id)}
-                    >
-                      <Trash2 size={14} aria-hidden="true" />
-                      <span>削除</span>
-                    </button>
-                  </div>
+                      </div>
+                    </div>
+                  )}
                 </li>
               );
             })}
