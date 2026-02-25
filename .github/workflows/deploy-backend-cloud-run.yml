@@ -51,15 +51,41 @@ jobs:
 
       - name: Build and push image
         run: |
-          IMAGE="asia-northeast1-docker.pkg.dev/${PROJECT_ID}/kaji/kaji-backend:${GITHUB_SHA}"
-          docker build -t "$IMAGE" backend
-          docker push "$IMAGE"
-          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
+          IMAGE_SHA="asia-northeast1-docker.pkg.dev/${PROJECT_ID}/kaji/kaji-backend:${GITHUB_SHA}"
+          IMAGE_LATEST="asia-northeast1-docker.pkg.dev/${PROJECT_ID}/kaji/kaji-backend:latest"
+          docker build -t "$IMAGE_SHA" -t "$IMAGE_LATEST" backend
+          docker push "$IMAGE_SHA"
+          docker push "$IMAGE_LATEST"
+          echo "IMAGE_SHA=$IMAGE_SHA" >> $GITHUB_ENV
+          echo "IMAGE_LATEST=$IMAGE_LATEST" >> $GITHUB_ENV
 
       - name: Deploy to Cloud Run
         run: |
           gcloud run deploy "$SERVICE" \
-            --image "$IMAGE" \
+            --image "$IMAGE_SHA" \
             --region "$REGION" \
             --platform managed \
             --allow-unauthenticated
+
+      - name: Update Cloud Run Jobs image
+        run: |
+          set -euo pipefail
+          for scope in day week month; do
+            JOB_NAME="kaji-backend-close-${scope}"
+            gcloud run jobs update "${JOB_NAME}" \
+              --region "$REGION" \
+              --image "$IMAGE_SHA" \
+              --command "/app/ops" \
+              --args "close,--scope,${scope},--all-teams"
+          done
+
+      - name: Verify Cloud Run Jobs image
+        run: |
+          set -euo pipefail
+          for scope in day week month; do
+            JOB_NAME="kaji-backend-close-${scope}"
+            IMAGE=$(gcloud run jobs describe "${JOB_NAME}" \
+              --region "$REGION" \
+              --format='value(template.template.containers[0].image)')
+            echo "${JOB_NAME}: ${IMAGE}"
+          done
