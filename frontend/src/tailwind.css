@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+html,
+body,
+#root {
+  min-height: 100%;
+  background-color: #f6f4ef;
+}
+
 @theme {
   --font-sans: "Noto Sans JP", sans-serif;
 
@@ -29,4 +36,14 @@
 
 .animate-enter {
   animation: enter 220ms ease-out both;
+}
+
+.ios-safe-main {
+  padding-top: calc(env(safe-area-inset-top) + 12px);
+}
+
+@media (min-width: 768px) {
+  .ios-safe-main {
+    padding-top: calc(env(safe-area-inset-top) + 24px);
+  }
 }
