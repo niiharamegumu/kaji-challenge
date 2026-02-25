@@ -17,6 +17,7 @@ import { AdminPenaltiesPage } from "./AdminPenaltiesPage";
 import { AdminTasksPage } from "./AdminTasksPage";
 
 const mockPostTask = vi.fn();
+const mockPostPenaltyRule = vi.fn();
 const mockPatchTask = vi.fn();
 const mockListTasks = vi.fn();
 const mockListPenaltyRules = vi.fn();
@@ -34,7 +35,7 @@ vi.mock("../../../lib/api/generated/client", async () => {
     postTask: (...args: unknown[]) => mockPostTask(...args),
     patchTask: (...args: unknown[]) => mockPatchTask(...args),
     deleteTask: vi.fn(),
-    postPenaltyRule: vi.fn(),
+    postPenaltyRule: (...args: unknown[]) => mockPostPenaltyRule(...args),
     patchPenaltyRule: (...args: unknown[]) => mockPatchPenaltyRule(...args),
     deletePenaltyRule: vi.fn(),
     postTeamInvite: vi.fn().mockResolvedValue({ data: { code: "INVITE1" } }),
@@ -54,6 +55,7 @@ describe("AdminTasksPage", () => {
   beforeEach(() => {
     appQueryClient.clear();
     mockPostTask.mockReset();
+    mockPostPenaltyRule.mockReset();
     mockPatchTask.mockReset();
     mockListTasks.mockReset();
     mockListPenaltyRules.mockReset();
@@ -93,6 +95,49 @@ describe("AdminTasksPage", () => {
     await waitFor(() => {
       expect(mockPostTask).toHaveBeenCalled();
     });
+  });
+
+  it("resets task form fields after creating task", async () => {
+    mockPostTask.mockResolvedValue({ data: {} });
+    const user = userEvent.setup();
+
+    renderPage();
+
+    const titleInput = await screen.findByLabelText("タスク名");
+    const notesInput = screen.getByLabelText("メモ");
+    const typeSelect = screen.getByLabelText("種別");
+    const penaltyInput = screen.getByLabelText("未達減点");
+
+    await user.type(titleInput, "浴室掃除");
+    await user.type(notesInput, "日曜夜");
+    await user.selectOptions(typeSelect, "weekly");
+    const requiredInput = await screen.findByLabelText("週間必要回数");
+    await user.clear(penaltyInput);
+    await user.type(penaltyInput, "3");
+    await user.clear(requiredInput);
+    await user.type(requiredInput, "2");
+    await user.click(screen.getByRole("button", { name: "タスク追加" }));
+
+    await waitFor(() => {
+      expect(mockPostTask).toHaveBeenCalledWith({
+        title: "浴室掃除",
+        notes: "日曜夜",
+        type: "weekly",
+        penaltyPoints: 3,
+        requiredCompletionsPerWeek: 2,
+      });
+    });
+
+    await waitFor(() => {
+      expect(titleInput).toHaveValue("");
+      expect(notesInput).toHaveValue("");
+      expect(typeSelect).toHaveValue("daily");
+      expect(penaltyInput).toHaveValue(1);
+      expect(screen.queryByLabelText("週間必要回数")).not.toBeInTheDocument();
+    });
+
+    await user.selectOptions(typeSelect, "weekly");
+    expect(await screen.findByLabelText("週間必要回数")).toHaveValue(1);
   });
 
   it("starts editing with current values and saves task title/notes", async () => {
@@ -394,5 +439,31 @@ describe("AdminTasksPage", () => {
     expect(
       within(displayCard).queryByLabelText("ルール名"),
     ).not.toBeInTheDocument();
+  });
+
+  it("resets penalty rule form fields after creating rule", async () => {
+    mockPostPenaltyRule.mockResolvedValue({ data: {} });
+    const user = userEvent.setup();
+
+    renderPenaltiesPage();
+
+    const nameInput = await screen.findByLabelText("ルール名");
+    const thresholdInput = screen.getByLabelText("発動しきい値");
+    await user.type(nameInput, "減点10で通知");
+    await user.clear(thresholdInput);
+    await user.type(thresholdInput, "10");
+    await user.click(screen.getByRole("button", { name: "ルール追加" }));
+
+    await waitFor(() => {
+      expect(mockPostPenaltyRule).toHaveBeenCalledWith({
+        name: "減点10で通知",
+        threshold: 10,
+      });
+    });
+
+    await waitFor(() => {
+      expect(nameInput).toHaveValue("");
+      expect(thresholdInput).toHaveValue(1);
+    });
   });
 });
