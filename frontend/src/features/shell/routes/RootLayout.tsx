@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAtom, useAtomValue } from "jotai";
-import { LoaderCircle, RefreshCw } from "lucide-react";
+import { LoaderCircle } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 
@@ -428,21 +428,6 @@ export function RootLayout() {
               <span className="text-xs whitespace-nowrap text-stone-700 md:text-sm">
                 {todayLabel}
               </span>
-              <button
-                type="button"
-                className="inline-flex min-h-9 items-center gap-1 rounded-md bg-white px-2 py-1 text-xs text-stone-700 transition-colors hover:bg-stone-50"
-                onClick={() => {
-                  void refreshTeamState();
-                }}
-                disabled={isRefreshing}
-                aria-label="最新状態に更新"
-              >
-                <RefreshCw
-                  size={14}
-                  className={isRefreshing ? "animate-spin" : ""}
-                  aria-hidden="true"
-                />
-              </button>
             </div>
           </div>
         </header>
@@ -450,7 +435,14 @@ export function RootLayout() {
         <Outlet context={outletContext} />
       </div>
 
-      <FloatingNav currentUserName={currentUserName} onLogout={onLogout} />
+      <FloatingNav
+        currentUserName={currentUserName}
+        onLogout={onLogout}
+        onRefresh={() => {
+          void refreshTeamState();
+        }}
+        isRefreshing={isRefreshing}
+      />
     </main>
   );
 }

@@ -2,6 +2,7 @@ import {
   ChartColumn,
   House,
   LogOut,
+  RefreshCw,
   Settings,
   Shield,
   ShieldAlert,
@@ -12,6 +13,8 @@ import { NavLink, useLocation } from "react-router-dom";
 
 type Props = {
   currentUserName: string;
+  isRefreshing: boolean;
+  onRefresh: () => void;
   onLogout: () => void;
 };
 
@@ -25,7 +28,12 @@ const linkClass = ({ isActive }: { isActive: boolean }) =>
       : "border-stone-200 bg-white text-stone-800 hover:bg-stone-50 hover:text-stone-900"
   }`;
 
-export function FloatingNav({ currentUserName, onLogout }: Props) {
+export function FloatingNav({
+  currentUserName,
+  isRefreshing,
+  onRefresh,
+  onLogout,
+}: Props) {
   const [open, setOpen] = useState(false);
   const location = useLocation();
 
@@ -69,11 +77,25 @@ export function FloatingNav({ currentUserName, onLogout }: Props) {
               : "pointer-events-none translate-y-2 opacity-0"
           }`}
         >
-          <div className="mb-1.5 flex justify-start">
+          <div className="mb-1.5 flex items-center justify-between gap-2">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-stone-100 px-3 py-1 text-xs text-stone-700">
               <UserCircle2 size={14} aria-hidden="true" />
               {currentUserName}
             </span>
+            <button
+              type="button"
+              className="inline-flex min-h-9 items-center justify-center gap-1 rounded-md bg-white px-2 py-1 text-xs text-stone-700 transition-colors hover:bg-stone-50"
+              onClick={onRefresh}
+              disabled={isRefreshing}
+              aria-label="最新状態に更新"
+            >
+              <RefreshCw
+                size={16}
+                className={isRefreshing ? "animate-spin" : ""}
+                aria-hidden="true"
+              />
+              <span>更新</span>
+            </button>
           </div>
           <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
             <NavLink to="/" end className={linkClass}>
