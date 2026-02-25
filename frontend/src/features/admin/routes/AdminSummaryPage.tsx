@@ -189,9 +189,9 @@ export function AdminSummaryPage() {
   }, [monthPickerOpen]);
 
   return (
-    <section className="mt-3 w-full pb-2 md:mt-4">
-      <article className="animate-enter rounded-xl border border-stone-200 bg-white/90 p-3 shadow-sm md:rounded-2xl md:p-6">
-        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+    <section className="mt-2 w-full pb-1 md:mt-4">
+      <article className="animate-enter rounded-xl border border-stone-200 bg-white/90 p-2.5 shadow-sm md:rounded-2xl md:p-6">
+        <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
           <div>
             <h2 className="text-lg font-semibold">月次サマリー</h2>
             <p className="mt-1 text-sm text-stone-600">減点状況</p>
@@ -222,7 +222,7 @@ export function AdminSummaryPage() {
                 </button>
 
                 {monthPickerOpen ? (
-                  <div className="absolute right-0 top-full z-50 mt-2 w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-stone-200 bg-white p-3 shadow-xl">
+                  <div className="absolute right-0 top-full z-50 mt-2 w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-stone-200 bg-white p-2.5 shadow-xl">
                     <div className="flex items-center justify-between gap-2">
                       <button
                         type="button"
@@ -306,8 +306,8 @@ export function AdminSummaryPage() {
           </div>
         </div>
 
-        <div className="mt-5">
-          <div className="rounded-xl border border-stone-200 bg-white p-3 md:p-4">
+        <div className="mt-4">
+          <div className="rounded-xl border border-stone-200 bg-white p-2.5 md:p-4">
             <p className="text-sm text-stone-700">合計減点</p>
             <p className="mt-2 text-3xl font-bold text-stone-900">
               {summaryQuery.data?.totalPenalty ?? 0}
@@ -315,14 +315,14 @@ export function AdminSummaryPage() {
           </div>
         </div>
 
-        <div className="mt-3 grid grid-cols-2 gap-2 md:gap-3">
-          <div className="rounded-xl border border-stone-200 bg-white p-3 md:p-4">
+        <div className="mt-2 grid grid-cols-2 gap-2 md:gap-3">
+          <div className="rounded-xl border border-stone-200 bg-white p-2.5 md:p-4">
             <p className="text-sm text-stone-700">日次減点</p>
             <p className="mt-2 text-2xl font-semibold text-stone-900">
               {summaryQuery.data?.dailyPenaltyTotal ?? 0}
             </p>
           </div>
-          <div className="rounded-xl border border-stone-200 bg-white p-3 md:p-4">
+          <div className="rounded-xl border border-stone-200 bg-white p-2.5 md:p-4">
             <p className="text-sm text-stone-700">週次減点</p>
             <p className="mt-2 text-2xl font-semibold text-stone-900">
               {summaryQuery.data?.weeklyPenaltyTotal ?? 0}
@@ -330,7 +330,7 @@ export function AdminSummaryPage() {
           </div>
         </div>
 
-        <div className="mt-6 border-t border-stone-200 pt-5">
+        <div className="mt-4 border-t border-stone-200 pt-3">
           <h3 className="text-base font-semibold">発生しているペナルティ</h3>
 
           {summaryQuery.isLoading || rulesQuery.isLoading ? (
@@ -351,11 +351,11 @@ export function AdminSummaryPage() {
               発動ペナルティはありません。
             </p>
           ) : (
-            <ul className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <ul className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
               {triggeredPenalties.map((penalty) => (
                 <li
                   key={penalty.id}
-                  className={`rounded-xl border p-3 ${penalty.isUnknown ? "border-amber-300 bg-amber-100/70" : "border-amber-300 bg-amber-50"}`}
+                  className={`rounded-xl border p-2.5 ${penalty.isUnknown ? "border-amber-300 bg-amber-100/70" : "border-amber-300 bg-amber-50"}`}
                 >
                   <div className="flex items-center gap-2 text-amber-800">
                     {penalty.isUnknown ? (
@@ -384,7 +384,7 @@ export function AdminSummaryPage() {
           )}
         </div>
 
-        <div className="mt-6 border-t border-stone-200 pt-5">
+        <div className="mt-4 border-t border-stone-200 pt-3">
           <h3 className="text-base font-semibold">日次サマリー</h3>
 
           {summaryQuery.isLoading ? (
@@ -405,7 +405,7 @@ export function AdminSummaryPage() {
               対象月のタスク履歴はありません。
             </p>
           ) : (
-            <div className="mt-3 space-y-4">
+            <div className="mt-2 space-y-3">
               {monthlyTaskStatusGroups.map((group) => {
                 const date = dateFromDateKey(group.date);
                 const weekday = new Intl.DateTimeFormat("ja-JP", {
@@ -439,7 +439,7 @@ export function AdminSummaryPage() {
                         return (
                           <li
                             key={`${group.date}-${item.taskId}`}
-                            className={`p-3 text-sm ${
+                            className={`p-2.5 text-sm ${
                               item.completed
                                 ? "bg-[color:var(--color-matcha-50)]"
                                 : "bg-rose-50"

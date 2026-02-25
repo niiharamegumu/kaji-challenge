@@ -105,7 +105,7 @@ export function AdminInvitesPage() {
   };
 
   return (
-    <section className="mt-3 pb-2 md:mt-4">
+    <section className="mt-2 pb-1 md:mt-4">
       <InviteManager
         invite={invite}
         joinCode={joinCode}

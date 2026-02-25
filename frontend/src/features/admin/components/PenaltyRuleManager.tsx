@@ -61,9 +61,9 @@ export function PenaltyRuleManager({
   };
 
   return (
-    <article className="animate-enter rounded-xl border border-stone-200 bg-white/90 p-3 shadow-sm md:rounded-2xl md:p-6">
+    <article className="animate-enter rounded-xl border border-stone-200 bg-white/90 p-2.5 shadow-sm md:rounded-2xl md:p-6">
       <h2 className="text-lg font-semibold">ペナルティ管理</h2>
-      <div className="mt-4 grid gap-3">
+      <div className="mt-3 grid gap-2">
         <label className="text-sm text-stone-700" htmlFor="rule-name">
           ルール名
         </label>
@@ -97,20 +97,20 @@ export function PenaltyRuleManager({
           </button>
         </div>
       </div>
-      <div className="mt-6 border-t border-stone-200 pt-5">
+      <div className="mt-4 border-t border-stone-200 pt-3">
         {sortedRules.length === 0 ? (
           <p className="text-sm text-stone-500">
             ペナルティルールはまだありません。
           </p>
         ) : (
-          <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <ul className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
             {sortedRules.map((rule) => {
               const isEditing = editingRuleId === rule.id;
               const canSave = editName.trim().length > 0;
               return (
                 <li
                   key={rule.id}
-                  className="rounded-xl border border-stone-200 bg-white p-3"
+                  className="rounded-xl border border-stone-200 bg-white p-2.5"
                 >
                   {isEditing ? (
                     <div className="grid gap-2">
@@ -135,7 +135,7 @@ export function PenaltyRuleManager({
                   <div className="mt-1 text-xs text-stone-600">
                     発動しきい値 {rule.threshold}
                   </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
+                  <div className="mt-2 flex flex-wrap gap-2">
                     {isEditing ? (
                       <>
                         <button

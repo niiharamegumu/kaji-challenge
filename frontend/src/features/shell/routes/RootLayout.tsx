@@ -187,7 +187,7 @@ export function RootLayout() {
 
   if (isAuthChecking) {
     return (
-      <main className="min-h-screen bg-[radial-gradient(circle_at_top,_var(--color-washi-50),_#fff,_var(--color-kohaku-50))] px-2 py-4 text-stone-700 md:p-6">
+      <main className="min-h-screen bg-[radial-gradient(circle_at_top,_var(--color-washi-50),_#fff,_var(--color-kohaku-50))] px-2 py-3 text-stone-700 md:p-6">
         <div className="flex justify-center">
           <LoaderCircle
             size={24}
@@ -208,11 +208,11 @@ export function RootLayout() {
   }
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,_var(--color-washi-50),_#fff,_var(--color-kohaku-50))] px-2 py-3 pb-32 text-stone-800 md:p-8 md:pb-20">
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top,_var(--color-washi-50),_#fff,_var(--color-kohaku-50))] px-2 py-2.5 pb-28 text-stone-800 md:p-8 md:pb-20">
       <StatusToast message={status} onDismiss={onDismissStatus} />
 
       <div className="mx-auto max-w-6xl">
-        <header className="rounded-xl border border-stone-200 bg-white/90 p-3 shadow-sm backdrop-blur md:rounded-2xl md:p-4">
+        <header className="rounded-xl border border-stone-200 bg-white/90 p-2.5 shadow-sm backdrop-blur md:rounded-2xl md:p-4">
           <div className="flex flex-wrap items-center justify-between gap-2 md:gap-3">
             <h1 className="text-xl font-semibold tracking-normal md:text-2xl md:font-bold md:tracking-wide">
               {currentTeamName}

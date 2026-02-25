@@ -88,7 +88,7 @@ export function TaskManager({
     return (
       <li
         key={task.id}
-        className="rounded-xl border border-stone-200 bg-white p-3"
+        className="rounded-xl border border-stone-200 bg-white p-2.5"
       >
         {isEditing ? (
           <div className="grid gap-2">
@@ -137,7 +137,7 @@ export function TaskManager({
           {weekly ? ` / 必要 ${task.requiredCompletionsPerWeek}回/週` : ""}
         </div>
 
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="mt-2 flex flex-wrap gap-2">
           {isEditing ? (
             <>
               <button
@@ -183,9 +183,9 @@ export function TaskManager({
   };
 
   return (
-    <article className="animate-enter rounded-xl border border-stone-200 bg-white/90 p-3 shadow-sm md:rounded-2xl md:p-6">
+    <article className="animate-enter rounded-xl border border-stone-200 bg-white/90 p-2.5 shadow-sm md:rounded-2xl md:p-6">
       <h2 className="text-lg font-semibold">タスク管理</h2>
-      <div className="mt-4 grid gap-3">
+      <div className="mt-3 grid gap-2">
         <label className="text-sm text-stone-700" htmlFor="task-title">
           タスク名
         </label>
@@ -276,7 +276,7 @@ export function TaskManager({
           </button>
         </div>
       </div>
-      <div className="mt-6 border-t border-stone-200 pt-5">
+      <div className="mt-4 border-t border-stone-200 pt-3">
         <div>
           <h3 className="text-base font-semibold">毎日</h3>
           {dailyTasks.length === 0 ? (
@@ -284,20 +284,20 @@ export function TaskManager({
               日次タスクはまだありません。
             </p>
           ) : (
-            <ul className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <ul className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
               {dailyTasks.map((task) => renderTaskCard(task, false))}
             </ul>
           )}
         </div>
 
-        <div className="mt-6">
+        <div className="mt-4">
           <h3 className="text-base font-semibold">週間</h3>
           {weeklyTasks.length === 0 ? (
             <p className="mt-2 text-sm text-stone-500">
               週次タスクはまだありません。
             </p>
           ) : (
-            <ul className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <ul className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
               {weeklyTasks.map((task) => renderTaskCard(task, true))}
             </ul>
           )}

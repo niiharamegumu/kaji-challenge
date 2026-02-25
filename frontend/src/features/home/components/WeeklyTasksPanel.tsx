@@ -25,23 +25,23 @@ export function WeeklyTasksPanel({
   const remainingDaysInWeek = Math.max(0, 7 - elapsedDaysBeforeToday);
 
   return (
-    <article className="animate-enter rounded-xl border border-stone-200 bg-white/90 p-3 shadow-sm md:rounded-2xl md:p-4">
+    <article className="animate-enter rounded-xl border border-stone-200 bg-white/90 p-2.5 shadow-sm md:rounded-2xl md:p-4">
       <h2 className="text-lg font-semibold">今週の週間タスク</h2>
-      <dl className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-        <div className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-3 py-1.5 text-stone-700">
+      <dl className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+        <div className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2.5 py-1 text-stone-700">
           <dt className="text-xs text-stone-500">経過</dt>
           <dd className="font-medium">{elapsedDaysBeforeToday}日</dd>
         </div>
-        <div className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-3 py-1.5 text-stone-700">
+        <div className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2.5 py-1 text-stone-700">
           <dt className="text-xs text-stone-500">残り</dt>
           <dd className="font-medium">{remainingDaysInWeek}日</dd>
         </div>
-        <div className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-3 py-1.5 text-stone-700">
+        <div className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2.5 py-1 text-stone-700">
           <dt className="text-xs text-stone-500">進捗</dt>
           <dd className="font-medium">{weeklyProgress}</dd>
         </div>
       </dl>
-      <ul className="mt-3 space-y-2">
+      <ul className="mt-2 space-y-2">
         {items.map((item) => {
           const isSingleCompletion = item.requiredCompletionsPerWeek <= 1;
           const progressRatio = Math.max(
@@ -61,7 +61,7 @@ export function WeeklyTasksPanel({
               <li key={item.task.id}>
                 <button
                   type="button"
-                  className={`relative w-full overflow-hidden rounded-xl border p-3 text-left transition-colors duration-200 ${isDone ? "border-[color:var(--color-matcha-400)]" : "border-stone-300"}`}
+                  className={`relative w-full overflow-hidden rounded-xl border p-2.5 text-left transition-colors duration-200 ${isDone ? "border-[color:var(--color-matcha-400)]" : "border-stone-300"}`}
                   onClick={() => onToggle(item.task.id)}
                 >
                   <span
@@ -89,7 +89,7 @@ export function WeeklyTasksPanel({
           return (
             <li
               key={item.task.id}
-              className={`relative overflow-hidden rounded-xl p-3 ring-1 ${isDone ? "ring-[color:var(--color-matcha-400)]" : "ring-stone-200"}`}
+              className={`relative overflow-hidden rounded-xl p-2.5 ring-1 ${isDone ? "ring-[color:var(--color-matcha-400)]" : "ring-stone-200"}`}
             >
               <span
                 className="pointer-events-none absolute inset-y-0 left-0 bg-[color:var(--color-matcha-50)] transition-[width] duration-200 ease-out"

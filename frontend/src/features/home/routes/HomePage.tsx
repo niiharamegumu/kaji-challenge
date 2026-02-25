@@ -35,8 +35,8 @@ export function HomePage() {
   }, []);
 
   return (
-    <div className="mt-3 space-y-3 md:mt-4 md:space-y-4">
-      <section className="grid gap-3 md:grid-cols-2 md:gap-4">
+    <div className="mt-2 space-y-2 md:mt-4 md:space-y-4">
+      <section className="grid gap-2 md:grid-cols-2 md:gap-4">
         <DailyTasksPanel
           items={home?.dailyTasks ?? []}
           onToggle={(taskId) => {
@@ -59,7 +59,7 @@ export function HomePage() {
         />
       </section>
 
-      <section className="rounded-xl border border-stone-200 bg-white/90 p-3 shadow-sm md:rounded-2xl md:p-4">
+      <section className="rounded-xl border border-stone-200 bg-white/90 p-2.5 shadow-sm md:rounded-2xl md:p-4">
         <Link
           to={`/admin/summary?month=${currentMonth}`}
           className="text-sm font-medium text-stone-700 underline underline-offset-4 transition-colors hover:text-stone-900"

@@ -42,7 +42,7 @@ export function AdminTasksPage() {
   };
 
   return (
-    <section className="mt-3 w-full pb-2 md:mt-4">
+    <section className="mt-2 w-full pb-1 md:mt-4">
       <TaskManager
         form={taskForm}
         tasks={tasksQuery.data ?? []}
