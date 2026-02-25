@@ -52,7 +52,7 @@ export function FloatingNav({ currentUserName, onLogout }: Props) {
       {open && (
         <button
           type="button"
-          className="fixed inset-0 z-40 bg-black/10"
+          className="fixed inset-0 z-40 bg-transparent"
           onClick={() => setOpen(false)}
           aria-label="ナビを閉じる"
         />
