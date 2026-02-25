@@ -191,28 +191,24 @@ export function AdminSummaryPage() {
   return (
     <section className="mt-2 w-full pb-1 md:mt-4">
       <article className="animate-enter rounded-xl border border-stone-200 bg-white/90 p-2.5 shadow-sm md:rounded-2xl md:p-6">
-        <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-          <div>
+        <div className="flex items-start justify-between gap-2 max-[360px]:flex-wrap max-[360px]:items-end">
+          <div className="shrink-0">
             <h2 className="text-lg font-semibold">月次サマリー</h2>
-            <p className="mt-1 text-sm text-stone-600">減点状況</p>
           </div>
-          <div className="grid gap-1">
-            <label className="text-sm text-stone-700" htmlFor="summary-month">
-              対象月
-            </label>
-            <div className="flex items-center gap-2">
+          <div className="ml-auto grid w-auto min-w-0 justify-items-end max-[360px]:w-full">
+            <div className="flex items-center gap-1.5 sm:gap-2">
               <button
                 type="button"
-                className="flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-full border border-stone-300 bg-white text-stone-600 transition-colors hover:bg-stone-100"
+                className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border border-stone-300 bg-white text-stone-600 transition-colors hover:bg-stone-100 sm:h-11 sm:w-11"
                 onClick={() => updateMonth(addMonth(month, -1))}
                 aria-label="前月へ移動"
               >
-                <ChevronLeft size={18} aria-hidden="true" />
+                <ChevronLeft size={16} aria-hidden="true" />
               </button>
               <div className="relative flex-1" ref={monthPickerRef}>
                 <button
                   type="button"
-                  className="relative flex min-h-11 w-full cursor-pointer items-center justify-center rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-800"
+                  className="relative flex h-9 w-36 cursor-pointer items-center justify-center rounded-lg border border-stone-300 bg-white px-2 py-1.5 text-sm text-stone-800 sm:h-11 sm:w-52 sm:px-3 sm:py-2"
                   onClick={() => setMonthPickerOpen((open) => !open)}
                   aria-label="対象月を選択"
                 >
@@ -296,37 +292,38 @@ export function AdminSummaryPage() {
               </div>
               <button
                 type="button"
-                className="flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-full border border-stone-300 bg-white text-stone-600 transition-colors hover:bg-stone-100"
+                className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border border-stone-300 bg-white text-stone-600 transition-colors hover:bg-stone-100 sm:h-11 sm:w-11"
                 onClick={() => updateMonth(addMonth(month, 1))}
                 aria-label="翌月へ移動"
               >
-                <ChevronRight size={18} aria-hidden="true" />
+                <ChevronRight size={16} aria-hidden="true" />
               </button>
             </div>
           </div>
         </div>
 
-        <div className="mt-4">
-          <div className="rounded-xl border border-stone-200 bg-white p-2.5 md:p-4">
-            <p className="text-sm text-stone-700">合計減点</p>
-            <p className="mt-2 text-3xl font-bold text-stone-900">
-              {summaryQuery.data?.totalPenalty ?? 0}
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-2 grid grid-cols-2 gap-2 md:gap-3">
-          <div className="rounded-xl border border-stone-200 bg-white p-2.5 md:p-4">
-            <p className="text-sm text-stone-700">日次減点</p>
-            <p className="mt-2 text-2xl font-semibold text-stone-900">
-              {summaryQuery.data?.dailyPenaltyTotal ?? 0}
-            </p>
-          </div>
-          <div className="rounded-xl border border-stone-200 bg-white p-2.5 md:p-4">
-            <p className="text-sm text-stone-700">週次減点</p>
-            <p className="mt-2 text-2xl font-semibold text-stone-900">
-              {summaryQuery.data?.weeklyPenaltyTotal ?? 0}
-            </p>
+        <div className="mt-3">
+          <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-stone-200 bg-white">
+            <div className="p-3">
+              <p className="text-xs text-stone-700">合計減点</p>
+              <p className="mt-1 text-3xl font-bold leading-none text-stone-900">
+                {summaryQuery.data?.totalPenalty ?? 0}
+              </p>
+            </div>
+            <div className="grid grid-rows-2 border-l border-stone-200">
+              <div className="flex items-end justify-between gap-2 p-3">
+                <p className="text-xs text-stone-700">日次減点</p>
+                <p className="text-xl font-semibold leading-none text-stone-900">
+                  {summaryQuery.data?.dailyPenaltyTotal ?? 0}
+                </p>
+              </div>
+              <div className="flex items-end justify-between gap-2 border-t border-stone-200 p-3">
+                <p className="text-xs text-stone-700">週次減点</p>
+                <p className="text-xl font-semibold leading-none text-stone-900">
+                  {summaryQuery.data?.weeklyPenaltyTotal ?? 0}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -470,6 +467,23 @@ export function AdminSummaryPage() {
                                   {isWeekly ? "週間" : "日間"}
                                 </span>
                                 <span
+                                  className={`inline-flex items-center gap-1 whitespace-nowrap ${
+                                    item.completed
+                                      ? "text-[color:var(--color-matcha-700)]"
+                                      : "text-rose-700"
+                                  }`}
+                                >
+                                  {item.completed ? (
+                                    <CheckCircle2
+                                      size={12}
+                                      aria-hidden="true"
+                                    />
+                                  ) : (
+                                    <Circle size={12} aria-hidden="true" />
+                                  )}
+                                  {item.completed ? "完了" : "未完了"}
+                                </span>
+                                <span
                                   className={`text-stone-500 ${item.completed ? "line-through" : ""}`}
                                 >
                                   減点 {item.penaltyPoints} 点
@@ -480,22 +494,6 @@ export function AdminSummaryPage() {
                                   </span>
                                 ) : null}
                               </div>
-                            </div>
-                            <div className="mt-2">
-                              <span
-                                className={`inline-flex items-center gap-1 whitespace-nowrap text-xs ${
-                                  item.completed
-                                    ? "text-[color:var(--color-matcha-700)]"
-                                    : "text-rose-700"
-                                }`}
-                              >
-                                {item.completed ? (
-                                  <CheckCircle2 size={14} aria-hidden="true" />
-                                ) : (
-                                  <Circle size={14} aria-hidden="true" />
-                                )}
-                                {item.completed ? "完了" : "未完了"}
-                              </span>
                             </div>
                           </li>
                         );
