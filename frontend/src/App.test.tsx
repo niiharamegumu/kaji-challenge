@@ -207,4 +207,34 @@ describe("App", () => {
       expect(screen.getByText("夜ごはんの後に実施")).toBeInTheDocument();
     });
   });
+
+  it("keeps current URL on reload when session is valid", async () => {
+    window.history.pushState({}, "", "/admin/summary?month=2026-02");
+    mockGetMe.mockResolvedValue({
+      data: { user: { id: "u1", displayName: "Owner" }, memberships: [] },
+    });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe("/admin/summary");
+      expect(window.location.search).toBe("?month=2026-02");
+    });
+    expect(
+      screen.queryByRole("button", { name: "Googleでログイン" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows login card on protected page when session is invalid", async () => {
+    window.history.pushState({}, "", "/admin/summary");
+    mockGetMe.mockRejectedValue(new Error("request failed: 401"));
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Googleでログイン" }),
+      ).toBeInTheDocument();
+    });
+  });
 });
