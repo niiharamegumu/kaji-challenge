@@ -183,6 +183,7 @@ export function RootLayout() {
 
   const isAuthChecking =
     meQuery.status === "pending" && meQuery.data == null && !meQuery.isError;
+  const isAuthenticated = loggedIn || meQuery.isSuccess || meQuery.data != null;
 
   if (isAuthChecking) {
     return (
@@ -199,7 +200,7 @@ export function RootLayout() {
     );
   }
 
-  if (!loggedIn) {
+  if (!isAuthenticated) {
     if (location.pathname !== "/") {
       return <Navigate to="/" replace />;
     }
