@@ -7,7 +7,7 @@ import {
 import { queryKeys } from "../../../shared/query/queryKeys";
 import {
   formatError,
-  isPreconditionFailed,
+  isPreconditionFailure,
   todayString,
 } from "../../../shared/utils/errors";
 
@@ -44,7 +44,7 @@ export function useToggleCompletionMutation(
       ]);
     },
     onError: (error) => {
-      if (isPreconditionFailed(error)) {
+      if (isPreconditionFailure(error)) {
         void Promise.all([
           queryClient.invalidateQueries({ queryKey: queryKeys.home }),
           queryClient.invalidateQueries({ queryKey: queryKeys.monthlySummary }),

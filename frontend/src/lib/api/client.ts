@@ -35,13 +35,30 @@ export const customFetch = async <T>(
   const method = (options?.method ?? "GET").toUpperCase();
   const isMutating =
     method !== "GET" && method !== "HEAD" && method !== "OPTIONS";
+  const requiresTeamPrecondition = isMutating && !url.startsWith("/v1/auth/");
   const headers: Record<string, string> = {
     ...(options?.headers as Record<string, string> | undefined),
   };
   if (options?.body != null && headers["Content-Type"] == null) {
     headers["Content-Type"] = "application/json";
   }
-  if (isMutating && latestTeamEtag !== "" && headers["If-Match"] == null) {
+  if (
+    requiresTeamPrecondition &&
+    latestTeamEtag === "" &&
+    headers["If-Match"] == null
+  ) {
+    throw {
+      name: "ApiRequestError",
+      message: "最新状態の取得が必要です。画面を更新して再操作してください。",
+      status: 428,
+      code: "precondition_required",
+    } satisfies ApiRequestError;
+  }
+  if (
+    requiresTeamPrecondition &&
+    latestTeamEtag !== "" &&
+    headers["If-Match"] == null
+  ) {
     headers["If-Match"] = latestTeamEtag;
   }
 

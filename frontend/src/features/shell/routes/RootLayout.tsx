@@ -48,6 +48,8 @@ export function RootLayout() {
   const hasValidatedSessionRef = useRef(false);
   const retriedAfterLoginRef = useRef(false);
   const lastSeenRevisionRef = useRef(0);
+  const pendingEntitiesRef = useRef<Set<string>>(new Set());
+  const flushTimerRef = useRef<number | null>(null);
 
   const meQuery = useMeQuery(true);
   const currentUserID = meQuery.data?.user.id ?? null;
@@ -203,6 +205,48 @@ export function RootLayout() {
     }
   }, [queryClient]);
 
+  const flushPendingEntityInvalidations = useCallback(async () => {
+    const pending = pendingEntitiesRef.current;
+    if (pending.size === 0) {
+      return;
+    }
+    pendingEntitiesRef.current = new Set();
+    if (pending.has("close_run") || pending.has("unknown")) {
+      await refreshTeamState();
+      return;
+    }
+    const operations: Promise<unknown>[] = [];
+    if (pending.has("task") || pending.has("task_completion")) {
+      operations.push(
+        queryClient.invalidateQueries({ queryKey: queryKeys.home }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.tasks }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.monthlySummary }),
+      );
+    }
+    if (pending.has("penalty_rule")) {
+      operations.push(
+        queryClient.invalidateQueries({ queryKey: queryKeys.rules }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.monthlySummary }),
+      );
+    }
+    if (
+      pending.has("invite") ||
+      pending.has("team_member") ||
+      pending.has("team_state")
+    ) {
+      operations.push(
+        queryClient.invalidateQueries({ queryKey: queryKeys.me }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.teamMembers }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.currentInvite }),
+      );
+    }
+    if (operations.length === 0) {
+      await refreshTeamState();
+      return;
+    }
+    await Promise.all(operations);
+  }, [queryClient, refreshTeamState]);
+
   useEffect(() => {
     if (!isAuthenticated) {
       lastSeenRevisionRef.current = 0;
@@ -237,6 +281,16 @@ export function RootLayout() {
       retryDelay = Math.min(retryDelay * 2, 30_000);
     };
 
+    const scheduleEntityFlush = () => {
+      if (flushTimerRef.current != null) {
+        return;
+      }
+      flushTimerRef.current = window.setTimeout(() => {
+        flushTimerRef.current = null;
+        void flushPendingEntityInvalidations();
+      }, 300);
+    };
+
     const handleRevision = (revision: number, entity: string) => {
       if (!Number.isFinite(revision) || revision <= 0) {
         return;
@@ -247,45 +301,17 @@ export function RootLayout() {
       }
       lastSeenRevisionRef.current = revision;
       if (previous > 0 && revision > previous + 1) {
+        pendingEntitiesRef.current = new Set();
         void refreshTeamState();
         return;
       }
-      const invalidateByEntity = async () => {
-        switch (entity) {
-          case "task":
-          case "task_completion":
-            await Promise.all([
-              queryClient.invalidateQueries({ queryKey: queryKeys.home }),
-              queryClient.invalidateQueries({ queryKey: queryKeys.tasks }),
-              queryClient.invalidateQueries({
-                queryKey: queryKeys.monthlySummary,
-              }),
-            ]);
-            break;
-          case "penalty_rule":
-            await Promise.all([
-              queryClient.invalidateQueries({ queryKey: queryKeys.rules }),
-              queryClient.invalidateQueries({
-                queryKey: queryKeys.monthlySummary,
-              }),
-            ]);
-            break;
-          case "invite":
-            await Promise.all([
-              queryClient.invalidateQueries({
-                queryKey: queryKeys.currentInvite,
-              }),
-              queryClient.invalidateQueries({
-                queryKey: queryKeys.teamMembers,
-              }),
-            ]);
-            break;
-          default:
-            await refreshTeamState();
-            break;
-        }
-      };
-      void invalidateByEntity();
+      const normalized = entity.trim();
+      if (normalized === "") {
+        pendingEntitiesRef.current.add("unknown");
+      } else {
+        pendingEntitiesRef.current.add(normalized);
+      }
+      scheduleEntityFlush();
     };
 
     const connect = () => {
@@ -335,9 +361,14 @@ export function RootLayout() {
       if (retryTimer != null) {
         window.clearTimeout(retryTimer);
       }
+      if (flushTimerRef.current != null) {
+        window.clearTimeout(flushTimerRef.current);
+        flushTimerRef.current = null;
+      }
+      pendingEntitiesRef.current = new Set();
       resetSource();
     };
-  }, [isAuthenticated, queryClient, refreshTeamState]);
+  }, [flushPendingEntityInvalidations, isAuthenticated, refreshTeamState]);
 
   useEffect(() => {
     if (!isAuthenticated) {
