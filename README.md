@@ -1,4 +1,4 @@
-# kaji-challenge
+# KajiChalle
 
 家事管理アプリのモノレポひな形です。
 
@@ -79,6 +79,18 @@ Cloud Run Job運用推奨（3分割）:
 
 - デプロイ: `cd frontend && npm run deploy`
 - 設定: `frontend/wrangler.toml`
+
+PWA対応:
+
+- `frontend/public/manifest.webmanifest` を配信し、ホーム画面への追加に対応
+- ホーム追加時のアプリ名は `KajiChalle`
+- テーマ色・背景色は `#f6f4ef` を使用
+
+PWAアイコン再生成:
+
+- 元画像: `frontend/public/app.png`（1024x1024）
+- 実行: `cd frontend && npm run pwa:assets`
+- 生成先: `frontend/public/icons/`, `frontend/public/favicon.ico`
 
 必要な環境変数:
 
