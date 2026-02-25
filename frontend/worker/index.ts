@@ -19,6 +19,20 @@ export default {
       const upstreamReq = new Request(upstreamURL, request);
       return fetch(upstreamReq);
     }
-    return env.ASSETS.fetch(request);
+    const response = await env.ASSETS.fetch(request);
+    if (
+      url.pathname === "/sw.js" ||
+      url.pathname === "/registerSW.js" ||
+      url.pathname === "/manifest.webmanifest"
+    ) {
+      const headers = new Headers(response.headers);
+      headers.set("Cache-Control", "no-cache, no-store, must-revalidate");
+      return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers,
+      });
+    }
+    return response;
   },
 };
