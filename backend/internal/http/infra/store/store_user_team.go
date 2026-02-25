@@ -92,6 +92,13 @@ func (s *Store) GetMe(ctx context.Context, userID string) (api.MeResponse, error
 }
 
 func (s *Store) PatchMeNickname(ctx context.Context, userID string, req api.UpdateNicknameRequest) (api.UpdateNicknameResponse, error) {
+	teamID, err := s.primaryTeamLocked(ctx, userID)
+	if err != nil {
+		return api.UpdateNicknameResponse{}, err
+	}
+	if err := s.checkIfMatchPrecondition(ctx, teamID); err != nil {
+		return api.UpdateNicknameResponse{}, err
+	}
 	nickname, err := normalizeNickname(req.Nickname)
 	if err != nil {
 		return api.UpdateNicknameResponse{}, err
@@ -112,6 +119,9 @@ func (s *Store) PatchMeNickname(ctx context.Context, userID string, req api.Upda
 func (s *Store) CreateInvite(ctx context.Context, userID string, req api.CreateInviteRequest) (api.InviteCodeResponse, error) {
 	membership, err := s.primaryMembershipLocked(ctx, userID)
 	if err != nil {
+		return api.InviteCodeResponse{}, err
+	}
+	if err := s.checkIfMatchPrecondition(ctx, membership.TeamID); err != nil {
 		return api.InviteCodeResponse{}, err
 	}
 	if membership.Role != string(api.TeamMembershipRoleOwner) {
@@ -150,6 +160,9 @@ func (s *Store) CreateInvite(ctx context.Context, userID string, req api.CreateI
 	if err := tx.Commit(ctx); err != nil {
 		return api.InviteCodeResponse{}, err
 	}
+	if _, err := s.bumpRevisionAndPublish(ctx, membership.TeamID, "invite", map[string]string{"action": "create"}); err != nil {
+		return api.InviteCodeResponse{}, err
+	}
 
 	return api.InviteCodeResponse{
 		Code:      code,
@@ -182,11 +195,17 @@ func (s *Store) PatchTeamCurrent(ctx context.Context, userID string, req api.Upd
 	if err != nil {
 		return api.TeamInfoResponse{}, err
 	}
+	if err := s.checkIfMatchPrecondition(ctx, membership.TeamID); err != nil {
+		return api.TeamInfoResponse{}, err
+	}
 	teamName, err := normalizeTeamName(req.Name)
 	if err != nil {
 		return api.TeamInfoResponse{}, err
 	}
 	if err := s.q.UpdateTeamName(ctx, dbsqlc.UpdateTeamNameParams{ID: membership.TeamID, Name: teamName}); err != nil {
+		return api.TeamInfoResponse{}, err
+	}
+	if _, err := s.bumpRevisionAndPublish(ctx, membership.TeamID, "team_state", map[string]string{"action": "rename"}); err != nil {
 		return api.TeamInfoResponse{}, err
 	}
 	return api.TeamInfoResponse{TeamId: membership.TeamID, Name: teamName}, nil
@@ -240,6 +259,11 @@ func (s *Store) JoinTeam(ctx context.Context, userID, code string) (api.JoinTeam
 	if err != nil {
 		return api.JoinTeamResponse{}, err
 	}
+	if len(memberships) > 0 {
+		if err := s.checkIfMatchPrecondition(ctx, memberships[0].TeamID); err != nil {
+			return api.JoinTeamResponse{}, err
+		}
+	}
 
 	for _, m := range memberships {
 		if m.TeamID == invite.TeamID {
@@ -280,6 +304,14 @@ func (s *Store) JoinTeam(ctx context.Context, userID, code string) (api.JoinTeam
 	if err := tx.Commit(ctx); err != nil {
 		return api.JoinTeamResponse{}, err
 	}
+	if len(memberships) > 0 && memberships[0].TeamID != invite.TeamID {
+		if _, err := s.bumpRevisionAndPublish(ctx, memberships[0].TeamID, "team_member", map[string]string{"action": "leave"}); err != nil {
+			return api.JoinTeamResponse{}, err
+		}
+	}
+	if _, err := s.bumpRevisionAndPublish(ctx, invite.TeamID, "team_member", map[string]string{"action": "join"}); err != nil {
+		return api.JoinTeamResponse{}, err
+	}
 	return api.JoinTeamResponse{TeamId: invite.TeamID}, nil
 }
 
@@ -292,6 +324,9 @@ func (s *Store) PostTeamLeave(ctx context.Context, userID string) (api.JoinTeamR
 		return api.JoinTeamResponse{}, errors.New("user has no team membership")
 	}
 	current := memberships[0]
+	if err := s.checkIfMatchPrecondition(ctx, current.TeamID); err != nil {
+		return api.JoinTeamResponse{}, err
+	}
 	user, err := s.q.GetUserByID(ctx, userID)
 	if err != nil {
 		return api.JoinTeamResponse{}, err
@@ -335,6 +370,12 @@ func (s *Store) PostTeamLeave(ctx context.Context, userID string) (api.JoinTeamR
 	}
 
 	if err := tx.Commit(ctx); err != nil {
+		return api.JoinTeamResponse{}, err
+	}
+	if _, err := s.bumpRevisionAndPublish(ctx, current.TeamID, "team_member", map[string]string{"action": "leave"}); err != nil {
+		return api.JoinTeamResponse{}, err
+	}
+	if _, err := s.bumpRevisionAndPublish(ctx, newTeamID, "team_member", map[string]string{"action": "join"}); err != nil {
 		return api.JoinTeamResponse{}, err
 	}
 	return api.JoinTeamResponse{TeamId: newTeamID}, nil

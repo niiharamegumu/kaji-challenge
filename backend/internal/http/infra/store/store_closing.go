@@ -19,12 +19,18 @@ func (s *Store) CloseDayForUser(ctx context.Context, userID string) (api.CloseRe
 	if err != nil {
 		return api.CloseResponse{}, err
 	}
+	if err := s.checkIfMatchPrecondition(ctx, teamID); err != nil {
+		return api.CloseResponse{}, err
+	}
 	return s.CloseDayForTeam(ctx, teamID)
 }
 
 func (s *Store) CloseWeekForUser(ctx context.Context, userID string) (api.CloseResponse, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
+		return api.CloseResponse{}, err
+	}
+	if err := s.checkIfMatchPrecondition(ctx, teamID); err != nil {
 		return api.CloseResponse{}, err
 	}
 	return s.CloseWeekForTeam(ctx, teamID)
@@ -35,30 +41,50 @@ func (s *Store) CloseMonthForUser(ctx context.Context, userID string) (api.Close
 	if err != nil {
 		return api.CloseResponse{}, err
 	}
+	if err := s.checkIfMatchPrecondition(ctx, teamID); err != nil {
+		return api.CloseResponse{}, err
+	}
 	return s.CloseMonthForTeam(ctx, teamID)
 }
 
 func (s *Store) CloseDayForTeam(ctx context.Context, teamID string) (api.CloseResponse, error) {
 	now := time.Now().In(s.loc)
-	if _, err := s.catchUpDayLocked(ctx, now, teamID); err != nil {
+	processed, err := s.catchUpDayLocked(ctx, now, teamID)
+	if err != nil {
 		return api.CloseResponse{}, err
+	}
+	if processed > 0 {
+		if _, err := s.bumpRevisionAndPublish(ctx, teamID, "close_run", map[string]string{"scope": "day"}); err != nil {
+			return api.CloseResponse{}, err
+		}
 	}
 	return api.CloseResponse{ClosedAt: now, Month: monthKeyFromTime(now, s.loc)}, nil
 }
 
 func (s *Store) CloseWeekForTeam(ctx context.Context, teamID string) (api.CloseResponse, error) {
 	now := time.Now().In(s.loc)
-	if _, err := s.catchUpWeekLocked(ctx, now, teamID); err != nil {
+	processed, err := s.catchUpWeekLocked(ctx, now, teamID)
+	if err != nil {
 		return api.CloseResponse{}, err
+	}
+	if processed > 0 {
+		if _, err := s.bumpRevisionAndPublish(ctx, teamID, "close_run", map[string]string{"scope": "week"}); err != nil {
+			return api.CloseResponse{}, err
+		}
 	}
 	return api.CloseResponse{ClosedAt: now, Month: monthKeyFromTime(now, s.loc)}, nil
 }
 
 func (s *Store) CloseMonthForTeam(ctx context.Context, teamID string) (api.CloseResponse, error) {
 	now := time.Now().In(s.loc)
-	_, closedMonth, err := s.catchUpMonthLocked(ctx, now, teamID)
+	processed, closedMonth, err := s.catchUpMonthLocked(ctx, now, teamID)
 	if err != nil {
 		return api.CloseResponse{}, err
+	}
+	if processed > 0 {
+		if _, err := s.bumpRevisionAndPublish(ctx, teamID, "close_run", map[string]string{"scope": "month"}); err != nil {
+			return api.CloseResponse{}, err
+		}
 	}
 	return api.CloseResponse{ClosedAt: now, Month: closedMonth}, nil
 }

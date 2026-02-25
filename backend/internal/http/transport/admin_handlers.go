@@ -11,6 +11,7 @@ func (h *Handler) PostAdminCloseDay(c *gin.Context) {
 	if !ok {
 		return
 	}
+	injectIfMatchContext(c)
 	res, err := h.services.Admin.CloseDayForUser(c.Request.Context(), userID)
 	if err != nil {
 		writeAppError(c, err, http.StatusBadRequest)
@@ -24,6 +25,7 @@ func (h *Handler) PostAdminCloseWeek(c *gin.Context) {
 	if !ok {
 		return
 	}
+	injectIfMatchContext(c)
 	res, err := h.services.Admin.CloseWeekForUser(c.Request.Context(), userID)
 	if err != nil {
 		writeAppError(c, err, http.StatusBadRequest)
@@ -37,6 +39,7 @@ func (h *Handler) PostAdminCloseMonth(c *gin.Context) {
 	if !ok {
 		return
 	}
+	injectIfMatchContext(c)
 	res, err := h.services.Admin.CloseMonthForUser(c.Request.Context(), userID)
 	if err != nil {
 		writeAppError(c, err, http.StatusBadRequest)
