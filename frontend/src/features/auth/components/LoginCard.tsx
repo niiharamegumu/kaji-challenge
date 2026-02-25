@@ -12,8 +12,8 @@ export function LoginCard({ status, onLogin }: Props) {
         <section className="mx-auto max-w-2xl">
           <div className="flex items-center justify-center gap-3 md:justify-start">
             <img
-              src="/favicon.svg"
-              alt="KajiChalleのファビコン"
+              src="/icons/pwa-192x192.png"
+              alt="KajiChalleのアプリアイコン"
               width={128}
               height={128}
               loading="eager"
