@@ -1,14 +1,14 @@
 {
   "id": "/",
-  "name": "Kaji Challenge",
-  "short_name": "Kaji",
-  "description": "家事管理アプリ Kaji Challenge",
+  "name": "KajiChalle",
+  "short_name": "KajiChalle",
+  "description": "家事管理アプリ KajiChalle",
   "lang": "ja",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#ffffff",
+  "background_color": "#f6f4ef",
+  "theme_color": "#f6f4ef",
   "icons": [
     {
       "src": "/icons/pwa-192x192.png",
