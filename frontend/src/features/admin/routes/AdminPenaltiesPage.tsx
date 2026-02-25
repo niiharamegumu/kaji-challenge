@@ -10,7 +10,7 @@ import { statusMessageAtom } from "../../shell/state/status";
 import { PenaltyRuleManager } from "../components/PenaltyRuleManager";
 import { usePenaltyRuleMutations } from "../hooks/useAdminMutations";
 import { usePenaltyRulesQuery } from "../hooks/useAdminQueries";
-import { ruleFormAtom } from "../state/forms";
+import { initialRuleFormState, ruleFormAtom } from "../state/forms";
 
 export function AdminPenaltiesPage() {
   const loggedIn = useAtomValue(isLoggedInAtom);
@@ -31,6 +31,7 @@ export function AdminPenaltiesPage() {
       threshold: Number(ruleForm.threshold),
     };
     await createRule.mutateAsync(payload);
+    setRuleForm(initialRuleFormState);
   };
 
   const handleUpdateRule = async (

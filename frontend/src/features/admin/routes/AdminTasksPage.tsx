@@ -10,7 +10,7 @@ import { statusMessageAtom } from "../../shell/state/status";
 import { TaskManager } from "../components/TaskManager";
 import { useTaskMutations } from "../hooks/useAdminMutations";
 import { useTasksQuery } from "../hooks/useAdminQueries";
-import { taskFormAtom } from "../state/forms";
+import { initialTaskFormState, taskFormAtom } from "../state/forms";
 
 export function AdminTasksPage() {
   const loggedIn = useAtomValue(isLoggedInAtom);
@@ -32,6 +32,7 @@ export function AdminTasksPage() {
           : undefined,
     };
     await createTask.mutateAsync(payload);
+    setTaskForm(initialTaskFormState);
   };
 
   const handleUpdateTask = async (
