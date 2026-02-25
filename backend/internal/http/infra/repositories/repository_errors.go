@@ -1,6 +1,7 @@
 package repositories
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -10,6 +11,10 @@ import (
 func mapInfraErr(err error) error {
 	if err == nil {
 		return nil
+	}
+	var preconditionErr *application.PreconditionError
+	if errors.As(err, &preconditionErr) {
+		return err
 	}
 	msg := strings.ToLower(err.Error())
 	switch {
