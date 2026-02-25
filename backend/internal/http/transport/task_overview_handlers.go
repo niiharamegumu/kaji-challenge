@@ -17,6 +17,7 @@ func (h *Handler) GetTaskOverview(c *gin.Context) {
 		writeAppError(c, err, http.StatusBadRequest)
 		return
 	}
+	h.writeTeamETag(c, userID)
 	c.JSON(http.StatusOK, home)
 }
 
@@ -30,5 +31,6 @@ func (h *Handler) GetPenaltySummaryMonthly(c *gin.Context, params api.GetPenalty
 		writeAppError(c, err, http.StatusBadRequest)
 		return
 	}
+	h.writeTeamETag(c, userID)
 	c.JSON(http.StatusOK, summary)
 }

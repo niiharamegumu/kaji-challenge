@@ -23,6 +23,7 @@ func newStore() *Store {
 
 	s := &Store{
 		loc:            loc,
+		eventHub:       newTeamEventHub(),
 		users:          map[string]userRecord{},
 		usersByMail:    map[string]string{},
 		memberships:    map[string][]membership{},

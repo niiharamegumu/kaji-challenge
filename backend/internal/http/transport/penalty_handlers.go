@@ -21,6 +21,7 @@ func (h *Handler) ListPenaltyRules(c *gin.Context, params api.ListPenaltyRulesPa
 		writeAppError(c, err, http.StatusBadRequest)
 		return
 	}
+	h.writeTeamETag(c, userID)
 	c.JSON(http.StatusOK, gin.H{"items": items})
 }
 
@@ -29,6 +30,7 @@ func (h *Handler) PostPenaltyRule(c *gin.Context) {
 	if !ok {
 		return
 	}
+	injectIfMatchContext(c)
 	req, ok := bindJSON[api.CreatePenaltyRuleRequest](c)
 	if !ok {
 		return
@@ -46,6 +48,7 @@ func (h *Handler) PatchPenaltyRule(c *gin.Context, ruleID string) {
 	if !ok {
 		return
 	}
+	injectIfMatchContext(c)
 	req, ok := bindJSON[api.UpdatePenaltyRuleRequest](c)
 	if !ok {
 		return
@@ -63,6 +66,7 @@ func (h *Handler) DeletePenaltyRule(c *gin.Context, ruleID string) {
 	if !ok {
 		return
 	}
+	injectIfMatchContext(c)
 	if err := h.services.Penalty.DeletePenaltyRule(c.Request.Context(), userID, ruleID); err != nil {
 		writeAppError(c, err, http.StatusBadRequest)
 		return

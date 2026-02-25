@@ -117,7 +117,7 @@ func newTestHandler(teamErr error) *Handler {
 		Penalty:      mockPenaltyService{},
 		TaskOverview: mockTaskOverviewService{},
 		Admin:        mockAdminService{},
-	})
+	}, nil)
 }
 
 func TestGetMeMapsTypedNotFoundTo404(t *testing.T) {

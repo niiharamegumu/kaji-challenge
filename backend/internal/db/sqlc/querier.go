@@ -49,6 +49,7 @@ type Querier interface {
 	GetSessionByToken(ctx context.Context, token string) (Session, error)
 	GetTaskByID(ctx context.Context, id string) (GetTaskByIDRow, error)
 	GetTaskCompletionWeeklyCount(ctx context.Context, arg GetTaskCompletionWeeklyCountParams) (int64, error)
+	GetTeamStateRevision(ctx context.Context, id string) (int64, error)
 	GetUndeletedPenaltyRuleByID(ctx context.Context, id string) (PenaltyRule, error)
 	GetUserByEmail(ctx context.Context, lower string) (GetUserByEmailRow, error)
 	GetUserByID(ctx context.Context, id string) (GetUserByIDRow, error)
@@ -83,6 +84,7 @@ type Querier interface {
 	UpdateTask(ctx context.Context, arg UpdateTaskParams) error
 	UpdateTeamMemberRole(ctx context.Context, arg UpdateTeamMemberRoleParams) error
 	UpdateTeamName(ctx context.Context, arg UpdateTeamNameParams) error
+	UpdateTeamStateRevisionIfMatch(ctx context.Context, arg UpdateTeamStateRevisionIfMatchParams) (int64, error)
 	UpdateUserDisplayName(ctx context.Context, arg UpdateUserDisplayNameParams) error
 	UpdateUserNickname(ctx context.Context, arg UpdateUserNicknameParams) error
 	UpsertMonthlyPenaltySummary(ctx context.Context, arg UpsertMonthlyPenaltySummaryParams) error

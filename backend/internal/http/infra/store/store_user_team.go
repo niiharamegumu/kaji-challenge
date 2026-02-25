@@ -92,32 +92,41 @@ func (s *Store) GetMe(ctx context.Context, userID string) (api.MeResponse, error
 }
 
 func (s *Store) PatchMeNickname(ctx context.Context, userID string, req api.UpdateNicknameRequest) (api.UpdateNicknameResponse, error) {
+	teamID, err := s.primaryTeamLocked(ctx, userID)
+	if err != nil {
+		return api.UpdateNicknameResponse{}, err
+	}
 	nickname, err := normalizeNickname(req.Nickname)
 	if err != nil {
 		return api.UpdateNicknameResponse{}, err
 	}
-	if err := s.q.UpdateUserNickname(ctx, dbsqlc.UpdateUserNicknameParams{ID: userID, Column2: nickname}); err != nil {
+	var res api.UpdateNicknameResponse
+	if _, err := s.runWithTeamRevisionCAS(
+		ctx,
+		teamID,
+		"team_member",
+		map[string]string{"userId": userID, "action": "nickname_update"},
+		func(_ context.Context, qtx *dbsqlc.Queries) error {
+			if err := qtx.UpdateUserNickname(ctx, dbsqlc.UpdateUserNicknameParams{ID: userID, Column2: nickname}); err != nil {
+				return err
+			}
+			row, err := qtx.GetUserByID(ctx, userID)
+			if err != nil {
+				return err
+			}
+			res = api.UpdateNicknameResponse{
+				Nickname:      nickname,
+				EffectiveName: effectiveName(row.DisplayName, row.Nickname),
+			}
+			return nil
+		},
+	); err != nil {
 		return api.UpdateNicknameResponse{}, err
 	}
-	row, err := s.q.GetUserByID(ctx, userID)
-	if err != nil {
-		return api.UpdateNicknameResponse{}, err
-	}
-	return api.UpdateNicknameResponse{
-		Nickname:      nickname,
-		EffectiveName: effectiveName(row.DisplayName, row.Nickname),
-	}, nil
+	return res, nil
 }
 
 func (s *Store) CreateInvite(ctx context.Context, userID string, req api.CreateInviteRequest) (api.InviteCodeResponse, error) {
-	membership, err := s.primaryMembershipLocked(ctx, userID)
-	if err != nil {
-		return api.InviteCodeResponse{}, err
-	}
-	if membership.Role != string(api.TeamMembershipRoleOwner) {
-		return api.InviteCodeResponse{}, errors.New("forbidden: owner role required")
-	}
-
 	expiresInHours := 72
 	if req.ExpiresInHours != nil {
 		expiresInHours = *req.ExpiresInHours
@@ -129,28 +138,35 @@ func (s *Store) CreateInvite(ctx context.Context, userID string, req api.CreateI
 	}
 	code := strings.ToUpper(raw[:10])
 	expiresAt := time.Now().In(s.loc).Add(time.Duration(expiresInHours) * time.Hour)
-	tx, err := s.db.Begin(ctx)
+	membership, err := s.primaryMembershipLocked(ctx, userID)
 	if err != nil {
 		return api.InviteCodeResponse{}, err
 	}
-	defer func() {
-		_ = tx.Rollback(ctx)
-	}()
-	qtx := s.q.WithTx(tx)
-	if err := qtx.DeleteInviteCodesByTeamID(ctx, membership.TeamID); err != nil {
+	if _, err := s.runWithTeamRevisionCAS(
+		ctx,
+		membership.TeamID,
+		"invite",
+		map[string]string{"action": "create"},
+		func(txCtx context.Context, qtx *dbsqlc.Queries) error {
+			m, err := s.primaryMembershipLocked(txCtx, userID)
+			if err != nil {
+				return err
+			}
+			if m.Role != string(api.TeamMembershipRoleOwner) {
+				return errors.New("forbidden: owner role required")
+			}
+			if err := qtx.DeleteInviteCodesByTeamID(txCtx, m.TeamID); err != nil {
+				return err
+			}
+			return qtx.CreateInviteCode(txCtx, dbsqlc.CreateInviteCodeParams{
+				Code:      code,
+				TeamID:    m.TeamID,
+				ExpiresAt: toPgTimestamptz(expiresAt),
+			})
+		},
+	); err != nil {
 		return api.InviteCodeResponse{}, err
 	}
-	if err := qtx.CreateInviteCode(ctx, dbsqlc.CreateInviteCodeParams{
-		Code:      code,
-		TeamID:    membership.TeamID,
-		ExpiresAt: toPgTimestamptz(expiresAt),
-	}); err != nil {
-		return api.InviteCodeResponse{}, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return api.InviteCodeResponse{}, err
-	}
-
 	return api.InviteCodeResponse{
 		Code:      code,
 		TeamId:    membership.TeamID,
@@ -186,7 +202,15 @@ func (s *Store) PatchTeamCurrent(ctx context.Context, userID string, req api.Upd
 	if err != nil {
 		return api.TeamInfoResponse{}, err
 	}
-	if err := s.q.UpdateTeamName(ctx, dbsqlc.UpdateTeamNameParams{ID: membership.TeamID, Name: teamName}); err != nil {
+	if _, err := s.runWithTeamRevisionCAS(
+		ctx,
+		membership.TeamID,
+		"team_state",
+		map[string]string{"action": "rename"},
+		func(_ context.Context, qtx *dbsqlc.Queries) error {
+			return qtx.UpdateTeamName(ctx, dbsqlc.UpdateTeamNameParams{ID: membership.TeamID, Name: teamName})
+		},
+	); err != nil {
 		return api.TeamInfoResponse{}, err
 	}
 	return api.TeamInfoResponse{TeamId: membership.TeamID, Name: teamName}, nil
@@ -240,6 +264,11 @@ func (s *Store) JoinTeam(ctx context.Context, userID, code string) (api.JoinTeam
 	if err != nil {
 		return api.JoinTeamResponse{}, err
 	}
+	if len(memberships) > 0 {
+		if err := s.verifyIfMatchAgainstTeam(ctx, memberships[0].TeamID, true); err != nil {
+			return api.JoinTeamResponse{}, err
+		}
+	}
 
 	for _, m := range memberships {
 		if m.TeamID == invite.TeamID {
@@ -280,6 +309,10 @@ func (s *Store) JoinTeam(ctx context.Context, userID, code string) (api.JoinTeam
 	if err := tx.Commit(ctx); err != nil {
 		return api.JoinTeamResponse{}, err
 	}
+	if len(memberships) > 0 && memberships[0].TeamID != invite.TeamID {
+		_, _ = s.bumpTeamRevisionBestEffort(ctx, memberships[0].TeamID, "team_member", map[string]string{"action": "leave"})
+	}
+	_, _ = s.bumpTeamRevisionBestEffort(ctx, invite.TeamID, "team_member", map[string]string{"action": "join"})
 	return api.JoinTeamResponse{TeamId: invite.TeamID}, nil
 }
 
@@ -292,12 +325,16 @@ func (s *Store) PostTeamLeave(ctx context.Context, userID string) (api.JoinTeamR
 		return api.JoinTeamResponse{}, errors.New("user has no team membership")
 	}
 	current := memberships[0]
+	if err := s.verifyIfMatchAgainstTeam(ctx, current.TeamID, true); err != nil {
+		return api.JoinTeamResponse{}, err
+	}
 	user, err := s.q.GetUserByID(ctx, userID)
 	if err != nil {
 		return api.JoinTeamResponse{}, err
 	}
 
 	now := time.Now().In(s.loc)
+	newTeamID := s.nextID("team")
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return api.JoinTeamResponse{}, err
@@ -317,7 +354,6 @@ func (s *Store) PostTeamLeave(ctx context.Context, userID string) (api.JoinTeamR
 		}
 	}
 
-	newTeamID := s.nextID("team")
 	if err := qtx.CreateTeam(ctx, dbsqlc.CreateTeamParams{
 		ID:        newTeamID,
 		Name:      defaultOwnTeamName(effectiveName(user.DisplayName, user.Nickname)),
@@ -337,6 +373,8 @@ func (s *Store) PostTeamLeave(ctx context.Context, userID string) (api.JoinTeamR
 	if err := tx.Commit(ctx); err != nil {
 		return api.JoinTeamResponse{}, err
 	}
+	_, _ = s.bumpTeamRevisionBestEffort(ctx, current.TeamID, "team_member", map[string]string{"action": "leave"})
+	_, _ = s.bumpTeamRevisionBestEffort(ctx, newTeamID, "team_member", map[string]string{"action": "join"})
 	return api.JoinTeamResponse{TeamId: newTeamID}, nil
 }
 
@@ -376,7 +414,7 @@ func (s *Store) primaryTeamLocked(ctx context.Context, userID string) (string, e
 }
 
 func (s *Store) primaryMembershipLocked(ctx context.Context, userID string) (dbsqlc.ListMembershipsByUserIDRow, error) {
-	list, err := s.q.ListMembershipsByUserID(ctx, userID)
+	list, err := s.queries(ctx).ListMembershipsByUserID(ctx, userID)
 	if err != nil {
 		return dbsqlc.ListMembershipsByUserIDRow{}, err
 	}

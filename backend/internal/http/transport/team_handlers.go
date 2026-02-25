@@ -17,6 +17,7 @@ func (h *Handler) GetMe(c *gin.Context) {
 		writeAppError(c, err, http.StatusUnauthorized)
 		return
 	}
+	h.writeTeamETag(c, userID)
 	c.JSON(http.StatusOK, res)
 }
 
@@ -25,6 +26,7 @@ func (h *Handler) PatchMeNickname(c *gin.Context) {
 	if !ok {
 		return
 	}
+	injectIfMatchContext(c)
 	req, ok := bindJSON[api.UpdateNicknameRequest](c)
 	if !ok {
 		return
@@ -42,6 +44,7 @@ func (h *Handler) PostTeamInvite(c *gin.Context) {
 	if !ok {
 		return
 	}
+	injectIfMatchContext(c)
 	var req api.CreateInviteRequest
 	if c.Request.ContentLength > 0 {
 		v, ok := bindJSON[api.CreateInviteRequest](c)
@@ -68,6 +71,7 @@ func (h *Handler) GetTeamCurrentInvite(c *gin.Context) {
 		writeAppError(c, err, http.StatusNotFound)
 		return
 	}
+	h.writeTeamETag(c, userID)
 	c.JSON(http.StatusOK, invite)
 }
 
@@ -76,6 +80,7 @@ func (h *Handler) PatchTeamCurrent(c *gin.Context) {
 	if !ok {
 		return
 	}
+	injectIfMatchContext(c)
 	req, ok := bindJSON[api.UpdateCurrentTeamRequest](c)
 	if !ok {
 		return
@@ -98,6 +103,7 @@ func (h *Handler) GetTeamCurrentMembers(c *gin.Context) {
 		writeAppError(c, err, http.StatusBadRequest)
 		return
 	}
+	h.writeTeamETag(c, userID)
 	c.JSON(http.StatusOK, res)
 }
 
@@ -106,6 +112,7 @@ func (h *Handler) PostTeamJoin(c *gin.Context) {
 	if !ok {
 		return
 	}
+	injectIfMatchContext(c)
 	req, ok := bindJSON[api.JoinTeamRequest](c)
 	if !ok {
 		return
@@ -123,6 +130,7 @@ func (h *Handler) PostTeamLeave(c *gin.Context) {
 	if !ok {
 		return
 	}
+	injectIfMatchContext(c)
 	res, err := h.services.Team.PostTeamLeave(c.Request.Context(), userID)
 	if err != nil {
 		writeAppError(c, err, http.StatusBadRequest)

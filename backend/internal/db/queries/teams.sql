@@ -63,3 +63,15 @@ WHERE EXISTS (
   WHERE tm.team_id = t.id
 )
 ORDER BY t.created_at ASC, t.id ASC;
+
+-- name: GetTeamStateRevision :one
+SELECT state_revision
+FROM teams
+WHERE id = $1;
+
+-- name: UpdateTeamStateRevisionIfMatch :one
+UPDATE teams
+SET state_revision = state_revision + 1
+WHERE id = $1
+  AND state_revision = $2
+RETURNING state_revision;

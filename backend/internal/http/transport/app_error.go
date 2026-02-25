@@ -35,6 +35,23 @@ func writeAppError(c *gin.Context, err error, defaultStatus int) {
 	if err == nil {
 		return
 	}
+	var preconditionRequiredErr *application.PreconditionRequiredError
+	if errors.As(err, &preconditionRequiredErr) {
+		c.JSON(http.StatusPreconditionRequired, gin.H{
+			"code":    "precondition_required",
+			"message": preconditionRequiredErr.Error(),
+		})
+		return
+	}
+	var preconditionErr *application.PreconditionError
+	if errors.As(err, &preconditionErr) {
+		c.JSON(http.StatusPreconditionFailed, gin.H{
+			"code":        "precondition_failed",
+			"message":     preconditionErr.Error(),
+			"currentEtag": preconditionErr.CurrentETag,
+		})
+		return
+	}
 	var appErr *AppError
 	if errors.As(err, &appErr) {
 		writeError(c, appErr.Status, appErr.Message)
@@ -55,6 +72,10 @@ func mapErrorStatus(err error, defaultStatus int) int {
 		return http.StatusBadRequest
 	case errors.Is(err, application.ErrConflict):
 		return http.StatusConflict
+	case errors.Is(err, application.ErrPreconditionRequired):
+		return http.StatusPreconditionRequired
+	case errors.Is(err, application.ErrPrecondition):
+		return http.StatusPreconditionFailed
 	case errors.Is(err, application.ErrInternal):
 		return http.StatusInternalServerError
 	default:
