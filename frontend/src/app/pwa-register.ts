@@ -2,7 +2,6 @@ import { notifyPWARefresh } from "./pwa";
 
 const SW_URL = "/sw.js";
 const REFRESH_EVENT = "controllerchange";
-const UPDATE_CHECK_INTERVAL_MS = 60_000;
 
 const applyWaitingWorkerUpdate = async (
   registration: ServiceWorkerRegistration,
@@ -29,8 +28,6 @@ const applyWaitingWorkerUpdate = async (
 };
 
 const bindRegistrationListeners = (registration: ServiceWorkerRegistration) => {
-  let intervalID: number | null = null;
-
   const notifyIfWaiting = () => {
     if (registration.waiting) {
       notifyPWARefresh(() => applyWaitingWorkerUpdate(registration));
@@ -38,26 +35,9 @@ const bindRegistrationListeners = (registration: ServiceWorkerRegistration) => {
   };
 
   const checkForUpdates = () => {
-    void registration.update();
-  };
-
-  const startIntervalCheck = () => {
-    if (intervalID != null) {
-      return;
-    }
-    intervalID = window.setInterval(() => {
-      if (document.visibilityState === "visible") {
-        checkForUpdates();
-      }
-    }, UPDATE_CHECK_INTERVAL_MS);
-  };
-
-  const stopIntervalCheck = () => {
-    if (intervalID == null) {
-      return;
-    }
-    window.clearInterval(intervalID);
-    intervalID = null;
+    void registration.update().catch(() => {
+      // Offline or transient network failures are expected here.
+    });
   };
 
   notifyIfWaiting();
@@ -80,16 +60,11 @@ const bindRegistrationListeners = (registration: ServiceWorkerRegistration) => {
   });
 
   window.addEventListener("focus", checkForUpdates);
-  window.addEventListener("pageshow", checkForUpdates);
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") {
-      startIntervalCheck();
       checkForUpdates();
-      return;
     }
-    stopIntervalCheck();
   });
-  startIntervalCheck();
 };
 
 export const initializePWA = () => {
