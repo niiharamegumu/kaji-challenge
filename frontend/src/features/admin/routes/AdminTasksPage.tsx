@@ -3,6 +3,7 @@ import { useAtom, useAtomValue } from "jotai";
 import {
   type CreateTaskRequest,
   TaskType as TaskTypeConst,
+  type UpdateTaskRequest,
 } from "../../../lib/api/generated/client";
 import { isLoggedInAtom } from "../../../state/session";
 import { statusMessageAtom } from "../../shell/state/status";
@@ -17,7 +18,7 @@ export function AdminTasksPage() {
 
   const [taskForm, setTaskForm] = useAtom(taskFormAtom);
   const [, setStatus] = useAtom(statusMessageAtom);
-  const { createTask, removeTask } = useTaskMutations(setStatus);
+  const { createTask, removeTask, updateTask } = useTaskMutations(setStatus);
 
   const handleCreateTask = async () => {
     const payload: CreateTaskRequest = {
@@ -33,6 +34,13 @@ export function AdminTasksPage() {
     await createTask.mutateAsync(payload);
   };
 
+  const handleUpdateTask = async (
+    taskId: string,
+    payload: UpdateTaskRequest,
+  ) => {
+    await updateTask.mutateAsync({ taskId, payload });
+  };
+
   return (
     <section className="mt-3 w-full pb-2 md:mt-4">
       <TaskManager
@@ -44,6 +52,9 @@ export function AdminTasksPage() {
         }}
         onDelete={(taskId) => {
           void removeTask.mutateAsync(taskId);
+        }}
+        onUpdate={(taskId, payload) => {
+          void handleUpdateTask(taskId, payload);
         }}
       />
     </section>
