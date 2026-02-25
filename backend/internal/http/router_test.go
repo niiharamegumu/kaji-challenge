@@ -851,6 +851,8 @@ func TestWeeklyTaskIncrementIsAtomicUnderConcurrency(t *testing.T) {
 	req := `{"targetDate":"` + today + `","action":"increment"}`
 
 	start := make(chan struct{})
+	successCh := make(chan struct{}, workers)
+	preconditionCh := make(chan struct{}, workers)
 	errCh := make(chan string, workers)
 	var wg sync.WaitGroup
 	for i := 0; i < workers; i++ {
@@ -859,9 +861,13 @@ func TestWeeklyTaskIncrementIsAtomicUnderConcurrency(t *testing.T) {
 			defer wg.Done()
 			<-start
 			res := doRequest(t, r, http.MethodPost, "/v1/tasks/"+task.Id+"/completions/toggle", req, token)
-			if res.Code != http.StatusOK {
+			switch res.Code {
+			case http.StatusOK:
+				successCh <- struct{}{}
+			case http.StatusPreconditionFailed:
+				preconditionCh <- struct{}{}
+			default:
 				errCh <- "increment request failed"
-				return
 			}
 		}()
 	}
@@ -870,6 +876,16 @@ func TestWeeklyTaskIncrementIsAtomicUnderConcurrency(t *testing.T) {
 	close(errCh)
 	for msg := range errCh {
 		t.Fatal(msg)
+	}
+	close(successCh)
+	close(preconditionCh)
+	successCount := len(successCh)
+	preconditionCount := len(preconditionCh)
+	if successCount == 0 {
+		t.Fatalf("expected at least one successful increment")
+	}
+	if preconditionCount == 0 {
+		t.Fatalf("expected some precondition failures under concurrent stale writes")
 	}
 
 	overviewRes := doRequest(t, r, http.MethodGet, "/v1/tasks/overview", "", token)
@@ -883,8 +899,8 @@ func TestWeeklyTaskIncrementIsAtomicUnderConcurrency(t *testing.T) {
 
 	for _, item := range overview.WeeklyTasks {
 		if item.Task.Id == task.Id {
-			if item.WeekCompletedCount != workers {
-				t.Fatalf("expected weekly count %d, got %d", workers, item.WeekCompletedCount)
+			if item.WeekCompletedCount != successCount {
+				t.Fatalf("expected weekly count %d, got %d", successCount, item.WeekCompletedCount)
 			}
 			return
 		}
@@ -944,6 +960,28 @@ func TestWriteRejectsIfMatchMismatch(t *testing.T) {
 	}
 	if strings.TrimSpace(body["currentEtag"]) == "" {
 		t.Fatalf("expected currentEtag in response")
+	}
+}
+
+func TestWriteRejectsMissingIfMatch(t *testing.T) {
+	r := newTestRouter(t)
+	token := login(t, r)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/tasks", strings.NewReader(`{"title":"掃除","type":"daily","penaltyPoints":2}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", "http://localhost:5173")
+	req.AddCookie(&http.Cookie{Name: "kaji_session", Value: token})
+	res := httptest.NewRecorder()
+	r.ServeHTTP(res, req)
+	if res.Code != http.StatusPreconditionRequired {
+		t.Fatalf("expected 428, got %d: %s", res.Code, res.Body.String())
+	}
+	var body map[string]string
+	if err := json.Unmarshal(res.Body.Bytes(), &body); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	if body["code"] != "precondition_required" {
+		t.Fatalf("expected precondition_required code, got %q", body["code"])
 	}
 }
 
@@ -1108,10 +1146,27 @@ func doRequest(t *testing.T, r http.Handler, method, path, body, sessionCookie s
 	}
 	if method == http.MethodPost || method == http.MethodPut || method == http.MethodPatch || method == http.MethodDelete {
 		req.Header.Set("Origin", "http://localhost:5173")
+		if sessionCookie != "" && !strings.HasPrefix(path, "/v1/auth/") {
+			if etag := fetchLatestETag(t, r, sessionCookie); etag != "" {
+				req.Header.Set("If-Match", etag)
+			}
+		}
 	}
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
 	return res
+}
+
+func fetchLatestETag(t *testing.T, r http.Handler, sessionCookie string) string {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, "/v1/me", nil)
+	req.AddCookie(&http.Cookie{Name: "kaji_session", Value: sessionCookie})
+	res := httptest.NewRecorder()
+	r.ServeHTTP(res, req)
+	if res.Code != http.StatusOK {
+		return ""
+	}
+	return strings.TrimSpace(res.Header().Get("ETag"))
 }
 
 func expireSessionForTest(t *testing.T, rawToken string) {

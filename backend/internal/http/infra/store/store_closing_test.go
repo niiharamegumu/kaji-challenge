@@ -85,7 +85,7 @@ func TestCloseWeekAndMonthForTeam(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CloseMonthForTeam failed: %v", err)
 	}
-	monthResUser, err := s.CloseMonthForUser(ctx, userID)
+	monthResUser, err := s.CloseMonthForUser(withLatestIfMatchForUser(t, s, ctx, userID), userID)
 	if err != nil {
 		t.Fatalf("CloseMonthForUser failed: %v", err)
 	}
@@ -123,6 +123,19 @@ func TestCatchUpDayLockedProcessesMissingDays(t *testing.T) {
 	if jan.DailyPenaltyTotal != 8 {
 		t.Fatalf("expected daily total=8 after catch-up, got %d", jan.DailyPenaltyTotal)
 	}
+}
+
+func withLatestIfMatchForUser(t *testing.T, s *Store, ctx context.Context, userID string) context.Context {
+	t.Helper()
+	teamID, err := s.primaryTeamLocked(ctx, userID)
+	if err != nil {
+		t.Fatalf("failed to load team for user: %v", err)
+	}
+	revision, err := s.q.GetTeamStateRevision(ctx, teamID)
+	if err != nil {
+		t.Fatalf("failed to load state revision: %v", err)
+	}
+	return NewIfMatchContext(ctx, etagFromRevision(teamID, revision))
 }
 
 func TestCatchUpDayLockedUsesTargetTimeTaskSnapshot(t *testing.T) {
