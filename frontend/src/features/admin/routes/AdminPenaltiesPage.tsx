@@ -1,7 +1,10 @@
 import { useAtom, useAtomValue } from "jotai";
 import { useMemo } from "react";
 
-import type { CreatePenaltyRuleRequest } from "../../../lib/api/generated/client";
+import type {
+  CreatePenaltyRuleRequest,
+  UpdatePenaltyRuleRequest,
+} from "../../../lib/api/generated/client";
 import { isLoggedInAtom } from "../../../state/session";
 import { statusMessageAtom } from "../../shell/state/status";
 import { PenaltyRuleManager } from "../components/PenaltyRuleManager";
@@ -19,7 +22,8 @@ export function AdminPenaltiesPage() {
 
   const [ruleForm, setRuleForm] = useAtom(ruleFormAtom);
   const [, setStatus] = useAtom(statusMessageAtom);
-  const { createRule, removeRule } = usePenaltyRuleMutations(setStatus);
+  const { createRule, removeRule, updateRule } =
+    usePenaltyRuleMutations(setStatus);
 
   const handleCreateRule = async () => {
     const payload: CreatePenaltyRuleRequest = {
@@ -29,8 +33,15 @@ export function AdminPenaltiesPage() {
     await createRule.mutateAsync(payload);
   };
 
+  const handleUpdateRule = async (
+    ruleId: string,
+    payload: UpdatePenaltyRuleRequest,
+  ) => {
+    await updateRule.mutateAsync({ ruleId, payload });
+  };
+
   return (
-    <section className="mt-3 w-full pb-2 md:mt-4">
+    <section className="mt-2 w-full pb-1 md:mt-4">
       <PenaltyRuleManager
         form={ruleForm}
         rules={activeRules}
@@ -40,6 +51,9 @@ export function AdminPenaltiesPage() {
         }}
         onDelete={(ruleId) => {
           void removeRule.mutateAsync(ruleId);
+        }}
+        onUpdate={(ruleId, payload) => {
+          void handleUpdateRule(ruleId, payload);
         }}
       />
     </section>

@@ -35,7 +35,7 @@ export function StatusToast({ message, onDismiss }: Props) {
 
   return (
     <output
-      className="fixed right-3 bottom-[calc(env(safe-area-inset-bottom)+6.5rem)] z-50 w-[min(80vw,22rem)] md:top-4 md:right-4 md:bottom-auto md:w-[22rem]"
+      className="fixed right-3 bottom-[calc(env(safe-area-inset-bottom)+6rem)] z-50 w-[min(80vw,22rem)] md:top-4 md:right-4 md:bottom-auto md:w-[22rem]"
       aria-live="polite"
       data-testid="status-message"
       onMouseEnter={() => setIsHovered(true)}
@@ -45,7 +45,7 @@ export function StatusToast({ message, onDismiss }: Props) {
       onPointerCancel={() => setIsPressing(false)}
       onPointerLeave={() => setIsPressing(false)}
     >
-      <div className="flex items-center gap-2 rounded-lg border border-stone-200 bg-white/95 px-2.5 py-2 text-stone-800 shadow-md backdrop-blur">
+      <div className="flex items-center gap-2 rounded-lg border border-stone-200 bg-white/95 px-2.5 py-1.5 text-stone-800 shadow-md backdrop-blur">
         <CircleAlert size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
         <p className="min-w-0 flex-1 text-xs leading-5 break-words">
           {message}

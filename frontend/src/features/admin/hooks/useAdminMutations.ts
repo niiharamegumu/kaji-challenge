@@ -4,9 +4,13 @@ import {
   type CreatePenaltyRuleRequest,
   type CreateTaskRequest,
   type InviteCodeResponse,
+  type UpdatePenaltyRuleRequest,
+  type UpdateTaskRequest,
   deletePenaltyRule,
   deleteTask,
   patchMeNickname,
+  patchPenaltyRule,
+  patchTask,
   patchTeamCurrent,
   postPenaltyRule,
   postTask,
@@ -78,7 +82,24 @@ export function useTaskMutations(setStatus: StatusSetter) {
     },
   });
 
-  return { createTask, removeTask };
+  const updateTask = useMutation({
+    mutationFn: async ({
+      taskId,
+      payload,
+    }: {
+      taskId: string;
+      payload: UpdateTaskRequest;
+    }) => patchTask(taskId, payload),
+    onSuccess: async () => {
+      setStatus("タスクを更新しました");
+      await invalidate();
+    },
+    onError: (error) => {
+      setStatus(`タスク更新に失敗しました: ${formatError(error)}`);
+    },
+  });
+
+  return { createTask, removeTask, updateTask };
 }
 
 export function usePenaltyRuleMutations(setStatus: StatusSetter) {
@@ -116,7 +137,27 @@ export function usePenaltyRuleMutations(setStatus: StatusSetter) {
     },
   });
 
-  return { createRule, removeRule };
+  const updateRule = useMutation({
+    mutationFn: async ({
+      ruleId,
+      payload,
+    }: {
+      ruleId: string;
+      payload: UpdatePenaltyRuleRequest;
+    }) => patchPenaltyRule(ruleId, payload),
+    onSuccess: async () => {
+      setStatus("ルールを更新しました");
+      await Promise.all([
+        invalidate(),
+        queryClient.invalidateQueries({ queryKey: queryKeys.monthlySummary }),
+      ]);
+    },
+    onError: (error) => {
+      setStatus(`ルール更新に失敗しました: ${formatError(error)}`);
+    },
+  });
+
+  return { createRule, removeRule, updateRule };
 }
 
 export function useInviteMutations(setStatus: StatusSetter) {

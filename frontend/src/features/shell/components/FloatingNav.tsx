@@ -63,19 +63,19 @@ export function FloatingNav({ currentUserName, onLogout }: Props) {
         style={{ bottom: "calc(env(safe-area-inset-bottom) + 1rem)" }}
       >
         <div
-          className={`origin-bottom rounded-2xl border border-stone-200 bg-white/95 p-3 shadow-xl backdrop-blur transition-all duration-200 motion-reduce:transition-none ${
+          className={`origin-bottom rounded-2xl border border-stone-200 bg-white/95 p-2.5 shadow-xl backdrop-blur transition-all duration-200 motion-reduce:transition-none ${
             open
               ? "pointer-events-auto translate-y-0 opacity-100"
               : "pointer-events-none translate-y-2 opacity-0"
           }`}
         >
-          <div className="mb-2 flex justify-start">
+          <div className="mb-1.5 flex justify-start">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-stone-100 px-3 py-1 text-xs text-stone-700">
               <UserCircle2 size={14} aria-hidden="true" />
               {currentUserName}
             </span>
           </div>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
             <NavLink to="/" end className={linkClass}>
               <House size={18} aria-hidden="true" />
               <span>ホーム</span>
@@ -108,10 +108,10 @@ export function FloatingNav({ currentUserName, onLogout }: Props) {
           </div>
         </div>
 
-        <div className="pointer-events-auto mt-2 flex justify-center">
+        <div className="pointer-events-auto mt-1.5 flex justify-center">
           <button
             type="button"
-            className="relative flex items-center justify-center rounded-full border border-stone-200 bg-white p-3 text-stone-900 shadow-lg transition-transform duration-200 motion-reduce:transition-none"
+            className="relative flex items-center justify-center rounded-full border border-stone-200 bg-white p-2.5 text-stone-900 shadow-lg transition-transform duration-200 motion-reduce:transition-none"
             onClick={() => setOpen((prev) => !prev)}
             aria-expanded={open}
             aria-label={

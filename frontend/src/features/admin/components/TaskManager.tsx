@@ -1,11 +1,12 @@
-import { ChevronDown, CirclePlus, Trash2 } from "lucide-react";
+import { ChevronDown, CirclePlus, Pencil, Trash2, X } from "lucide-react";
 import type { ChangeEvent } from "react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import {
   type Task,
   type TaskType,
   TaskType as TaskTypeConst,
+  type UpdateTaskRequest,
 } from "../../../lib/api/generated/client";
 import type { TaskFormState } from "../state/forms";
 
@@ -18,6 +19,12 @@ type Props = {
   onFormChange: (updater: (prev: TaskFormState) => TaskFormState) => void;
   onCreate: () => void;
   onDelete: (taskId: string) => void;
+  onUpdate: (taskId: string, payload: UpdateTaskRequest) => Promise<void>;
+};
+
+type EditTaskState = {
+  title: string;
+  notes: string;
 };
 
 export function TaskManager({
@@ -26,7 +33,14 @@ export function TaskManager({
   onFormChange,
   onCreate,
   onDelete,
+  onUpdate,
 }: Props) {
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [editState, setEditState] = useState<EditTaskState>({
+    title: "",
+    notes: "",
+  });
+
   const handleChange =
     (key: keyof TaskFormState) =>
     (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -42,10 +56,136 @@ export function TaskManager({
     [tasks],
   );
 
+  const startEdit = (task: Task) => {
+    setEditingTaskId(task.id);
+    setEditState({
+      title: task.title,
+      notes: task.notes ?? "",
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingTaskId(null);
+    setEditState({ title: "", notes: "" });
+  };
+
+  const saveEdit = async (taskId: string) => {
+    const title = editState.title.trim();
+    if (title.length === 0) {
+      return;
+    }
+    await onUpdate(taskId, {
+      title,
+      notes: editState.notes,
+    });
+    cancelEdit();
+  };
+
+  const renderTaskCard = (task: Task, weekly: boolean) => {
+    const isEditing = editingTaskId === task.id;
+    const canSave = editState.title.trim().length > 0;
+
+    return (
+      <li
+        key={task.id}
+        className="rounded-xl border border-stone-200 bg-white p-2.5"
+      >
+        {isEditing ? (
+          <div className="grid gap-2">
+            <label
+              className="text-xs text-stone-700"
+              htmlFor={`task-edit-title-${task.id}`}
+            >
+              タイトル
+            </label>
+            <input
+              id={`task-edit-title-${task.id}`}
+              className="min-h-11 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm"
+              value={editState.title}
+              onChange={(event) =>
+                setEditState((prev) => ({ ...prev, title: event.target.value }))
+              }
+            />
+            <label
+              className="text-xs text-stone-700"
+              htmlFor={`task-edit-notes-${task.id}`}
+            >
+              メモ
+            </label>
+            <input
+              id={`task-edit-notes-${task.id}`}
+              className="min-h-11 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm"
+              value={editState.notes}
+              onChange={(event) =>
+                setEditState((prev) => ({ ...prev, notes: event.target.value }))
+              }
+            />
+          </div>
+        ) : (
+          <>
+            <div className="font-medium text-stone-900">{task.title}</div>
+            {task.notes != null && task.notes !== "" ? (
+              <div className="mt-1 whitespace-pre-wrap break-words text-xs text-stone-600">
+                {task.notes}
+              </div>
+            ) : null}
+          </>
+        )}
+
+        <div className="mt-1 text-xs text-stone-600">
+          {taskTypeLabel(task.type)} / 減点 {task.penaltyPoints}
+          {weekly ? ` / 必要 ${task.requiredCompletionsPerWeek}回/週` : ""}
+        </div>
+
+        <div className="mt-2 flex flex-wrap gap-2">
+          {isEditing ? (
+            <>
+              <button
+                type="button"
+                className="flex min-h-11 items-center gap-1 rounded-lg border border-emerald-300 bg-white px-3 py-2 text-xs text-emerald-700 transition-colors duration-200 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => {
+                  void saveEdit(task.id);
+                }}
+                disabled={!canSave}
+              >
+                <span>保存</span>
+              </button>
+              <button
+                type="button"
+                className="flex min-h-11 items-center gap-1 rounded-lg border border-stone-300 bg-white px-3 py-2 text-xs text-stone-700 transition-colors duration-200 hover:bg-stone-100"
+                onClick={cancelEdit}
+              >
+                <X size={14} aria-hidden="true" />
+                <span>キャンセル</span>
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="flex min-h-11 items-center gap-1 rounded-lg border border-stone-300 bg-white px-3 py-2 text-xs text-stone-700 transition-colors duration-200 hover:bg-stone-100"
+              onClick={() => startEdit(task)}
+            >
+              <Pencil size={14} aria-hidden="true" />
+              <span>編集</span>
+            </button>
+          )}
+          <button
+            type="button"
+            className="flex min-h-11 items-center gap-1 rounded-lg border border-rose-300 bg-white px-3 py-2 text-xs text-rose-700 transition-colors duration-200 hover:bg-rose-50"
+            onClick={() => onDelete(task.id)}
+          >
+            <Trash2 size={14} aria-hidden="true" />
+            <span>削除</span>
+          </button>
+        </div>
+      </li>
+    );
+  };
+
   return (
-    <article className="animate-enter rounded-xl border border-stone-200 bg-white/90 p-3 shadow-sm md:rounded-2xl md:p-6">
+    <article className="animate-enter rounded-xl border border-stone-200 bg-white/90 p-2.5 shadow-sm md:rounded-2xl md:p-6">
       <h2 className="text-lg font-semibold">タスク管理</h2>
-      <div className="mt-4 grid gap-3">
+      <div className="mt-3 grid gap-2">
         <label className="text-sm text-stone-700" htmlFor="task-title">
           タスク名
         </label>
@@ -136,7 +276,7 @@ export function TaskManager({
           </button>
         </div>
       </div>
-      <div className="mt-6 border-t border-stone-200 pt-5">
+      <div className="mt-4 border-t border-stone-200 pt-3">
         <div>
           <h3 className="text-base font-semibold">毎日</h3>
           {dailyTasks.length === 0 ? (
@@ -144,72 +284,21 @@ export function TaskManager({
               日次タスクはまだありません。
             </p>
           ) : (
-            <ul className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {dailyTasks.map((task) => (
-                <li
-                  key={task.id}
-                  className="rounded-xl border border-stone-200 bg-white p-3"
-                >
-                  <div className="font-medium text-stone-900">{task.title}</div>
-                  {task.notes != null && task.notes !== "" ? (
-                    <div className="mt-1 whitespace-pre-wrap break-words text-xs text-stone-600">
-                      {task.notes}
-                    </div>
-                  ) : null}
-                  <div className="mt-1 text-xs text-stone-600">
-                    {taskTypeLabel(task.type)} / 減点 {task.penaltyPoints}
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      className="flex min-h-11 items-center gap-1 rounded-lg border border-rose-300 bg-white px-3 py-2 text-xs text-rose-700 transition-colors duration-200 hover:bg-rose-50"
-                      onClick={() => onDelete(task.id)}
-                    >
-                      <Trash2 size={14} aria-hidden="true" />
-                      <span>削除</span>
-                    </button>
-                  </div>
-                </li>
-              ))}
+            <ul className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+              {dailyTasks.map((task) => renderTaskCard(task, false))}
             </ul>
           )}
         </div>
 
-        <div className="mt-6">
+        <div className="mt-4">
           <h3 className="text-base font-semibold">週間</h3>
           {weeklyTasks.length === 0 ? (
             <p className="mt-2 text-sm text-stone-500">
               週次タスクはまだありません。
             </p>
           ) : (
-            <ul className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {weeklyTasks.map((task) => (
-                <li
-                  key={task.id}
-                  className="rounded-xl border border-stone-200 bg-white p-3"
-                >
-                  <div className="font-medium text-stone-900">{task.title}</div>
-                  {task.notes != null && task.notes !== "" ? (
-                    <div className="mt-1 whitespace-pre-wrap break-words text-xs text-stone-600">
-                      {task.notes}
-                    </div>
-                  ) : null}
-                  <div className="mt-1 text-xs text-stone-600">
-                    {taskTypeLabel(task.type)} / 減点 {task.penaltyPoints} /
-                    必要 {task.requiredCompletionsPerWeek}回/週
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      className="flex min-h-11 items-center gap-1 rounded-lg border border-rose-300 bg-white px-3 py-2 text-xs text-rose-700 transition-colors duration-200 hover:bg-rose-50"
-                      onClick={() => onDelete(task.id)}
-                    >
-                      <Trash2 size={14} aria-hidden="true" />
-                      <span>削除</span>
-                    </button>
-                  </div>
-                </li>
-              ))}
+            <ul className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+              {weeklyTasks.map((task) => renderTaskCard(task, true))}
             </ul>
           )}
         </div>

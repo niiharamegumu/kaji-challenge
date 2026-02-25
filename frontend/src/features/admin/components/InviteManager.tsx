@@ -95,17 +95,17 @@ export function InviteManager({
   };
 
   return (
-    <section className="space-y-3 pb-2 md:space-y-4">
-      <header className="py-1">
+    <section className="space-y-2 pb-1 md:space-y-4">
+      <header className="py-0.5">
         <h2 className="text-lg font-semibold text-stone-900">設定</h2>
         <p className="mt-1 text-sm text-stone-600">
           チーム設定とアカウント設定を管理できます。
         </p>
       </header>
 
-      <article className="rounded-xl border border-stone-200 bg-white/90 p-3 shadow-sm md:rounded-2xl md:p-6">
+      <article className="rounded-xl border border-stone-200 bg-white/90 p-2.5 shadow-sm md:rounded-2xl md:p-6">
         <h2 className="text-base font-semibold text-stone-900">チーム設定</h2>
-        <div className="mt-4 space-y-5">
+        <div className="mt-3 space-y-3">
           <TeamNameSection
             teamName={teamName}
             teamNameError={teamNameError}
@@ -114,7 +114,7 @@ export function InviteManager({
             onSaveTeamName={onSaveTeamName}
           />
 
-          <div className="border-t border-stone-200 pt-5">
+          <div className="border-t border-stone-200 pt-3">
             <TeamMembersSection
               members={members}
               isLeavingTeam={isLeavingTeam}
@@ -122,7 +122,7 @@ export function InviteManager({
             />
           </div>
 
-          <div className="border-t border-stone-200 pt-5">
+          <div className="border-t border-stone-200 pt-3">
             <InviteCodeIssueSection
               invite={invite}
               inviteExpired={inviteExpired}
@@ -135,7 +135,7 @@ export function InviteManager({
             />
           </div>
 
-          <div className="border-t border-stone-200 pt-5">
+          <div className="border-t border-stone-200 pt-3">
             <JoinTeamSection
               joinCode={joinCode}
               isJoiningTeam={isJoiningTeam}
@@ -146,11 +146,11 @@ export function InviteManager({
         </div>
       </article>
 
-      <article className="rounded-xl border border-stone-200 bg-white/90 p-3 shadow-sm md:rounded-2xl md:p-6">
+      <article className="rounded-xl border border-stone-200 bg-white/90 p-2.5 shadow-sm md:rounded-2xl md:p-6">
         <h2 className="text-base font-semibold text-stone-900">
           アカウント設定
         </h2>
-        <div className="mt-4">
+        <div className="mt-3">
           <AccountSettingsSection
             nickname={nickname}
             nicknameError={nicknameError}
