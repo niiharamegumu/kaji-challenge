@@ -97,7 +97,7 @@ describe("App", () => {
         ),
       ).toBeInTheDocument();
       expect(
-        screen.getByRole("img", { name: "KajiChalleのファビコン" }),
+        screen.getByRole("img", { name: "KajiChalleのアプリアイコン" }),
       ).toBeInTheDocument();
       expect(
         screen.getByRole("button", { name: "Googleでログイン" }),

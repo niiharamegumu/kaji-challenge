@@ -4,19 +4,32 @@ import { useEffect, useRef, useState } from "react";
 type Props = {
   message: string;
   onDismiss: () => void;
+  actionLabel?: string;
+  onAction?: () => void;
 };
 
-export function StatusToast({ message, onDismiss }: Props) {
+export function StatusToast({
+  message,
+  onDismiss,
+  actionLabel,
+  onAction,
+}: Props) {
   const [isHovered, setIsHovered] = useState(false);
   const [isPressing, setIsPressing] = useState(false);
   const onDismissRef = useRef(onDismiss);
+  const onActionRef = useRef(onAction);
+  const hasAction = actionLabel != null && onAction != null;
 
   useEffect(() => {
     onDismissRef.current = onDismiss;
   }, [onDismiss]);
 
   useEffect(() => {
-    if (!message || isHovered || isPressing) {
+    onActionRef.current = onAction;
+  }, [onAction]);
+
+  useEffect(() => {
+    if (!message || isHovered || isPressing || hasAction) {
       return;
     }
 
@@ -27,7 +40,7 @@ export function StatusToast({ message, onDismiss }: Props) {
     return () => {
       window.clearTimeout(timer);
     };
-  }, [isHovered, isPressing, message]);
+  }, [hasAction, isHovered, isPressing, message]);
 
   if (!message) {
     return null;
@@ -50,6 +63,15 @@ export function StatusToast({ message, onDismiss }: Props) {
         <p className="min-w-0 flex-1 text-xs leading-5 break-words">
           {message}
         </p>
+        {hasAction ? (
+          <button
+            type="button"
+            className="shrink-0 rounded-md bg-[color:var(--color-matcha-600)] px-2 py-1 text-xs font-medium text-white transition-colors duration-200 hover:bg-[color:var(--color-matcha-700)]"
+            onClick={() => onActionRef.current?.()}
+          >
+            {actionLabel}
+          </button>
+        ) : null}
         <button
           type="button"
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-stone-600 transition-colors duration-200 hover:bg-stone-50"
