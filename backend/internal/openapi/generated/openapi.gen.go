@@ -140,6 +140,7 @@ type MonthlyTaskStatusGroup struct {
 type MonthlyTaskStatusItem struct {
 	Completed     bool     `json:"completed"`
 	IsDeleted     bool     `json:"isDeleted"`
+	Notes         *string  `json:"notes,omitempty"`
 	PenaltyPoints int      `json:"penaltyPoints"`
 	TaskId        string   `json:"taskId"`
 	Title         string   `json:"title"`

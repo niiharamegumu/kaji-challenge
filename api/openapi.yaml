@@ -843,6 +843,9 @@ components:
           type: string
         title:
           type: string
+        notes:
+          type: string
+          maxLength: 500
         type:
           $ref: '#/components/schemas/TaskType'
         penaltyPoints:

@@ -117,14 +117,78 @@ func TestBuildMonthlyTaskStatusByDateWeeklyCrossMonthShownOnMonthStart(t *testin
 	}
 }
 
+func TestBuildMonthlyTaskStatusByDateIncludesNotes(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	base := time.Date(2026, 1, 1, 9, 0, 0, 0, s.loc)
+	teamID, _ := createTeamWithMember(t, s, "summary-notes@example.com", base)
+	notes := "食器を片付ける"
+	taskID := createTaskAtWithIDAndNotes(t, s, teamID, api.Daily, 2, 1, base, &notes)
+
+	groups, err := s.buildMonthlyTaskStatusByDate(ctx, teamID, "2026-01")
+	if err != nil {
+		t.Fatalf("buildMonthlyTaskStatusByDate failed: %v", err)
+	}
+
+	for _, group := range groups {
+		for _, item := range group.Items {
+			if item.TaskId != taskID {
+				continue
+			}
+			if item.Notes == nil || *item.Notes != notes {
+				t.Fatalf("expected notes to be propagated, got %#v", item.Notes)
+			}
+			return
+		}
+	}
+	t.Fatalf("task not found in monthly status groups")
+}
+
+func TestBuildMonthlyTaskStatusByDateLeavesNotesNilWhenEmpty(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	base := time.Date(2026, 1, 1, 9, 0, 0, 0, s.loc)
+	teamID, _ := createTeamWithMember(t, s, "summary-notes-empty@example.com", base)
+	taskID := createTaskAtWithID(t, s, teamID, api.Daily, 2, 1, base)
+
+	groups, err := s.buildMonthlyTaskStatusByDate(ctx, teamID, "2026-01")
+	if err != nil {
+		t.Fatalf("buildMonthlyTaskStatusByDate failed: %v", err)
+	}
+
+	for _, group := range groups {
+		for _, item := range group.Items {
+			if item.TaskId != taskID {
+				continue
+			}
+			if item.Notes != nil {
+				t.Fatalf("expected notes to be nil, got %#v", item.Notes)
+			}
+			return
+		}
+	}
+	t.Fatalf("task not found in monthly status groups")
+}
+
 func createTaskAtWithID(t *testing.T, s *Store, teamID string, taskType api.TaskType, penalty, required int, createdAt time.Time) string {
 	t.Helper()
+	return createTaskAtWithIDAndNotes(t, s, teamID, taskType, penalty, required, createdAt, nil)
+}
+
+func createTaskAtWithIDAndNotes(t *testing.T, s *Store, teamID string, taskType api.TaskType, penalty, required int, createdAt time.Time, notes *string) string {
+	t.Helper()
 	taskID := s.nextID("task")
+	notesValue := pgtype.Text{}
+	if notes != nil {
+		notesValue = pgtype.Text{String: *notes, Valid: true}
+	}
 	if err := s.q.CreateTask(context.Background(), dbsqlc.CreateTaskParams{
 		ID:                         taskID,
 		TeamID:                     teamID,
 		Title:                      "monthly status task",
-		Notes:                      pgtype.Text{},
+		Notes:                      notesValue,
 		Type:                       string(taskType),
 		PenaltyPoints:              int32(penalty),
 		Column7:                    "",
