@@ -7,7 +7,7 @@ type Props = {
 
 export function LoginCard({ status, onLogin }: Props) {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top,_var(--color-washi-50),_#fff,_var(--color-matcha-50))] px-2 py-4 text-stone-800 md:p-6">
+    <main className="ios-safe-main flex min-h-screen items-center justify-center bg-[color:var(--color-washi-50)] px-2 py-4 text-stone-800 md:p-6">
       <div className="mx-auto max-w-4xl rounded-xl border border-stone-200 bg-white/90 p-3 shadow-sm backdrop-blur animate-enter md:rounded-2xl md:p-8">
         <section className="mx-auto max-w-2xl">
           <div className="flex items-center justify-center gap-3 md:justify-start">
