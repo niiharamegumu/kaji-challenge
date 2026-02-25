@@ -19,9 +19,11 @@ import { AdminTasksPage } from "./AdminTasksPage";
 const mockPostTask = vi.fn();
 const mockPostPenaltyRule = vi.fn();
 const mockPatchTask = vi.fn();
+const mockDeleteTask = vi.fn();
 const mockListTasks = vi.fn();
 const mockListPenaltyRules = vi.fn();
 const mockPatchPenaltyRule = vi.fn();
+const mockDeletePenaltyRule = vi.fn();
 
 vi.mock("../../../lib/api/generated/client", async () => {
   const actual = await vi.importActual<object>(
@@ -34,10 +36,10 @@ vi.mock("../../../lib/api/generated/client", async () => {
     listPenaltyRules: (...args: unknown[]) => mockListPenaltyRules(...args),
     postTask: (...args: unknown[]) => mockPostTask(...args),
     patchTask: (...args: unknown[]) => mockPatchTask(...args),
-    deleteTask: vi.fn(),
+    deleteTask: (...args: unknown[]) => mockDeleteTask(...args),
     postPenaltyRule: (...args: unknown[]) => mockPostPenaltyRule(...args),
     patchPenaltyRule: (...args: unknown[]) => mockPatchPenaltyRule(...args),
-    deletePenaltyRule: vi.fn(),
+    deletePenaltyRule: (...args: unknown[]) => mockDeletePenaltyRule(...args),
     postTeamInvite: vi.fn().mockResolvedValue({ data: { code: "INVITE1" } }),
     postTeamJoin: vi.fn(),
   };
@@ -57,9 +59,11 @@ describe("AdminTasksPage", () => {
     mockPostTask.mockReset();
     mockPostPenaltyRule.mockReset();
     mockPatchTask.mockReset();
+    mockDeleteTask.mockReset();
     mockListTasks.mockReset();
     mockListPenaltyRules.mockReset();
     mockPatchPenaltyRule.mockReset();
+    mockDeletePenaltyRule.mockReset();
     mockListTasks.mockResolvedValue({ data: { items: [] } });
     mockListPenaltyRules.mockResolvedValue({ data: { items: [] } });
   });
@@ -315,6 +319,42 @@ describe("AdminTasksPage", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("deletes task only after confirming in modal", async () => {
+    mockListTasks.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: "task-del-1",
+            teamId: "team-1",
+            title: "誤タップ確認タスク",
+            notes: "",
+            type: "daily",
+            penaltyPoints: 1,
+            assigneeUserId: undefined,
+            requiredCompletionsPerWeek: 1,
+            createdAt: "2026-02-01T00:00:00Z",
+            updatedAt: "2026-02-01T00:00:00Z",
+          },
+        ],
+      },
+    });
+    mockDeleteTask.mockResolvedValue({ status: 204, data: {}, headers: {} });
+    const user = userEvent.setup();
+
+    renderPage();
+
+    await user.click(await screen.findByRole("button", { name: "削除" }));
+    expect(mockDeleteTask).not.toHaveBeenCalled();
+
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "削除する" }));
+
+    await waitFor(() => {
+      expect(mockDeleteTask).toHaveBeenCalledWith("task-del-1");
+    });
+  });
+
   it("starts editing penalty rule with current name and saves", async () => {
     mockListPenaltyRules.mockResolvedValue({
       data: {
@@ -439,6 +479,44 @@ describe("AdminTasksPage", () => {
     expect(
       within(displayCard).queryByLabelText("ルール名"),
     ).not.toBeInTheDocument();
+  });
+
+  it("deletes penalty rule only after confirming in modal", async () => {
+    mockListPenaltyRules.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: "rule-del-1",
+            teamId: "team-1",
+            threshold: 5,
+            name: "誤タップ確認ルール",
+            description: undefined,
+            deletedAt: null,
+            createdAt: "2026-02-01T00:00:00Z",
+            updatedAt: "2026-02-01T00:00:00Z",
+          },
+        ],
+      },
+    });
+    mockDeletePenaltyRule.mockResolvedValue({
+      status: 204,
+      data: {},
+      headers: {},
+    });
+    const user = userEvent.setup();
+
+    renderPenaltiesPage();
+
+    await user.click(await screen.findByRole("button", { name: "削除" }));
+    expect(mockDeletePenaltyRule).not.toHaveBeenCalled();
+
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "削除する" }));
+
+    await waitFor(() => {
+      expect(mockDeletePenaltyRule).toHaveBeenCalledWith("rule-del-1");
+    });
   });
 
   it("resets penalty rule form fields after creating rule", async () => {

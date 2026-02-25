@@ -8,6 +8,7 @@ import {
   type UpdateTaskRequest,
 } from "../../../lib/api/generated/client";
 import type { TaskFormState } from "../state/forms";
+import { DeleteConfirmModal } from "./DeleteConfirmModal";
 
 type Props = {
   form: TaskFormState;
@@ -23,6 +24,11 @@ type EditTaskState = {
   notes: string;
 };
 
+type PendingDeleteTask = {
+  id: string;
+  title: string;
+};
+
 export function TaskManager({
   form,
   tasks,
@@ -36,6 +42,8 @@ export function TaskManager({
     title: "",
     notes: "",
   });
+  const [pendingDeleteTask, setPendingDeleteTask] =
+    useState<PendingDeleteTask | null>(null);
 
   const handleChange =
     (key: keyof TaskFormState) =>
@@ -195,7 +203,9 @@ export function TaskManager({
               <button
                 type="button"
                 className="flex h-8 w-8 items-center justify-center rounded-md border border-rose-300 bg-white text-rose-700 transition-colors duration-200 hover:bg-rose-50 sm:h-9 sm:w-9"
-                onClick={() => onDelete(task.id)}
+                onClick={() =>
+                  setPendingDeleteTask({ id: task.id, title: task.title })
+                }
               >
                 <Trash2 size={14} aria-hidden="true" />
                 <span className="sr-only">削除</span>
@@ -335,6 +345,24 @@ export function TaskManager({
           )}
         </div>
       </div>
+
+      <DeleteConfirmModal
+        isOpen={pendingDeleteTask != null}
+        title="タスクを削除しますか？"
+        message={
+          pendingDeleteTask == null
+            ? ""
+            : `「${pendingDeleteTask.title}」を削除します。この操作は取り消せません。`
+        }
+        onCancel={() => setPendingDeleteTask(null)}
+        onConfirm={() => {
+          if (pendingDeleteTask == null) {
+            return;
+          }
+          onDelete(pendingDeleteTask.id);
+          setPendingDeleteTask(null);
+        }}
+      />
     </article>
   );
 }

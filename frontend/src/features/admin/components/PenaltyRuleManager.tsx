@@ -7,6 +7,7 @@ import type {
   UpdatePenaltyRuleRequest,
 } from "../../../lib/api/generated/client";
 import type { RuleFormState } from "../state/forms";
+import { DeleteConfirmModal } from "./DeleteConfirmModal";
 
 type Props = {
   form: RuleFormState;
@@ -20,6 +21,11 @@ type Props = {
   ) => Promise<void>;
 };
 
+type PendingDeleteRule = {
+  id: string;
+  name: string;
+};
+
 export function PenaltyRuleManager({
   form,
   rules,
@@ -30,6 +36,8 @@ export function PenaltyRuleManager({
 }: Props) {
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
+  const [pendingDeleteRule, setPendingDeleteRule] =
+    useState<PendingDeleteRule | null>(null);
 
   const handleChange =
     (key: keyof RuleFormState) => (event: ChangeEvent<HTMLInputElement>) => {
@@ -183,7 +191,12 @@ export function PenaltyRuleManager({
                         <button
                           type="button"
                           className="flex h-8 w-8 items-center justify-center rounded-md border border-rose-300 bg-white text-rose-700 transition-colors duration-200 hover:bg-rose-50 sm:h-9 sm:w-9"
-                          onClick={() => onDelete(rule.id)}
+                          onClick={() =>
+                            setPendingDeleteRule({
+                              id: rule.id,
+                              name: rule.name,
+                            })
+                          }
                         >
                           <Trash2 size={14} aria-hidden="true" />
                           <span className="sr-only">削除</span>
@@ -197,6 +210,23 @@ export function PenaltyRuleManager({
           </ul>
         )}
       </div>
+      <DeleteConfirmModal
+        isOpen={pendingDeleteRule != null}
+        title="ペナルティルールを削除しますか？"
+        message={
+          pendingDeleteRule == null
+            ? ""
+            : `「${pendingDeleteRule.name}」を削除します。この操作は取り消せません。`
+        }
+        onCancel={() => setPendingDeleteRule(null)}
+        onConfirm={() => {
+          if (pendingDeleteRule == null) {
+            return;
+          }
+          onDelete(pendingDeleteRule.id);
+          setPendingDeleteRule(null);
+        }}
+      />
     </article>
   );
 }

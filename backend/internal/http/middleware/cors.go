@@ -26,9 +26,10 @@ func CORS() gin.HandlerFunc {
 		if allowOrigins[origin] {
 			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
 			c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+			c.Writer.Header().Set("Access-Control-Expose-Headers", "ETag")
 		}
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, If-Match")
 		c.Writer.Header().Set("Vary", "Origin")
 
 		if c.Request.Method == http.MethodOptions {
