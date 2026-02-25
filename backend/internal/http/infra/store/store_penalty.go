@@ -36,9 +36,6 @@ func (s *Store) CreatePenaltyRule(ctx context.Context, userID string, req api.Cr
 	if err != nil {
 		return api.PenaltyRule{}, err
 	}
-	if err := s.checkIfMatchPrecondition(ctx, teamID); err != nil {
-		return api.PenaltyRule{}, err
-	}
 	now := time.Now().In(s.loc)
 	r := ruleRecord{
 		ID:          s.nextID("pr"),
@@ -53,18 +50,23 @@ func (s *Store) CreatePenaltyRule(ctx context.Context, userID string, req api.Cr
 	if err != nil {
 		return api.PenaltyRule{}, err
 	}
-	if err := s.q.CreatePenaltyRule(ctx, dbsqlc.CreatePenaltyRuleParams{
-		ID:          r.ID,
-		TeamID:      r.TeamID,
-		Threshold:   threshold32,
-		Name:        r.Name,
-		Description: textFromPtr(r.Description),
-		CreatedAt:   toPgTimestamptz(r.CreatedAt),
-		UpdatedAt:   toPgTimestamptz(r.UpdatedAt),
-	}); err != nil {
-		return api.PenaltyRule{}, err
-	}
-	if _, err := s.bumpRevisionAndPublish(ctx, teamID, "penalty_rule", map[string]string{"ruleId": r.ID, "action": "create"}); err != nil {
+	if _, err := s.runWithTeamRevisionCAS(
+		ctx,
+		teamID,
+		"penalty_rule",
+		map[string]string{"ruleId": r.ID, "action": "create"},
+		func(_ context.Context, qtx *dbsqlc.Queries) error {
+			return qtx.CreatePenaltyRule(ctx, dbsqlc.CreatePenaltyRuleParams{
+				ID:          r.ID,
+				TeamID:      r.TeamID,
+				Threshold:   threshold32,
+				Name:        r.Name,
+				Description: textFromPtr(r.Description),
+				CreatedAt:   toPgTimestamptz(r.CreatedAt),
+				UpdatedAt:   toPgTimestamptz(r.UpdatedAt),
+			})
+		},
+	); err != nil {
 		return api.PenaltyRule{}, err
 	}
 	return r.toAPI(), nil
@@ -75,41 +77,44 @@ func (s *Store) PatchPenaltyRule(ctx context.Context, userID, ruleID string, req
 	if err != nil {
 		return api.PenaltyRule{}, err
 	}
-	if err := s.checkIfMatchPrecondition(ctx, teamID); err != nil {
-		return api.PenaltyRule{}, err
-	}
-	row, err := s.q.GetUndeletedPenaltyRuleByID(ctx, ruleID)
-	if err != nil {
-		return api.PenaltyRule{}, errors.New("rule not found")
-	}
-	rule := ruleFromDB(row, s.loc)
-	if rule.TeamID != teamID {
-		return api.PenaltyRule{}, errors.New("rule not found")
-	}
-	if req.Threshold != nil {
-		rule.Threshold = *req.Threshold
-	}
-	if req.Name != nil {
-		rule.Name = strings.TrimSpace(*req.Name)
-	}
-	if req.Description != nil {
-		rule.Description = req.Description
-	}
-	rule.UpdatedAt = time.Now().In(s.loc)
-	threshold32, err := safeInt32(rule.Threshold, "threshold")
-	if err != nil {
-		return api.PenaltyRule{}, err
-	}
-	if err := s.q.UpdatePenaltyRule(ctx, dbsqlc.UpdatePenaltyRuleParams{
-		ID:          rule.ID,
-		Threshold:   threshold32,
-		Name:        rule.Name,
-		Description: textFromPtr(rule.Description),
-		UpdatedAt:   toPgTimestamptz(rule.UpdatedAt),
-	}); err != nil {
-		return api.PenaltyRule{}, err
-	}
-	if _, err := s.bumpRevisionAndPublish(ctx, teamID, "penalty_rule", map[string]string{"ruleId": rule.ID, "action": "update"}); err != nil {
+	var rule ruleRecord
+	if _, err := s.runWithTeamRevisionCAS(
+		ctx,
+		teamID,
+		"penalty_rule",
+		map[string]string{"ruleId": ruleID, "action": "update"},
+		func(_ context.Context, qtx *dbsqlc.Queries) error {
+			row, err := qtx.GetUndeletedPenaltyRuleByID(ctx, ruleID)
+			if err != nil {
+				return errors.New("rule not found")
+			}
+			rule = ruleFromDB(row, s.loc)
+			if rule.TeamID != teamID {
+				return errors.New("rule not found")
+			}
+			if req.Threshold != nil {
+				rule.Threshold = *req.Threshold
+			}
+			if req.Name != nil {
+				rule.Name = strings.TrimSpace(*req.Name)
+			}
+			if req.Description != nil {
+				rule.Description = req.Description
+			}
+			rule.UpdatedAt = time.Now().In(s.loc)
+			threshold32, err := safeInt32(rule.Threshold, "threshold")
+			if err != nil {
+				return err
+			}
+			return qtx.UpdatePenaltyRule(ctx, dbsqlc.UpdatePenaltyRuleParams{
+				ID:          rule.ID,
+				Threshold:   threshold32,
+				Name:        rule.Name,
+				Description: textFromPtr(rule.Description),
+				UpdatedAt:   toPgTimestamptz(rule.UpdatedAt),
+			})
+		},
+	); err != nil {
 		return api.PenaltyRule{}, err
 	}
 	return rule.toAPI(), nil
@@ -120,26 +125,29 @@ func (s *Store) DeletePenaltyRule(ctx context.Context, userID, ruleID string) er
 	if err != nil {
 		return err
 	}
-	if err := s.checkIfMatchPrecondition(ctx, teamID); err != nil {
-		return err
-	}
-	rule, err := s.q.GetUndeletedPenaltyRuleByID(ctx, ruleID)
-	if err != nil || rule.TeamID != teamID {
-		return errors.New("rule not found")
-	}
-	now := time.Now().In(s.loc)
-	rows, err := s.q.SoftDeletePenaltyRule(ctx, dbsqlc.SoftDeletePenaltyRuleParams{
-		ID:        ruleID,
-		DeletedAt: toPgTimestamptz(now),
-	})
-	if err != nil {
-		return err
-	}
-	if rows == 0 {
-		return errors.New("rule not found")
-	}
-	if _, err := s.bumpRevisionAndPublish(ctx, teamID, "penalty_rule", map[string]string{"ruleId": ruleID, "action": "delete"}); err != nil {
-		return err
-	}
-	return nil
+	_, err = s.runWithTeamRevisionCAS(
+		ctx,
+		teamID,
+		"penalty_rule",
+		map[string]string{"ruleId": ruleID, "action": "delete"},
+		func(_ context.Context, qtx *dbsqlc.Queries) error {
+			rule, err := qtx.GetUndeletedPenaltyRuleByID(ctx, ruleID)
+			if err != nil || rule.TeamID != teamID {
+				return errors.New("rule not found")
+			}
+			now := time.Now().In(s.loc)
+			rows, err := qtx.SoftDeletePenaltyRule(ctx, dbsqlc.SoftDeletePenaltyRuleParams{
+				ID:        ruleID,
+				DeletedAt: toPgTimestamptz(now),
+			})
+			if err != nil {
+				return err
+			}
+			if rows == 0 {
+				return errors.New("rule not found")
+			}
+			return nil
+		},
+	)
+	return err
 }
