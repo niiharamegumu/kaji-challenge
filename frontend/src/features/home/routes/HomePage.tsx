@@ -1,4 +1,5 @@
 import { useAtom, useAtomValue } from "jotai";
+import { ChevronRight } from "lucide-react";
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 
@@ -35,7 +36,7 @@ export function HomePage() {
   }, []);
 
   return (
-    <div className="mt-2 space-y-2 md:mt-4 md:space-y-4">
+    <div className="mt-2 space-y-1.5 md:mt-4 md:space-y-3">
       <section className="grid gap-2 md:grid-cols-2 md:gap-4">
         <DailyTasksPanel
           items={home?.dailyTasks ?? []}
@@ -59,14 +60,15 @@ export function HomePage() {
         />
       </section>
 
-      <section className="rounded-xl border border-stone-200 bg-white/90 p-2.5 shadow-sm md:rounded-2xl md:p-4">
+      <div className="px-1">
         <Link
           to={`/admin/summary?month=${currentMonth}`}
-          className="text-sm font-medium text-stone-700 underline underline-offset-4 transition-colors hover:text-stone-900"
+          className="inline-flex items-center gap-1 text-sm font-medium text-stone-700 underline underline-offset-4 transition-colors hover:text-stone-900"
         >
-          今月のサマリーを見る
+          <span>今月のサマリーを見る</span>
+          <ChevronRight size={14} aria-hidden="true" />
         </Link>
-      </section>
+      </div>
     </div>
   );
 }
