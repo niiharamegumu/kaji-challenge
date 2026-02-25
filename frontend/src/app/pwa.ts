@@ -23,6 +23,10 @@ export const subscribePWAState = (listener: Listener) => {
 };
 
 export const notifyPWARefresh = (updater: () => Promise<void>) => {
+  if (state.needRefresh) {
+    applyUpdate = updater;
+    return;
+  }
   applyUpdate = updater;
   state = { needRefresh: true };
   emit();
