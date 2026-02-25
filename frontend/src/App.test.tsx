@@ -169,4 +169,42 @@ describe("App", () => {
     });
     expect(mockGetMe).not.toHaveBeenCalled();
   });
+
+  it("renders task notes on home", async () => {
+    mockGetMe.mockResolvedValue({
+      data: { user: { id: "u1", displayName: "Owner" }, memberships: [] },
+    });
+    mockGetTaskOverview.mockResolvedValue({
+      data: {
+        month: "2026-02",
+        today: "2026-02-15",
+        elapsedDaysInWeek: 2,
+        monthlyPenaltyTotal: 0,
+        dailyTasks: [
+          {
+            task: {
+              id: "task-1",
+              teamId: "team-1",
+              title: "皿洗い",
+              notes: "夜ごはんの後に実施",
+              type: "daily",
+              penaltyPoints: 2,
+              assigneeUserId: undefined,
+              requiredCompletionsPerWeek: 1,
+              createdAt: "2026-02-01T00:00:00Z",
+              updatedAt: "2026-02-01T00:00:00Z",
+            },
+            completedToday: false,
+          },
+        ],
+        weeklyTasks: [],
+      },
+    });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText("夜ごはんの後に実施")).toBeInTheDocument();
+    });
+  });
 });
