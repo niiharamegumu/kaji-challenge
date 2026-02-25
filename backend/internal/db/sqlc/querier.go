@@ -49,12 +49,14 @@ type Querier interface {
 	GetSessionByToken(ctx context.Context, token string) (Session, error)
 	GetTaskByID(ctx context.Context, id string) (GetTaskByIDRow, error)
 	GetTaskCompletionWeeklyCount(ctx context.Context, arg GetTaskCompletionWeeklyCountParams) (int64, error)
+	GetTeamStateRevision(ctx context.Context, id string) (int64, error)
 	GetUndeletedPenaltyRuleByID(ctx context.Context, id string) (PenaltyRule, error)
 	GetUserByEmail(ctx context.Context, lower string) (GetUserByEmailRow, error)
 	GetUserByID(ctx context.Context, id string) (GetUserByIDRow, error)
 	HasTaskCompletionDaily(ctx context.Context, arg HasTaskCompletionDailyParams) (bool, error)
 	IncrementDailyPenalty(ctx context.Context, arg IncrementDailyPenaltyParams) error
 	IncrementTaskCompletionWeekly(ctx context.Context, arg IncrementTaskCompletionWeeklyParams) (int64, error)
+	IncrementTeamStateRevision(ctx context.Context, id string) (int64, error)
 	IncrementWeeklyPenalty(ctx context.Context, arg IncrementWeeklyPenaltyParams) error
 	InsertAuthRequest(ctx context.Context, arg InsertAuthRequestParams) error
 	InsertCloseRun(ctx context.Context, arg InsertCloseRunParams) (int64, error)

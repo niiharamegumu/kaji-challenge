@@ -97,6 +97,33 @@ func (q *Queries) GetOldestOtherTeamMember(ctx context.Context, arg GetOldestOth
 	return user_id, err
 }
 
+const getTeamStateRevision = `-- name: GetTeamStateRevision :one
+SELECT state_revision
+FROM teams
+WHERE id = $1
+`
+
+func (q *Queries) GetTeamStateRevision(ctx context.Context, id string) (int64, error) {
+	row := q.db.QueryRow(ctx, getTeamStateRevision, id)
+	var state_revision int64
+	err := row.Scan(&state_revision)
+	return state_revision, err
+}
+
+const incrementTeamStateRevision = `-- name: IncrementTeamStateRevision :one
+UPDATE teams
+SET state_revision = state_revision + 1
+WHERE id = $1
+RETURNING state_revision
+`
+
+func (q *Queries) IncrementTeamStateRevision(ctx context.Context, id string) (int64, error) {
+	row := q.db.QueryRow(ctx, incrementTeamStateRevision, id)
+	var state_revision int64
+	err := row.Scan(&state_revision)
+	return state_revision, err
+}
+
 const listMembershipsByUserID = `-- name: ListMembershipsByUserID :many
 SELECT tm.team_id, tm.role, t.name AS team_name
 FROM team_members tm

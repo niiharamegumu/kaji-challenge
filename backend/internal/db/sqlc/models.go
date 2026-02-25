@@ -108,9 +108,10 @@ type TaskEvaluationDedupe struct {
 }
 
 type Team struct {
-	ID        string             `json:"id"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	Name      string             `json:"name"`
+	ID            string             `json:"id"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	Name          string             `json:"name"`
+	StateRevision int64              `json:"state_revision"`
 }
 
 type TeamMember struct {
