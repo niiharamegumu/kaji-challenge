@@ -1,3 +1,4 @@
+import { Minus, Plus } from "lucide-react";
 import type { TaskOverviewWeeklyTask } from "../../../lib/api/generated/client";
 
 type Props = {
@@ -95,57 +96,69 @@ export function WeeklyTasksPanel({
             }
 
             return (
-              <li
-                key={item.task.id}
-                className={`relative overflow-hidden rounded-xl p-2.5 ring-1 ${isDone ? "ring-[color:var(--color-matcha-400)]" : "ring-stone-200"}`}
-              >
-                <span
-                  className="pointer-events-none absolute inset-y-0 left-0 bg-[color:var(--color-matcha-50)] transition-[width] duration-200 ease-out"
-                  style={{ width: progressPercent }}
-                  aria-hidden="true"
-                />
-                <div className="relative z-10 flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="font-medium">{item.task.title}</div>
-                    {item.task.notes != null && item.task.notes !== "" ? (
-                      <div className="mt-1 whitespace-pre-wrap break-words text-xs text-stone-600">
-                        {item.task.notes}
+              <li key={item.task.id} className="relative overflow-visible">
+                <div
+                  className={`relative overflow-hidden rounded-xl p-2.5 ring-1 ${isDone ? "ring-[color:var(--color-matcha-400)]" : "ring-stone-200"}`}
+                >
+                  <span
+                    className="pointer-events-none absolute inset-y-0 left-0 bg-[color:var(--color-matcha-50)] transition-[width] duration-200 ease-out"
+                    style={{ width: progressPercent }}
+                    aria-hidden="true"
+                  />
+                  <span
+                    className="pointer-events-none absolute inset-y-2 left-1/2 w-px -translate-x-1/2 border-l border-dashed border-stone-300/70"
+                    aria-hidden="true"
+                  />
+                  <div className="relative z-10 min-w-0">
+                    <div className="min-w-0">
+                      <div className="font-medium">{item.task.title}</div>
+                      {item.task.notes != null && item.task.notes !== "" ? (
+                        <div className="mt-1 whitespace-pre-wrap break-words text-xs text-stone-600">
+                          {item.task.notes}
+                        </div>
+                      ) : null}
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-stone-600">
+                        <span className="inline-flex items-center rounded-full bg-stone-900 px-2 py-0.5 font-semibold leading-4 text-white">
+                          週間
+                        </span>
+                        <span>
+                          進捗 {item.weekCompletedCount}/
+                          {item.requiredCompletionsPerWeek}
+                        </span>
                       </div>
-                    ) : null}
-                    <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-stone-600">
-                      <span className="inline-flex items-center rounded-full bg-stone-900 px-2 py-0.5 font-semibold leading-4 text-white">
-                        週間
-                      </span>
-                      <span>
-                        進捗 {item.weekCompletedCount}/
-                        {item.requiredCompletionsPerWeek}
-                      </span>
                     </div>
                   </div>
-                  <div className="flex shrink-0 items-center gap-1">
-                    <button
-                      type="button"
-                      className="h-9 w-9 rounded-lg border border-stone-300 bg-white/90 text-sm disabled:cursor-not-allowed disabled:opacity-50"
-                      onClick={() => onDecrement(item.task.id)}
-                      disabled={item.weekCompletedCount <= 0}
-                      aria-label={`${item.task.title} をカウントダウン`}
-                    >
-                      -
-                    </button>
-                    <button
-                      type="button"
-                      className="h-9 w-9 rounded-lg border border-stone-300 bg-white/90 text-sm disabled:cursor-not-allowed disabled:opacity-50"
-                      onClick={() => onIncrement(item.task.id)}
-                      disabled={
-                        item.weekCompletedCount >=
-                        item.requiredCompletionsPerWeek
-                      }
-                      aria-label={`${item.task.title} をカウントアップ`}
-                    >
-                      +
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    className="absolute inset-y-0 left-0 z-20 w-1/2 touch-manipulation rounded-l-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-matcha-500)] focus-visible:ring-offset-2 disabled:cursor-not-allowed"
+                    onClick={() => onDecrement(item.task.id)}
+                    disabled={item.weekCompletedCount <= 0}
+                    aria-label={`${item.task.title} を1減らす`}
+                  />
+                  <button
+                    type="button"
+                    className="absolute inset-y-0 right-0 z-20 w-1/2 touch-manipulation rounded-r-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-matcha-500)] focus-visible:ring-offset-2 disabled:cursor-not-allowed"
+                    onClick={() => onIncrement(item.task.id)}
+                    disabled={
+                      item.weekCompletedCount >= item.requiredCompletionsPerWeek
+                    }
+                    aria-label={`${item.task.title} を1増やす`}
+                  />
                 </div>
+                <span
+                  className={`pointer-events-none absolute top-1/2 left-0 z-30 -translate-x-1/2 -translate-y-1/2 rounded-full p-0.5 shadow-sm transition-colors ${item.weekCompletedCount <= 0 ? "bg-stone-300 text-stone-500" : "bg-stone-900 text-white"}`}
+                  aria-hidden="true"
+                  data-testid={`weekly-decrement-icon-${item.task.id}`}
+                >
+                  <Minus size={10} />
+                </span>
+                <span
+                  className={`pointer-events-none absolute top-1/2 right-0 z-30 translate-x-1/2 -translate-y-1/2 rounded-full p-0.5 shadow-sm transition-colors ${item.weekCompletedCount >= item.requiredCompletionsPerWeek ? "bg-stone-300 text-stone-500" : "bg-stone-900 text-white"}`}
+                  aria-hidden="true"
+                  data-testid={`weekly-increment-icon-${item.task.id}`}
+                >
+                  <Plus size={10} />
+                </span>
               </li>
             );
           })}
