@@ -1,4 +1,5 @@
 import type { TaskOverviewDailyTask } from "../../../lib/api/generated/client";
+import { CompletionSlots } from "../../../shared/components/CompletionSlots";
 
 type Props = {
   items: TaskOverviewDailyTask[];
@@ -26,20 +27,27 @@ export function DailyTasksPanel({ items, onToggle }: Props) {
                   {item.task.notes}
                 </div>
               ) : null}
-              <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-stone-600">
-                <span className="inline-flex items-center rounded-full border border-stone-300 bg-white px-2 py-0.5 font-semibold leading-4 text-stone-900">
-                  日間
-                </span>
-                <span>減点 {item.task.penaltyPoints}</span>
-                <span
-                  className={
-                    item.completedToday
-                      ? "text-[color:var(--color-matcha-700)]"
-                      : "text-stone-600"
-                  }
-                >
-                  {item.completedToday ? "完了" : "未完了"}
-                </span>
+              <div className="mt-1 flex items-center justify-between gap-2">
+                <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-stone-600">
+                  <span className="inline-flex items-center rounded-full border border-stone-300 bg-white px-2 py-0.5 font-semibold leading-4 text-stone-900">
+                    日間
+                  </span>
+                  <span>減点 {item.task.penaltyPoints}</span>
+                  <span
+                    className={
+                      item.completedToday
+                        ? "text-[color:var(--color-matcha-700)]"
+                        : "text-stone-600"
+                    }
+                  >
+                    {item.completedToday ? "完了" : "未完了"}
+                  </span>
+                </div>
+                <CompletionSlots
+                  compact
+                  className="shrink-0 justify-end"
+                  slots={[{ slot: 1, actor: item.completedBy ?? null }]}
+                />
               </div>
             </button>
           ))

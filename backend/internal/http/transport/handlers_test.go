@@ -40,6 +40,9 @@ func (m mockTeamService) GetMe(context.Context, string) (api.MeResponse, error) 
 func (m mockTeamService) PatchMeNickname(context.Context, string, api.UpdateNicknameRequest) (api.UpdateNicknameResponse, error) {
 	return api.UpdateNicknameResponse{}, nil
 }
+func (m mockTeamService) PatchMeColor(context.Context, string, api.UpdateColorRequest) (api.UpdateColorResponse, error) {
+	return api.UpdateColorResponse{}, nil
+}
 func (m mockTeamService) CreateInvite(context.Context, string, api.CreateInviteRequest) (api.InviteCodeResponse, error) {
 	return api.InviteCodeResponse{}, nil
 }

@@ -8,6 +8,10 @@ import {
 import { isLoggedInAtom } from "../../../state/session";
 import { statusMessageAtom } from "../../shell/state/status";
 import { TaskManager } from "../components/TaskManager";
+import {
+  WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MAX,
+  WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MIN,
+} from "../constants/tasks";
 import { useTaskMutations } from "../hooks/useAdminMutations";
 import { useTasksQuery } from "../hooks/useAdminQueries";
 import { initialTaskFormState, taskFormAtom } from "../state/forms";
@@ -21,15 +25,28 @@ export function AdminTasksPage() {
   const { createTask, removeTask, updateTask } = useTaskMutations(setStatus);
 
   const handleCreateTask = async () => {
+    let requiredCompletionsPerWeek: number | undefined;
+    if (taskForm.type === TaskTypeConst.weekly) {
+      const parsed = Number(taskForm.requiredCompletionsPerWeek);
+      if (
+        !Number.isInteger(parsed) ||
+        parsed < WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MIN ||
+        parsed > WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MAX
+      ) {
+        setStatus(
+          `週間必要回数は${WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MIN}〜${WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MAX}の整数で入力してください`,
+        );
+        return;
+      }
+      requiredCompletionsPerWeek = parsed;
+    }
+
     const payload: CreateTaskRequest = {
       title: taskForm.title,
       notes: taskForm.notes === "" ? undefined : taskForm.notes,
       type: taskForm.type,
       penaltyPoints: Number(taskForm.penaltyPoints),
-      requiredCompletionsPerWeek:
-        taskForm.type === TaskTypeConst.weekly
-          ? Number(taskForm.requiredCompletionsPerWeek)
-          : undefined,
+      requiredCompletionsPerWeek,
     };
     await createTask.mutateAsync(payload);
     setTaskForm(initialTaskFormState);

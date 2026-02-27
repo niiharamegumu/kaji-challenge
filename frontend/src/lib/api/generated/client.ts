@@ -30,6 +30,8 @@ export interface User {
   id: string;
   email: string;
   displayName: string;
+  /** @nullable */
+  colorHex?: string | null;
   createdAt: string;
 }
 
@@ -109,6 +111,8 @@ export interface TeamMember {
   /** @nullable */
   nickname?: string | null;
   effectiveName: string;
+  /** @nullable */
+  colorHex?: string | null;
   joinedAt: string;
   role: TeamMemberRole;
 }
@@ -125,6 +129,16 @@ export interface UpdateNicknameRequest {
 export interface UpdateNicknameResponse {
   nickname: string;
   effectiveName: string;
+}
+
+export interface UpdateColorRequest {
+  /** @nullable */
+  colorHex: string | null;
+}
+
+export interface UpdateColorResponse {
+  /** @nullable */
+  colorHex: string | null;
 }
 
 export type TaskType = typeof TaskType[keyof typeof TaskType];
@@ -147,7 +161,10 @@ export interface Task {
    */
   penaltyPoints: number;
   assigneeUserId?: string;
-  /** @minimum 1 */
+  /**
+   * @minimum 1
+   * @maximum 7
+   */
   requiredCompletionsPerWeek: number;
   createdAt: string;
   updatedAt: string;
@@ -168,7 +185,10 @@ export interface CreateTaskRequest {
    */
   penaltyPoints: number;
   assigneeUserId?: string;
-  /** @minimum 1 */
+  /**
+   * @minimum 1
+   * @maximum 7
+   */
   requiredCompletionsPerWeek?: number;
 }
 
@@ -186,7 +206,10 @@ export interface UpdateTaskRequest {
    */
   penaltyPoints?: number;
   assigneeUserId?: string;
-  /** @minimum 1 */
+  /**
+   * @minimum 1
+   * @maximum 7
+   */
   requiredCompletionsPerWeek?: number;
 }
 
@@ -209,6 +232,18 @@ export interface TaskCompletionResponse {
   targetDate: string;
   completed: boolean;
   weeklyCompletedCount: number;
+}
+
+export interface TaskCompletionActor {
+  userId: string;
+  effectiveName: string;
+  /** @nullable */
+  colorHex?: string | null;
+}
+
+export interface TaskCompletionSlot {
+  slot: number;
+  actor?: TaskCompletionActor | null;
 }
 
 export interface PenaltyRule {
@@ -251,12 +286,18 @@ export interface UpdatePenaltyRuleRequest {
 export interface TaskOverviewDailyTask {
   task: Task;
   completedToday: boolean;
+  completedBy?: TaskCompletionActor | null;
 }
 
 export interface TaskOverviewWeeklyTask {
   task: Task;
   weekCompletedCount: number;
+  /**
+   * @minimum 1
+   * @maximum 7
+   */
   requiredCompletionsPerWeek: number;
+  completionSlots: TaskCompletionSlot[];
 }
 
 export interface TaskOverviewResponse {
@@ -277,6 +318,7 @@ export interface MonthlyTaskStatusItem {
   penaltyPoints: number;
   completed: boolean;
   isDeleted: boolean;
+  completionSlots: TaskCompletionSlot[];
 }
 
 export interface MonthlyTaskStatusGroup {
@@ -584,6 +626,43 @@ export const patchMeNickname = async (updateNicknameRequest: UpdateNicknameReque
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(
       updateNicknameRequest,)
+  }
+);}
+
+
+
+/**
+ * @summary Update current user color
+ */
+export type patchMeColorResponse200 = {
+  data: UpdateColorResponse
+  status: 200
+}
+    
+export type patchMeColorResponseSuccess = (patchMeColorResponse200) & {
+  headers: Headers;
+};
+;
+
+export type patchMeColorResponse = (patchMeColorResponseSuccess)
+
+export const getPatchMeColorUrl = () => {
+
+
+  
+
+  return `/v1/me/color`
+}
+
+export const patchMeColor = async (updateColorRequest: UpdateColorRequest, options?: RequestInit): Promise<patchMeColorResponse> => {
+  
+  return customFetch<patchMeColorResponse>(getPatchMeColorUrl(),
+  {      
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      updateColorRequest,)
   }
 );}
 

@@ -16,6 +16,11 @@ func (r teamRepo) PatchMeNickname(ctx context.Context, userID string, req api.Up
 	return res, mapInfraErr(err)
 }
 
+func (r teamRepo) PatchMeColor(ctx context.Context, userID string, req api.UpdateColorRequest) (api.UpdateColorResponse, error) {
+	res, err := r.store.PatchMeColor(ctx, userID, req)
+	return res, mapInfraErr(err)
+}
+
 func (r teamRepo) CreateInvite(ctx context.Context, userID string, req api.CreateInviteRequest) (api.InviteCodeResponse, error) {
 	res, err := r.store.CreateInvite(ctx, userID, req)
 	return res, mapInfraErr(err)

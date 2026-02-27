@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -44,8 +45,9 @@ func (s *Store) CreateTask(ctx context.Context, userID string, req api.CreateTas
 	if req.Type == api.Weekly && req.RequiredCompletionsPerWeek != nil {
 		required = *req.RequiredCompletionsPerWeek
 	}
-	if req.Type == api.Daily {
-		required = 1
+	required, err = normalizeRequiredCompletionsPerWeek(req.Type, required)
+	if err != nil {
+		return api.Task{}, err
 	}
 	penalty32, err := safeInt32(req.PenaltyPoints, "penalty points")
 	if err != nil {
@@ -132,7 +134,14 @@ func (s *Store) PatchTask(ctx context.Context, userID, taskID string, req api.Up
 				task.AssigneeID = req.AssigneeUserId
 			}
 			if req.RequiredCompletionsPerWeek != nil && task.Type == api.Weekly {
-				task.Required = *req.RequiredCompletionsPerWeek
+				required, err := normalizeRequiredCompletionsPerWeek(
+					task.Type,
+					*req.RequiredCompletionsPerWeek,
+				)
+				if err != nil {
+					return err
+				}
+				task.Required = required
 			}
 			task.UpdatedAt = time.Now().In(s.loc)
 			penalty32, err := safeInt32(task.Penalty, "penalty points")
@@ -157,6 +166,20 @@ func (s *Store) PatchTask(ctx context.Context, userID, taskID string, req api.Up
 		return api.Task{}, err
 	}
 	return task.toAPI(), nil
+}
+
+func normalizeRequiredCompletionsPerWeek(taskType api.TaskType, required int) (int, error) {
+	if taskType == api.Daily {
+		return requiredCompletionsPerWeekMin, nil
+	}
+	if required < requiredCompletionsPerWeekMin || required > requiredCompletionsPerWeekMax {
+		return 0, fmt.Errorf(
+			"required completions per week must be between %d and %d",
+			requiredCompletionsPerWeekMin,
+			requiredCompletionsPerWeekMax,
+		)
+	}
+	return required, nil
 }
 
 func (s *Store) DeleteTask(ctx context.Context, userID, taskID string) error {
@@ -247,8 +270,9 @@ func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string,
 					}
 				} else {
 					if err := q.CreateTaskCompletionDaily(txCtx, dbsqlc.CreateTaskCompletionDailyParams{
-						TaskID:     taskID,
-						TargetDate: targetPg,
+						TaskID:            taskID,
+						TargetDate:        targetPg,
+						CompletedByUserID: userID,
 					}); err != nil {
 						return err
 					}
@@ -264,52 +288,73 @@ func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string,
 
 			weekStart := startOfWeek(targetDate, s.loc)
 			weekStartPg := toPgDate(weekStart)
-			var nextCount int64
+			currentCount, err := q.GetTaskCompletionWeeklyEntryCount(txCtx, dbsqlc.GetTaskCompletionWeeklyEntryCountParams{
+				TaskID:    taskID,
+				WeekStart: weekStartPg,
+			})
+			if err != nil {
+				return err
+			}
+			nextCount := currentCount
 			if task.Required <= 1 {
 				if mode != api.Toggle {
 					return errors.New("weekly tasks with required completions of 1 only support toggle action")
 				}
-				nextCount, err = q.ToggleTaskCompletionWeeklyBinary(txCtx, dbsqlc.ToggleTaskCompletionWeeklyBinaryParams{
-					TaskID:    taskID,
-					WeekStart: weekStartPg,
-				})
-				if err != nil {
-					return err
-				}
-			} else {
-				required32, err := safeInt32(task.Required, "required completions")
-				if err != nil {
-					return err
-				}
-				switch mode {
-				case api.Toggle, api.Increment:
-					nextCount, err = q.IncrementTaskCompletionWeekly(txCtx, dbsqlc.IncrementTaskCompletionWeeklyParams{
-						TaskID:        taskID,
-						WeekStart:     weekStartPg,
-						MaxCompletion: required32,
-					})
-					if err != nil {
-						return err
-					}
-				case api.Decrement:
-					nextCount, err = q.DecrementTaskCompletionWeekly(txCtx, dbsqlc.DecrementTaskCompletionWeeklyParams{
+				if currentCount > 0 {
+					deletedRows, err := q.DeleteLatestTaskCompletionWeeklyEntry(txCtx, dbsqlc.DeleteLatestTaskCompletionWeeklyEntryParams{
 						TaskID:    taskID,
 						WeekStart: weekStartPg,
 					})
 					if err != nil {
 						return err
 					}
+					if deletedRows > 0 {
+						nextCount = currentCount - 1
+					}
+				} else {
+					if err := q.InsertTaskCompletionWeeklyEntry(txCtx, dbsqlc.InsertTaskCompletionWeeklyEntryParams{
+						ID:                s.nextID("twce"),
+						TaskID:            taskID,
+						WeekStart:         weekStartPg,
+						CompletedByUserID: userID,
+					}); err != nil {
+						return err
+					}
+					nextCount = 1
+				}
+			} else {
+				switch mode {
+				case api.Toggle, api.Increment:
+					if currentCount >= int64(task.Required) {
+						nextCount = currentCount
+						break
+					}
+					if err := q.InsertTaskCompletionWeeklyEntry(txCtx, dbsqlc.InsertTaskCompletionWeeklyEntryParams{
+						ID:                s.nextID("twce"),
+						TaskID:            taskID,
+						WeekStart:         weekStartPg,
+						CompletedByUserID: userID,
+					}); err != nil {
+						return err
+					}
+					nextCount = currentCount + 1
+				case api.Decrement:
+					if currentCount <= 0 {
+						nextCount = 0
+						break
+					}
+					deletedRows, err := q.DeleteLatestTaskCompletionWeeklyEntry(txCtx, dbsqlc.DeleteLatestTaskCompletionWeeklyEntryParams{
+						TaskID:    taskID,
+						WeekStart: weekStartPg,
+					})
+					if err != nil {
+						return err
+					}
+					if deletedRows > 0 {
+						nextCount = currentCount - 1
+					}
 				default:
 					return errors.New("invalid completion action")
-				}
-			}
-
-			if nextCount <= 0 {
-				if err := q.DeleteTaskCompletionWeeklyIfZero(txCtx, dbsqlc.DeleteTaskCompletionWeeklyIfZeroParams{
-					TaskID:    taskID,
-					WeekStart: weekStartPg,
-				}); err != nil {
-					return err
 				}
 			}
 

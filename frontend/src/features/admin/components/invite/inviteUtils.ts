@@ -35,3 +35,14 @@ export const getTeamNameError = (value: string) => {
   }
   return "";
 };
+
+export const getColorHexError = (value: string) => {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return "";
+  }
+  if (!/^#[0-9A-Fa-f]{6}$/.test(trimmed)) {
+    return "カラーは #RRGGBB 形式で入力してください";
+  }
+  return "";
+};

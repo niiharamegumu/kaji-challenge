@@ -8,6 +8,7 @@ import {
   type UpdateTaskRequest,
   deletePenaltyRule,
   deleteTask,
+  patchMeColor,
   patchMeNickname,
   patchPenaltyRule,
   patchTask,
@@ -38,6 +39,12 @@ const teamMembershipRelatedQueryKeys = [
 ] as const;
 
 const nicknameRelatedQueryKeys = [queryKeys.teamMembers] as const;
+const colorRelatedQueryKeys = [
+  queryKeys.teamMembers,
+  queryKeys.me,
+  queryKeys.home,
+  queryKeys.monthlySummary,
+] as const;
 const teamNameRelatedQueryKeys = [queryKeys.me] as const;
 
 async function invalidateQueryKeys(
@@ -289,6 +296,25 @@ export function useProfileMutations(setStatus: StatusSetter) {
     },
   });
 
+  const updateColor = useMutation({
+    mutationFn: async (colorHex: string | null) => patchMeColor({ colorHex }),
+    onSuccess: async (_, colorHex) => {
+      const message =
+        colorHex == null
+          ? "表示カラーをリセットしました"
+          : "表示カラーを更新しました";
+      setStatus(message);
+      await invalidateQueryKeys(queryClient, colorRelatedQueryKeys);
+    },
+    onError: (error) => {
+      void handlePreconditionFailure(error, queryClient, setStatus);
+      if (isPreconditionFailure(error)) {
+        return;
+      }
+      setStatus(`表示カラー更新に失敗しました: ${formatError(error)}`);
+    },
+  });
+
   const updateTeamName = useMutation({
     mutationFn: async (name: string) => patchTeamCurrent({ name }),
     onSuccess: async () => {
@@ -304,5 +330,5 @@ export function useProfileMutations(setStatus: StatusSetter) {
     },
   });
 
-  return { updateNickname, updateTeamName };
+  return { updateNickname, updateColor, updateTeamName };
 }

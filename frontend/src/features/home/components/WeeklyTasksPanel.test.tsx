@@ -22,6 +22,11 @@ function buildWeeklyTask(
     },
     weekCompletedCount: 1,
     requiredCompletionsPerWeek: 3,
+    completionSlots: [
+      { slot: 1, actor: { userId: "u1", effectiveName: "めぐ" } },
+      { slot: 2, actor: null },
+      { slot: 3, actor: null },
+    ],
     ...overrides,
   };
 }

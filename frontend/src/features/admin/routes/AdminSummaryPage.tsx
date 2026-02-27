@@ -17,6 +17,7 @@ import {
   getPenaltySummaryMonthly,
   listPenaltyRules,
 } from "../../../lib/api/generated/client";
+import { CompletionSlots } from "../../../shared/components/CompletionSlots";
 import { queryKeys } from "../../../shared/query/queryKeys";
 import { formatError } from "../../../shared/utils/errors";
 import { isLoggedInAtom } from "../../../state/session";
@@ -456,43 +457,50 @@ export function AdminSummaryPage() {
                                   {item.notes}
                                 </p>
                               ) : null}
-                              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
-                                <span
-                                  className={`inline-flex items-center rounded-full px-2 py-0.5 font-semibold leading-4 ${
-                                    isWeekly
-                                      ? "bg-stone-900 text-white"
-                                      : "border border-stone-300 bg-white text-stone-900"
-                                  }`}
-                                >
-                                  {isWeekly ? "週間" : "日間"}
-                                </span>
-                                <span
-                                  className={`inline-flex items-center gap-1 whitespace-nowrap ${
-                                    item.completed
-                                      ? "text-[color:var(--color-matcha-700)]"
-                                      : "text-rose-700"
-                                  }`}
-                                >
-                                  {item.completed ? (
-                                    <CheckCircle2
-                                      size={12}
-                                      aria-hidden="true"
-                                    />
-                                  ) : (
-                                    <Circle size={12} aria-hidden="true" />
-                                  )}
-                                  {item.completed ? "完了" : "未完了"}
-                                </span>
-                                <span
-                                  className={`text-stone-500 ${item.completed ? "line-through" : ""}`}
-                                >
-                                  減点 {item.penaltyPoints} 点
-                                </span>
-                                {showCrossMonthBadge ? (
-                                  <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 font-semibold leading-4 text-amber-800">
-                                    週は前月から継続
+                              <div className="mt-1 flex items-center justify-between gap-2">
+                                <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
+                                  <span
+                                    className={`inline-flex items-center rounded-full px-2 py-0.5 font-semibold leading-4 ${
+                                      isWeekly
+                                        ? "bg-stone-900 text-white"
+                                        : "border border-stone-300 bg-white text-stone-900"
+                                    }`}
+                                  >
+                                    {isWeekly ? "週間" : "日間"}
                                   </span>
-                                ) : null}
+                                  <span
+                                    className={`inline-flex items-center gap-1 whitespace-nowrap ${
+                                      item.completed
+                                        ? "text-[color:var(--color-matcha-700)]"
+                                        : "text-rose-700"
+                                    }`}
+                                  >
+                                    {item.completed ? (
+                                      <CheckCircle2
+                                        size={12}
+                                        aria-hidden="true"
+                                      />
+                                    ) : (
+                                      <Circle size={12} aria-hidden="true" />
+                                    )}
+                                    {item.completed ? "完了" : "未完了"}
+                                  </span>
+                                  <span
+                                    className={`text-stone-500 ${item.completed ? "line-through" : ""}`}
+                                  >
+                                    減点 {item.penaltyPoints} 点
+                                  </span>
+                                  {showCrossMonthBadge ? (
+                                    <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 font-semibold leading-4 text-amber-800">
+                                      週は前月から継続
+                                    </span>
+                                  ) : null}
+                                </div>
+                                <CompletionSlots
+                                  compact
+                                  className="shrink-0 justify-end"
+                                  slots={item.completionSlots}
+                                />
                               </div>
                             </div>
                           </li>

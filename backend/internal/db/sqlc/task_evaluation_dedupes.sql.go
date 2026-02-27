@@ -79,7 +79,12 @@ const sumWeeklyPenaltyForClose = `-- name: SumWeeklyPenaltyForClose :one
 WITH candidates AS (
   SELECT t.id AS task_id, t.penalty_points
   FROM tasks t
-  LEFT JOIN task_completion_weekly w
+  LEFT JOIN (
+    SELECT task_id, week_start, COUNT(*)::integer AS completion_count
+    FROM task_completion_weekly_entries
+    WHERE week_start = $2
+    GROUP BY task_id, week_start
+  ) w
     ON w.task_id = t.id
    AND w.week_start = $2
   WHERE t.team_id = $1

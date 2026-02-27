@@ -48,7 +48,8 @@ SELECT
   tm.role,
   tm.created_at,
   u.display_name,
-  COALESCE(u.nickname, '') AS nickname
+  COALESCE(u.nickname, '') AS nickname,
+  u.color_hex
 FROM team_members tm
 INNER JOIN users u ON u.id = tm.user_id
 WHERE tm.team_id = $1

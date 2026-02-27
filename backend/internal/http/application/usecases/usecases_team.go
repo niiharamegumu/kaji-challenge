@@ -14,6 +14,10 @@ func (u teamUsecase) PatchMeNickname(ctx context.Context, userID string, req api
 	return u.repo.PatchMeNickname(ctx, userID, req)
 }
 
+func (u teamUsecase) PatchMeColor(ctx context.Context, userID string, req api.UpdateColorRequest) (api.UpdateColorResponse, error) {
+	return u.repo.PatchMeColor(ctx, userID, req)
+}
+
 func (u teamUsecase) CreateInvite(ctx context.Context, userID string, req api.CreateInviteRequest) (api.InviteCodeResponse, error) {
 	return u.repo.CreateInvite(ctx, userID, req)
 }

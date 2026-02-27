@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -391,6 +392,50 @@ func TestPatchMeNicknameAndListMembers(t *testing.T) {
 	}
 	if members.Items[0].EffectiveName != "Test User" {
 		t.Fatalf("expected displayName fallback after clear, got %q", members.Items[0].EffectiveName)
+	}
+}
+
+func TestPatchMeColorAndListMembers(t *testing.T) {
+	r := newTestRouter(t)
+	token := loginAs(t, r, "color-owner@example.com")
+
+	patchRes := doRequest(t, r, http.MethodPatch, "/v1/me/color", `{"colorHex":"#a1b2c3"}`, token)
+	if patchRes.Code != http.StatusOK {
+		t.Fatalf("expected color patch 200, got %d: %s", patchRes.Code, patchRes.Body.String())
+	}
+	var patched api.UpdateColorResponse
+	if err := json.Unmarshal(patchRes.Body.Bytes(), &patched); err != nil {
+		t.Fatalf("failed to parse color patch response: %v", err)
+	}
+	if patched.ColorHex == nil || *patched.ColorHex != "#A1B2C3" {
+		t.Fatalf("expected normalized color #A1B2C3, got %+v", patched.ColorHex)
+	}
+
+	membersRes := doRequest(t, r, http.MethodGet, "/v1/teams/current/members", "", token)
+	if membersRes.Code != http.StatusOK {
+		t.Fatalf("expected members 200, got %d: %s", membersRes.Code, membersRes.Body.String())
+	}
+	var members api.TeamMembersResponse
+	if err := json.Unmarshal(membersRes.Body.Bytes(), &members); err != nil {
+		t.Fatalf("failed to parse members response: %v", err)
+	}
+	if len(members.Items) == 0 {
+		t.Fatalf("expected at least one member")
+	}
+	if members.Items[0].ColorHex == nil || *members.Items[0].ColorHex != "#A1B2C3" {
+		t.Fatalf("expected member color #A1B2C3, got %+v", members.Items[0].ColorHex)
+	}
+
+	resetRes := doRequest(t, r, http.MethodPatch, "/v1/me/color", `{"colorHex":null}`, token)
+	if resetRes.Code != http.StatusOK {
+		t.Fatalf("expected color reset 200, got %d: %s", resetRes.Code, resetRes.Body.String())
+	}
+	var reset api.UpdateColorResponse
+	if err := json.Unmarshal(resetRes.Body.Bytes(), &reset); err != nil {
+		t.Fatalf("failed to parse color reset response: %v", err)
+	}
+	if reset.ColorHex != nil {
+		t.Fatalf("expected nil color after reset, got %+v", reset.ColorHex)
 	}
 }
 
@@ -832,8 +877,13 @@ func TestWeeklyTaskIncrementIsAtomicUnderConcurrency(t *testing.T) {
 	r := newTestRouter(t)
 	token := login(t, r)
 
+	const maxRequiredCompletionsPerWeek = 7
 	const workers = 20
-	taskRes := doRequest(t, r, http.MethodPost, "/v1/tasks", `{"title":"洗濯","type":"weekly","penaltyPoints":2,"requiredCompletionsPerWeek":100}`, token)
+	createTaskReq := fmt.Sprintf(
+		`{"title":"洗濯","type":"weekly","penaltyPoints":2,"requiredCompletionsPerWeek":%d}`,
+		maxRequiredCompletionsPerWeek,
+	)
+	taskRes := doRequest(t, r, http.MethodPost, "/v1/tasks", createTaskReq, token)
 	if taskRes.Code != http.StatusCreated {
 		t.Fatalf("expected 201, got %d: %s", taskRes.Code, taskRes.Body.String())
 	}
@@ -899,8 +949,12 @@ func TestWeeklyTaskIncrementIsAtomicUnderConcurrency(t *testing.T) {
 
 	for _, item := range overview.WeeklyTasks {
 		if item.Task.Id == task.Id {
-			if item.WeekCompletedCount != successCount {
-				t.Fatalf("expected weekly count %d, got %d", successCount, item.WeekCompletedCount)
+			expectedCount := successCount
+			if expectedCount > maxRequiredCompletionsPerWeek {
+				expectedCount = maxRequiredCompletionsPerWeek
+			}
+			if item.WeekCompletedCount != expectedCount {
+				t.Fatalf("expected weekly count %d, got %d", expectedCount, item.WeekCompletedCount)
 			}
 			return
 		}

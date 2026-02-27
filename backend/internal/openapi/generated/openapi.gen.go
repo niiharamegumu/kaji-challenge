@@ -138,13 +138,14 @@ type MonthlyTaskStatusGroup struct {
 
 // MonthlyTaskStatusItem defines model for MonthlyTaskStatusItem.
 type MonthlyTaskStatusItem struct {
-	Completed     bool     `json:"completed"`
-	IsDeleted     bool     `json:"isDeleted"`
-	Notes         *string  `json:"notes,omitempty"`
-	PenaltyPoints int      `json:"penaltyPoints"`
-	TaskId        string   `json:"taskId"`
-	Title         string   `json:"title"`
-	Type          TaskType `json:"type"`
+	Completed       bool                 `json:"completed"`
+	CompletionSlots []TaskCompletionSlot `json:"completionSlots"`
+	IsDeleted       bool                 `json:"isDeleted"`
+	Notes           *string              `json:"notes,omitempty"`
+	PenaltyPoints   int                  `json:"penaltyPoints"`
+	TaskId          string               `json:"taskId"`
+	Title           string               `json:"title"`
+	Type            TaskType             `json:"type"`
 }
 
 // PenaltyRule defines model for PenaltyRule.
@@ -173,6 +174,13 @@ type Task struct {
 	UpdatedAt                  time.Time `json:"updatedAt"`
 }
 
+// TaskCompletionActor defines model for TaskCompletionActor.
+type TaskCompletionActor struct {
+	ColorHex      *string `json:"colorHex"`
+	EffectiveName string  `json:"effectiveName"`
+	UserId        string  `json:"userId"`
+}
+
 // TaskCompletionResponse defines model for TaskCompletionResponse.
 type TaskCompletionResponse struct {
 	Completed            bool               `json:"completed"`
@@ -181,10 +189,17 @@ type TaskCompletionResponse struct {
 	WeeklyCompletedCount int                `json:"weeklyCompletedCount"`
 }
 
+// TaskCompletionSlot defines model for TaskCompletionSlot.
+type TaskCompletionSlot struct {
+	Actor *TaskCompletionActor `json:"actor,omitempty"`
+	Slot  int                  `json:"slot"`
+}
+
 // TaskOverviewDailyTask defines model for TaskOverviewDailyTask.
 type TaskOverviewDailyTask struct {
-	CompletedToday bool `json:"completedToday"`
-	Task           Task `json:"task"`
+	CompletedBy    *TaskCompletionActor `json:"completedBy,omitempty"`
+	CompletedToday bool                 `json:"completedToday"`
+	Task           Task                 `json:"task"`
 }
 
 // TaskOverviewResponse defines model for TaskOverviewResponse.
@@ -199,9 +214,10 @@ type TaskOverviewResponse struct {
 
 // TaskOverviewWeeklyTask defines model for TaskOverviewWeeklyTask.
 type TaskOverviewWeeklyTask struct {
-	RequiredCompletionsPerWeek int  `json:"requiredCompletionsPerWeek"`
-	Task                       Task `json:"task"`
-	WeekCompletedCount         int  `json:"weekCompletedCount"`
+	CompletionSlots            []TaskCompletionSlot `json:"completionSlots"`
+	RequiredCompletionsPerWeek int                  `json:"requiredCompletionsPerWeek"`
+	Task                       Task                 `json:"task"`
+	WeekCompletedCount         int                  `json:"weekCompletedCount"`
 }
 
 // TaskType defines model for TaskType.
@@ -215,6 +231,7 @@ type TeamInfoResponse struct {
 
 // TeamMember defines model for TeamMember.
 type TeamMember struct {
+	ColorHex      *string        `json:"colorHex"`
 	DisplayName   string         `json:"displayName"`
 	EffectiveName string         `json:"effectiveName"`
 	JoinedAt      time.Time      `json:"joinedAt"`
@@ -250,6 +267,16 @@ type ToggleTaskCompletionRequest struct {
 // ToggleTaskCompletionRequestAction defines model for ToggleTaskCompletionRequest.Action.
 type ToggleTaskCompletionRequestAction string
 
+// UpdateColorRequest defines model for UpdateColorRequest.
+type UpdateColorRequest struct {
+	ColorHex *string `json:"colorHex"`
+}
+
+// UpdateColorResponse defines model for UpdateColorResponse.
+type UpdateColorResponse struct {
+	ColorHex *string `json:"colorHex"`
+}
+
 // UpdateCurrentTeamRequest defines model for UpdateCurrentTeamRequest.
 type UpdateCurrentTeamRequest struct {
 	Name string `json:"name"`
@@ -284,6 +311,7 @@ type UpdateTaskRequest struct {
 
 // User defines model for User.
 type User struct {
+	ColorHex    *string   `json:"colorHex"`
 	CreatedAt   time.Time `json:"createdAt"`
 	DisplayName string    `json:"displayName"`
 	Email       string    `json:"email"`
@@ -313,6 +341,9 @@ type ListTasksParams struct {
 
 // PostAuthSessionsExchangeJSONRequestBody defines body for PostAuthSessionsExchange for application/json ContentType.
 type PostAuthSessionsExchangeJSONRequestBody = AuthSessionExchangeRequest
+
+// PatchMeColorJSONRequestBody defines body for PatchMeColor for application/json ContentType.
+type PatchMeColorJSONRequestBody = UpdateColorRequest
 
 // PatchMeNicknameJSONRequestBody defines body for PatchMeNickname for application/json ContentType.
 type PatchMeNicknameJSONRequestBody = UpdateNicknameRequest
@@ -370,6 +401,9 @@ type ServerInterface interface {
 	// Current user
 	// (GET /v1/me)
 	GetMe(c *gin.Context)
+	// Update current user color
+	// (PATCH /v1/me/color)
+	PatchMeColor(c *gin.Context)
 	// Update current user nickname
 	// (PATCH /v1/me/nickname)
 	PatchMeNickname(c *gin.Context)
@@ -595,6 +629,21 @@ func (siw *ServerInterfaceWrapper) GetMe(c *gin.Context) {
 	}
 
 	siw.Handler.GetMe(c)
+}
+
+// PatchMeColor operation middleware
+func (siw *ServerInterfaceWrapper) PatchMeColor(c *gin.Context) {
+
+	c.Set(CookieAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.PatchMeColor(c)
 }
 
 // PatchMeNickname operation middleware
@@ -997,6 +1046,7 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	router.POST(options.BaseURL+"/v1/auth/logout", wrapper.PostAuthLogout)
 	router.POST(options.BaseURL+"/v1/auth/sessions/exchange", wrapper.PostAuthSessionsExchange)
 	router.GET(options.BaseURL+"/v1/me", wrapper.GetMe)
+	router.PATCH(options.BaseURL+"/v1/me/color", wrapper.PatchMeColor)
 	router.PATCH(options.BaseURL+"/v1/me/nickname", wrapper.PatchMeNickname)
 	router.GET(options.BaseURL+"/v1/penalty-rules", wrapper.ListPenaltyRules)
 	router.POST(options.BaseURL+"/v1/penalty-rules", wrapper.PostPenaltyRule)

@@ -39,6 +39,24 @@ func (h *Handler) PatchMeNickname(c *gin.Context) {
 	c.JSON(http.StatusOK, res)
 }
 
+func (h *Handler) PatchMeColor(c *gin.Context) {
+	userID, ok := mustUserID(c)
+	if !ok {
+		return
+	}
+	injectIfMatchContext(c)
+	req, ok := bindJSON[api.UpdateColorRequest](c)
+	if !ok {
+		return
+	}
+	res, err := h.services.Team.PatchMeColor(c.Request.Context(), userID, req)
+	if err != nil {
+		writeAppError(c, err, http.StatusBadRequest)
+		return
+	}
+	c.JSON(http.StatusOK, res)
+}
+
 func (h *Handler) PostTeamInvite(c *gin.Context) {
 	userID, ok := mustUserID(c)
 	if !ok {

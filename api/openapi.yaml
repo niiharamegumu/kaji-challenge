@@ -112,6 +112,23 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UpdateNicknameResponse'
+  /v1/me/color:
+    patch:
+      operationId: patchMeColor
+      summary: Update current user color
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateColorRequest'
+      responses:
+        '200':
+          description: Color updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateColorResponse'
 
   /v1/teams/invites:
     post:
@@ -505,6 +522,9 @@ components:
           type: string
         displayName:
           type: string
+        colorHex:
+          type: string
+          nullable: true
         createdAt:
           type: string
           format: date-time
@@ -600,6 +620,9 @@ components:
           nullable: true
         effectiveName:
           type: string
+        colorHex:
+          type: string
+          nullable: true
         joinedAt:
           type: string
           format: date-time
@@ -633,6 +656,22 @@ components:
         effectiveName:
           type: string
 
+    UpdateColorRequest:
+      type: object
+      required: [colorHex]
+      properties:
+        colorHex:
+          type: string
+          nullable: true
+
+    UpdateColorResponse:
+      type: object
+      required: [colorHex]
+      properties:
+        colorHex:
+          type: string
+          nullable: true
+
     TaskType:
       type: string
       enum: [daily, weekly]
@@ -661,6 +700,7 @@ components:
         requiredCompletionsPerWeek:
           type: integer
           minimum: 1
+          maximum: 7
         createdAt:
           type: string
           format: date-time
@@ -690,6 +730,7 @@ components:
         requiredCompletionsPerWeek:
           type: integer
           minimum: 1
+          maximum: 7
 
     UpdateTaskRequest:
       type: object
@@ -710,6 +751,7 @@ components:
         requiredCompletionsPerWeek:
           type: integer
           minimum: 1
+          maximum: 7
 
     ToggleTaskCompletionRequest:
       type: object
@@ -736,6 +778,28 @@ components:
           type: boolean
         weeklyCompletedCount:
           type: integer
+
+    TaskCompletionActor:
+      type: object
+      required: [userId, effectiveName]
+      properties:
+        userId:
+          type: string
+        effectiveName:
+          type: string
+        colorHex:
+          type: string
+          nullable: true
+
+    TaskCompletionSlot:
+      type: object
+      required: [slot]
+      properties:
+        slot:
+          type: integer
+        actor:
+          $ref: '#/components/schemas/TaskCompletionActor'
+          nullable: true
 
     PenaltyRule:
       type: object
@@ -800,10 +864,13 @@ components:
           $ref: '#/components/schemas/Task'
         completedToday:
           type: boolean
+        completedBy:
+          $ref: '#/components/schemas/TaskCompletionActor'
+          nullable: true
 
     TaskOverviewWeeklyTask:
       type: object
-      required: [task, weekCompletedCount, requiredCompletionsPerWeek]
+      required: [task, weekCompletedCount, requiredCompletionsPerWeek, completionSlots]
       properties:
         task:
           $ref: '#/components/schemas/Task'
@@ -811,6 +878,12 @@ components:
           type: integer
         requiredCompletionsPerWeek:
           type: integer
+          minimum: 1
+          maximum: 7
+        completionSlots:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskCompletionSlot'
 
     TaskOverviewResponse:
       type: object
@@ -837,7 +910,7 @@ components:
 
     MonthlyTaskStatusItem:
       type: object
-      required: [taskId, title, type, penaltyPoints, completed, isDeleted]
+      required: [taskId, title, type, penaltyPoints, completed, isDeleted, completionSlots]
       properties:
         taskId:
           type: string
@@ -854,6 +927,10 @@ components:
           type: boolean
         isDeleted:
           type: boolean
+        completionSlots:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskCompletionSlot'
 
     MonthlyTaskStatusGroup:
       type: object

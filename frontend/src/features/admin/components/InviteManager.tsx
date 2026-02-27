@@ -10,26 +10,34 @@ import {
   TeamMembersSection,
   TeamNameSection,
 } from "./invite/InviteSections";
-import { getNicknameError, getTeamNameError } from "./invite/inviteUtils";
+import {
+  getColorHexError,
+  getNicknameError,
+  getTeamNameError,
+} from "./invite/inviteUtils";
 
 type Props = {
   invite: InviteState | null;
   joinCode: string;
   members: TeamMember[];
   nickname: string;
+  colorHex: string;
   teamName: string;
   isCreatingInvite: boolean;
   isJoiningTeam: boolean;
   isLeavingTeam: boolean;
   isSavingNickname: boolean;
+  isSavingColor: boolean;
   isSavingTeamName: boolean;
   onJoinCodeChange: (value: string) => void;
   onNicknameChange: (value: string) => void;
+  onColorHexChange: (value: string) => void;
   onTeamNameChange: (value: string) => void;
   onCreateInvite: () => void;
   onJoinTeam: () => void;
   onLeaveTeam: () => void;
   onSaveNickname: () => void;
+  onSaveColor: () => void;
   onSaveTeamName: () => void;
 };
 
@@ -38,19 +46,23 @@ export function InviteManager({
   joinCode,
   members,
   nickname,
+  colorHex,
   teamName,
   isCreatingInvite,
   isJoiningTeam,
   isLeavingTeam,
   isSavingNickname,
+  isSavingColor,
   isSavingTeamName,
   onJoinCodeChange,
   onNicknameChange,
+  onColorHexChange,
   onTeamNameChange,
   onCreateInvite,
   onJoinTeam,
   onLeaveTeam,
   onSaveNickname,
+  onSaveColor,
   onSaveTeamName,
 }: Props) {
   const [copied, setCopied] = useState(false);
@@ -66,6 +78,7 @@ export function InviteManager({
   }, [copied]);
 
   const nicknameError = getNicknameError(nickname);
+  const colorHexError = getColorHexError(colorHex);
   const teamNameError = getTeamNameError(teamName);
   const inviteExpired =
     invite != null && new Date(invite.expiresAt).getTime() < Date.now();
@@ -153,10 +166,15 @@ export function InviteManager({
         <div className="mt-3">
           <AccountSettingsSection
             nickname={nickname}
+            colorHex={colorHex}
             nicknameError={nicknameError}
+            colorHexError={colorHexError}
             isSavingNickname={isSavingNickname}
+            isSavingColor={isSavingColor}
             onNicknameChange={onNicknameChange}
+            onColorHexChange={onColorHexChange}
             onSaveNickname={onSaveNickname}
+            onSaveColor={onSaveColor}
           />
         </div>
       </article>

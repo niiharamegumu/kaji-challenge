@@ -32,6 +32,7 @@ type AuthService interface {
 type TeamService interface {
 	GetMe(ctx context.Context, userID string) (api.MeResponse, error)
 	PatchMeNickname(ctx context.Context, userID string, req api.UpdateNicknameRequest) (api.UpdateNicknameResponse, error)
+	PatchMeColor(ctx context.Context, userID string, req api.UpdateColorRequest) (api.UpdateColorResponse, error)
 	CreateInvite(ctx context.Context, userID string, req api.CreateInviteRequest) (api.InviteCodeResponse, error)
 	GetTeamCurrentInvite(ctx context.Context, userID string) (api.InviteCodeResponse, error)
 	PatchTeamCurrent(ctx context.Context, userID string, req api.UpdateCurrentTeamRequest) (api.TeamInfoResponse, error)

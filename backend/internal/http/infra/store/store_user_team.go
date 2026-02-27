@@ -85,6 +85,7 @@ func (s *Store) GetMe(ctx context.Context, userID string) (api.MeResponse, error
 			Id:          row.ID,
 			Email:       row.Email,
 			DisplayName: row.DisplayName,
+			ColorHex:    ptrFromText(row.ColorHex),
 			CreatedAt:   row.CreatedAt.Time.In(s.loc),
 		},
 		Memberships: memberships,
@@ -122,6 +123,43 @@ func (s *Store) PatchMeNickname(ctx context.Context, userID string, req api.Upda
 		},
 	); err != nil {
 		return api.UpdateNicknameResponse{}, err
+	}
+	return res, nil
+}
+
+func (s *Store) PatchMeColor(ctx context.Context, userID string, req api.UpdateColorRequest) (api.UpdateColorResponse, error) {
+	teamID, err := s.primaryTeamLocked(ctx, userID)
+	if err != nil {
+		return api.UpdateColorResponse{}, err
+	}
+	colorHex, err := normalizeColorHex(req.ColorHex)
+	if err != nil {
+		return api.UpdateColorResponse{}, err
+	}
+	var res api.UpdateColorResponse
+	if _, err := s.runWithTeamRevisionCAS(
+		ctx,
+		teamID,
+		"team_member",
+		map[string]string{"userId": userID, "action": "color_update"},
+		func(_ context.Context, qtx *dbsqlc.Queries) error {
+			if err := qtx.UpdateUserColorHex(ctx, dbsqlc.UpdateUserColorHexParams{
+				ID:      userID,
+				Column2: colorHex,
+			}); err != nil {
+				return err
+			}
+			row, err := qtx.GetUserByID(ctx, userID)
+			if err != nil {
+				return err
+			}
+			res = api.UpdateColorResponse{
+				ColorHex: ptrFromText(row.ColorHex),
+			}
+			return nil
+		},
+	); err != nil {
+		return api.UpdateColorResponse{}, err
 	}
 	return res, nil
 }
@@ -242,6 +280,7 @@ func (s *Store) GetTeamCurrentMembers(ctx context.Context, userID string) (api.T
 			DisplayName:   row.DisplayName,
 			Nickname:      nickname,
 			EffectiveName: effective,
+			ColorHex:      ptrFromText(row.ColorHex),
 			JoinedAt:      row.CreatedAt.Time.In(s.loc),
 			Role:          role,
 		})
@@ -444,6 +483,27 @@ func normalizeTeamName(raw string) (string, error) {
 		return "", fmt.Errorf("team name must be between %d and %d characters", 1, 50)
 	}
 	return name, nil
+}
+
+func normalizeColorHex(raw *string) (string, error) {
+	if raw == nil {
+		return "", nil
+	}
+	color := strings.ToUpper(strings.TrimSpace(*raw))
+	if color == "" {
+		return "", errors.New("colorHex must be null or #RRGGBB")
+	}
+	if len(color) != 7 || color[0] != '#' {
+		return "", errors.New("colorHex must match #RRGGBB")
+	}
+	for _, r := range color[1:] {
+		isDigit := r >= '0' && r <= '9'
+		isUpperHex := r >= 'A' && r <= 'F'
+		if !isDigit && !isUpperHex {
+			return "", errors.New("colorHex must match #RRGGBB")
+		}
+	}
+	return color, nil
 }
 
 func effectiveName(displayName, nickname string) string {
