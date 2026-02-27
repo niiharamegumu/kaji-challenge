@@ -34,6 +34,7 @@ export type RootLayoutOutletContext = {
   currentUserId: string | null;
   currentTeamName: string;
   displayName: string;
+  colorHex: string | null;
 };
 
 export function RootLayout() {
@@ -69,13 +70,19 @@ export function RootLayout() {
     preferredNickname.length > 0
       ? preferredNickname
       : (meQuery.data?.user.displayName ?? "ログイン中");
+  const currentUserColorHex =
+    cachedMembersQuery.data?.find((member) => member.userId === currentUserID)
+      ?.colorHex ??
+    meQuery.data?.user.colorHex ??
+    null;
   const outletContext = useMemo<RootLayoutOutletContext>(
     () => ({
       currentUserId: currentUserID,
       currentTeamName,
       displayName: currentUserName,
+      colorHex: currentUserColorHex,
     }),
-    [currentTeamName, currentUserID, currentUserName],
+    [currentTeamName, currentUserColorHex, currentUserID, currentUserName],
   );
   const todayLabel = useMemo(() => {
     const now = new Date();
@@ -437,6 +444,7 @@ export function RootLayout() {
 
       <FloatingNav
         currentUserName={currentUserName}
+        currentUserColorHex={currentUserColorHex}
         onLogout={onLogout}
         onRefresh={() => {
           void refreshTeamState();

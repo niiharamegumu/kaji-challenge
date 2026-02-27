@@ -11,8 +11,11 @@ import {
 import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 
+import { getReadableTextColor, resolveUserColor } from "../../../shared/utils/userColor";
+
 type Props = {
   currentUserName: string;
+  currentUserColorHex?: string | null;
   isRefreshing: boolean;
   onRefresh: () => void;
   onLogout: () => void;
@@ -30,6 +33,7 @@ const linkClass = ({ isActive }: { isActive: boolean }) =>
 
 export function FloatingNav({
   currentUserName,
+  currentUserColorHex,
   isRefreshing,
   onRefresh,
   onLogout,
@@ -55,6 +59,9 @@ export function FloatingNav({
     };
   }, []);
 
+  const userBgColor = resolveUserColor(currentUserColorHex);
+  const userTextColor = getReadableTextColor(userBgColor);
+
   return (
     <>
       {open && (
@@ -79,8 +86,13 @@ export function FloatingNav({
         >
           <div className="mb-1.5 flex items-center justify-between gap-2">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-stone-100 px-3 py-1 text-xs text-stone-700">
+              <span
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs"
+                style={{ backgroundColor: userBgColor, color: userTextColor }}
+              >
               <UserCircle2 size={14} aria-hidden="true" />
               {currentUserName}
+              </span>
             </span>
             <button
               type="button"
