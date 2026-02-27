@@ -33,7 +33,7 @@ export function CompletionSlots({ slots, compact = false, className }: Props) {
           ? `${slot.slot}回目: ${actor.effectiveName}`
           : `${slot.slot}回目: 未完了`;
         const initial = isDone ? getInitial(actor.effectiveName) : "";
-        const bgColor = isDone ? resolveUserColor(actor.colorHex) : undefined;
+        const bgColor = isDone ? resolveUserColor(actor.colorHex) : "";
         const textColor = isDone ? getReadableTextColor(bgColor) : undefined;
 
         return (
