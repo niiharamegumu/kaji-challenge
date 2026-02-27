@@ -300,7 +300,9 @@ export function useProfileMutations(setStatus: StatusSetter) {
     mutationFn: async (colorHex: string | null) => patchMeColor({ colorHex }),
     onSuccess: async (_, colorHex) => {
       const message =
-        colorHex == null ? "表示カラーをリセットしました" : "表示カラーを更新しました";
+        colorHex == null
+          ? "表示カラーをリセットしました"
+          : "表示カラーを更新しました";
       setStatus(message);
       await invalidateQueryKeys(queryClient, colorRelatedQueryKeys);
     },

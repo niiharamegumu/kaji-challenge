@@ -73,7 +73,13 @@ export function AdminInvitesPage() {
     if (!colorHexDirty) {
       setColorHex(currentColorHex);
     }
-  }, [colorHexDirty, currentColorHex, currentNickname, currentUserId, nicknameDirty]);
+  }, [
+    colorHexDirty,
+    currentColorHex,
+    currentNickname,
+    currentUserId,
+    nicknameDirty,
+  ]);
 
   const handleCreateInvite = async () => {
     try {
@@ -112,7 +118,9 @@ export function AdminInvitesPage() {
 
   const handleSaveColor = async () => {
     try {
-      await updateColor.mutateAsync(colorHex.trim().length === 0 ? null : colorHex);
+      await updateColor.mutateAsync(
+        colorHex.trim().length === 0 ? null : colorHex,
+      );
       setColorHexDirty(false);
     } catch {
       // Error status is handled by mutation onError.

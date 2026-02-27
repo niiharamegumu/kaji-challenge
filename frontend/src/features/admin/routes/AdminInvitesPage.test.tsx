@@ -159,7 +159,11 @@ describe("AdminInvitesPage", () => {
       expect(nicknameInput).toHaveValue("");
     });
 
-    const saveButton = within(accountCard).getByRole("button", {
+    const nicknameField = nicknameInput.closest("div");
+    if (nicknameField == null) {
+      throw new Error("nickname field container not found");
+    }
+    const saveButton = within(nicknameField).getByRole("button", {
       name: "保存",
     });
     await user.click(saveButton);
