@@ -51,18 +51,10 @@ func TestBuildMonthlyTaskStatusByDateWeeklyOmitFromDeleteWeek(t *testing.T) {
 	teamID, _ := createTeamWithMember(t, s, "summary-weekly-delete@example.com", base)
 	taskID := createTaskAtWithID(t, s, teamID, api.Weekly, 3, 1, base)
 
-	if err := s.q.UpsertTaskCompletionWeeklyCount(ctx, dbsqlc.UpsertTaskCompletionWeeklyCountParams{
-		TaskID:          taskID,
-		WeekStart:       toPgDate(time.Date(2026, 1, 5, 0, 0, 0, 0, s.loc)),
-		CompletionCount: 1,
-	}); err != nil {
+	if err := insertWeeklyCompletionEntriesForTest(ctx, s, taskID, time.Date(2026, 1, 5, 0, 0, 0, 0, s.loc), 1); err != nil {
 		t.Fatalf("failed to create previous-week completion: %v", err)
 	}
-	if err := s.q.UpsertTaskCompletionWeeklyCount(ctx, dbsqlc.UpsertTaskCompletionWeeklyCountParams{
-		TaskID:          taskID,
-		WeekStart:       toPgDate(time.Date(2026, 1, 12, 0, 0, 0, 0, s.loc)),
-		CompletionCount: 1,
-	}); err != nil {
+	if err := insertWeeklyCompletionEntriesForTest(ctx, s, taskID, time.Date(2026, 1, 12, 0, 0, 0, 0, s.loc), 1); err != nil {
 		t.Fatalf("failed to create delete-week completion: %v", err)
 	}
 
@@ -92,11 +84,7 @@ func TestBuildMonthlyTaskStatusByDateWeeklyCrossMonthShownOnMonthStart(t *testin
 	teamID, _ := createTeamWithMember(t, s, "summary-weekly-cross-month@example.com", base)
 	taskID := createTaskAtWithID(t, s, teamID, api.Weekly, 3, 1, base)
 
-	if err := s.q.UpsertTaskCompletionWeeklyCount(ctx, dbsqlc.UpsertTaskCompletionWeeklyCountParams{
-		TaskID:          taskID,
-		WeekStart:       toPgDate(time.Date(2025, 12, 29, 0, 0, 0, 0, s.loc)),
-		CompletionCount: 1,
-	}); err != nil {
+	if err := insertWeeklyCompletionEntriesForTest(ctx, s, taskID, time.Date(2025, 12, 29, 0, 0, 0, 0, s.loc), 1); err != nil {
 		t.Fatalf("failed to create cross-month weekly completion: %v", err)
 	}
 
@@ -227,4 +215,18 @@ func taskCompletedOnDate(groups []api.MonthlyTaskStatusGroup, date, taskID strin
 		}
 	}
 	return false, false
+}
+
+func insertWeeklyCompletionEntriesForTest(ctx context.Context, s *Store, taskID string, weekStart time.Time, count int) error {
+	for idx := 0; idx < count; idx++ {
+		if err := s.q.InsertTaskCompletionWeeklyEntry(ctx, dbsqlc.InsertTaskCompletionWeeklyEntryParams{
+			ID:                s.nextID("twce-test"),
+			TaskID:            taskID,
+			WeekStart:         toPgDate(weekStart),
+			CompletedByUserID: "",
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }

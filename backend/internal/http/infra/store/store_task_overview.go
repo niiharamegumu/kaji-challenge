@@ -40,7 +40,7 @@ func (s *Store) GetTaskOverview(ctx context.Context, userID string) (resp api.Ta
 	}
 	taskCount = len(tasks)
 
-	dailyCompletedTaskIDs, err := s.q.ListCompletedDailyTaskIDsByTeamAndDate(ctx, dbsqlc.ListCompletedDailyTaskIDsByTeamAndDateParams{
+	dailyCompletionRows, err := s.q.ListTaskCompletionDailyByTeamAndDate(ctx, dbsqlc.ListTaskCompletionDailyByTeamAndDateParams{
 		TeamID:     teamID,
 		TargetDate: toPgDate(today),
 	})
@@ -48,9 +48,11 @@ func (s *Store) GetTaskOverview(ctx context.Context, userID string) (resp api.Ta
 	if err != nil {
 		return api.TaskOverviewResponse{}, err
 	}
-	dailyDone := make(map[string]bool, len(dailyCompletedTaskIDs))
-	for _, taskID := range dailyCompletedTaskIDs {
-		dailyDone[taskID] = true
+	dailyDone := make(map[string]bool, len(dailyCompletionRows))
+	dailyActorByTaskID := make(map[string]*api.TaskCompletionActor, len(dailyCompletionRows))
+	for _, row := range dailyCompletionRows {
+		dailyDone[row.TaskID] = true
+		dailyActorByTaskID[row.TaskID] = taskCompletionActorPtr(row.CompletedByUserID, row.CompletedByEffectiveName)
 	}
 
 	weeklyCompletionRows, err := s.q.ListTaskCompletionWeeklyCountsByTeamAndWeek(ctx, dbsqlc.ListTaskCompletionWeeklyCountsByTeamAndWeekParams{
@@ -65,6 +67,21 @@ func (s *Store) GetTaskOverview(ctx context.Context, userID string) (resp api.Ta
 	for _, row := range weeklyCompletionRows {
 		weeklyDone[row.TaskID] = int(row.CompletionCount)
 	}
+	weeklySlotRows, err := s.q.ListTaskCompletionWeeklySlotsByTeamAndWeek(ctx, dbsqlc.ListTaskCompletionWeeklySlotsByTeamAndWeekParams{
+		TeamID:    teamID,
+		WeekStart: toPgDate(weekStart),
+	})
+	queryCount++
+	if err != nil {
+		return api.TaskOverviewResponse{}, err
+	}
+	weeklySlotsByTaskID := map[string]map[int]*api.TaskCompletionActor{}
+	for _, row := range weeklySlotRows {
+		if weeklySlotsByTaskID[row.TaskID] == nil {
+			weeklySlotsByTaskID[row.TaskID] = map[int]*api.TaskCompletionActor{}
+		}
+		weeklySlotsByTaskID[row.TaskID][int(row.Slot)] = taskCompletionActorPtr(row.CompletedByUserID, row.CompletedByEffectiveName)
+	}
 
 	for _, row := range tasks {
 		t := taskFromUndeletedListRow(row, s.loc)
@@ -72,6 +89,7 @@ func (s *Store) GetTaskOverview(ctx context.Context, userID string) (resp api.Ta
 			daily = append(daily, api.TaskOverviewDailyTask{
 				Task:           t.toAPI(),
 				CompletedToday: dailyDone[t.ID],
+				CompletedBy:    dailyActorByTaskID[t.ID],
 			})
 			continue
 		}
@@ -79,6 +97,7 @@ func (s *Store) GetTaskOverview(ctx context.Context, userID string) (resp api.Ta
 			Task:                       t.toAPI(),
 			WeekCompletedCount:         weeklyDone[t.ID],
 			RequiredCompletionsPerWeek: t.Required,
+			CompletionSlots:            buildCompletionSlots(t.Required, weeklySlotsByTaskID[t.ID]),
 		})
 	}
 
@@ -165,6 +184,7 @@ type monthlyTaskStatusRecord struct {
 	Notes     *string
 	Type      api.TaskType
 	Penalty   int
+	Required  int
 	CreatedAt time.Time
 	DeletedAt *time.Time
 }
@@ -192,6 +212,7 @@ func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month 
 			Notes:     ptrFromText(row.Notes),
 			Type:      api.TaskType(row.Type),
 			Penalty:   int(row.PenaltyPoints),
+			Required:  int(row.RequiredCompletionsPerWeek),
 			CreatedAt: row.CreatedAt.Time.In(s.loc),
 			DeletedAt: ptrFromTimestamptz(row.DeletedAt, s.loc),
 		})
@@ -206,12 +227,17 @@ func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month 
 		return nil, err
 	}
 	dailyDone := map[string]map[string]bool{}
+	dailyActors := map[string]map[string]*api.TaskCompletionActor{}
 	for _, row := range dailyRows {
 		dateKey := row.TargetDate.Time.In(s.loc).Format("2006-01-02")
 		if dailyDone[dateKey] == nil {
 			dailyDone[dateKey] = map[string]bool{}
 		}
+		if dailyActors[dateKey] == nil {
+			dailyActors[dateKey] = map[string]*api.TaskCompletionActor{}
+		}
 		dailyDone[dateKey][row.TaskID] = true
+		dailyActors[dateKey][row.TaskID] = taskCompletionActorPtr(row.CompletedByUserID, row.CompletedByEffectiveName)
 	}
 
 	weeklyRows, err := s.q.ListTaskCompletionWeeklyByMonthAndTeam(ctx, dbsqlc.ListTaskCompletionWeeklyByMonthAndTeamParams{
@@ -222,13 +248,32 @@ func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month 
 	if err != nil {
 		return nil, err
 	}
-	weeklyDone := map[string]map[string]bool{}
+	weeklyCounts := map[string]map[string]int{}
 	for _, row := range weeklyRows {
 		weekStartKey := row.WeekStart.Time.In(s.loc).Format("2006-01-02")
-		if weeklyDone[weekStartKey] == nil {
-			weeklyDone[weekStartKey] = map[string]bool{}
+		if weeklyCounts[weekStartKey] == nil {
+			weeklyCounts[weekStartKey] = map[string]int{}
 		}
-		weeklyDone[weekStartKey][row.TaskID] = row.CompletionCount > 0
+		weeklyCounts[weekStartKey][row.TaskID] = int(row.CompletionCount)
+	}
+	weeklySlotRows, err := s.q.ListTaskCompletionWeeklySlotsByMonthAndTeam(ctx, dbsqlc.ListTaskCompletionWeeklySlotsByMonthAndTeamParams{
+		TeamID:      teamID,
+		WeekStart:   toPgDate(startOfWeek(monthStart, s.loc)),
+		WeekStart_2: toPgDate(monthEnd),
+	})
+	if err != nil {
+		return nil, err
+	}
+	weeklyActors := map[string]map[string]map[int]*api.TaskCompletionActor{}
+	for _, row := range weeklySlotRows {
+		weekStartKey := row.WeekStart.Time.In(s.loc).Format("2006-01-02")
+		if weeklyActors[weekStartKey] == nil {
+			weeklyActors[weekStartKey] = map[string]map[int]*api.TaskCompletionActor{}
+		}
+		if weeklyActors[weekStartKey][row.TaskID] == nil {
+			weeklyActors[weekStartKey][row.TaskID] = map[int]*api.TaskCompletionActor{}
+		}
+		weeklyActors[weekStartKey][row.TaskID][int(row.Slot)] = taskCompletionActorPtr(row.CompletedByUserID, row.CompletedByEffectiveName)
 	}
 
 	weeklyAnchorByDay := map[string]time.Time{}
@@ -253,6 +298,7 @@ func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month 
 
 		for _, task := range tasks {
 			completed := false
+			var completionSlots []api.TaskCompletionSlot
 			switch task.Type {
 			case api.Daily:
 				if task.CreatedAt.In(s.loc).After(dayEnd.Add(-time.Nanosecond)) {
@@ -262,6 +308,9 @@ func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month 
 					continue
 				}
 				completed = dailyDone[dayKey] != nil && dailyDone[dayKey][task.ID]
+				completionSlots = buildCompletionSlots(1, map[int]*api.TaskCompletionActor{
+					1: dailyActors[dayKey][task.ID],
+				})
 			case api.Weekly:
 				weekStart, ok := weeklyAnchorByDay[dayKey]
 				if !ok {
@@ -275,19 +324,21 @@ func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month 
 					continue
 				}
 				weekStartKey := weekStart.Format("2006-01-02")
-				completed = weeklyDone[weekStartKey] != nil && weeklyDone[weekStartKey][task.ID]
+				completed = weeklyCounts[weekStartKey] != nil && weeklyCounts[weekStartKey][task.ID] >= task.Required
+				completionSlots = buildCompletionSlots(task.Required, weeklyActors[weekStartKey][task.ID])
 			default:
 				return nil, fmt.Errorf("unknown task type: %s", task.Type)
 			}
 
 			items = append(items, api.MonthlyTaskStatusItem{
-				TaskId:        task.ID,
-				Title:         task.Title,
-				Notes:         task.Notes,
-				Type:          task.Type,
-				PenaltyPoints: task.Penalty,
-				Completed:     completed,
-				IsDeleted:     task.DeletedAt != nil,
+				TaskId:          task.ID,
+				Title:           task.Title,
+				Notes:           task.Notes,
+				Type:            task.Type,
+				PenaltyPoints:   task.Penalty,
+				Completed:       completed,
+				IsDeleted:       task.DeletedAt != nil,
+				CompletionSlots: completionSlots,
 			})
 		}
 
@@ -308,4 +359,29 @@ func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month 
 	}
 
 	return groups, nil
+}
+
+func taskCompletionActorPtr(userIDRaw interface{}, effectiveName string) *api.TaskCompletionActor {
+	userID := ptrFromAny(userIDRaw)
+	if userID == nil {
+		return nil
+	}
+	return &api.TaskCompletionActor{
+		UserId:        *userID,
+		EffectiveName: effectiveName,
+	}
+}
+
+func buildCompletionSlots(required int, actorsBySlot map[int]*api.TaskCompletionActor) []api.TaskCompletionSlot {
+	if required < 1 {
+		required = 1
+	}
+	slots := make([]api.TaskCompletionSlot, 0, required)
+	for idx := 1; idx <= required; idx++ {
+		slots = append(slots, api.TaskCompletionSlot{
+			Slot:  idx,
+			Actor: actorsBySlot[idx],
+		})
+	}
+	return slots
 }
