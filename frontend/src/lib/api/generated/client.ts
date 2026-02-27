@@ -30,6 +30,8 @@ export interface User {
   id: string;
   email: string;
   displayName: string;
+  /** @nullable */
+  colorHex?: string | null;
   createdAt: string;
 }
 
@@ -109,6 +111,8 @@ export interface TeamMember {
   /** @nullable */
   nickname?: string | null;
   effectiveName: string;
+  /** @nullable */
+  colorHex?: string | null;
   joinedAt: string;
   role: TeamMemberRole;
 }
@@ -125,6 +129,16 @@ export interface UpdateNicknameRequest {
 export interface UpdateNicknameResponse {
   nickname: string;
   effectiveName: string;
+}
+
+export interface UpdateColorRequest {
+  /** @nullable */
+  colorHex: string | null;
+}
+
+export interface UpdateColorResponse {
+  /** @nullable */
+  colorHex: string | null;
 }
 
 export type TaskType = typeof TaskType[keyof typeof TaskType];
@@ -214,6 +228,8 @@ export interface TaskCompletionResponse {
 export interface TaskCompletionActor {
   userId: string;
   effectiveName: string;
+  /** @nullable */
+  colorHex?: string | null;
 }
 
 export interface TaskCompletionSlot {
@@ -597,6 +613,43 @@ export const patchMeNickname = async (updateNicknameRequest: UpdateNicknameReque
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(
       updateNicknameRequest,)
+  }
+);}
+
+
+
+/**
+ * @summary Update current user color
+ */
+export type patchMeColorResponse200 = {
+  data: UpdateColorResponse
+  status: 200
+}
+    
+export type patchMeColorResponseSuccess = (patchMeColorResponse200) & {
+  headers: Headers;
+};
+;
+
+export type patchMeColorResponse = (patchMeColorResponseSuccess)
+
+export const getPatchMeColorUrl = () => {
+
+
+  
+
+  return `/v1/me/color`
+}
+
+export const patchMeColor = async (updateColorRequest: UpdateColorRequest, options?: RequestInit): Promise<patchMeColorResponse> => {
+  
+  return customFetch<patchMeColorResponse>(getPatchMeColorUrl(),
+  {      
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      updateColorRequest,)
   }
 );}
 
