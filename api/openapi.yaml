@@ -737,6 +737,25 @@ components:
         weeklyCompletedCount:
           type: integer
 
+    TaskCompletionActor:
+      type: object
+      required: [userId, effectiveName]
+      properties:
+        userId:
+          type: string
+        effectiveName:
+          type: string
+
+    TaskCompletionSlot:
+      type: object
+      required: [slot]
+      properties:
+        slot:
+          type: integer
+        actor:
+          $ref: '#/components/schemas/TaskCompletionActor'
+          nullable: true
+
     PenaltyRule:
       type: object
       required: [id, teamId, threshold, name, createdAt, updatedAt]
@@ -800,10 +819,13 @@ components:
           $ref: '#/components/schemas/Task'
         completedToday:
           type: boolean
+        completedBy:
+          $ref: '#/components/schemas/TaskCompletionActor'
+          nullable: true
 
     TaskOverviewWeeklyTask:
       type: object
-      required: [task, weekCompletedCount, requiredCompletionsPerWeek]
+      required: [task, weekCompletedCount, requiredCompletionsPerWeek, completionSlots]
       properties:
         task:
           $ref: '#/components/schemas/Task'
@@ -811,6 +833,10 @@ components:
           type: integer
         requiredCompletionsPerWeek:
           type: integer
+        completionSlots:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskCompletionSlot'
 
     TaskOverviewResponse:
       type: object
@@ -837,7 +863,7 @@ components:
 
     MonthlyTaskStatusItem:
       type: object
-      required: [taskId, title, type, penaltyPoints, completed, isDeleted]
+      required: [taskId, title, type, penaltyPoints, completed, isDeleted, completionSlots]
       properties:
         taskId:
           type: string
@@ -854,6 +880,10 @@ components:
           type: boolean
         isDeleted:
           type: boolean
+        completionSlots:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskCompletionSlot'
 
     MonthlyTaskStatusGroup:
       type: object
