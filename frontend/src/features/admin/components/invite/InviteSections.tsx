@@ -30,18 +30,15 @@ export function TeamNameSection({
         <label className="sr-only" htmlFor="team-name">
           チーム名
         </label>
-        <input
-          id="team-name"
-          className="min-h-11 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-stone-900 focus-visible:border-[color:var(--color-matcha-500)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-matcha-200)]"
-          value={teamName}
-          onChange={(event) => onTeamNameChange(event.target.value)}
-          placeholder="チーム名"
-          disabled={isSavingTeamName}
-        />
-        {teamNameError && (
-          <p className="mt-1 text-xs text-rose-600">{teamNameError}</p>
-        )}
-        <div className="mt-3 flex justify-start">
+        <div className="mt-2 flex items-center gap-2">
+          <input
+            id="team-name"
+            className="min-h-11 w-full flex-1 rounded-lg border border-stone-300 bg-white px-3 py-2 text-stone-900 focus-visible:border-[color:var(--color-matcha-500)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-matcha-200)]"
+            value={teamName}
+            onChange={(event) => onTeamNameChange(event.target.value)}
+            placeholder="チーム名"
+            disabled={isSavingTeamName}
+          />
           <button
             type="button"
             className="min-h-11 rounded-lg border border-stone-400 px-4 py-2 text-sm whitespace-nowrap text-stone-800 transition-colors duration-200 hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
@@ -51,6 +48,9 @@ export function TeamNameSection({
             {isSavingTeamName ? "保存中..." : "保存"}
           </button>
         </div>
+        {teamNameError && (
+          <p className="mt-1 text-xs text-rose-600">{teamNameError}</p>
+        )}
       </div>
     </section>
   );
@@ -102,10 +102,10 @@ export function TeamMembersSection({
       </ul>
 
       <div className="rounded-lg border border-rose-200 bg-rose-50/70 p-3">
-        <p className="text-xs text-rose-700">
-          離脱すると新しいチームを作成します。
-        </p>
-        <div className="mt-2 flex justify-start">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs text-rose-700">
+            離脱すると新しいチームを作成します。
+          </p>
           <button
             type="button"
             className="min-h-11 rounded-lg border border-rose-300 px-4 py-2 text-sm text-rose-700 transition-colors duration-200 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
@@ -208,15 +208,15 @@ export function JoinTeamSection({
         招待コード
       </label>
       <div>
-        <input
-          id="join-code"
-          className="min-h-11 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-stone-900 focus-visible:border-[color:var(--color-matcha-500)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-matcha-200)]"
-          value={joinCode}
-          onChange={(event) => onJoinCodeChange(event.target.value)}
-          placeholder="招待コード入力"
-          disabled={isJoiningTeam}
-        />
-        <div className="mt-3 flex justify-start">
+        <div className="mt-2 flex items-center gap-2">
+          <input
+            id="join-code"
+            className="min-h-11 w-full flex-1 rounded-lg border border-stone-300 bg-white px-3 py-2 text-stone-900 focus-visible:border-[color:var(--color-matcha-500)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-matcha-200)]"
+            value={joinCode}
+            onChange={(event) => onJoinCodeChange(event.target.value)}
+            placeholder="招待コード入力"
+            disabled={isJoiningTeam}
+          />
           <button
             type="button"
             className="flex min-h-11 items-center justify-center rounded-lg border border-stone-400 px-4 py-2 text-sm whitespace-nowrap text-stone-800 transition-colors duration-200 hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
@@ -263,18 +263,15 @@ export function AccountSettingsSection({
         <label className="sr-only" htmlFor="nickname">
           ニックネーム
         </label>
-        <input
-          id="nickname"
-          className="min-h-11 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-stone-900 focus-visible:border-[color:var(--color-matcha-500)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-matcha-200)]"
-          value={nickname}
-          onChange={(event) => onNicknameChange(event.target.value)}
-          placeholder="ニックネーム（未入力でも保存可能）"
-          disabled={isSavingNickname}
-        />
-        {nicknameError && (
-          <p className="mt-1 text-xs text-rose-600">{nicknameError}</p>
-        )}
-        <div className="mt-3 flex justify-start">
+        <div className="mt-2 flex w-full items-center gap-2">
+          <input
+            id="nickname"
+            className="min-h-11 w-full flex-1 rounded-lg border border-stone-300 bg-white px-3 py-2 text-stone-900 focus-visible:border-[color:var(--color-matcha-500)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-matcha-200)]"
+            value={nickname}
+            onChange={(event) => onNicknameChange(event.target.value)}
+            placeholder="ニックネーム（未入力でも保存可能）"
+            disabled={isSavingNickname}
+          />
           <button
             type="button"
             className="flex min-h-11 items-center justify-center rounded-lg border border-stone-400 px-4 py-2 text-sm whitespace-nowrap text-stone-800 transition-colors duration-200 hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
@@ -284,13 +281,16 @@ export function AccountSettingsSection({
             <span>{isSavingNickname ? "保存中..." : "保存"}</span>
           </button>
         </div>
+        {nicknameError && (
+          <p className="mt-1 text-xs text-rose-600">{nicknameError}</p>
+        )}
       </div>
       <div className="border-t border-stone-200 pt-3">
         <h3 className="text-sm font-semibold text-stone-900">表示カラー</h3>
         <label className="sr-only" htmlFor="color-hex">
           表示カラー
         </label>
-        <div className="mt-2 flex items-center gap-2">
+        <div className="mt-2 flex w-full items-center gap-2">
           <input
             id="color-picker"
             type="color"
@@ -301,7 +301,7 @@ export function AccountSettingsSection({
           />
           <input
             id="color-hex"
-            className="min-h-11 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 font-mono text-stone-900 focus-visible:border-[color:var(--color-matcha-500)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-matcha-200)]"
+            className="min-h-11 w-full flex-1 rounded-lg border border-stone-300 bg-white px-3 py-2 font-mono text-stone-900 focus-visible:border-[color:var(--color-matcha-500)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-matcha-200)]"
             value={colorHex}
             onChange={(event) => onColorHexChange(event.target.value)}
             placeholder="#RRGGBB（空欄で既定色）"
@@ -316,7 +316,9 @@ export function AccountSettingsSection({
             <span>{isSavingColor ? "保存中..." : "保存"}</span>
           </button>
         </div>
-        {colorHexError && <p className="mt-1 text-xs text-rose-600">{colorHexError}</p>}
+        {colorHexError && (
+          <p className="mt-1 text-xs text-rose-600">{colorHexError}</p>
+        )}
       </div>
     </section>
   );
