@@ -52,7 +52,7 @@ func (s *Store) GetTaskOverview(ctx context.Context, userID string) (resp api.Ta
 	dailyActorByTaskID := make(map[string]*api.TaskCompletionActor, len(dailyCompletionRows))
 	for _, row := range dailyCompletionRows {
 		dailyDone[row.TaskID] = true
-		dailyActorByTaskID[row.TaskID] = taskCompletionActorPtr(row.CompletedByUserID, row.CompletedByEffectiveName)
+		dailyActorByTaskID[row.TaskID] = taskCompletionActorPtr(row.CompletedByUserID, row.CompletedByEffectiveName, row.CompletedByColorHex)
 	}
 
 	weeklyCompletionRows, err := s.q.ListTaskCompletionWeeklyCountsByTeamAndWeek(ctx, dbsqlc.ListTaskCompletionWeeklyCountsByTeamAndWeekParams{
@@ -80,7 +80,7 @@ func (s *Store) GetTaskOverview(ctx context.Context, userID string) (resp api.Ta
 		if weeklySlotsByTaskID[row.TaskID] == nil {
 			weeklySlotsByTaskID[row.TaskID] = map[int]*api.TaskCompletionActor{}
 		}
-		weeklySlotsByTaskID[row.TaskID][int(row.Slot)] = taskCompletionActorPtr(row.CompletedByUserID, row.CompletedByEffectiveName)
+		weeklySlotsByTaskID[row.TaskID][int(row.Slot)] = taskCompletionActorPtr(row.CompletedByUserID, row.CompletedByEffectiveName, row.CompletedByColorHex)
 	}
 
 	for _, row := range tasks {
@@ -237,7 +237,7 @@ func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month 
 			dailyActors[dateKey] = map[string]*api.TaskCompletionActor{}
 		}
 		dailyDone[dateKey][row.TaskID] = true
-		dailyActors[dateKey][row.TaskID] = taskCompletionActorPtr(row.CompletedByUserID, row.CompletedByEffectiveName)
+		dailyActors[dateKey][row.TaskID] = taskCompletionActorPtr(row.CompletedByUserID, row.CompletedByEffectiveName, row.CompletedByColorHex)
 	}
 
 	weeklyRows, err := s.q.ListTaskCompletionWeeklyByMonthAndTeam(ctx, dbsqlc.ListTaskCompletionWeeklyByMonthAndTeamParams{
@@ -273,7 +273,7 @@ func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month 
 		if weeklyActors[weekStartKey][row.TaskID] == nil {
 			weeklyActors[weekStartKey][row.TaskID] = map[int]*api.TaskCompletionActor{}
 		}
-		weeklyActors[weekStartKey][row.TaskID][int(row.Slot)] = taskCompletionActorPtr(row.CompletedByUserID, row.CompletedByEffectiveName)
+		weeklyActors[weekStartKey][row.TaskID][int(row.Slot)] = taskCompletionActorPtr(row.CompletedByUserID, row.CompletedByEffectiveName, row.CompletedByColorHex)
 	}
 
 	weeklyAnchorByDay := map[string]time.Time{}
@@ -361,7 +361,7 @@ func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month 
 	return groups, nil
 }
 
-func taskCompletionActorPtr(userIDRaw interface{}, effectiveName string) *api.TaskCompletionActor {
+func taskCompletionActorPtr(userIDRaw interface{}, effectiveName string, colorHexRaw interface{}) *api.TaskCompletionActor {
 	userID := ptrFromAny(userIDRaw)
 	if userID == nil {
 		return nil
@@ -369,6 +369,7 @@ func taskCompletionActorPtr(userIDRaw interface{}, effectiveName string) *api.Ta
 	return &api.TaskCompletionActor{
 		UserId:        *userID,
 		EffectiveName: effectiveName,
+		ColorHex:      ptrFromAny(colorHexRaw),
 	}
 }
 
