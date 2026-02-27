@@ -700,6 +700,7 @@ components:
         requiredCompletionsPerWeek:
           type: integer
           minimum: 1
+          maximum: 7
         createdAt:
           type: string
           format: date-time
@@ -729,6 +730,7 @@ components:
         requiredCompletionsPerWeek:
           type: integer
           minimum: 1
+          maximum: 7
 
     UpdateTaskRequest:
       type: object
@@ -749,6 +751,7 @@ components:
         requiredCompletionsPerWeek:
           type: integer
           minimum: 1
+          maximum: 7
 
     ToggleTaskCompletionRequest:
       type: object
@@ -875,6 +878,8 @@ components:
           type: integer
         requiredCompletionsPerWeek:
           type: integer
+          minimum: 1
+          maximum: 7
         completionSlots:
           type: array
           items:

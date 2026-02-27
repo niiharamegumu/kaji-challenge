@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -876,8 +877,13 @@ func TestWeeklyTaskIncrementIsAtomicUnderConcurrency(t *testing.T) {
 	r := newTestRouter(t)
 	token := login(t, r)
 
+	const maxRequiredCompletionsPerWeek = 7
 	const workers = 20
-	taskRes := doRequest(t, r, http.MethodPost, "/v1/tasks", `{"title":"洗濯","type":"weekly","penaltyPoints":2,"requiredCompletionsPerWeek":100}`, token)
+	createTaskReq := fmt.Sprintf(
+		`{"title":"洗濯","type":"weekly","penaltyPoints":2,"requiredCompletionsPerWeek":%d}`,
+		maxRequiredCompletionsPerWeek,
+	)
+	taskRes := doRequest(t, r, http.MethodPost, "/v1/tasks", createTaskReq, token)
 	if taskRes.Code != http.StatusCreated {
 		t.Fatalf("expected 201, got %d: %s", taskRes.Code, taskRes.Body.String())
 	}
@@ -943,8 +949,12 @@ func TestWeeklyTaskIncrementIsAtomicUnderConcurrency(t *testing.T) {
 
 	for _, item := range overview.WeeklyTasks {
 		if item.Task.Id == task.Id {
-			if item.WeekCompletedCount != successCount {
-				t.Fatalf("expected weekly count %d, got %d", successCount, item.WeekCompletedCount)
+			expectedCount := successCount
+			if expectedCount > maxRequiredCompletionsPerWeek {
+				expectedCount = maxRequiredCompletionsPerWeek
+			}
+			if item.WeekCompletedCount != expectedCount {
+				t.Fatalf("expected weekly count %d, got %d", expectedCount, item.WeekCompletedCount)
 			}
 			return
 		}

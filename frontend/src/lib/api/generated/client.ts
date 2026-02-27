@@ -161,7 +161,10 @@ export interface Task {
    */
   penaltyPoints: number;
   assigneeUserId?: string;
-  /** @minimum 1 */
+  /**
+   * @minimum 1
+   * @maximum 7
+   */
   requiredCompletionsPerWeek: number;
   createdAt: string;
   updatedAt: string;
@@ -182,7 +185,10 @@ export interface CreateTaskRequest {
    */
   penaltyPoints: number;
   assigneeUserId?: string;
-  /** @minimum 1 */
+  /**
+   * @minimum 1
+   * @maximum 7
+   */
   requiredCompletionsPerWeek?: number;
 }
 
@@ -200,7 +206,10 @@ export interface UpdateTaskRequest {
    */
   penaltyPoints?: number;
   assigneeUserId?: string;
-  /** @minimum 1 */
+  /**
+   * @minimum 1
+   * @maximum 7
+   */
   requiredCompletionsPerWeek?: number;
 }
 
@@ -283,6 +292,10 @@ export interface TaskOverviewDailyTask {
 export interface TaskOverviewWeeklyTask {
   task: Task;
   weekCompletedCount: number;
+  /**
+   * @minimum 1
+   * @maximum 7
+   */
   requiredCompletionsPerWeek: number;
   completionSlots: TaskCompletionSlot[];
 }

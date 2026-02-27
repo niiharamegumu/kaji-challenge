@@ -7,6 +7,10 @@ import {
   TaskType as TaskTypeConst,
   type UpdateTaskRequest,
 } from "../../../lib/api/generated/client";
+import {
+  WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MAX,
+  WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MIN,
+} from "../constants/tasks";
 import type { TaskFormState } from "../state/forms";
 import { DeleteConfirmModal } from "./DeleteConfirmModal";
 
@@ -300,7 +304,8 @@ export function TaskManager({
                 id="task-weekly-required"
                 className="h-10 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
                 type="number"
-                min={1}
+                min={WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MIN}
+                max={WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MAX}
                 value={form.requiredCompletionsPerWeek}
                 onChange={handleChange("requiredCompletionsPerWeek")}
               />

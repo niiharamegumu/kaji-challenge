@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -44,8 +45,9 @@ func (s *Store) CreateTask(ctx context.Context, userID string, req api.CreateTas
 	if req.Type == api.Weekly && req.RequiredCompletionsPerWeek != nil {
 		required = *req.RequiredCompletionsPerWeek
 	}
-	if req.Type == api.Daily {
-		required = 1
+	required, err = normalizeRequiredCompletionsPerWeek(req.Type, required)
+	if err != nil {
+		return api.Task{}, err
 	}
 	penalty32, err := safeInt32(req.PenaltyPoints, "penalty points")
 	if err != nil {
@@ -132,7 +134,14 @@ func (s *Store) PatchTask(ctx context.Context, userID, taskID string, req api.Up
 				task.AssigneeID = req.AssigneeUserId
 			}
 			if req.RequiredCompletionsPerWeek != nil && task.Type == api.Weekly {
-				task.Required = *req.RequiredCompletionsPerWeek
+				required, err := normalizeRequiredCompletionsPerWeek(
+					task.Type,
+					*req.RequiredCompletionsPerWeek,
+				)
+				if err != nil {
+					return err
+				}
+				task.Required = required
 			}
 			task.UpdatedAt = time.Now().In(s.loc)
 			penalty32, err := safeInt32(task.Penalty, "penalty points")
@@ -157,6 +166,20 @@ func (s *Store) PatchTask(ctx context.Context, userID, taskID string, req api.Up
 		return api.Task{}, err
 	}
 	return task.toAPI(), nil
+}
+
+func normalizeRequiredCompletionsPerWeek(taskType api.TaskType, required int) (int, error) {
+	if taskType == api.Daily {
+		return requiredCompletionsPerWeekMin, nil
+	}
+	if required < requiredCompletionsPerWeekMin || required > requiredCompletionsPerWeekMax {
+		return 0, fmt.Errorf(
+			"required completions per week must be between %d and %d",
+			requiredCompletionsPerWeekMin,
+			requiredCompletionsPerWeekMax,
+		)
+	}
+	return required, nil
 }
 
 func (s *Store) DeleteTask(ctx context.Context, userID, taskID string) error {

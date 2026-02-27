@@ -374,8 +374,11 @@ func taskCompletionActorPtr(userIDRaw interface{}, effectiveName string, colorHe
 }
 
 func buildCompletionSlots(required int, actorsBySlot map[int]*api.TaskCompletionActor) []api.TaskCompletionSlot {
-	if required < 1 {
-		required = 1
+	if required < requiredCompletionsPerWeekMin {
+		required = requiredCompletionsPerWeekMin
+	}
+	if required > requiredCompletionsPerWeekMax {
+		required = requiredCompletionsPerWeekMax
 	}
 	slots := make([]api.TaskCompletionSlot, 0, required)
 	for idx := 1; idx <= required; idx++ {
