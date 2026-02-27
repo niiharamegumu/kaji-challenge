@@ -1,5 +1,6 @@
 import { Minus, Plus } from "lucide-react";
 import type { TaskOverviewWeeklyTask } from "../../../lib/api/generated/client";
+import { CompletionSlots } from "../../../shared/components/CompletionSlots";
 
 type Props = {
   items: TaskOverviewWeeklyTask[];
@@ -80,14 +81,21 @@ export function WeeklyTasksPanel({
                           {item.task.notes}
                         </div>
                       ) : null}
-                      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-stone-600">
-                        <span className="inline-flex items-center rounded-full bg-stone-900 px-2 py-0.5 font-semibold leading-4 text-white">
-                          週間
-                        </span>
-                        <span>
-                          進捗 {item.weekCompletedCount}/
-                          {item.requiredCompletionsPerWeek}
-                        </span>
+                      <div className="mt-1 flex items-center justify-between gap-2">
+                        <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-stone-600">
+                          <span className="inline-flex items-center rounded-full bg-stone-900 px-2 py-0.5 font-semibold leading-4 text-white">
+                            週間
+                          </span>
+                          <span>
+                            進捗 {item.weekCompletedCount}/
+                            {item.requiredCompletionsPerWeek}
+                          </span>
+                        </div>
+                        <CompletionSlots
+                          compact
+                          className="shrink-0 justify-end"
+                          slots={item.completionSlots}
+                        />
                       </div>
                     </div>
                   </button>
@@ -117,14 +125,21 @@ export function WeeklyTasksPanel({
                           {item.task.notes}
                         </div>
                       ) : null}
-                      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-stone-600">
-                        <span className="inline-flex items-center rounded-full bg-stone-900 px-2 py-0.5 font-semibold leading-4 text-white">
-                          週間
-                        </span>
-                        <span>
-                          進捗 {item.weekCompletedCount}/
-                          {item.requiredCompletionsPerWeek}
-                        </span>
+                      <div className="mt-1 flex items-center justify-between gap-2">
+                        <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-stone-600">
+                          <span className="inline-flex items-center rounded-full bg-stone-900 px-2 py-0.5 font-semibold leading-4 text-white">
+                            週間
+                          </span>
+                          <span>
+                            進捗 {item.weekCompletedCount}/
+                            {item.requiredCompletionsPerWeek}
+                          </span>
+                        </div>
+                        <CompletionSlots
+                          compact
+                          className="shrink-0 justify-end"
+                          slots={item.completionSlots}
+                        />
                       </div>
                     </div>
                   </div>
