@@ -394,6 +394,50 @@ func TestPatchMeNicknameAndListMembers(t *testing.T) {
 	}
 }
 
+func TestPatchMeColorAndListMembers(t *testing.T) {
+	r := newTestRouter(t)
+	token := loginAs(t, r, "color-owner@example.com")
+
+	patchRes := doRequest(t, r, http.MethodPatch, "/v1/me/color", `{"colorHex":"#a1b2c3"}`, token)
+	if patchRes.Code != http.StatusOK {
+		t.Fatalf("expected color patch 200, got %d: %s", patchRes.Code, patchRes.Body.String())
+	}
+	var patched api.UpdateColorResponse
+	if err := json.Unmarshal(patchRes.Body.Bytes(), &patched); err != nil {
+		t.Fatalf("failed to parse color patch response: %v", err)
+	}
+	if patched.ColorHex == nil || *patched.ColorHex != "#A1B2C3" {
+		t.Fatalf("expected normalized color #A1B2C3, got %+v", patched.ColorHex)
+	}
+
+	membersRes := doRequest(t, r, http.MethodGet, "/v1/teams/current/members", "", token)
+	if membersRes.Code != http.StatusOK {
+		t.Fatalf("expected members 200, got %d: %s", membersRes.Code, membersRes.Body.String())
+	}
+	var members api.TeamMembersResponse
+	if err := json.Unmarshal(membersRes.Body.Bytes(), &members); err != nil {
+		t.Fatalf("failed to parse members response: %v", err)
+	}
+	if len(members.Items) == 0 {
+		t.Fatalf("expected at least one member")
+	}
+	if members.Items[0].ColorHex == nil || *members.Items[0].ColorHex != "#A1B2C3" {
+		t.Fatalf("expected member color #A1B2C3, got %+v", members.Items[0].ColorHex)
+	}
+
+	resetRes := doRequest(t, r, http.MethodPatch, "/v1/me/color", `{"colorHex":null}`, token)
+	if resetRes.Code != http.StatusOK {
+		t.Fatalf("expected color reset 200, got %d: %s", resetRes.Code, resetRes.Body.String())
+	}
+	var reset api.UpdateColorResponse
+	if err := json.Unmarshal(resetRes.Body.Bytes(), &reset); err != nil {
+		t.Fatalf("failed to parse color reset response: %v", err)
+	}
+	if reset.ColorHex != nil {
+		t.Fatalf("expected nil color after reset, got %+v", reset.ColorHex)
+	}
+}
+
 func TestPatchTeamCurrentName(t *testing.T) {
 	r := newTestRouter(t)
 	token := loginAs(t, r, "team-name-owner@example.com")
