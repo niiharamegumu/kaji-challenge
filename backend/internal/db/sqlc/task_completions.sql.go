@@ -12,40 +12,47 @@ import (
 )
 
 const createTaskCompletionDaily = `-- name: CreateTaskCompletionDaily :exec
-INSERT INTO task_completion_daily (task_id, target_date, created_at)
-VALUES ($1, $2, NOW())
+INSERT INTO task_completion_daily (task_id, target_date, completed_by_user_id, created_at)
+VALUES ($1, $2, NULLIF($3, '')::uuid, NOW())
 ON CONFLICT (task_id, target_date) DO NOTHING
 `
 
 type CreateTaskCompletionDailyParams struct {
-	TaskID     string      `json:"task_id"`
-	TargetDate pgtype.Date `json:"target_date"`
+	TaskID            string      `json:"task_id"`
+	TargetDate        pgtype.Date `json:"target_date"`
+	CompletedByUserID interface{} `json:"completed_by_user_id"`
 }
 
 func (q *Queries) CreateTaskCompletionDaily(ctx context.Context, arg CreateTaskCompletionDailyParams) error {
-	_, err := q.db.Exec(ctx, createTaskCompletionDaily, arg.TaskID, arg.TargetDate)
+	_, err := q.db.Exec(ctx, createTaskCompletionDaily, arg.TaskID, arg.TargetDate, arg.CompletedByUserID)
 	return err
 }
 
-const decrementTaskCompletionWeekly = `-- name: DecrementTaskCompletionWeekly :one
-INSERT INTO task_completion_weekly (task_id, week_start, completion_count, created_at, updated_at)
-VALUES ($1, $2, 0, NOW(), NOW())
-ON CONFLICT (task_id, week_start) DO UPDATE
-SET completion_count = GREATEST(0, task_completion_weekly.completion_count - 1),
-    updated_at = NOW()
-RETURNING completion_count::bigint
+const deleteLatestTaskCompletionWeeklyEntry = `-- name: DeleteLatestTaskCompletionWeeklyEntry :execrows
+WITH latest AS (
+  SELECT id
+  FROM task_completion_weekly_entries e
+  WHERE e.task_id = $1
+    AND e.week_start = $2
+  ORDER BY created_at DESC, id DESC
+  LIMIT 1
+)
+DELETE FROM task_completion_weekly_entries e
+USING latest
+WHERE e.id = latest.id
 `
 
-type DecrementTaskCompletionWeeklyParams struct {
+type DeleteLatestTaskCompletionWeeklyEntryParams struct {
 	TaskID    string      `json:"task_id"`
 	WeekStart pgtype.Date `json:"week_start"`
 }
 
-func (q *Queries) DecrementTaskCompletionWeekly(ctx context.Context, arg DecrementTaskCompletionWeeklyParams) (int64, error) {
-	row := q.db.QueryRow(ctx, decrementTaskCompletionWeekly, arg.TaskID, arg.WeekStart)
-	var completion_count int64
-	err := row.Scan(&completion_count)
-	return completion_count, err
+func (q *Queries) DeleteLatestTaskCompletionWeeklyEntry(ctx context.Context, arg DeleteLatestTaskCompletionWeeklyEntryParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteLatestTaskCompletionWeeklyEntry, arg.TaskID, arg.WeekStart)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const deleteTaskCompletionDaily = `-- name: DeleteTaskCompletionDaily :exec
@@ -73,61 +80,31 @@ func (q *Queries) DeleteTaskCompletionDailyByTaskID(ctx context.Context, taskID 
 	return err
 }
 
-const deleteTaskCompletionWeekly = `-- name: DeleteTaskCompletionWeekly :exec
-DELETE FROM task_completion_weekly
-WHERE task_id = $1 AND week_start = $2
-`
-
-type DeleteTaskCompletionWeeklyParams struct {
-	TaskID    string      `json:"task_id"`
-	WeekStart pgtype.Date `json:"week_start"`
-}
-
-func (q *Queries) DeleteTaskCompletionWeekly(ctx context.Context, arg DeleteTaskCompletionWeeklyParams) error {
-	_, err := q.db.Exec(ctx, deleteTaskCompletionWeekly, arg.TaskID, arg.WeekStart)
-	return err
-}
-
-const deleteTaskCompletionWeeklyByTaskID = `-- name: DeleteTaskCompletionWeeklyByTaskID :exec
-DELETE FROM task_completion_weekly
+const deleteTaskCompletionWeeklyEntriesByTaskID = `-- name: DeleteTaskCompletionWeeklyEntriesByTaskID :exec
+DELETE FROM task_completion_weekly_entries
 WHERE task_id = $1
 `
 
-func (q *Queries) DeleteTaskCompletionWeeklyByTaskID(ctx context.Context, taskID string) error {
-	_, err := q.db.Exec(ctx, deleteTaskCompletionWeeklyByTaskID, taskID)
+func (q *Queries) DeleteTaskCompletionWeeklyEntriesByTaskID(ctx context.Context, taskID string) error {
+	_, err := q.db.Exec(ctx, deleteTaskCompletionWeeklyEntriesByTaskID, taskID)
 	return err
 }
 
-const deleteTaskCompletionWeeklyIfZero = `-- name: DeleteTaskCompletionWeeklyIfZero :exec
-DELETE FROM task_completion_weekly
-WHERE task_id = $1 AND week_start = $2 AND completion_count = 0
-`
-
-type DeleteTaskCompletionWeeklyIfZeroParams struct {
-	TaskID    string      `json:"task_id"`
-	WeekStart pgtype.Date `json:"week_start"`
-}
-
-func (q *Queries) DeleteTaskCompletionWeeklyIfZero(ctx context.Context, arg DeleteTaskCompletionWeeklyIfZeroParams) error {
-	_, err := q.db.Exec(ctx, deleteTaskCompletionWeeklyIfZero, arg.TaskID, arg.WeekStart)
-	return err
-}
-
-const getTaskCompletionWeeklyCount = `-- name: GetTaskCompletionWeeklyCount :one
+const getTaskCompletionWeeklyEntryCount = `-- name: GetTaskCompletionWeeklyEntryCount :one
 SELECT COALESCE((
-  SELECT completion_count
-  FROM task_completion_weekly
+  SELECT COUNT(*)::integer
+  FROM task_completion_weekly_entries
   WHERE task_id = $1 AND week_start = $2
 ), 0)::bigint
 `
 
-type GetTaskCompletionWeeklyCountParams struct {
+type GetTaskCompletionWeeklyEntryCountParams struct {
 	TaskID    string      `json:"task_id"`
 	WeekStart pgtype.Date `json:"week_start"`
 }
 
-func (q *Queries) GetTaskCompletionWeeklyCount(ctx context.Context, arg GetTaskCompletionWeeklyCountParams) (int64, error) {
-	row := q.db.QueryRow(ctx, getTaskCompletionWeeklyCount, arg.TaskID, arg.WeekStart)
+func (q *Queries) GetTaskCompletionWeeklyEntryCount(ctx context.Context, arg GetTaskCompletionWeeklyEntryCountParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getTaskCompletionWeeklyEntryCount, arg.TaskID, arg.WeekStart)
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
@@ -153,67 +130,37 @@ func (q *Queries) HasTaskCompletionDaily(ctx context.Context, arg HasTaskComplet
 	return exists, err
 }
 
-const incrementTaskCompletionWeekly = `-- name: IncrementTaskCompletionWeekly :one
-INSERT INTO task_completion_weekly (task_id, week_start, completion_count, created_at, updated_at)
-VALUES ($1, $2, 1, NOW(), NOW())
-ON CONFLICT (task_id, week_start) DO UPDATE
-SET completion_count = LEAST($3::integer, task_completion_weekly.completion_count + 1),
-    updated_at = NOW()
-RETURNING completion_count::bigint
+const insertTaskCompletionWeeklyEntry = `-- name: InsertTaskCompletionWeeklyEntry :exec
+INSERT INTO task_completion_weekly_entries (id, task_id, week_start, completed_by_user_id, created_at)
+VALUES ($1, $2, $3, NULLIF($4, '')::uuid, NOW())
 `
 
-type IncrementTaskCompletionWeeklyParams struct {
-	TaskID        string      `json:"task_id"`
-	WeekStart     pgtype.Date `json:"week_start"`
-	MaxCompletion int32       `json:"max_completion"`
+type InsertTaskCompletionWeeklyEntryParams struct {
+	ID                string      `json:"id"`
+	TaskID            string      `json:"task_id"`
+	WeekStart         pgtype.Date `json:"week_start"`
+	CompletedByUserID interface{} `json:"completed_by_user_id"`
 }
 
-func (q *Queries) IncrementTaskCompletionWeekly(ctx context.Context, arg IncrementTaskCompletionWeeklyParams) (int64, error) {
-	row := q.db.QueryRow(ctx, incrementTaskCompletionWeekly, arg.TaskID, arg.WeekStart, arg.MaxCompletion)
-	var completion_count int64
-	err := row.Scan(&completion_count)
-	return completion_count, err
-}
-
-const listCompletedDailyTaskIDsByTeamAndDate = `-- name: ListCompletedDailyTaskIDsByTeamAndDate :many
-SELECT d.task_id
-FROM task_completion_daily d
-JOIN tasks t ON t.id = d.task_id
-WHERE t.team_id = $1
-  AND t.type = 'daily'
-  AND d.target_date = $2
-ORDER BY d.task_id
-`
-
-type ListCompletedDailyTaskIDsByTeamAndDateParams struct {
-	TeamID     string      `json:"team_id"`
-	TargetDate pgtype.Date `json:"target_date"`
-}
-
-func (q *Queries) ListCompletedDailyTaskIDsByTeamAndDate(ctx context.Context, arg ListCompletedDailyTaskIDsByTeamAndDateParams) ([]string, error) {
-	rows, err := q.db.Query(ctx, listCompletedDailyTaskIDsByTeamAndDate, arg.TeamID, arg.TargetDate)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []string
-	for rows.Next() {
-		var task_id string
-		if err := rows.Scan(&task_id); err != nil {
-			return nil, err
-		}
-		items = append(items, task_id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+func (q *Queries) InsertTaskCompletionWeeklyEntry(ctx context.Context, arg InsertTaskCompletionWeeklyEntryParams) error {
+	_, err := q.db.Exec(ctx, insertTaskCompletionWeeklyEntry,
+		arg.ID,
+		arg.TaskID,
+		arg.WeekStart,
+		arg.CompletedByUserID,
+	)
+	return err
 }
 
 const listTaskCompletionDailyByMonthAndTeam = `-- name: ListTaskCompletionDailyByMonthAndTeam :many
-SELECT d.task_id, d.target_date
+SELECT
+  d.task_id,
+  d.target_date,
+  COALESCE(d.completed_by_user_id::text, ''::text) AS completed_by_user_id,
+  COALESCE(NULLIF(u.nickname, ''), u.display_name, ''::text) AS completed_by_effective_name
 FROM task_completion_daily d
 JOIN tasks t ON t.id = d.task_id
+LEFT JOIN users u ON u.id = d.completed_by_user_id
 WHERE t.team_id = $1
   AND d.target_date >= $2
   AND d.target_date < $3
@@ -227,8 +174,10 @@ type ListTaskCompletionDailyByMonthAndTeamParams struct {
 }
 
 type ListTaskCompletionDailyByMonthAndTeamRow struct {
-	TaskID     string      `json:"task_id"`
-	TargetDate pgtype.Date `json:"target_date"`
+	TaskID                   string      `json:"task_id"`
+	TargetDate               pgtype.Date `json:"target_date"`
+	CompletedByUserID        interface{} `json:"completed_by_user_id"`
+	CompletedByEffectiveName string      `json:"completed_by_effective_name"`
 }
 
 func (q *Queries) ListTaskCompletionDailyByMonthAndTeam(ctx context.Context, arg ListTaskCompletionDailyByMonthAndTeamParams) ([]ListTaskCompletionDailyByMonthAndTeamRow, error) {
@@ -240,7 +189,57 @@ func (q *Queries) ListTaskCompletionDailyByMonthAndTeam(ctx context.Context, arg
 	var items []ListTaskCompletionDailyByMonthAndTeamRow
 	for rows.Next() {
 		var i ListTaskCompletionDailyByMonthAndTeamRow
-		if err := rows.Scan(&i.TaskID, &i.TargetDate); err != nil {
+		if err := rows.Scan(
+			&i.TaskID,
+			&i.TargetDate,
+			&i.CompletedByUserID,
+			&i.CompletedByEffectiveName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTaskCompletionDailyByTeamAndDate = `-- name: ListTaskCompletionDailyByTeamAndDate :many
+SELECT
+  d.task_id,
+  COALESCE(d.completed_by_user_id::text, ''::text) AS completed_by_user_id,
+  COALESCE(NULLIF(u.nickname, ''), u.display_name, ''::text) AS completed_by_effective_name
+FROM task_completion_daily d
+JOIN tasks t ON t.id = d.task_id
+LEFT JOIN users u ON u.id = d.completed_by_user_id
+WHERE t.team_id = $1
+  AND t.type = 'daily'
+  AND d.target_date = $2
+ORDER BY d.task_id
+`
+
+type ListTaskCompletionDailyByTeamAndDateParams struct {
+	TeamID     string      `json:"team_id"`
+	TargetDate pgtype.Date `json:"target_date"`
+}
+
+type ListTaskCompletionDailyByTeamAndDateRow struct {
+	TaskID                   string      `json:"task_id"`
+	CompletedByUserID        interface{} `json:"completed_by_user_id"`
+	CompletedByEffectiveName string      `json:"completed_by_effective_name"`
+}
+
+func (q *Queries) ListTaskCompletionDailyByTeamAndDate(ctx context.Context, arg ListTaskCompletionDailyByTeamAndDateParams) ([]ListTaskCompletionDailyByTeamAndDateRow, error) {
+	rows, err := q.db.Query(ctx, listTaskCompletionDailyByTeamAndDate, arg.TeamID, arg.TargetDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTaskCompletionDailyByTeamAndDateRow
+	for rows.Next() {
+		var i ListTaskCompletionDailyByTeamAndDateRow
+		if err := rows.Scan(&i.TaskID, &i.CompletedByUserID, &i.CompletedByEffectiveName); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -252,13 +251,14 @@ func (q *Queries) ListTaskCompletionDailyByMonthAndTeam(ctx context.Context, arg
 }
 
 const listTaskCompletionWeeklyByMonthAndTeam = `-- name: ListTaskCompletionWeeklyByMonthAndTeam :many
-SELECT w.task_id, w.week_start, w.completion_count
-FROM task_completion_weekly w
-JOIN tasks t ON t.id = w.task_id
+SELECT e.task_id, e.week_start, COUNT(*)::integer AS completion_count
+FROM task_completion_weekly_entries e
+JOIN tasks t ON t.id = e.task_id
 WHERE t.team_id = $1
-  AND w.week_start >= $2
-  AND w.week_start < $3
-ORDER BY w.week_start, w.task_id
+  AND e.week_start >= $2
+  AND e.week_start < $3
+GROUP BY e.task_id, e.week_start
+ORDER BY e.week_start, e.task_id
 `
 
 type ListTaskCompletionWeeklyByMonthAndTeamParams struct {
@@ -294,13 +294,14 @@ func (q *Queries) ListTaskCompletionWeeklyByMonthAndTeam(ctx context.Context, ar
 }
 
 const listTaskCompletionWeeklyCountsByTeamAndWeek = `-- name: ListTaskCompletionWeeklyCountsByTeamAndWeek :many
-SELECT w.task_id, w.completion_count
-FROM task_completion_weekly w
-JOIN tasks t ON t.id = w.task_id
+SELECT e.task_id, COUNT(*)::integer AS completion_count
+FROM task_completion_weekly_entries e
+JOIN tasks t ON t.id = e.task_id
 WHERE t.team_id = $1
   AND t.type = 'weekly'
-  AND w.week_start = $2
-ORDER BY w.task_id
+  AND e.week_start = $2
+GROUP BY e.task_id
+ORDER BY e.task_id
 `
 
 type ListTaskCompletionWeeklyCountsByTeamAndWeekParams struct {
@@ -333,45 +334,111 @@ func (q *Queries) ListTaskCompletionWeeklyCountsByTeamAndWeek(ctx context.Contex
 	return items, nil
 }
 
-const toggleTaskCompletionWeeklyBinary = `-- name: ToggleTaskCompletionWeeklyBinary :one
-INSERT INTO task_completion_weekly (task_id, week_start, completion_count, created_at, updated_at)
-VALUES ($1, $2, 1, NOW(), NOW())
-ON CONFLICT (task_id, week_start) DO UPDATE
-SET completion_count = CASE
-  WHEN task_completion_weekly.completion_count > 0 THEN 0
-  ELSE 1
-END,
-    updated_at = NOW()
-RETURNING completion_count::bigint
+const listTaskCompletionWeeklySlotsByMonthAndTeam = `-- name: ListTaskCompletionWeeklySlotsByMonthAndTeam :many
+SELECT
+  e.task_id,
+  e.week_start,
+  ROW_NUMBER() OVER (PARTITION BY e.task_id, e.week_start ORDER BY e.created_at ASC, e.id ASC)::integer AS slot,
+  COALESCE(e.completed_by_user_id::text, ''::text) AS completed_by_user_id,
+  COALESCE(NULLIF(u.nickname, ''), u.display_name, ''::text) AS completed_by_effective_name
+FROM task_completion_weekly_entries e
+JOIN tasks t ON t.id = e.task_id
+LEFT JOIN users u ON u.id = e.completed_by_user_id
+WHERE t.team_id = $1
+  AND t.type = 'weekly'
+  AND e.week_start >= $2
+  AND e.week_start < $3
+ORDER BY e.week_start, e.task_id, slot
 `
 
-type ToggleTaskCompletionWeeklyBinaryParams struct {
-	TaskID    string      `json:"task_id"`
+type ListTaskCompletionWeeklySlotsByMonthAndTeamParams struct {
+	TeamID      string      `json:"team_id"`
+	WeekStart   pgtype.Date `json:"week_start"`
+	WeekStart_2 pgtype.Date `json:"week_start_2"`
+}
+
+type ListTaskCompletionWeeklySlotsByMonthAndTeamRow struct {
+	TaskID                   string      `json:"task_id"`
+	WeekStart                pgtype.Date `json:"week_start"`
+	Slot                     int32       `json:"slot"`
+	CompletedByUserID        interface{} `json:"completed_by_user_id"`
+	CompletedByEffectiveName string      `json:"completed_by_effective_name"`
+}
+
+func (q *Queries) ListTaskCompletionWeeklySlotsByMonthAndTeam(ctx context.Context, arg ListTaskCompletionWeeklySlotsByMonthAndTeamParams) ([]ListTaskCompletionWeeklySlotsByMonthAndTeamRow, error) {
+	rows, err := q.db.Query(ctx, listTaskCompletionWeeklySlotsByMonthAndTeam, arg.TeamID, arg.WeekStart, arg.WeekStart_2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTaskCompletionWeeklySlotsByMonthAndTeamRow
+	for rows.Next() {
+		var i ListTaskCompletionWeeklySlotsByMonthAndTeamRow
+		if err := rows.Scan(
+			&i.TaskID,
+			&i.WeekStart,
+			&i.Slot,
+			&i.CompletedByUserID,
+			&i.CompletedByEffectiveName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTaskCompletionWeeklySlotsByTeamAndWeek = `-- name: ListTaskCompletionWeeklySlotsByTeamAndWeek :many
+SELECT
+  e.task_id,
+  ROW_NUMBER() OVER (PARTITION BY e.task_id ORDER BY e.created_at ASC, e.id ASC)::integer AS slot,
+  COALESCE(e.completed_by_user_id::text, ''::text) AS completed_by_user_id,
+  COALESCE(NULLIF(u.nickname, ''), u.display_name, ''::text) AS completed_by_effective_name
+FROM task_completion_weekly_entries e
+JOIN tasks t ON t.id = e.task_id
+LEFT JOIN users u ON u.id = e.completed_by_user_id
+WHERE t.team_id = $1
+  AND t.type = 'weekly'
+  AND e.week_start = $2
+ORDER BY e.task_id, slot
+`
+
+type ListTaskCompletionWeeklySlotsByTeamAndWeekParams struct {
+	TeamID    string      `json:"team_id"`
 	WeekStart pgtype.Date `json:"week_start"`
 }
 
-func (q *Queries) ToggleTaskCompletionWeeklyBinary(ctx context.Context, arg ToggleTaskCompletionWeeklyBinaryParams) (int64, error) {
-	row := q.db.QueryRow(ctx, toggleTaskCompletionWeeklyBinary, arg.TaskID, arg.WeekStart)
-	var completion_count int64
-	err := row.Scan(&completion_count)
-	return completion_count, err
+type ListTaskCompletionWeeklySlotsByTeamAndWeekRow struct {
+	TaskID                   string      `json:"task_id"`
+	Slot                     int32       `json:"slot"`
+	CompletedByUserID        interface{} `json:"completed_by_user_id"`
+	CompletedByEffectiveName string      `json:"completed_by_effective_name"`
 }
 
-const upsertTaskCompletionWeeklyCount = `-- name: UpsertTaskCompletionWeeklyCount :exec
-INSERT INTO task_completion_weekly (task_id, week_start, completion_count, created_at, updated_at)
-VALUES ($1, $2, $3, NOW(), NOW())
-ON CONFLICT (task_id, week_start) DO UPDATE
-SET completion_count = EXCLUDED.completion_count,
-    updated_at = NOW()
-`
-
-type UpsertTaskCompletionWeeklyCountParams struct {
-	TaskID          string      `json:"task_id"`
-	WeekStart       pgtype.Date `json:"week_start"`
-	CompletionCount int32       `json:"completion_count"`
-}
-
-func (q *Queries) UpsertTaskCompletionWeeklyCount(ctx context.Context, arg UpsertTaskCompletionWeeklyCountParams) error {
-	_, err := q.db.Exec(ctx, upsertTaskCompletionWeeklyCount, arg.TaskID, arg.WeekStart, arg.CompletionCount)
-	return err
+func (q *Queries) ListTaskCompletionWeeklySlotsByTeamAndWeek(ctx context.Context, arg ListTaskCompletionWeeklySlotsByTeamAndWeekParams) ([]ListTaskCompletionWeeklySlotsByTeamAndWeekRow, error) {
+	rows, err := q.db.Query(ctx, listTaskCompletionWeeklySlotsByTeamAndWeek, arg.TeamID, arg.WeekStart)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTaskCompletionWeeklySlotsByTeamAndWeekRow
+	for rows.Next() {
+		var i ListTaskCompletionWeeklySlotsByTeamAndWeekRow
+		if err := rows.Scan(
+			&i.TaskID,
+			&i.Slot,
+			&i.CompletedByUserID,
+			&i.CompletedByEffectiveName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
