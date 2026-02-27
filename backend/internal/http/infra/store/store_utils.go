@@ -63,6 +63,11 @@ func ptrFromAny(v interface{}) *string {
 	switch x := v.(type) {
 	case nil:
 		return nil
+	case pgtype.Text:
+		if !x.Valid {
+			return nil
+		}
+		return ptrFromUUIDString(x.String)
 	case string:
 		return ptrFromUUIDString(x)
 	case []byte:
