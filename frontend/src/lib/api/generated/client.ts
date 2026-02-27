@@ -211,6 +211,16 @@ export interface TaskCompletionResponse {
   weeklyCompletedCount: number;
 }
 
+export interface TaskCompletionActor {
+  userId: string;
+  effectiveName: string;
+}
+
+export interface TaskCompletionSlot {
+  slot: number;
+  actor?: TaskCompletionActor | null;
+}
+
 export interface PenaltyRule {
   id: string;
   teamId: string;
@@ -251,12 +261,14 @@ export interface UpdatePenaltyRuleRequest {
 export interface TaskOverviewDailyTask {
   task: Task;
   completedToday: boolean;
+  completedBy?: TaskCompletionActor | null;
 }
 
 export interface TaskOverviewWeeklyTask {
   task: Task;
   weekCompletedCount: number;
   requiredCompletionsPerWeek: number;
+  completionSlots: TaskCompletionSlot[];
 }
 
 export interface TaskOverviewResponse {
@@ -277,6 +289,7 @@ export interface MonthlyTaskStatusItem {
   penaltyPoints: number;
   completed: boolean;
   isDeleted: boolean;
+  completionSlots: TaskCompletionSlot[];
 }
 
 export interface MonthlyTaskStatusGroup {
