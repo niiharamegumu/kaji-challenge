@@ -1,4 +1,5 @@
 import type { TaskCompletionSlot } from "../../lib/api/generated/client";
+import { getReadableTextColor, resolveUserColor } from "../utils/userColor";
 
 const fallbackLabel = "不明";
 
@@ -32,6 +33,8 @@ export function CompletionSlots({ slots, compact = false, className }: Props) {
           ? `${slot.slot}回目: ${actor.effectiveName}`
           : `${slot.slot}回目: 未完了`;
         const initial = isDone ? getInitial(actor.effectiveName) : "";
+        const bgColor = isDone ? resolveUserColor(actor.colorHex) : undefined;
+        const textColor = isDone ? getReadableTextColor(bgColor) : undefined;
 
         return (
           <span
@@ -40,9 +43,14 @@ export function CompletionSlots({ slots, compact = false, className }: Props) {
             aria-label={title}
             className={`inline-flex ${sizeClass} items-center justify-center rounded-full border font-semibold leading-none ${
               isDone
-                ? "border-stone-900 bg-stone-900 text-white"
+                ? "border-transparent"
                 : "border-stone-300 bg-stone-100 text-stone-500"
             }`}
+            style={
+              isDone
+                ? { backgroundColor: bgColor, color: textColor }
+                : undefined
+            }
           >
             {initial}
             <span className="sr-only">
