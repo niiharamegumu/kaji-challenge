@@ -138,13 +138,14 @@ type MonthlyTaskStatusGroup struct {
 
 // MonthlyTaskStatusItem defines model for MonthlyTaskStatusItem.
 type MonthlyTaskStatusItem struct {
-	Completed     bool     `json:"completed"`
-	IsDeleted     bool     `json:"isDeleted"`
-	Notes         *string  `json:"notes,omitempty"`
-	PenaltyPoints int      `json:"penaltyPoints"`
-	TaskId        string   `json:"taskId"`
-	Title         string   `json:"title"`
-	Type          TaskType `json:"type"`
+	Completed       bool                 `json:"completed"`
+	CompletionSlots []TaskCompletionSlot `json:"completionSlots"`
+	IsDeleted       bool                 `json:"isDeleted"`
+	Notes           *string              `json:"notes,omitempty"`
+	PenaltyPoints   int                  `json:"penaltyPoints"`
+	TaskId          string               `json:"taskId"`
+	Title           string               `json:"title"`
+	Type            TaskType             `json:"type"`
 }
 
 // PenaltyRule defines model for PenaltyRule.
@@ -173,6 +174,12 @@ type Task struct {
 	UpdatedAt                  time.Time `json:"updatedAt"`
 }
 
+// TaskCompletionActor defines model for TaskCompletionActor.
+type TaskCompletionActor struct {
+	EffectiveName string `json:"effectiveName"`
+	UserId        string `json:"userId"`
+}
+
 // TaskCompletionResponse defines model for TaskCompletionResponse.
 type TaskCompletionResponse struct {
 	Completed            bool               `json:"completed"`
@@ -181,10 +188,17 @@ type TaskCompletionResponse struct {
 	WeeklyCompletedCount int                `json:"weeklyCompletedCount"`
 }
 
+// TaskCompletionSlot defines model for TaskCompletionSlot.
+type TaskCompletionSlot struct {
+	Actor *TaskCompletionActor `json:"actor,omitempty"`
+	Slot  int                  `json:"slot"`
+}
+
 // TaskOverviewDailyTask defines model for TaskOverviewDailyTask.
 type TaskOverviewDailyTask struct {
-	CompletedToday bool `json:"completedToday"`
-	Task           Task `json:"task"`
+	CompletedBy    *TaskCompletionActor `json:"completedBy,omitempty"`
+	CompletedToday bool                 `json:"completedToday"`
+	Task           Task                 `json:"task"`
 }
 
 // TaskOverviewResponse defines model for TaskOverviewResponse.
@@ -199,9 +213,10 @@ type TaskOverviewResponse struct {
 
 // TaskOverviewWeeklyTask defines model for TaskOverviewWeeklyTask.
 type TaskOverviewWeeklyTask struct {
-	RequiredCompletionsPerWeek int  `json:"requiredCompletionsPerWeek"`
-	Task                       Task `json:"task"`
-	WeekCompletedCount         int  `json:"weekCompletedCount"`
+	CompletionSlots            []TaskCompletionSlot `json:"completionSlots"`
+	RequiredCompletionsPerWeek int                  `json:"requiredCompletionsPerWeek"`
+	Task                       Task                 `json:"task"`
+	WeekCompletedCount         int                  `json:"weekCompletedCount"`
 }
 
 // TaskType defines model for TaskType.
