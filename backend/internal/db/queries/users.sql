@@ -1,10 +1,10 @@
 -- name: GetUserByEmail :one
-SELECT id, email, display_name, COALESCE(nickname, '') AS nickname, created_at
+SELECT id, email, display_name, COALESCE(nickname, '') AS nickname, color_hex, created_at
 FROM users
 WHERE LOWER(email) = LOWER($1);
 
 -- name: GetUserByID :one
-SELECT id, email, display_name, COALESCE(nickname, '') AS nickname, created_at
+SELECT id, email, display_name, COALESCE(nickname, '') AS nickname, color_hex, created_at
 FROM users
 WHERE id = $1;
 
@@ -20,4 +20,9 @@ WHERE id = $1;
 -- name: UpdateUserNickname :exec
 UPDATE users
 SET nickname = NULLIF($2, '')
+WHERE id = $1;
+
+-- name: UpdateUserColorHex :exec
+UPDATE users
+SET color_hex = NULLIF($2, '')
 WHERE id = $1;

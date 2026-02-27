@@ -18,7 +18,8 @@ SELECT EXISTS (
 SELECT
   d.task_id,
   COALESCE(d.completed_by_user_id::text, ''::text) AS completed_by_user_id,
-  COALESCE(NULLIF(u.nickname, ''), u.display_name, ''::text) AS completed_by_effective_name
+  COALESCE(NULLIF(u.nickname, ''), u.display_name, ''::text) AS completed_by_effective_name,
+  u.color_hex AS completed_by_color_hex
 FROM task_completion_daily d
 JOIN tasks t ON t.id = d.task_id
 LEFT JOIN users u ON u.id = d.completed_by_user_id
@@ -74,7 +75,8 @@ SELECT
   d.task_id,
   d.target_date,
   COALESCE(d.completed_by_user_id::text, ''::text) AS completed_by_user_id,
-  COALESCE(NULLIF(u.nickname, ''), u.display_name, ''::text) AS completed_by_effective_name
+  COALESCE(NULLIF(u.nickname, ''), u.display_name, ''::text) AS completed_by_effective_name,
+  u.color_hex AS completed_by_color_hex
 FROM task_completion_daily d
 JOIN tasks t ON t.id = d.task_id
 LEFT JOIN users u ON u.id = d.completed_by_user_id
@@ -98,7 +100,8 @@ SELECT
   e.task_id,
   ROW_NUMBER() OVER (PARTITION BY e.task_id ORDER BY e.created_at ASC, e.id ASC)::integer AS slot,
   COALESCE(e.completed_by_user_id::text, ''::text) AS completed_by_user_id,
-  COALESCE(NULLIF(u.nickname, ''), u.display_name, ''::text) AS completed_by_effective_name
+  COALESCE(NULLIF(u.nickname, ''), u.display_name, ''::text) AS completed_by_effective_name,
+  u.color_hex AS completed_by_color_hex
 FROM task_completion_weekly_entries e
 JOIN tasks t ON t.id = e.task_id
 LEFT JOIN users u ON u.id = e.completed_by_user_id
@@ -113,7 +116,8 @@ SELECT
   e.week_start,
   ROW_NUMBER() OVER (PARTITION BY e.task_id, e.week_start ORDER BY e.created_at ASC, e.id ASC)::integer AS slot,
   COALESCE(e.completed_by_user_id::text, ''::text) AS completed_by_user_id,
-  COALESCE(NULLIF(u.nickname, ''), u.display_name, ''::text) AS completed_by_effective_name
+  COALESCE(NULLIF(u.nickname, ''), u.display_name, ''::text) AS completed_by_effective_name,
+  u.color_hex AS completed_by_color_hex
 FROM task_completion_weekly_entries e
 JOIN tasks t ON t.id = e.task_id
 LEFT JOIN users u ON u.id = e.completed_by_user_id
