@@ -1,6 +1,10 @@
 import { Check, Copy, RefreshCw, Users } from "lucide-react";
 
 import type { TeamMember } from "../../../../lib/api/generated/client";
+import {
+  getReadableTextColor,
+  resolveUserColor,
+} from "../../../../shared/utils/userColor";
 import type { InviteState } from "../../state/ui";
 import { formatDateTime } from "./inviteUtils";
 
@@ -73,7 +77,13 @@ export function TeamMembersSection({
             className="flex flex-wrap items-center gap-2 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm"
           >
             <Users size={14} aria-hidden="true" className="text-stone-500" />
-            <span className="font-medium text-stone-900">
+            <span
+              className="rounded-full px-2 py-0.5 font-medium"
+              style={{
+                backgroundColor: resolveUserColor(member.colorHex),
+                color: getReadableTextColor(resolveUserColor(member.colorHex)),
+              }}
+            >
               {member.effectiveName}
             </span>
             <span className="rounded bg-white px-2 py-0.5 text-xs text-stone-600">
@@ -223,18 +233,28 @@ export function JoinTeamSection({
 
 type AccountSettingsSectionProps = {
   nickname: string;
+  colorHex: string;
   nicknameError: string;
+  colorHexError: string;
   isSavingNickname: boolean;
+  isSavingColor: boolean;
   onNicknameChange: (value: string) => void;
+  onColorHexChange: (value: string) => void;
   onSaveNickname: () => void;
+  onSaveColor: () => void;
 };
 
 export function AccountSettingsSection({
   nickname,
+  colorHex,
   nicknameError,
+  colorHexError,
   isSavingNickname,
+  isSavingColor,
   onNicknameChange,
+  onColorHexChange,
   onSaveNickname,
+  onSaveColor,
 }: AccountSettingsSectionProps) {
   return (
     <section className="space-y-2">
@@ -264,6 +284,39 @@ export function AccountSettingsSection({
             <span>{isSavingNickname ? "保存中..." : "保存"}</span>
           </button>
         </div>
+      </div>
+      <div className="border-t border-stone-200 pt-3">
+        <h3 className="text-sm font-semibold text-stone-900">表示カラー</h3>
+        <label className="sr-only" htmlFor="color-hex">
+          表示カラー
+        </label>
+        <div className="mt-2 flex items-center gap-2">
+          <input
+            id="color-picker"
+            type="color"
+            className="h-11 w-12 rounded border border-stone-300 bg-white p-1"
+            value={resolveUserColor(colorHex)}
+            onChange={(event) => onColorHexChange(event.target.value)}
+            disabled={isSavingColor}
+          />
+          <input
+            id="color-hex"
+            className="min-h-11 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 font-mono text-stone-900 focus-visible:border-[color:var(--color-matcha-500)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-matcha-200)]"
+            value={colorHex}
+            onChange={(event) => onColorHexChange(event.target.value)}
+            placeholder="#RRGGBB（空欄で既定色）"
+            disabled={isSavingColor}
+          />
+          <button
+            type="button"
+            className="flex min-h-11 items-center justify-center rounded-lg border border-stone-400 px-4 py-2 text-sm whitespace-nowrap text-stone-800 transition-colors duration-200 hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
+            onClick={onSaveColor}
+            disabled={isSavingColor || colorHexError.length > 0}
+          >
+            <span>{isSavingColor ? "保存中..." : "保存"}</span>
+          </button>
+        </div>
+        {colorHexError && <p className="mt-1 text-xs text-rose-600">{colorHexError}</p>}
       </div>
     </section>
   );

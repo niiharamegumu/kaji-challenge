@@ -21,13 +21,16 @@ export function AdminInvitesPage() {
   const [joinCode, setJoinCode] = useState("");
   const setStatus = useSetAtom(statusMessageAtom);
   const { createInvite, joinTeam, leaveTeam } = useInviteMutations(setStatus);
-  const { updateNickname, updateTeamName } = useProfileMutations(setStatus);
+  const { updateNickname, updateColor, updateTeamName } =
+    useProfileMutations(setStatus);
   const membersQuery = useCurrentTeamMembersQuery(Boolean(currentUserId));
   const currentInviteQuery = useCurrentInviteQuery(Boolean(currentUserId));
 
   const [nickname, setNickname] = useState("");
+  const [colorHex, setColorHex] = useState("");
   const [teamName, setTeamName] = useState("");
   const [nicknameDirty, setNicknameDirty] = useState(false);
+  const [colorHexDirty, setColorHexDirty] = useState(false);
   const [teamNameDirty, setTeamNameDirty] = useState(false);
 
   const invite: InviteState | null =
@@ -40,6 +43,9 @@ export function AdminInvitesPage() {
   const currentNickname =
     membersQuery.data?.find((member) => member.userId === currentUserId)
       ?.nickname ?? "";
+  const currentColorHex =
+    membersQuery.data?.find((member) => member.userId === currentUserId)
+      ?.colorHex ?? "";
 
   useEffect(() => {
     if (teamNameDirty) {
@@ -52,13 +58,22 @@ export function AdminInvitesPage() {
     if (currentUserId == null) {
       setNickname("");
       setNicknameDirty(false);
+      setColorHex("");
+      setColorHexDirty(false);
       return;
     }
     if (nicknameDirty) {
-      return;
+      if (colorHexDirty) {
+        return;
+      }
     }
-    setNickname(currentNickname);
-  }, [currentNickname, currentUserId, nicknameDirty]);
+    if (!nicknameDirty) {
+      setNickname(currentNickname);
+    }
+    if (!colorHexDirty) {
+      setColorHex(currentColorHex);
+    }
+  }, [colorHexDirty, currentColorHex, currentNickname, currentUserId, nicknameDirty]);
 
   const handleCreateInvite = async () => {
     try {
@@ -95,6 +110,15 @@ export function AdminInvitesPage() {
     }
   };
 
+  const handleSaveColor = async () => {
+    try {
+      await updateColor.mutateAsync(colorHex.trim().length === 0 ? null : colorHex);
+      setColorHexDirty(false);
+    } catch {
+      // Error status is handled by mutation onError.
+    }
+  };
+
   const handleSaveTeamName = async () => {
     try {
       await updateTeamName.mutateAsync(teamName);
@@ -111,16 +135,22 @@ export function AdminInvitesPage() {
         joinCode={joinCode}
         members={membersQuery.data ?? []}
         nickname={nickname}
+        colorHex={colorHex}
         teamName={teamName}
         isCreatingInvite={createInvite.isPending}
         isJoiningTeam={joinTeam.isPending}
         isLeavingTeam={leaveTeam.isPending}
         isSavingNickname={updateNickname.isPending}
+        isSavingColor={updateColor.isPending}
         isSavingTeamName={updateTeamName.isPending}
         onJoinCodeChange={setJoinCode}
         onNicknameChange={(value) => {
           setNickname(value);
           setNicknameDirty(true);
+        }}
+        onColorHexChange={(value) => {
+          setColorHex(value);
+          setColorHexDirty(true);
         }}
         onTeamNameChange={(value) => {
           setTeamName(value);
@@ -137,6 +167,9 @@ export function AdminInvitesPage() {
         }}
         onSaveNickname={() => {
           void handleSaveNickname();
+        }}
+        onSaveColor={() => {
+          void handleSaveColor();
         }}
         onSaveTeamName={() => {
           void handleSaveTeamName();

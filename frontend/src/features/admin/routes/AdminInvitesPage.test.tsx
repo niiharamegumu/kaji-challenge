@@ -19,6 +19,7 @@ const mockPostTeamInvite = vi.fn();
 const mockPostTeamJoin = vi.fn();
 const mockPostTeamLeave = vi.fn();
 const mockPatchMeNickname = vi.fn();
+const mockPatchMeColor = vi.fn();
 const mockPatchTeamCurrent = vi.fn();
 
 vi.mock("react-router-dom", async () => {
@@ -48,6 +49,7 @@ vi.mock("../../../lib/api/generated/client", async () => {
     postTeamJoin: (...args: unknown[]) => mockPostTeamJoin(...args),
     postTeamLeave: (...args: unknown[]) => mockPostTeamLeave(...args),
     patchMeNickname: (...args: unknown[]) => mockPatchMeNickname(...args),
+    patchMeColor: (...args: unknown[]) => mockPatchMeColor(...args),
     patchTeamCurrent: (...args: unknown[]) => mockPatchTeamCurrent(...args),
   };
 });
@@ -62,6 +64,7 @@ describe("AdminInvitesPage", () => {
     mockPostTeamJoin.mockReset();
     mockPostTeamLeave.mockReset();
     mockPatchMeNickname.mockReset();
+    mockPatchMeColor.mockReset();
     mockPatchTeamCurrent.mockReset();
 
     mockGetTeamCurrentMembers.mockResolvedValue({ data: { items: [] } });
@@ -76,6 +79,7 @@ describe("AdminInvitesPage", () => {
     mockPostTeamJoin.mockResolvedValue({ data: {} });
     mockPostTeamLeave.mockResolvedValue({ data: {} });
     mockPatchMeNickname.mockResolvedValue({ data: {} });
+    mockPatchMeColor.mockResolvedValue({ data: {} });
     mockPatchTeamCurrent.mockResolvedValue({ data: {} });
   });
 
@@ -124,6 +128,7 @@ describe("AdminInvitesPage", () => {
             displayName: "Owner",
             nickname: "にっく",
             effectiveName: "にっく",
+            colorHex: "#111111",
             joinedAt: "2026-02-24T00:00:00Z",
             role: "owner",
           },
