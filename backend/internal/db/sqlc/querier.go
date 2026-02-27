@@ -84,6 +84,7 @@ type Querier interface {
 	UpdateTeamMemberRole(ctx context.Context, arg UpdateTeamMemberRoleParams) error
 	UpdateTeamName(ctx context.Context, arg UpdateTeamNameParams) error
 	UpdateTeamStateRevisionIfMatch(ctx context.Context, arg UpdateTeamStateRevisionIfMatchParams) (int64, error)
+	UpdateUserColorHex(ctx context.Context, arg UpdateUserColorHexParams) error
 	UpdateUserDisplayName(ctx context.Context, arg UpdateUserDisplayNameParams) error
 	UpdateUserNickname(ctx context.Context, arg UpdateUserNicknameParams) error
 	UpsertMonthlyPenaltySummary(ctx context.Context, arg UpsertMonthlyPenaltySummaryParams) error

@@ -157,7 +157,8 @@ SELECT
   d.task_id,
   d.target_date,
   COALESCE(d.completed_by_user_id::text, ''::text) AS completed_by_user_id,
-  COALESCE(NULLIF(u.nickname, ''), u.display_name, ''::text) AS completed_by_effective_name
+  COALESCE(NULLIF(u.nickname, ''), u.display_name, ''::text) AS completed_by_effective_name,
+  u.color_hex AS completed_by_color_hex
 FROM task_completion_daily d
 JOIN tasks t ON t.id = d.task_id
 LEFT JOIN users u ON u.id = d.completed_by_user_id
@@ -178,6 +179,7 @@ type ListTaskCompletionDailyByMonthAndTeamRow struct {
 	TargetDate               pgtype.Date `json:"target_date"`
 	CompletedByUserID        interface{} `json:"completed_by_user_id"`
 	CompletedByEffectiveName string      `json:"completed_by_effective_name"`
+	CompletedByColorHex      pgtype.Text `json:"completed_by_color_hex"`
 }
 
 func (q *Queries) ListTaskCompletionDailyByMonthAndTeam(ctx context.Context, arg ListTaskCompletionDailyByMonthAndTeamParams) ([]ListTaskCompletionDailyByMonthAndTeamRow, error) {
@@ -194,6 +196,7 @@ func (q *Queries) ListTaskCompletionDailyByMonthAndTeam(ctx context.Context, arg
 			&i.TargetDate,
 			&i.CompletedByUserID,
 			&i.CompletedByEffectiveName,
+			&i.CompletedByColorHex,
 		); err != nil {
 			return nil, err
 		}
@@ -209,7 +212,8 @@ const listTaskCompletionDailyByTeamAndDate = `-- name: ListTaskCompletionDailyBy
 SELECT
   d.task_id,
   COALESCE(d.completed_by_user_id::text, ''::text) AS completed_by_user_id,
-  COALESCE(NULLIF(u.nickname, ''), u.display_name, ''::text) AS completed_by_effective_name
+  COALESCE(NULLIF(u.nickname, ''), u.display_name, ''::text) AS completed_by_effective_name,
+  u.color_hex AS completed_by_color_hex
 FROM task_completion_daily d
 JOIN tasks t ON t.id = d.task_id
 LEFT JOIN users u ON u.id = d.completed_by_user_id
@@ -228,6 +232,7 @@ type ListTaskCompletionDailyByTeamAndDateRow struct {
 	TaskID                   string      `json:"task_id"`
 	CompletedByUserID        interface{} `json:"completed_by_user_id"`
 	CompletedByEffectiveName string      `json:"completed_by_effective_name"`
+	CompletedByColorHex      pgtype.Text `json:"completed_by_color_hex"`
 }
 
 func (q *Queries) ListTaskCompletionDailyByTeamAndDate(ctx context.Context, arg ListTaskCompletionDailyByTeamAndDateParams) ([]ListTaskCompletionDailyByTeamAndDateRow, error) {
@@ -239,7 +244,12 @@ func (q *Queries) ListTaskCompletionDailyByTeamAndDate(ctx context.Context, arg 
 	var items []ListTaskCompletionDailyByTeamAndDateRow
 	for rows.Next() {
 		var i ListTaskCompletionDailyByTeamAndDateRow
-		if err := rows.Scan(&i.TaskID, &i.CompletedByUserID, &i.CompletedByEffectiveName); err != nil {
+		if err := rows.Scan(
+			&i.TaskID,
+			&i.CompletedByUserID,
+			&i.CompletedByEffectiveName,
+			&i.CompletedByColorHex,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -340,7 +350,8 @@ SELECT
   e.week_start,
   ROW_NUMBER() OVER (PARTITION BY e.task_id, e.week_start ORDER BY e.created_at ASC, e.id ASC)::integer AS slot,
   COALESCE(e.completed_by_user_id::text, ''::text) AS completed_by_user_id,
-  COALESCE(NULLIF(u.nickname, ''), u.display_name, ''::text) AS completed_by_effective_name
+  COALESCE(NULLIF(u.nickname, ''), u.display_name, ''::text) AS completed_by_effective_name,
+  u.color_hex AS completed_by_color_hex
 FROM task_completion_weekly_entries e
 JOIN tasks t ON t.id = e.task_id
 LEFT JOIN users u ON u.id = e.completed_by_user_id
@@ -363,6 +374,7 @@ type ListTaskCompletionWeeklySlotsByMonthAndTeamRow struct {
 	Slot                     int32       `json:"slot"`
 	CompletedByUserID        interface{} `json:"completed_by_user_id"`
 	CompletedByEffectiveName string      `json:"completed_by_effective_name"`
+	CompletedByColorHex      pgtype.Text `json:"completed_by_color_hex"`
 }
 
 func (q *Queries) ListTaskCompletionWeeklySlotsByMonthAndTeam(ctx context.Context, arg ListTaskCompletionWeeklySlotsByMonthAndTeamParams) ([]ListTaskCompletionWeeklySlotsByMonthAndTeamRow, error) {
@@ -380,6 +392,7 @@ func (q *Queries) ListTaskCompletionWeeklySlotsByMonthAndTeam(ctx context.Contex
 			&i.Slot,
 			&i.CompletedByUserID,
 			&i.CompletedByEffectiveName,
+			&i.CompletedByColorHex,
 		); err != nil {
 			return nil, err
 		}
@@ -396,7 +409,8 @@ SELECT
   e.task_id,
   ROW_NUMBER() OVER (PARTITION BY e.task_id ORDER BY e.created_at ASC, e.id ASC)::integer AS slot,
   COALESCE(e.completed_by_user_id::text, ''::text) AS completed_by_user_id,
-  COALESCE(NULLIF(u.nickname, ''), u.display_name, ''::text) AS completed_by_effective_name
+  COALESCE(NULLIF(u.nickname, ''), u.display_name, ''::text) AS completed_by_effective_name,
+  u.color_hex AS completed_by_color_hex
 FROM task_completion_weekly_entries e
 JOIN tasks t ON t.id = e.task_id
 LEFT JOIN users u ON u.id = e.completed_by_user_id
@@ -416,6 +430,7 @@ type ListTaskCompletionWeeklySlotsByTeamAndWeekRow struct {
 	Slot                     int32       `json:"slot"`
 	CompletedByUserID        interface{} `json:"completed_by_user_id"`
 	CompletedByEffectiveName string      `json:"completed_by_effective_name"`
+	CompletedByColorHex      pgtype.Text `json:"completed_by_color_hex"`
 }
 
 func (q *Queries) ListTaskCompletionWeeklySlotsByTeamAndWeek(ctx context.Context, arg ListTaskCompletionWeeklySlotsByTeamAndWeekParams) ([]ListTaskCompletionWeeklySlotsByTeamAndWeekRow, error) {
@@ -432,6 +447,7 @@ func (q *Queries) ListTaskCompletionWeeklySlotsByTeamAndWeek(ctx context.Context
 			&i.Slot,
 			&i.CompletedByUserID,
 			&i.CompletedByEffectiveName,
+			&i.CompletedByColorHex,
 		); err != nil {
 			return nil, err
 		}

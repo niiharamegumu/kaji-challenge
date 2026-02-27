@@ -181,7 +181,8 @@ SELECT
   tm.role,
   tm.created_at,
   u.display_name,
-  COALESCE(u.nickname, '') AS nickname
+  COALESCE(u.nickname, '') AS nickname,
+  u.color_hex
 FROM team_members tm
 INNER JOIN users u ON u.id = tm.user_id
 WHERE tm.team_id = $1
@@ -195,6 +196,7 @@ type ListTeamMembersByTeamIDRow struct {
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	DisplayName string             `json:"display_name"`
 	Nickname    string             `json:"nickname"`
+	ColorHex    pgtype.Text        `json:"color_hex"`
 }
 
 func (q *Queries) ListTeamMembersByTeamID(ctx context.Context, teamID string) ([]ListTeamMembersByTeamIDRow, error) {
@@ -213,6 +215,7 @@ func (q *Queries) ListTeamMembersByTeamID(ctx context.Context, teamID string) ([
 			&i.CreatedAt,
 			&i.DisplayName,
 			&i.Nickname,
+			&i.ColorHex,
 		); err != nil {
 			return nil, err
 		}

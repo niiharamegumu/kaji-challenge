@@ -128,4 +128,5 @@ type User struct {
 	DisplayName string             `json:"display_name"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	Nickname    pgtype.Text        `json:"nickname"`
+	ColorHex    pgtype.Text        `json:"color_hex"`
 }

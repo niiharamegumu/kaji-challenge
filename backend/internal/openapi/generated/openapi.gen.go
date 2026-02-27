@@ -176,8 +176,9 @@ type Task struct {
 
 // TaskCompletionActor defines model for TaskCompletionActor.
 type TaskCompletionActor struct {
-	EffectiveName string `json:"effectiveName"`
-	UserId        string `json:"userId"`
+	ColorHex      *string `json:"colorHex"`
+	EffectiveName string  `json:"effectiveName"`
+	UserId        string  `json:"userId"`
 }
 
 // TaskCompletionResponse defines model for TaskCompletionResponse.
@@ -230,6 +231,7 @@ type TeamInfoResponse struct {
 
 // TeamMember defines model for TeamMember.
 type TeamMember struct {
+	ColorHex      *string        `json:"colorHex"`
 	DisplayName   string         `json:"displayName"`
 	EffectiveName string         `json:"effectiveName"`
 	JoinedAt      time.Time      `json:"joinedAt"`
@@ -265,6 +267,16 @@ type ToggleTaskCompletionRequest struct {
 // ToggleTaskCompletionRequestAction defines model for ToggleTaskCompletionRequest.Action.
 type ToggleTaskCompletionRequestAction string
 
+// UpdateColorRequest defines model for UpdateColorRequest.
+type UpdateColorRequest struct {
+	ColorHex *string `json:"colorHex"`
+}
+
+// UpdateColorResponse defines model for UpdateColorResponse.
+type UpdateColorResponse struct {
+	ColorHex *string `json:"colorHex"`
+}
+
 // UpdateCurrentTeamRequest defines model for UpdateCurrentTeamRequest.
 type UpdateCurrentTeamRequest struct {
 	Name string `json:"name"`
@@ -299,6 +311,7 @@ type UpdateTaskRequest struct {
 
 // User defines model for User.
 type User struct {
+	ColorHex    *string   `json:"colorHex"`
 	CreatedAt   time.Time `json:"createdAt"`
 	DisplayName string    `json:"displayName"`
 	Email       string    `json:"email"`
@@ -328,6 +341,9 @@ type ListTasksParams struct {
 
 // PostAuthSessionsExchangeJSONRequestBody defines body for PostAuthSessionsExchange for application/json ContentType.
 type PostAuthSessionsExchangeJSONRequestBody = AuthSessionExchangeRequest
+
+// PatchMeColorJSONRequestBody defines body for PatchMeColor for application/json ContentType.
+type PatchMeColorJSONRequestBody = UpdateColorRequest
 
 // PatchMeNicknameJSONRequestBody defines body for PatchMeNickname for application/json ContentType.
 type PatchMeNicknameJSONRequestBody = UpdateNicknameRequest
@@ -385,6 +401,9 @@ type ServerInterface interface {
 	// Current user
 	// (GET /v1/me)
 	GetMe(c *gin.Context)
+	// Update current user color
+	// (PATCH /v1/me/color)
+	PatchMeColor(c *gin.Context)
 	// Update current user nickname
 	// (PATCH /v1/me/nickname)
 	PatchMeNickname(c *gin.Context)
@@ -610,6 +629,21 @@ func (siw *ServerInterfaceWrapper) GetMe(c *gin.Context) {
 	}
 
 	siw.Handler.GetMe(c)
+}
+
+// PatchMeColor operation middleware
+func (siw *ServerInterfaceWrapper) PatchMeColor(c *gin.Context) {
+
+	c.Set(CookieAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.PatchMeColor(c)
 }
 
 // PatchMeNickname operation middleware
@@ -1012,6 +1046,7 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	router.POST(options.BaseURL+"/v1/auth/logout", wrapper.PostAuthLogout)
 	router.POST(options.BaseURL+"/v1/auth/sessions/exchange", wrapper.PostAuthSessionsExchange)
 	router.GET(options.BaseURL+"/v1/me", wrapper.GetMe)
+	router.PATCH(options.BaseURL+"/v1/me/color", wrapper.PatchMeColor)
 	router.PATCH(options.BaseURL+"/v1/me/nickname", wrapper.PatchMeNickname)
 	router.GET(options.BaseURL+"/v1/penalty-rules", wrapper.ListPenaltyRules)
 	router.POST(options.BaseURL+"/v1/penalty-rules", wrapper.PostPenaltyRule)

@@ -34,7 +34,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) error {
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, display_name, COALESCE(nickname, '') AS nickname, created_at
+SELECT id, email, display_name, COALESCE(nickname, '') AS nickname, color_hex, created_at
 FROM users
 WHERE LOWER(email) = LOWER($1)
 `
@@ -44,6 +44,7 @@ type GetUserByEmailRow struct {
 	Email       string             `json:"email"`
 	DisplayName string             `json:"display_name"`
 	Nickname    string             `json:"nickname"`
+	ColorHex    pgtype.Text        `json:"color_hex"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 
@@ -55,13 +56,14 @@ func (q *Queries) GetUserByEmail(ctx context.Context, lower string) (GetUserByEm
 		&i.Email,
 		&i.DisplayName,
 		&i.Nickname,
+		&i.ColorHex,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, email, display_name, COALESCE(nickname, '') AS nickname, created_at
+SELECT id, email, display_name, COALESCE(nickname, '') AS nickname, color_hex, created_at
 FROM users
 WHERE id = $1
 `
@@ -71,6 +73,7 @@ type GetUserByIDRow struct {
 	Email       string             `json:"email"`
 	DisplayName string             `json:"display_name"`
 	Nickname    string             `json:"nickname"`
+	ColorHex    pgtype.Text        `json:"color_hex"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 
@@ -82,9 +85,26 @@ func (q *Queries) GetUserByID(ctx context.Context, id string) (GetUserByIDRow, e
 		&i.Email,
 		&i.DisplayName,
 		&i.Nickname,
+		&i.ColorHex,
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const updateUserColorHex = `-- name: UpdateUserColorHex :exec
+UPDATE users
+SET color_hex = NULLIF($2, '')
+WHERE id = $1
+`
+
+type UpdateUserColorHexParams struct {
+	ID      string      `json:"id"`
+	Column2 interface{} `json:"column_2"`
+}
+
+func (q *Queries) UpdateUserColorHex(ctx context.Context, arg UpdateUserColorHexParams) error {
+	_, err := q.db.Exec(ctx, updateUserColorHex, arg.ID, arg.Column2)
+	return err
 }
 
 const updateUserDisplayName = `-- name: UpdateUserDisplayName :exec
