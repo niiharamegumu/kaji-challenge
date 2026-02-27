@@ -11,7 +11,10 @@ import {
 import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 
-import { getReadableTextColor, resolveUserColor } from "../../../shared/utils/userColor";
+import {
+  getReadableTextColor,
+  resolveUserColor,
+} from "../../../shared/utils/userColor";
 
 type Props = {
   currentUserName: string;
@@ -85,14 +88,12 @@ export function FloatingNav({
           }`}
         >
           <div className="mb-1.5 flex items-center justify-between gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-stone-100 px-3 py-1 text-xs text-stone-700">
-              <span
-                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs"
-                style={{ backgroundColor: userBgColor, color: userTextColor }}
-              >
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs"
+              style={{ backgroundColor: userBgColor, color: userTextColor }}
+            >
               <UserCircle2 size={14} aria-hidden="true" />
               {currentUserName}
-              </span>
             </span>
             <button
               type="button"
