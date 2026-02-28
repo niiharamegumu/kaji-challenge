@@ -26,3 +26,17 @@ WHERE id = $1;
 UPDATE users
 SET color_hex = NULLIF($2, '')
 WHERE id = $1;
+
+-- name: GetUserAuthIdentityByID :one
+SELECT id,
+       COALESCE(oidc_issuer, '') AS oidc_issuer,
+       COALESCE(oidc_subject, '') AS oidc_subject
+FROM users
+WHERE id = $1;
+
+-- name: UpdateUserOIDCByID :exec
+UPDATE users
+SET oidc_issuer = NULLIF($2, ''),
+    oidc_subject = NULLIF($3, ''),
+    oidc_linked_at = $4
+WHERE id = $1;
