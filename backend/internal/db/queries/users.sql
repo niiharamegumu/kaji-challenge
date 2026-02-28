@@ -3,6 +3,12 @@ SELECT id, email, display_name, COALESCE(nickname, '') AS nickname, color_hex, c
 FROM users
 WHERE LOWER(email) = LOWER($1);
 
+-- name: GetUserByOIDC :one
+SELECT id, email, display_name, COALESCE(nickname, '') AS nickname, color_hex, created_at
+FROM users
+WHERE oidc_issuer = $1
+  AND oidc_subject = $2;
+
 -- name: GetUserByID :one
 SELECT id, email, display_name, COALESCE(nickname, '') AS nickname, color_hex, created_at
 FROM users
