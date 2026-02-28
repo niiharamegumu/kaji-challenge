@@ -112,6 +112,41 @@ func (q *Queries) GetUserByID(ctx context.Context, id string) (GetUserByIDRow, e
 	return i, err
 }
 
+const getUserByOIDC = `-- name: GetUserByOIDC :one
+SELECT id, email, display_name, COALESCE(nickname, '') AS nickname, color_hex, created_at
+FROM users
+WHERE oidc_issuer = $1
+  AND oidc_subject = $2
+`
+
+type GetUserByOIDCParams struct {
+	OidcIssuer  pgtype.Text `json:"oidc_issuer"`
+	OidcSubject pgtype.Text `json:"oidc_subject"`
+}
+
+type GetUserByOIDCRow struct {
+	ID          string             `json:"id"`
+	Email       string             `json:"email"`
+	DisplayName string             `json:"display_name"`
+	Nickname    string             `json:"nickname"`
+	ColorHex    pgtype.Text        `json:"color_hex"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) GetUserByOIDC(ctx context.Context, arg GetUserByOIDCParams) (GetUserByOIDCRow, error) {
+	row := q.db.QueryRow(ctx, getUserByOIDC, arg.OidcIssuer, arg.OidcSubject)
+	var i GetUserByOIDCRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.DisplayName,
+		&i.Nickname,
+		&i.ColorHex,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const updateUserColorHex = `-- name: UpdateUserColorHex :exec
 UPDATE users
 SET color_hex = NULLIF($2, '')
