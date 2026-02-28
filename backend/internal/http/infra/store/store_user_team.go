@@ -13,7 +13,7 @@ import (
 	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 )
 
-func (s *Store) getOrCreateUserLocked(ctx context.Context, email, displayName string) (string, userRecord, error) {
+func (s *Store) getOrCreateUserLocked(ctx context.Context, issuer, subject, email, displayName string) (string, userRecord, error) {
 	now := time.Now().In(s.loc)
 	row, err := s.q.GetUserByEmail(ctx, email)
 	if err == nil {
@@ -25,6 +25,9 @@ func (s *Store) getOrCreateUserLocked(ctx context.Context, email, displayName st
 				return "", userRecord{}, err
 			}
 			row.DisplayName = displayName
+		}
+		if err := s.syncUserOIDCIdentityLocked(ctx, row.ID, issuer, subject); err != nil {
+			return "", userRecord{}, err
 		}
 		return row.ID, userRecord{ID: row.ID, Email: row.Email, Name: row.DisplayName, CreatedAt: row.CreatedAt.Time.In(s.loc)}, nil
 	}
@@ -60,7 +63,37 @@ func (s *Store) getOrCreateUserLocked(ctx context.Context, email, displayName st
 	}); err != nil {
 		return "", userRecord{}, err
 	}
+	if err := s.syncUserOIDCIdentityLocked(ctx, user.ID, issuer, subject); err != nil {
+		return "", userRecord{}, err
+	}
 	return user.ID, user, nil
+}
+
+func (s *Store) syncUserOIDCIdentityLocked(ctx context.Context, userID, issuer, subject string) error {
+	issuer = strings.TrimSpace(issuer)
+	subject = strings.TrimSpace(subject)
+	if issuer == "" || subject == "" {
+		return errors.New("forbidden: missing oidc identity")
+	}
+
+	rec, err := s.q.GetUserAuthIdentityByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	currentIssuer := strings.TrimSpace(rec.OidcIssuer)
+	currentSubject := strings.TrimSpace(rec.OidcSubject)
+	if currentIssuer == "" && currentSubject == "" {
+		return s.q.UpdateUserOIDCByID(ctx, dbsqlc.UpdateUserOIDCByIDParams{
+			ID:           userID,
+			Column2:      issuer,
+			Column3:      subject,
+			OidcLinkedAt: toPgTimestamptz(time.Now().In(s.loc)),
+		})
+	}
+	if currentIssuer == issuer && currentSubject == subject {
+		return nil
+	}
+	return errors.New("forbidden: oidc identity mismatch")
 }
 
 func (s *Store) GetMe(ctx context.Context, userID string) (api.MeResponse, error) {
