@@ -33,6 +33,27 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) error {
 	return err
 }
 
+const getUserAuthIdentityByID = `-- name: GetUserAuthIdentityByID :one
+SELECT id,
+       COALESCE(oidc_issuer, '') AS oidc_issuer,
+       COALESCE(oidc_subject, '') AS oidc_subject
+FROM users
+WHERE id = $1
+`
+
+type GetUserAuthIdentityByIDRow struct {
+	ID          string `json:"id"`
+	OidcIssuer  string `json:"oidc_issuer"`
+	OidcSubject string `json:"oidc_subject"`
+}
+
+func (q *Queries) GetUserAuthIdentityByID(ctx context.Context, id string) (GetUserAuthIdentityByIDRow, error) {
+	row := q.db.QueryRow(ctx, getUserAuthIdentityByID, id)
+	var i GetUserAuthIdentityByIDRow
+	err := row.Scan(&i.ID, &i.OidcIssuer, &i.OidcSubject)
+	return i, err
+}
+
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT id, email, display_name, COALESCE(nickname, '') AS nickname, color_hex, created_at
 FROM users
@@ -136,5 +157,30 @@ type UpdateUserNicknameParams struct {
 
 func (q *Queries) UpdateUserNickname(ctx context.Context, arg UpdateUserNicknameParams) error {
 	_, err := q.db.Exec(ctx, updateUserNickname, arg.ID, arg.Column2)
+	return err
+}
+
+const updateUserOIDCByID = `-- name: UpdateUserOIDCByID :exec
+UPDATE users
+SET oidc_issuer = NULLIF($2, ''),
+    oidc_subject = NULLIF($3, ''),
+    oidc_linked_at = $4
+WHERE id = $1
+`
+
+type UpdateUserOIDCByIDParams struct {
+	ID           string             `json:"id"`
+	Column2      interface{}        `json:"column_2"`
+	Column3      interface{}        `json:"column_3"`
+	OidcLinkedAt pgtype.Timestamptz `json:"oidc_linked_at"`
+}
+
+func (q *Queries) UpdateUserOIDCByID(ctx context.Context, arg UpdateUserOIDCByIDParams) error {
+	_, err := q.db.Exec(ctx, updateUserOIDCByID,
+		arg.ID,
+		arg.Column2,
+		arg.Column3,
+		arg.OidcLinkedAt,
+	)
 	return err
 }

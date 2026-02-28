@@ -32,6 +32,8 @@ function authCallbackErrorMessage(errorCode: string) {
   switch (errorCode) {
     case "signup_forbidden":
       return "このアカウントは現在の招待制リリース対象外です。";
+    case "oidc_identity_mismatch":
+      return "アカウント連携情報が一致しません。サポートに連絡してください。";
     case "unauthorized":
       return "認証に失敗しました。再度ログインしてください。";
     default:

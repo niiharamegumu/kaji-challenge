@@ -20,7 +20,7 @@ type mockAuthService struct{}
 func (m mockAuthService) StartGoogleAuth(context.Context) (api.AuthStartResponse, error) {
 	return api.AuthStartResponse{}, nil
 }
-func (m mockAuthService) CompleteGoogleAuth(context.Context, string, string, string, string, string) (string, string, error) {
+func (m mockAuthService) CompleteGoogleAuth(context.Context, string, string, string, string, string, string) (string, string, error) {
 	return "", "", nil
 }
 func (m mockAuthService) ExchangeSession(context.Context, string) (ports.AuthSession, error) {

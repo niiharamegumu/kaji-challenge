@@ -22,7 +22,15 @@ func (h *Handler) GetAuthGoogleStart(c *gin.Context) {
 }
 
 func (h *Handler) GetAuthGoogleCallback(c *gin.Context, params api.GetAuthGoogleCallbackParams) {
-	exchangeCode, redirectTo, err := h.services.Auth.CompleteGoogleAuth(c.Request.Context(), params.Code, params.State, c.Query("mock_email"), c.Query("mock_name"), c.Query("mock_sub"))
+	exchangeCode, redirectTo, err := h.services.Auth.CompleteGoogleAuth(
+		c.Request.Context(),
+		params.Code,
+		params.State,
+		c.Query("mock_email"),
+		c.Query("mock_name"),
+		c.Query("mock_sub"),
+		c.Query("mock_iss"),
+	)
 	if err != nil {
 		frontendCallbackURL := strings.TrimSpace(os.Getenv("FRONTEND_CALLBACK_URL"))
 		if frontendCallbackURL != "" {
@@ -40,6 +48,10 @@ func (h *Handler) GetAuthGoogleCallback(c *gin.Context, params api.GetAuthGoogle
 }
 
 func authCallbackErrorCode(err error) string {
+	msg := strings.ToLower(err.Error())
+	if strings.Contains(msg, "oidc identity mismatch") {
+		return "oidc_identity_mismatch"
+	}
 	switch {
 	case errors.Is(err, application.ErrForbidden):
 		return "signup_forbidden"

@@ -12,8 +12,8 @@ func (r authRepo) StartGoogleAuth(ctx context.Context) (api.AuthStartResponse, e
 	return res, mapInfraErr(err)
 }
 
-func (r authRepo) CompleteGoogleAuth(ctx context.Context, code, state, mockEmail, mockName, mockSub string) (string, string, error) {
-	exchangeCode, redirectTo, err := r.store.CompleteGoogleAuth(ctx, code, state, mockEmail, mockName, mockSub)
+func (r authRepo) CompleteGoogleAuth(ctx context.Context, code, state, mockEmail, mockName, mockSub, mockIss string) (string, string, error) {
+	exchangeCode, redirectTo, err := r.store.CompleteGoogleAuth(ctx, code, state, mockEmail, mockName, mockSub, mockIss)
 	return exchangeCode, redirectTo, mapInfraErr(err)
 }
 
