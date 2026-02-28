@@ -49,6 +49,7 @@ type Querier interface {
 	GetTaskCompletionWeeklyEntryCount(ctx context.Context, arg GetTaskCompletionWeeklyEntryCountParams) (int64, error)
 	GetTeamStateRevision(ctx context.Context, id string) (int64, error)
 	GetUndeletedPenaltyRuleByID(ctx context.Context, id string) (PenaltyRule, error)
+	GetUserAuthIdentityByID(ctx context.Context, id string) (GetUserAuthIdentityByIDRow, error)
 	GetUserByEmail(ctx context.Context, lower string) (GetUserByEmailRow, error)
 	GetUserByID(ctx context.Context, id string) (GetUserByIDRow, error)
 	HasTaskCompletionDaily(ctx context.Context, arg HasTaskCompletionDailyParams) (bool, error)
@@ -87,6 +88,7 @@ type Querier interface {
 	UpdateUserColorHex(ctx context.Context, arg UpdateUserColorHexParams) error
 	UpdateUserDisplayName(ctx context.Context, arg UpdateUserDisplayNameParams) error
 	UpdateUserNickname(ctx context.Context, arg UpdateUserNicknameParams) error
+	UpdateUserOIDCByID(ctx context.Context, arg UpdateUserOIDCByIDParams) error
 	UpsertMonthlyPenaltySummary(ctx context.Context, arg UpsertMonthlyPenaltySummaryParams) error
 }
 

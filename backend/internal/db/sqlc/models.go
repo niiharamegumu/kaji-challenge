@@ -123,10 +123,13 @@ type TeamMember struct {
 }
 
 type User struct {
-	ID          string             `json:"id"`
-	Email       string             `json:"email"`
-	DisplayName string             `json:"display_name"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	Nickname    pgtype.Text        `json:"nickname"`
-	ColorHex    pgtype.Text        `json:"color_hex"`
+	ID           string             `json:"id"`
+	Email        string             `json:"email"`
+	DisplayName  string             `json:"display_name"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	Nickname     pgtype.Text        `json:"nickname"`
+	ColorHex     pgtype.Text        `json:"color_hex"`
+	OidcIssuer   pgtype.Text        `json:"oidc_issuer"`
+	OidcSubject  pgtype.Text        `json:"oidc_subject"`
+	OidcLinkedAt pgtype.Timestamptz `json:"oidc_linked_at"`
 }
