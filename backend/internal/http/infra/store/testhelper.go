@@ -19,6 +19,6 @@ func RejectMockParamsInStrictModeForTest(ctx context.Context, loc *time.Location
 		CodeVerifier: "verifier-1",
 		ExpiresAt:    time.Now().In(loc).Add(10 * time.Minute),
 	}
-	_, _, err := s.CompleteGoogleAuth(ctx, "mock-code", "state-1", "owner@example.com", "Owner", "")
+	_, _, err := s.CompleteGoogleAuth(ctx, "mock-code", "state-1", "owner@example.com", "Owner", "", "")
 	return err
 }

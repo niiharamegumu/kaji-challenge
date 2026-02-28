@@ -11,8 +11,8 @@ func (u authUsecase) StartGoogleAuth(ctx context.Context) (api.AuthStartResponse
 	return u.repo.StartGoogleAuth(ctx)
 }
 
-func (u authUsecase) CompleteGoogleAuth(ctx context.Context, code, state, mockEmail, mockName, mockSub string) (string, string, error) {
-	return u.repo.CompleteGoogleAuth(ctx, code, state, mockEmail, mockName, mockSub)
+func (u authUsecase) CompleteGoogleAuth(ctx context.Context, code, state, mockEmail, mockName, mockSub, mockIss string) (string, string, error) {
+	return u.repo.CompleteGoogleAuth(ctx, code, state, mockEmail, mockName, mockSub, mockIss)
 }
 
 func (u authUsecase) ExchangeSession(ctx context.Context, exchangeCode string) (ports.AuthSession, error) {
