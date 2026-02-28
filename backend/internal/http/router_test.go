@@ -131,6 +131,76 @@ func TestAuthCallbackFailureRedirectsToFrontendWithErrorCode(t *testing.T) {
 	}
 }
 
+func TestLoginStoresOIDCIdentity(t *testing.T) {
+	r := newTestRouter(t)
+	email := "oidc-store@example.com"
+	_ = loginAs(t, r, email)
+
+	issuer, subject := fetchUserOIDCIdentityByEmail(t, email)
+	if issuer == "" {
+		t.Fatalf("expected oidc issuer to be stored")
+	}
+	if subject == "" {
+		t.Fatalf("expected oidc subject to be stored")
+	}
+}
+
+func TestLoginRejectsOIDCIdentityMismatch(t *testing.T) {
+	r := newTestRouter(t)
+	email := "oidc-mismatch@example.com"
+	_ = loginAs(t, r, email)
+
+	callbackRes := startGoogleAuthCallbackWithMockIdentity(t, r, email, "Test User", "other-subject", "https://mock-issuer.local")
+	if callbackRes.Code != http.StatusForbidden {
+		t.Fatalf("expected callback 403 for oidc mismatch, got %d: %s", callbackRes.Code, callbackRes.Body.String())
+	}
+}
+
+func TestAuthCallbackOIDCMismatchRedirectsToDedicatedErrorCode(t *testing.T) {
+	r := newTestRouter(t)
+	t.Setenv("FRONTEND_CALLBACK_URL", "http://localhost:5173/auth/callback")
+	email := "oidc-mismatch-redirect@example.com"
+	_ = loginAs(t, r, email)
+
+	callbackRes := startGoogleAuthCallbackWithMockIdentity(t, r, email, "Test User", "other-subject", "https://mock-issuer.local")
+	if callbackRes.Code != http.StatusFound {
+		t.Fatalf("expected callback 302 for oidc mismatch, got %d: %s", callbackRes.Code, callbackRes.Body.String())
+	}
+	loc, err := url.Parse(callbackRes.Header().Get("Location"))
+	if err != nil {
+		t.Fatalf("failed to parse redirect location: %v", err)
+	}
+	if loc.Query().Get("errorCode") != "oidc_identity_mismatch" {
+		t.Fatalf("expected errorCode=oidc_identity_mismatch, got %q", loc.Query().Get("errorCode"))
+	}
+}
+
+func TestAuthCallbackUniqueOIDCIdentityConflictRedirectsToInvalidAuth(t *testing.T) {
+	r := newTestRouter(t)
+	t.Setenv("FRONTEND_CALLBACK_URL", "http://localhost:5173/auth/callback")
+
+	const issuer = "https://mock-issuer.local"
+	const sub = "shared-subject"
+	emailA := "oidc-unique-a@example.com"
+	emailB := "oidc-unique-b@example.com"
+
+	_ = loginAsWithMockIdentity(t, r, emailA, "User A", sub, issuer)
+	_ = loginAsWithMockIdentity(t, r, emailB, "User B", "sub-b", issuer)
+	clearUserOIDCIdentityForTest(t, emailB)
+
+	callbackRes := startGoogleAuthCallbackWithMockIdentity(t, r, emailB, "User B", sub, issuer)
+	if callbackRes.Code != http.StatusFound {
+		t.Fatalf("expected callback 302 for oidc unique conflict, got %d: %s", callbackRes.Code, callbackRes.Body.String())
+	}
+	loc, err := url.Parse(callbackRes.Header().Get("Location"))
+	if err != nil {
+		t.Fatalf("failed to parse redirect location: %v", err)
+	}
+	if loc.Query().Get("errorCode") != "invalid_auth" {
+		t.Fatalf("expected errorCode=invalid_auth, got %q", loc.Query().Get("errorCode"))
+	}
+}
+
 func TestProtectedRouteRequiresAuth(t *testing.T) {
 	r := newTestRouter(t)
 	res := doRequest(t, r, http.MethodGet, "/v1/me", "", "")
@@ -1091,9 +1161,13 @@ func login(t *testing.T, r http.Handler) string {
 }
 
 func loginAs(t *testing.T, r http.Handler, email string) string {
+	return loginAsWithMockIdentity(t, r, email, "Test User", "mock-sub-"+email, "https://mock-issuer.local")
+}
+
+func loginAsWithMockIdentity(t *testing.T, r http.Handler, email, name, sub, iss string) string {
 	t.Helper()
 
-	callbackRes := startGoogleAuthCallbackWithMockEmail(t, r, email)
+	callbackRes := startGoogleAuthCallbackWithMockIdentity(t, r, email, name, sub, iss)
 	if callbackRes.Code != http.StatusOK && callbackRes.Code != http.StatusFound {
 		t.Fatalf("auth callback failed: %d %s", callbackRes.Code, callbackRes.Body.String())
 	}
@@ -1134,6 +1208,10 @@ func loginAs(t *testing.T, r http.Handler, email string) string {
 }
 
 func startGoogleAuthCallbackWithMockEmail(t *testing.T, r http.Handler, email string) *httptest.ResponseRecorder {
+	return startGoogleAuthCallbackWithMockIdentity(t, r, email, "Test User", "mock-sub-"+email, "https://mock-issuer.local")
+}
+
+func startGoogleAuthCallbackWithMockIdentity(t *testing.T, r http.Handler, email, name, sub, iss string) *httptest.ResponseRecorder {
 	t.Helper()
 
 	startRes := doRequest(t, r, http.MethodGet, "/v1/auth/google/start", "", "")
@@ -1152,9 +1230,52 @@ func startGoogleAuthCallbackWithMockEmail(t *testing.T, r http.Handler, email st
 	}
 	q := u.Query()
 	q.Set("mock_email", email)
-	q.Set("mock_name", "Test User")
+	q.Set("mock_name", name)
+	q.Set("mock_sub", sub)
+	q.Set("mock_iss", iss)
 	u.RawQuery = q.Encode()
 	return doRequest(t, r, http.MethodGet, u.RequestURI(), "", "")
+}
+
+func fetchUserOIDCIdentityByEmail(t *testing.T, email string) (string, string) {
+	t.Helper()
+
+	dbURL := strings.TrimSpace(os.Getenv("DATABASE_URL"))
+	if dbURL == "" {
+		t.Fatalf("DATABASE_URL is required")
+	}
+	db, err := sql.Open("pgx", dbURL)
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	defer db.Close()
+
+	var issuer, subject sql.NullString
+	if err := db.QueryRow(`SELECT oidc_issuer, oidc_subject FROM users WHERE LOWER(email) = LOWER($1)`, email).Scan(&issuer, &subject); err != nil {
+		t.Fatalf("failed to load oidc identity: %v", err)
+	}
+	return issuer.String, subject.String
+}
+
+func clearUserOIDCIdentityForTest(t *testing.T, email string) {
+	t.Helper()
+
+	dbURL := strings.TrimSpace(os.Getenv("DATABASE_URL"))
+	if dbURL == "" {
+		t.Fatalf("DATABASE_URL is required")
+	}
+	db, err := sql.Open("pgx", dbURL)
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	defer db.Close()
+
+	if _, err := db.Exec(
+		`UPDATE users SET oidc_issuer = NULL, oidc_subject = NULL, oidc_linked_at = NULL WHERE LOWER(email) = LOWER($1)`,
+		email,
+	); err != nil {
+		t.Fatalf("failed to clear oidc identity: %v", err)
+	}
 }
 
 func fetchMeUserID(t *testing.T, r http.Handler, token string) string {
