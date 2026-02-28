@@ -23,7 +23,7 @@ type AuthSession struct {
 
 type AuthService interface {
 	StartGoogleAuth(ctx context.Context) (api.AuthStartResponse, error)
-	CompleteGoogleAuth(ctx context.Context, code, state, mockEmail, mockName, mockSub string) (string, string, error)
+	CompleteGoogleAuth(ctx context.Context, code, state, mockEmail, mockName, mockSub, mockIss string) (string, string, error)
 	ExchangeSession(ctx context.Context, exchangeCode string) (AuthSession, error)
 	RevokeSession(ctx context.Context, token string)
 	LookupSession(ctx context.Context, token string) (string, bool)
