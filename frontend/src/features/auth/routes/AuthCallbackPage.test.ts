@@ -70,4 +70,22 @@ describe("authCallbackLoader", () => {
     expect(response.status).toBe(302);
     expect(response.headers.get("Location")).toBe("/");
   });
+
+  it("writes oidc mismatch flash when callback carries oidc_identity_mismatch", async () => {
+    const response = await authCallbackLoader({
+      request: new Request(
+        "http://localhost/auth/callback?errorCode=oidc_identity_mismatch",
+      ),
+      params: {},
+      context: undefined,
+      unstable_pattern: "",
+    });
+
+    expect(mockExchange).not.toHaveBeenCalled();
+    expect(mockWriteFlash).toHaveBeenCalledWith(
+      "アカウント連携情報が一致しません。サポートに連絡してください。",
+    );
+    expect(response.status).toBe(302);
+    expect(response.headers.get("Location")).toBe("/");
+  });
 });
