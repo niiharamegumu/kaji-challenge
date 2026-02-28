@@ -52,6 +52,7 @@ type Querier interface {
 	GetUserAuthIdentityByID(ctx context.Context, id string) (GetUserAuthIdentityByIDRow, error)
 	GetUserByEmail(ctx context.Context, lower string) (GetUserByEmailRow, error)
 	GetUserByID(ctx context.Context, id string) (GetUserByIDRow, error)
+	GetUserByOIDC(ctx context.Context, arg GetUserByOIDCParams) (GetUserByOIDCRow, error)
 	HasTaskCompletionDaily(ctx context.Context, arg HasTaskCompletionDailyParams) (bool, error)
 	IncrementDailyPenalty(ctx context.Context, arg IncrementDailyPenaltyParams) error
 	IncrementWeeklyPenalty(ctx context.Context, arg IncrementWeeklyPenaltyParams) error
