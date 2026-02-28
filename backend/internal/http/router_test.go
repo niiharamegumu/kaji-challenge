@@ -145,40 +145,37 @@ func TestLoginStoresOIDCIdentity(t *testing.T) {
 	}
 }
 
-func TestLoginRejectsOIDCIdentityMismatch(t *testing.T) {
+func TestLoginUsesOIDCIdentityEvenWhenEmailChanges(t *testing.T) {
 	r := newTestRouter(t)
-	email := "oidc-mismatch@example.com"
-	_ = loginAs(t, r, email)
+	const issuer = "https://mock-issuer.local"
+	const sub = "stable-subject"
+	emailA := "oidc-primary@example.com"
+	emailB := "oidc-secondary@example.com"
 
-	callbackRes := startGoogleAuthCallbackWithMockIdentity(t, r, email, "Test User", "other-subject", "https://mock-issuer.local")
-	if callbackRes.Code != http.StatusForbidden {
-		t.Fatalf("expected callback 403 for oidc mismatch, got %d: %s", callbackRes.Code, callbackRes.Body.String())
+	tokenA := loginAsWithMockIdentity(t, r, emailA, "User A", sub, issuer)
+	tokenB := loginAsWithMockIdentity(t, r, emailB, "User B", sub, issuer)
+
+	userIDA := fetchMeUserID(t, r, tokenA)
+	userIDB := fetchMeUserID(t, r, tokenB)
+	if userIDA != userIDB {
+		t.Fatalf("expected same user for same oidc identity, got %s and %s", userIDA, userIDB)
+	}
+
+	meRes := doRequest(t, r, http.MethodGet, "/v1/me", "", tokenB)
+	if meRes.Code != http.StatusOK {
+		t.Fatalf("expected /v1/me 200, got %d: %s", meRes.Code, meRes.Body.String())
+	}
+	var me api.MeResponse
+	if err := json.Unmarshal(meRes.Body.Bytes(), &me); err != nil {
+		t.Fatalf("failed to parse /v1/me response: %v", err)
+	}
+	if me.User.Email != emailA {
+		t.Fatalf("expected persisted email %q, got %q", emailA, me.User.Email)
 	}
 }
 
-func TestAuthCallbackOIDCMismatchRedirectsToDedicatedErrorCode(t *testing.T) {
+func TestUsersOIDCIdentityUniqueConstraint(t *testing.T) {
 	r := newTestRouter(t)
-	t.Setenv("FRONTEND_CALLBACK_URL", "http://localhost:5173/auth/callback")
-	email := "oidc-mismatch-redirect@example.com"
-	_ = loginAs(t, r, email)
-
-	callbackRes := startGoogleAuthCallbackWithMockIdentity(t, r, email, "Test User", "other-subject", "https://mock-issuer.local")
-	if callbackRes.Code != http.StatusFound {
-		t.Fatalf("expected callback 302 for oidc mismatch, got %d: %s", callbackRes.Code, callbackRes.Body.String())
-	}
-	loc, err := url.Parse(callbackRes.Header().Get("Location"))
-	if err != nil {
-		t.Fatalf("failed to parse redirect location: %v", err)
-	}
-	if loc.Query().Get("errorCode") != "oidc_identity_mismatch" {
-		t.Fatalf("expected errorCode=oidc_identity_mismatch, got %q", loc.Query().Get("errorCode"))
-	}
-}
-
-func TestAuthCallbackUniqueOIDCIdentityConflictRedirectsToInvalidAuth(t *testing.T) {
-	r := newTestRouter(t)
-	t.Setenv("FRONTEND_CALLBACK_URL", "http://localhost:5173/auth/callback")
-
 	const issuer = "https://mock-issuer.local"
 	const sub = "shared-subject"
 	emailA := "oidc-unique-a@example.com"
@@ -186,18 +183,28 @@ func TestAuthCallbackUniqueOIDCIdentityConflictRedirectsToInvalidAuth(t *testing
 
 	_ = loginAsWithMockIdentity(t, r, emailA, "User A", sub, issuer)
 	_ = loginAsWithMockIdentity(t, r, emailB, "User B", "sub-b", issuer)
-	clearUserOIDCIdentityForTest(t, emailB)
 
-	callbackRes := startGoogleAuthCallbackWithMockIdentity(t, r, emailB, "User B", sub, issuer)
-	if callbackRes.Code != http.StatusFound {
-		t.Fatalf("expected callback 302 for oidc unique conflict, got %d: %s", callbackRes.Code, callbackRes.Body.String())
+	dbURL := strings.TrimSpace(os.Getenv("DATABASE_URL"))
+	if dbURL == "" {
+		t.Fatalf("DATABASE_URL is required")
 	}
-	loc, err := url.Parse(callbackRes.Header().Get("Location"))
+	db, err := sql.Open("pgx", dbURL)
 	if err != nil {
-		t.Fatalf("failed to parse redirect location: %v", err)
+		t.Fatalf("failed to open db: %v", err)
 	}
-	if loc.Query().Get("errorCode") != "invalid_auth" {
-		t.Fatalf("expected errorCode=invalid_auth, got %q", loc.Query().Get("errorCode"))
+	defer db.Close()
+
+	_, err = db.Exec(
+		`UPDATE users SET oidc_issuer = $1, oidc_subject = $2, oidc_linked_at = NOW() WHERE LOWER(email) = LOWER($3)`,
+		issuer,
+		sub,
+		emailB,
+	)
+	if err == nil {
+		t.Fatalf("expected unique constraint violation for duplicated oidc identity")
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "duplicate key value violates unique constraint") {
+		t.Fatalf("expected unique constraint error, got %v", err)
 	}
 }
 
@@ -1255,27 +1262,6 @@ func fetchUserOIDCIdentityByEmail(t *testing.T, email string) (string, string) {
 		t.Fatalf("failed to load oidc identity: %v", err)
 	}
 	return issuer.String, subject.String
-}
-
-func clearUserOIDCIdentityForTest(t *testing.T, email string) {
-	t.Helper()
-
-	dbURL := strings.TrimSpace(os.Getenv("DATABASE_URL"))
-	if dbURL == "" {
-		t.Fatalf("DATABASE_URL is required")
-	}
-	db, err := sql.Open("pgx", dbURL)
-	if err != nil {
-		t.Fatalf("failed to open db: %v", err)
-	}
-	defer db.Close()
-
-	if _, err := db.Exec(
-		`UPDATE users SET oidc_issuer = NULL, oidc_subject = NULL, oidc_linked_at = NULL WHERE LOWER(email) = LOWER($1)`,
-		email,
-	); err != nil {
-		t.Fatalf("failed to clear oidc identity: %v", err)
-	}
 }
 
 func fetchMeUserID(t *testing.T, r http.Handler, token string) string {

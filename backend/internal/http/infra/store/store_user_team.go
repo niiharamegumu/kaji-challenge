@@ -15,7 +15,16 @@ import (
 
 func (s *Store) getOrCreateUserLocked(ctx context.Context, issuer, subject, email, displayName string) (string, userRecord, error) {
 	now := time.Now().In(s.loc)
-	row, err := s.q.GetUserByEmail(ctx, email)
+	issuer = strings.TrimSpace(issuer)
+	subject = strings.TrimSpace(subject)
+	if issuer == "" || subject == "" {
+		return "", userRecord{}, errors.New("forbidden: missing oidc identity")
+	}
+
+	row, err := s.q.GetUserByOIDC(ctx, dbsqlc.GetUserByOIDCParams{
+		OidcIssuer:  textFromPtr(&issuer),
+		OidcSubject: textFromPtr(&subject),
+	})
 	if err == nil {
 		if displayName != "" && row.DisplayName != displayName {
 			if err := s.q.UpdateUserDisplayName(ctx, dbsqlc.UpdateUserDisplayNameParams{
@@ -25,9 +34,6 @@ func (s *Store) getOrCreateUserLocked(ctx context.Context, issuer, subject, emai
 				return "", userRecord{}, err
 			}
 			row.DisplayName = displayName
-		}
-		if err := s.syncUserOIDCIdentityLocked(ctx, row.ID, issuer, subject); err != nil {
-			return "", userRecord{}, err
 		}
 		return row.ID, userRecord{ID: row.ID, Email: row.Email, Name: row.DisplayName, CreatedAt: row.CreatedAt.Time.In(s.loc)}, nil
 	}
