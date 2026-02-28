@@ -87,7 +87,7 @@ func (s *Store) StartGoogleAuth(ctx context.Context) (api.AuthStartResponse, err
 	return api.AuthStartResponse{AuthorizationUrl: authURL}, nil
 }
 
-func (s *Store) CompleteGoogleAuth(ctx context.Context, code, state, mockEmail, mockName, mockSub string) (string, string, error) {
+func (s *Store) CompleteGoogleAuth(ctx context.Context, code, state, mockEmail, mockName, mockSub, mockIss string) (string, string, error) {
 	var req authRequest
 	if s.q != nil {
 		row, err := s.q.GetAuthRequest(ctx, state)
@@ -124,7 +124,8 @@ func (s *Store) CompleteGoogleAuth(ctx context.Context, code, state, mockEmail, 
 	email := strings.TrimSpace(strings.ToLower(mockEmail))
 	name := strings.TrimSpace(mockName)
 	sub := strings.TrimSpace(mockSub)
-	if oidcStrictMode() && (email != "" || name != "" || sub != "") {
+	issuer := strings.TrimSpace(mockIss)
+	if oidcStrictMode() && (email != "" || name != "" || sub != "" || issuer != "") {
 		return "", "", errors.New("mock callback params are disabled when OIDC_STRICT_MODE=true")
 	}
 
@@ -139,18 +140,24 @@ func (s *Store) CompleteGoogleAuth(ctx context.Context, code, state, mockEmail, 
 		email = strings.TrimSpace(strings.ToLower(claims.Email))
 		name = strings.TrimSpace(claims.Name)
 		sub = strings.TrimSpace(claims.Sub)
+		issuer = strings.TrimSpace(claims.Iss)
 	}
 
 	if email == "" {
 		return "", "", errors.New("email not available from provider")
 	}
+	if sub == "" {
+		return "", "", errors.New("sub not available from provider")
+	}
+	if issuer == "" {
+		issuer = "https://mock-issuer.local"
+	}
 	if name == "" {
 		name = strings.Split(email, "@")[0]
 	}
-	_ = sub
 
 	s.mu.Lock()
-	userID, user, getErr := s.getOrCreateUserLocked(ctx, email, name)
+	userID, user, getErr := s.getOrCreateUserLocked(ctx, issuer, sub, email, name)
 	if getErr != nil {
 		s.mu.Unlock()
 		return "", "", getErr
@@ -181,6 +188,7 @@ func (s *Store) CompleteGoogleAuth(ctx context.Context, code, state, mockEmail, 
 }
 
 type idTokenClaims struct {
+	Iss   string `json:"iss"`
 	Sub   string `json:"sub"`
 	Email string `json:"email"`
 	Name  string `json:"name"`
@@ -223,11 +231,13 @@ func (s *Store) buildAuthorizationURLLocked(ctx context.Context, state, nonce, v
 		if base == "" {
 			base = "http://localhost:8080"
 		}
-		mockURL := fmt.Sprintf("%s/v1/auth/google/callback?code=mock-code&state=%s&mock_email=%s&mock_name=%s",
+		mockURL := fmt.Sprintf("%s/v1/auth/google/callback?code=mock-code&state=%s&mock_email=%s&mock_name=%s&mock_sub=%s&mock_iss=%s",
 			strings.TrimRight(base, "/"),
 			url.QueryEscape(state),
 			url.QueryEscape("owner@example.com"),
 			url.QueryEscape("Owner"),
+			url.QueryEscape("mock-sub-owner@example.com"),
+			url.QueryEscape("https://mock-issuer.local"),
 		)
 		return mockURL, nil
 	}
