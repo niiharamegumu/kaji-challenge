@@ -152,13 +152,12 @@ func TestLoginUsesOIDCIdentityEvenWhenEmailChanges(t *testing.T) {
 	emailA := "oidc-primary@example.com"
 	emailB := "oidc-secondary@example.com"
 
-	tokenA := loginAsWithMockIdentity(t, r, emailA, "User A", sub, issuer)
+	_ = loginAsWithMockIdentity(t, r, emailA, "User A", sub, issuer)
 	tokenB := loginAsWithMockIdentity(t, r, emailB, "User B", sub, issuer)
 
-	userIDA := fetchMeUserID(t, r, tokenA)
-	userIDB := fetchMeUserID(t, r, tokenB)
-	if userIDA != userIDB {
-		t.Fatalf("expected same user for same oidc identity, got %s and %s", userIDA, userIDB)
+	userCount := countUsersByOIDCIdentity(t, issuer, sub)
+	if userCount != 1 {
+		t.Fatalf("expected one user for shared oidc identity, got %d", userCount)
 	}
 
 	meRes := doRequest(t, r, http.MethodGet, "/v1/me", "", tokenB)
@@ -1262,6 +1261,30 @@ func fetchUserOIDCIdentityByEmail(t *testing.T, email string) (string, string) {
 		t.Fatalf("failed to load oidc identity: %v", err)
 	}
 	return issuer.String, subject.String
+}
+
+func countUsersByOIDCIdentity(t *testing.T, issuer, subject string) int {
+	t.Helper()
+
+	dbURL := strings.TrimSpace(os.Getenv("DATABASE_URL"))
+	if dbURL == "" {
+		t.Fatalf("DATABASE_URL is required")
+	}
+	db, err := sql.Open("pgx", dbURL)
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	defer db.Close()
+
+	var count int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM users WHERE oidc_issuer = $1 AND oidc_subject = $2`,
+		issuer,
+		subject,
+	).Scan(&count); err != nil {
+		t.Fatalf("failed to count users by oidc identity: %v", err)
+	}
+	return count
 }
 
 func fetchMeUserID(t *testing.T, r http.Handler, token string) string {
