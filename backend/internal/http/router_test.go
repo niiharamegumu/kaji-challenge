@@ -152,13 +152,12 @@ func TestLoginUsesOIDCIdentityEvenWhenEmailChanges(t *testing.T) {
 	emailA := "oidc-primary@example.com"
 	emailB := "oidc-secondary@example.com"
 
-	tokenA := loginAsWithMockIdentity(t, r, emailA, "User A", sub, issuer)
+	_ = loginAsWithMockIdentity(t, r, emailA, "User A", sub, issuer)
 	tokenB := loginAsWithMockIdentity(t, r, emailB, "User B", sub, issuer)
 
-	userIDA := fetchMeUserID(t, r, tokenA)
-	userIDB := fetchMeUserID(t, r, tokenB)
-	if userIDA != userIDB {
-		t.Fatalf("expected same user for same oidc identity, got %s and %s", userIDA, userIDB)
+	userCount := countUsersByOIDCIdentity(t, issuer, sub)
+	if userCount != 1 {
+		t.Fatalf("expected one user for shared oidc identity, got %d", userCount)
 	}
 
 	meRes := doRequest(t, r, http.MethodGet, "/v1/me", "", tokenB)
@@ -225,6 +224,119 @@ func TestProtectedRouteRejectsExpiredSession(t *testing.T) {
 	res := doRequest(t, r, http.MethodGet, "/v1/me", "", token)
 	if res.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d: %s", res.Code, res.Body.String())
+	}
+}
+
+func TestLoginReplacesExistingSessionForSameUser(t *testing.T) {
+	r := newTestRouter(t)
+	email := "single-session@example.com"
+
+	firstToken := loginAs(t, r, email)
+	secondToken := loginAs(t, r, email)
+	if firstToken == secondToken {
+		t.Fatalf("expected new login to rotate session token")
+	}
+
+	oldSessionRes := doRequest(t, r, http.MethodGet, "/v1/me", "", firstToken)
+	if oldSessionRes.Code != http.StatusUnauthorized {
+		t.Fatalf("expected old session token to be invalid, got %d: %s", oldSessionRes.Code, oldSessionRes.Body.String())
+	}
+
+	newSessionRes := doRequest(t, r, http.MethodGet, "/v1/me", "", secondToken)
+	if newSessionRes.Code != http.StatusOK {
+		t.Fatalf("expected new session token to be valid, got %d: %s", newSessionRes.Code, newSessionRes.Body.String())
+	}
+
+	userID := fetchMeUserID(t, r, secondToken)
+	sessionCount := countSessionsByUserID(t, userID)
+	if sessionCount != 1 {
+		t.Fatalf("expected one session row for user, got %d", sessionCount)
+	}
+}
+
+func TestSessionsOnePerUserMigrationDedupesLatest(t *testing.T) {
+	r := newTestRouter(t)
+	token := loginAs(t, r, "migration-session@example.com")
+	userID := fetchMeUserID(t, r, token)
+
+	dbURL := strings.TrimSpace(os.Getenv("DATABASE_URL"))
+	if dbURL == "" {
+		t.Fatalf("DATABASE_URL is required")
+	}
+	db, err := sql.Open("pgx", dbURL)
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	defer db.Close()
+
+	if _, err := db.Exec(`DROP INDEX IF EXISTS uq_sessions_user_id`); err != nil {
+		t.Fatalf("failed to drop session unique index: %v", err)
+	}
+	if _, err := db.Exec(`DELETE FROM sessions WHERE user_id = $1`, userID); err != nil {
+		t.Fatalf("failed to clear sessions: %v", err)
+	}
+
+	now := time.Now().UTC()
+	oldToken := hashTokenForTest("legacy-old")
+	midToken := hashTokenForTest("legacy-mid")
+	latestToken := hashTokenForTest("legacy-latest")
+	for _, item := range []struct {
+		token     string
+		createdAt time.Time
+	}{
+		{token: oldToken, createdAt: now.Add(-2 * time.Hour)},
+		{token: midToken, createdAt: now.Add(-1 * time.Hour)},
+		{token: latestToken, createdAt: now},
+	} {
+		if _, err := db.Exec(
+			`INSERT INTO sessions (token, user_id, created_at, expires_at) VALUES ($1, $2, $3, NULL)`,
+			item.token,
+			userID,
+			item.createdAt,
+		); err != nil {
+			t.Fatalf("failed to seed duplicate sessions: %v", err)
+		}
+	}
+
+	if _, err := db.Exec(`
+WITH ranked_sessions AS (
+  SELECT token,
+         ROW_NUMBER() OVER (
+           PARTITION BY user_id
+           ORDER BY created_at DESC, token DESC
+         ) AS rn
+  FROM sessions
+)
+DELETE FROM sessions AS s
+USING ranked_sessions AS r
+WHERE s.token = r.token
+  AND r.rn > 1;
+`); err != nil {
+		t.Fatalf("failed to dedupe sessions: %v", err)
+	}
+	if _, err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_sessions_user_id ON sessions (user_id)`); err != nil {
+		t.Fatalf("failed to recreate session unique index: %v", err)
+	}
+
+	var sessionCount int
+	var remainingToken string
+	if err := db.QueryRow(`SELECT COUNT(*), MAX(token) FROM sessions WHERE user_id = $1`, userID).Scan(&sessionCount, &remainingToken); err != nil {
+		t.Fatalf("failed to read sessions after dedupe: %v", err)
+	}
+	if sessionCount != 1 {
+		t.Fatalf("expected one session row after dedupe, got %d", sessionCount)
+	}
+	if remainingToken != latestToken {
+		t.Fatalf("expected latest session token to remain, got %q", remainingToken)
+	}
+
+	_, err = db.Exec(
+		`INSERT INTO sessions (token, user_id, created_at, expires_at) VALUES ($1, $2, NOW(), NULL)`,
+		hashTokenForTest("legacy-new"),
+		userID,
+	)
+	if err == nil {
+		t.Fatalf("expected duplicate user_id insert to fail after unique index recreation")
 	}
 }
 
@@ -1264,6 +1376,30 @@ func fetchUserOIDCIdentityByEmail(t *testing.T, email string) (string, string) {
 	return issuer.String, subject.String
 }
 
+func countUsersByOIDCIdentity(t *testing.T, issuer, subject string) int {
+	t.Helper()
+
+	dbURL := strings.TrimSpace(os.Getenv("DATABASE_URL"))
+	if dbURL == "" {
+		t.Fatalf("DATABASE_URL is required")
+	}
+	db, err := sql.Open("pgx", dbURL)
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	defer db.Close()
+
+	var count int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM users WHERE oidc_issuer = $1 AND oidc_subject = $2`,
+		issuer,
+		subject,
+	).Scan(&count); err != nil {
+		t.Fatalf("failed to count users by oidc identity: %v", err)
+	}
+	return count
+}
+
 func fetchMeUserID(t *testing.T, r http.Handler, token string) string {
 	t.Helper()
 
@@ -1355,6 +1491,26 @@ func expireSessionForTest(t *testing.T, rawToken string) {
 	if rows != 1 {
 		t.Fatalf("expected one affected session row, got %d", rows)
 	}
+}
+
+func countSessionsByUserID(t *testing.T, userID string) int {
+	t.Helper()
+
+	dbURL := strings.TrimSpace(os.Getenv("DATABASE_URL"))
+	if dbURL == "" {
+		t.Fatalf("DATABASE_URL is required")
+	}
+	db, err := sql.Open("pgx", dbURL)
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	defer db.Close()
+
+	var count int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM sessions WHERE user_id = $1`, userID).Scan(&count); err != nil {
+		t.Fatalf("failed to count sessions: %v", err)
+	}
+	return count
 }
 
 func hashTokenForTest(token string) string {
