@@ -160,6 +160,84 @@ func TestBuildMonthlyTaskStatusByDateLeavesNotesNilWhenEmpty(t *testing.T) {
 	t.Fatalf("task not found in monthly status groups")
 }
 
+func TestBuildMonthlyTaskStatusByDateCurrentMonthDoesNotIncludeFutureDates(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	now := time.Now().In(s.loc)
+	today := dateOnly(now, s.loc)
+	monthStart := time.Date(today.Year(), today.Month(), 1, 0, 0, 0, 0, s.loc)
+	month := monthStart.Format("2006-01")
+
+	teamID, _ := createTeamWithMember(t, s, "summary-current-month@example.com", monthStart.Add(9*time.Hour))
+	taskID := createTaskAtWithID(t, s, teamID, api.Daily, 2, 1, monthStart.Add(9*time.Hour))
+
+	groups, err := s.buildMonthlyTaskStatusByDate(ctx, teamID, month)
+	if err != nil {
+		t.Fatalf("buildMonthlyTaskStatusByDate failed: %v", err)
+	}
+	if len(groups) == 0 {
+		t.Fatalf("expected current month groups to be non-empty")
+	}
+
+	todayKey := today.Format("2006-01-02")
+	if !containsTaskOnDate(groups, todayKey, taskID) {
+		t.Fatalf("expected task to appear on today (%s)", todayKey)
+	}
+
+	for _, group := range groups {
+		groupDay := dateOnly(group.Date.Time.In(s.loc), s.loc)
+		if groupDay.After(today) {
+			t.Fatalf("future date should not be included: %s > %s", groupDay.Format("2006-01-02"), todayKey)
+		}
+	}
+}
+
+func TestBuildMonthlyTaskStatusByDateFutureMonthReturnsEmpty(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	now := time.Now().In(s.loc)
+	today := dateOnly(now, s.loc)
+	thisMonthStart := time.Date(today.Year(), today.Month(), 1, 0, 0, 0, 0, s.loc)
+	futureMonthStart := thisMonthStart.AddDate(0, 1, 0)
+	futureMonth := futureMonthStart.Format("2006-01")
+
+	teamID, _ := createTeamWithMember(t, s, "summary-future-month@example.com", today.Add(9*time.Hour))
+	createTaskAtWithID(t, s, teamID, api.Daily, 2, 1, futureMonthStart.Add(9*time.Hour))
+
+	groups, err := s.buildMonthlyTaskStatusByDate(ctx, teamID, futureMonth)
+	if err != nil {
+		t.Fatalf("buildMonthlyTaskStatusByDate failed: %v", err)
+	}
+	if len(groups) != 0 {
+		t.Fatalf("expected no groups for future month, got %d", len(groups))
+	}
+}
+
+func TestBuildMonthlyTaskStatusByDatePastMonthKeepsMonthEnd(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	now := time.Now().In(s.loc)
+	today := dateOnly(now, s.loc)
+	thisMonthStart := time.Date(today.Year(), today.Month(), 1, 0, 0, 0, 0, s.loc)
+	pastMonthStart := thisMonthStart.AddDate(0, -1, 0)
+	pastMonth := pastMonthStart.Format("2006-01")
+	pastMonthLastDay := pastMonthStart.AddDate(0, 1, -1).Format("2006-01-02")
+
+	teamID, _ := createTeamWithMember(t, s, "summary-past-month@example.com", pastMonthStart.Add(9*time.Hour))
+	taskID := createTaskAtWithID(t, s, teamID, api.Daily, 2, 1, pastMonthStart.Add(9*time.Hour))
+
+	groups, err := s.buildMonthlyTaskStatusByDate(ctx, teamID, pastMonth)
+	if err != nil {
+		t.Fatalf("buildMonthlyTaskStatusByDate failed: %v", err)
+	}
+	if !containsTaskOnDate(groups, pastMonthLastDay, taskID) {
+		t.Fatalf("expected task on past month end date: %s", pastMonthLastDay)
+	}
+}
+
 func createTaskAtWithID(t *testing.T, s *Store, teamID string, taskType api.TaskType, penalty, required int, createdAt time.Time) string {
 	t.Helper()
 	return createTaskAtWithIDAndNotes(t, s, teamID, taskType, penalty, required, createdAt, nil)
