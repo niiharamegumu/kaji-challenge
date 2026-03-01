@@ -227,6 +227,27 @@ func TestProtectedRouteRejectsExpiredSession(t *testing.T) {
 	}
 }
 
+func TestLoginReplacesExistingSessionForSameUser(t *testing.T) {
+	r := newTestRouter(t)
+	email := "single-session@example.com"
+
+	firstToken := loginAs(t, r, email)
+	secondToken := loginAs(t, r, email)
+	if firstToken == secondToken {
+		t.Fatalf("expected new login to rotate session token")
+	}
+
+	oldSessionRes := doRequest(t, r, http.MethodGet, "/v1/me", "", firstToken)
+	if oldSessionRes.Code != http.StatusUnauthorized {
+		t.Fatalf("expected old session token to be invalid, got %d: %s", oldSessionRes.Code, oldSessionRes.Body.String())
+	}
+
+	newSessionRes := doRequest(t, r, http.MethodGet, "/v1/me", "", secondToken)
+	if newSessionRes.Code != http.StatusOK {
+		t.Fatalf("expected new session token to be valid, got %d: %s", newSessionRes.Code, newSessionRes.Body.String())
+	}
+}
+
 func TestInviteJoinFlow(t *testing.T) {
 	r := newTestRouter(t)
 	ownerToken := loginAs(t, r, "invite-flow-owner@example.com")
