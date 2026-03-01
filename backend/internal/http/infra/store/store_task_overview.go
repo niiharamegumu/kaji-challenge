@@ -195,6 +195,15 @@ func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month 
 		return nil, err
 	}
 	monthEnd := monthStart.AddDate(0, 1, 0)
+	todayStart := dateOnly(time.Now().In(s.loc), s.loc)
+	displayEndExclusive := monthEnd
+	todayEndExclusive := todayStart.AddDate(0, 0, 1)
+	if todayEndExclusive.Before(displayEndExclusive) {
+		displayEndExclusive = todayEndExclusive
+	}
+	if !displayEndExclusive.After(monthStart) {
+		return []api.MonthlyTaskStatusGroup{}, nil
+	}
 
 	taskRows, err := s.q.ListTasksForMonthlyStatusByTeam(ctx, dbsqlc.ListTasksForMonthlyStatusByTeamParams{
 		TeamID:    teamID,
@@ -290,7 +299,7 @@ func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month 
 	}
 
 	groups := []api.MonthlyTaskStatusGroup{}
-	for day := monthEnd.AddDate(0, 0, -1); !day.Before(monthStart); day = day.AddDate(0, 0, -1) {
+	for day := displayEndExclusive.AddDate(0, 0, -1); !day.Before(monthStart); day = day.AddDate(0, 0, -1) {
 		dayStart := dateOnly(day, s.loc)
 		dayEnd := dayStart.AddDate(0, 0, 1)
 		dayKey := dayStart.Format("2006-01-02")
