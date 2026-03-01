@@ -329,6 +329,15 @@ WHERE s.token = r.token
 	if remainingToken != latestToken {
 		t.Fatalf("expected latest session token to remain, got %q", remainingToken)
 	}
+
+	_, err = db.Exec(
+		`INSERT INTO sessions (token, user_id, created_at, expires_at) VALUES ($1, $2, NOW(), NULL)`,
+		hashTokenForTest("legacy-new"),
+		userID,
+	)
+	if err == nil {
+		t.Fatalf("expected duplicate user_id insert to fail after unique index recreation")
+	}
 }
 
 func TestInviteJoinFlow(t *testing.T) {
