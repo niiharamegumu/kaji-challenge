@@ -254,6 +254,83 @@ func TestLoginReplacesExistingSessionForSameUser(t *testing.T) {
 	}
 }
 
+func TestSessionsOnePerUserMigrationDedupesLatest(t *testing.T) {
+	r := newTestRouter(t)
+	token := loginAs(t, r, "migration-session@example.com")
+	userID := fetchMeUserID(t, r, token)
+
+	dbURL := strings.TrimSpace(os.Getenv("DATABASE_URL"))
+	if dbURL == "" {
+		t.Fatalf("DATABASE_URL is required")
+	}
+	db, err := sql.Open("pgx", dbURL)
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	defer db.Close()
+
+	if _, err := db.Exec(`DROP INDEX IF EXISTS uq_sessions_user_id`); err != nil {
+		t.Fatalf("failed to drop session unique index: %v", err)
+	}
+	if _, err := db.Exec(`DELETE FROM sessions WHERE user_id = $1`, userID); err != nil {
+		t.Fatalf("failed to clear sessions: %v", err)
+	}
+
+	now := time.Now().UTC()
+	oldToken := hashTokenForTest("legacy-old")
+	midToken := hashTokenForTest("legacy-mid")
+	latestToken := hashTokenForTest("legacy-latest")
+	for _, item := range []struct {
+		token     string
+		createdAt time.Time
+	}{
+		{token: oldToken, createdAt: now.Add(-2 * time.Hour)},
+		{token: midToken, createdAt: now.Add(-1 * time.Hour)},
+		{token: latestToken, createdAt: now},
+	} {
+		if _, err := db.Exec(
+			`INSERT INTO sessions (token, user_id, created_at, expires_at) VALUES ($1, $2, $3, NULL)`,
+			item.token,
+			userID,
+			item.createdAt,
+		); err != nil {
+			t.Fatalf("failed to seed duplicate sessions: %v", err)
+		}
+	}
+
+	if _, err := db.Exec(`
+WITH ranked_sessions AS (
+  SELECT token,
+         ROW_NUMBER() OVER (
+           PARTITION BY user_id
+           ORDER BY created_at DESC, token DESC
+         ) AS rn
+  FROM sessions
+)
+DELETE FROM sessions AS s
+USING ranked_sessions AS r
+WHERE s.token = r.token
+  AND r.rn > 1;
+`); err != nil {
+		t.Fatalf("failed to dedupe sessions: %v", err)
+	}
+	if _, err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_sessions_user_id ON sessions (user_id)`); err != nil {
+		t.Fatalf("failed to recreate session unique index: %v", err)
+	}
+
+	var sessionCount int
+	var remainingToken string
+	if err := db.QueryRow(`SELECT COUNT(*), MAX(token) FROM sessions WHERE user_id = $1`, userID).Scan(&sessionCount, &remainingToken); err != nil {
+		t.Fatalf("failed to read sessions after dedupe: %v", err)
+	}
+	if sessionCount != 1 {
+		t.Fatalf("expected one session row after dedupe, got %d", sessionCount)
+	}
+	if remainingToken != latestToken {
+		t.Fatalf("expected latest session token to remain, got %q", remainingToken)
+	}
+}
+
 func TestInviteJoinFlow(t *testing.T) {
 	r := newTestRouter(t)
 	ownerToken := loginAs(t, r, "invite-flow-owner@example.com")
