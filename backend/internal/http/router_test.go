@@ -246,6 +246,12 @@ func TestLoginReplacesExistingSessionForSameUser(t *testing.T) {
 	if newSessionRes.Code != http.StatusOK {
 		t.Fatalf("expected new session token to be valid, got %d: %s", newSessionRes.Code, newSessionRes.Body.String())
 	}
+
+	userID := fetchMeUserID(t, r, secondToken)
+	sessionCount := countSessionsByUserID(t, userID)
+	if sessionCount != 1 {
+		t.Fatalf("expected one session row for user, got %d", sessionCount)
+	}
 }
 
 func TestInviteJoinFlow(t *testing.T) {
@@ -1399,6 +1405,26 @@ func expireSessionForTest(t *testing.T, rawToken string) {
 	if rows != 1 {
 		t.Fatalf("expected one affected session row, got %d", rows)
 	}
+}
+
+func countSessionsByUserID(t *testing.T, userID string) int {
+	t.Helper()
+
+	dbURL := strings.TrimSpace(os.Getenv("DATABASE_URL"))
+	if dbURL == "" {
+		t.Fatalf("DATABASE_URL is required")
+	}
+	db, err := sql.Open("pgx", dbURL)
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	defer db.Close()
+
+	var count int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM sessions WHERE user_id = $1`, userID).Scan(&count); err != nil {
+		t.Fatalf("failed to count sessions: %v", err)
+	}
+	return count
 }
 
 func hashTokenForTest(token string) string {
