@@ -86,6 +86,7 @@ export function WeeklyTasksPanel({
                           <span className="inline-flex items-center rounded-full bg-stone-900 px-2 py-0.5 font-semibold leading-4 text-white">
                             週間
                           </span>
+                          <span>減点 {item.task.penaltyPoints}点</span>
                           <span>
                             進捗 {item.weekCompletedCount}/
                             {item.requiredCompletionsPerWeek}
@@ -130,6 +131,7 @@ export function WeeklyTasksPanel({
                           <span className="inline-flex items-center rounded-full bg-stone-900 px-2 py-0.5 font-semibold leading-4 text-white">
                             週間
                           </span>
+                          <span>減点 {item.task.penaltyPoints}点</span>
                           <span>
                             進捗 {item.weekCompletedCount}/
                             {item.requiredCompletionsPerWeek}
