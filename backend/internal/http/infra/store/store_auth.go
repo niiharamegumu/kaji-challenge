@@ -38,6 +38,25 @@ type exchangeCodeRecord struct {
 	Used      bool
 }
 
+const maxSessionsPerUser int32 = 5
+
+const trimSessionsForUserQuery = `
+WITH stale_sessions AS (
+  SELECT token
+  FROM sessions
+  WHERE user_id = $1
+  ORDER BY created_at DESC, token DESC
+  OFFSET $2
+)
+DELETE FROM sessions
+WHERE token IN (SELECT token FROM stale_sessions);
+`
+
+func defaultTrimSessionsForUserExec(ctx context.Context, exec dbsqlc.DBTX, userID string, keepCount int32) error {
+	_, err := exec.Exec(ctx, trimSessionsForUserQuery, userID, keepCount)
+	return err
+}
+
 func (s *Store) LookupSession(ctx context.Context, token string) (string, bool) {
 	rec, err := s.q.GetSessionByToken(ctx, hashToken(token))
 	if err != nil {
@@ -346,14 +365,30 @@ func (s *Store) ExchangeSession(ctx context.Context, exchangeCode string) (ports
 	if err != nil {
 		return ports.AuthSession{}, err
 	}
-	if err := s.q.ConsumeExchangeCode(ctx, exchangeCode); err != nil {
+
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return ports.AuthSession{}, err
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+	qtx := s.q.WithTx(tx)
+
+	if err := qtx.ConsumeExchangeCode(ctx, exchangeCode); err != nil {
 		return ports.AuthSession{}, errors.New("exchange code expired")
 	}
 	hashedToken := hashToken(rawToken)
-	if err := s.q.CreateSession(ctx, dbsqlc.CreateSessionParams{
+	if err := qtx.CreateSession(ctx, dbsqlc.CreateSessionParams{
 		Token:  hashedToken,
 		UserID: rec.UserID,
 	}); err != nil {
+		return ports.AuthSession{}, err
+	}
+	if err := s.trimSessionsForUser(ctx, tx, rec.UserID, maxSessionsPerUser); err != nil {
+		return ports.AuthSession{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
 		return ports.AuthSession{}, err
 	}
 	user := userRecord{
@@ -372,4 +407,11 @@ func (s *Store) RevokeSession(ctx context.Context, token string) {
 func hashToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])
+}
+
+func (s *Store) trimSessionsForUser(ctx context.Context, exec dbsqlc.DBTX, userID string, keepCount int32) error {
+	if s.trimSessionsForUserExec == nil {
+		return defaultTrimSessionsForUserExec(ctx, exec, userID, keepCount)
+	}
+	return s.trimSessionsForUserExec(ctx, exec, userID, keepCount)
 }

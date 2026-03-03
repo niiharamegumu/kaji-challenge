@@ -25,10 +25,6 @@ func (q *Queries) ConsumeExchangeCode(ctx context.Context, code string) error {
 const createSession = `-- name: CreateSession :exec
 INSERT INTO sessions (token, user_id, created_at, expires_at)
 VALUES ($1, $2, NOW(), NULL)
-ON CONFLICT (user_id) DO UPDATE SET
-  token = EXCLUDED.token,
-  created_at = NOW(),
-  expires_at = NULL
 `
 
 type CreateSessionParams struct {

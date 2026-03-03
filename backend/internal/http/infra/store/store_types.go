@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -44,6 +45,8 @@ type Store struct {
 	exchangeCodes map[string]exchangeCodeRecord
 
 	oidc *oidcClient
+
+	trimSessionsForUserExec func(ctx context.Context, exec dbsqlc.DBTX, userID string, keepCount int32) error
 }
 
 type userRecord struct {

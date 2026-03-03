@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -14,6 +15,19 @@ import (
 )
 
 const dbPoolConnUpperLimit int32 = 100
+
+var (
+	nextStoreTrimSessionsForUserExecForTest func(ctx context.Context, exec dbsqlc.DBTX, userID string, keepCount int32) error
+	nextStoreTrimSessionsForUserExecMu      sync.Mutex
+)
+
+func consumeNextStoreTrimSessionsForUserExecForTest() func(ctx context.Context, exec dbsqlc.DBTX, userID string, keepCount int32) error {
+	nextStoreTrimSessionsForUserExecMu.Lock()
+	defer nextStoreTrimSessionsForUserExecMu.Unlock()
+	fn := nextStoreTrimSessionsForUserExecForTest
+	nextStoreTrimSessionsForUserExecForTest = nil
+	return fn
+}
 
 func newStore() *Store {
 	loc, _ := time.LoadLocation(jstTZ)
@@ -38,6 +52,10 @@ func newStore() *Store {
 		monthClosedKey: map[string]bool{},
 		authRequests:   map[string]authRequest{},
 		exchangeCodes:  map[string]exchangeCodeRecord{},
+		trimSessionsForUserExec: defaultTrimSessionsForUserExec,
+	}
+	if hook := consumeNextStoreTrimSessionsForUserExecForTest(); hook != nil {
+		s.trimSessionsForUserExec = hook
 	}
 	if err := validateOIDCSettings(); err != nil {
 		panic(err)
