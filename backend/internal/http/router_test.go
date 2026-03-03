@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	dbsqlc "github.com/megu/kaji-challenge/backend/internal/db/sqlc"
 	"github.com/megu/kaji-challenge/backend/internal/http/infra"
 	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 	"github.com/megu/kaji-challenge/backend/internal/testutil/dbtest"
@@ -227,9 +228,9 @@ func TestProtectedRouteRejectsExpiredSession(t *testing.T) {
 	}
 }
 
-func TestLoginReplacesExistingSessionForSameUser(t *testing.T) {
+func TestLoginAllowsMultipleSessionsForSameUser(t *testing.T) {
 	r := newTestRouter(t)
-	email := "single-session@example.com"
+	email := "multi-session@example.com"
 
 	firstToken := loginAs(t, r, email)
 	secondToken := loginAs(t, r, email)
@@ -237,9 +238,9 @@ func TestLoginReplacesExistingSessionForSameUser(t *testing.T) {
 		t.Fatalf("expected new login to rotate session token")
 	}
 
-	oldSessionRes := doRequest(t, r, http.MethodGet, "/v1/me", "", firstToken)
-	if oldSessionRes.Code != http.StatusUnauthorized {
-		t.Fatalf("expected old session token to be invalid, got %d: %s", oldSessionRes.Code, oldSessionRes.Body.String())
+	firstSessionRes := doRequest(t, r, http.MethodGet, "/v1/me", "", firstToken)
+	if firstSessionRes.Code != http.StatusOK {
+		t.Fatalf("expected first session token to remain valid, got %d: %s", firstSessionRes.Code, firstSessionRes.Body.String())
 	}
 
 	newSessionRes := doRequest(t, r, http.MethodGet, "/v1/me", "", secondToken)
@@ -249,12 +250,110 @@ func TestLoginReplacesExistingSessionForSameUser(t *testing.T) {
 
 	userID := fetchMeUserID(t, r, secondToken)
 	sessionCount := countSessionsByUserID(t, userID)
-	if sessionCount != 1 {
-		t.Fatalf("expected one session row for user, got %d", sessionCount)
+	if sessionCount != 2 {
+		t.Fatalf("expected two session rows for user, got %d", sessionCount)
 	}
 }
 
-func TestSessionsOnePerUserMigrationDedupesLatest(t *testing.T) {
+func TestSessionLimitEvictsOldestWhenOverFive(t *testing.T) {
+	r := newTestRouter(t)
+	email := "session-limit@example.com"
+
+	tokens := make([]string, 0, 6)
+	for i := 0; i < 6; i++ {
+		tokens = append(tokens, loginAs(t, r, email))
+	}
+
+	userID := fetchMeUserID(t, r, tokens[len(tokens)-1])
+	sessionCount := countSessionsByUserID(t, userID)
+	if sessionCount != 5 {
+		t.Fatalf("expected five session rows for user, got %d", sessionCount)
+	}
+
+	oldestSessionRes := doRequest(t, r, http.MethodGet, "/v1/me", "", tokens[0])
+	if oldestSessionRes.Code != http.StatusUnauthorized {
+		t.Fatalf("expected oldest session token to be evicted, got %d: %s", oldestSessionRes.Code, oldestSessionRes.Body.String())
+	}
+
+	latestSessionRes := doRequest(t, r, http.MethodGet, "/v1/me", "", tokens[len(tokens)-1])
+	if latestSessionRes.Code != http.StatusOK {
+		t.Fatalf("expected latest session token to be valid, got %d: %s", latestSessionRes.Code, latestSessionRes.Body.String())
+	}
+}
+
+func TestExchangeSessionRollsBackWhenTrimFails(t *testing.T) {
+	restoreTrim := infra.SetTrimSessionsForUserExecForTest(
+		func(ctx context.Context, exec dbsqlc.DBTX, userID string, keepCount int32) error {
+			return fmt.Errorf("forced trim failure")
+		},
+	)
+	defer restoreTrim()
+	r := newTestRouter(t)
+
+	email := "trim-failure@example.com"
+	callbackRes := startGoogleAuthCallbackWithMockEmail(t, r, email)
+	if callbackRes.Code != http.StatusOK && callbackRes.Code != http.StatusFound {
+		t.Fatalf("auth callback failed: %d %s", callbackRes.Code, callbackRes.Body.String())
+	}
+
+	exchangeCode := ""
+	if callbackRes.Code == http.StatusFound {
+		location := callbackRes.Header().Get("Location")
+		locURL, err := url.Parse(location)
+		if err != nil {
+			t.Fatalf("failed to parse callback redirect location: %v", err)
+		}
+		exchangeCode = locURL.Query().Get("exchangeCode")
+	} else {
+		var callback api.AuthCallbackResponse
+		if err := json.Unmarshal(callbackRes.Body.Bytes(), &callback); err != nil {
+			t.Fatalf("failed to parse callback response: %v", err)
+		}
+		exchangeCode = callback.ExchangeCode
+	}
+	if exchangeCode == "" {
+		t.Fatalf("expected exchange code from callback")
+	}
+
+	exchangeReq := `{"exchangeCode":"` + exchangeCode + `"}`
+	exchangeRes := doRequest(t, r, http.MethodPost, "/v1/auth/sessions/exchange", exchangeReq, "")
+	if exchangeRes.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 when trim fails, got %d: %s", exchangeRes.Code, exchangeRes.Body.String())
+	}
+
+	dbURL := strings.TrimSpace(os.Getenv("DATABASE_URL"))
+	if dbURL == "" {
+		t.Fatalf("DATABASE_URL is required")
+	}
+	db, err := sql.Open("pgx", dbURL)
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	defer db.Close()
+
+	var userID string
+	if err := db.QueryRow(`SELECT id FROM users WHERE LOWER(email) = LOWER($1)`, email).Scan(&userID); err != nil {
+		t.Fatalf("failed to find user id by email: %v", err)
+	}
+
+	var sessionCount int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM sessions WHERE user_id = $1`, userID).Scan(&sessionCount); err != nil {
+		t.Fatalf("failed to count sessions: %v", err)
+	}
+	if sessionCount != 0 {
+		t.Fatalf("expected no persisted sessions after rollback, got %d", sessionCount)
+	}
+
+	var usedAt sql.NullTime
+	if err := db.QueryRow(`SELECT used_at FROM oauth_exchange_codes WHERE code = $1`, exchangeCode).Scan(&usedAt); err != nil {
+		t.Fatalf("failed to fetch exchange code used_at: %v", err)
+	}
+	if usedAt.Valid {
+		t.Fatalf("expected exchange code to remain unconsumed after rollback")
+	}
+}
+
+func TestSessionsMaxFivePerUserMigrationKeepsLatestFive(t *testing.T) {
 	r := newTestRouter(t)
 	token := loginAs(t, r, "migration-session@example.com")
 	userID := fetchMeUserID(t, r, token)
@@ -277,17 +376,19 @@ func TestSessionsOnePerUserMigrationDedupesLatest(t *testing.T) {
 	}
 
 	now := time.Now().UTC()
-	oldToken := hashTokenForTest("legacy-old")
-	midToken := hashTokenForTest("legacy-mid")
-	latestToken := hashTokenForTest("legacy-latest")
-	for _, item := range []struct {
+	sessionSeeds := []struct {
 		token     string
 		createdAt time.Time
 	}{
-		{token: oldToken, createdAt: now.Add(-2 * time.Hour)},
-		{token: midToken, createdAt: now.Add(-1 * time.Hour)},
-		{token: latestToken, createdAt: now},
-	} {
+		{token: hashTokenForTest("legacy-1"), createdAt: now.Add(-7 * time.Hour)},
+		{token: hashTokenForTest("legacy-2"), createdAt: now.Add(-6 * time.Hour)},
+		{token: hashTokenForTest("legacy-3"), createdAt: now.Add(-5 * time.Hour)},
+		{token: hashTokenForTest("legacy-4"), createdAt: now.Add(-4 * time.Hour)},
+		{token: hashTokenForTest("legacy-5"), createdAt: now.Add(-3 * time.Hour)},
+		{token: hashTokenForTest("legacy-6"), createdAt: now.Add(-2 * time.Hour)},
+		{token: hashTokenForTest("legacy-7"), createdAt: now.Add(-1 * time.Hour)},
+	}
+	for _, item := range sessionSeeds {
 		if _, err := db.Exec(
 			`INSERT INTO sessions (token, user_id, created_at, expires_at) VALUES ($1, $2, $3, NULL)`,
 			item.token,
@@ -310,33 +411,40 @@ WITH ranked_sessions AS (
 DELETE FROM sessions AS s
 USING ranked_sessions AS r
 WHERE s.token = r.token
-  AND r.rn > 1;
+  AND r.rn > 5;
 `); err != nil {
-		t.Fatalf("failed to dedupe sessions: %v", err)
-	}
-	if _, err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_sessions_user_id ON sessions (user_id)`); err != nil {
-		t.Fatalf("failed to recreate session unique index: %v", err)
+		t.Fatalf("failed to trim sessions to max five: %v", err)
 	}
 
 	var sessionCount int
-	var remainingToken string
-	if err := db.QueryRow(`SELECT COUNT(*), MAX(token) FROM sessions WHERE user_id = $1`, userID).Scan(&sessionCount, &remainingToken); err != nil {
-		t.Fatalf("failed to read sessions after dedupe: %v", err)
+	if err := db.QueryRow(`SELECT COUNT(*) FROM sessions WHERE user_id = $1`, userID).Scan(&sessionCount); err != nil {
+		t.Fatalf("failed to read sessions after trim: %v", err)
 	}
-	if sessionCount != 1 {
-		t.Fatalf("expected one session row after dedupe, got %d", sessionCount)
-	}
-	if remainingToken != latestToken {
-		t.Fatalf("expected latest session token to remain, got %q", remainingToken)
+	if sessionCount != 5 {
+		t.Fatalf("expected five session rows after trim, got %d", sessionCount)
 	}
 
-	_, err = db.Exec(
-		`INSERT INTO sessions (token, user_id, created_at, expires_at) VALUES ($1, $2, NOW(), NULL)`,
-		hashTokenForTest("legacy-new"),
+	var remainingOldest time.Time
+	if err := db.QueryRow(`SELECT MIN(created_at) FROM sessions WHERE user_id = $1`, userID).Scan(&remainingOldest); err != nil {
+		t.Fatalf("failed to read oldest remaining session: %v", err)
+	}
+	expectedOldest := now.Add(-5 * time.Hour).Truncate(time.Microsecond)
+	remainingOldest = remainingOldest.UTC()
+	if !remainingOldest.Equal(expectedOldest) {
+		t.Fatalf("expected oldest remaining session to be %s, got %s", expectedOldest.Format(time.RFC3339Nano), remainingOldest.Format(time.RFC3339Nano))
+	}
+
+	var removedCount int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM sessions WHERE user_id = $1 AND token IN ($2, $3)`,
 		userID,
-	)
-	if err == nil {
-		t.Fatalf("expected duplicate user_id insert to fail after unique index recreation")
+		hashTokenForTest("legacy-1"),
+		hashTokenForTest("legacy-2"),
+	).Scan(&removedCount); err != nil {
+		t.Fatalf("failed to verify removed sessions: %v", err)
+	}
+	if removedCount != 0 {
+		t.Fatalf("expected two oldest sessions to be removed, found %d", removedCount)
 	}
 }
 

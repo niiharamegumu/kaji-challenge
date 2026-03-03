@@ -36,10 +36,7 @@ WHERE code = $1 AND used_at IS NULL;
 -- name: CreateSession :exec
 INSERT INTO sessions (token, user_id, created_at, expires_at)
 VALUES ($1, $2, NOW(), NULL)
-ON CONFLICT (user_id) DO UPDATE SET
-  token = EXCLUDED.token,
-  created_at = NOW(),
-  expires_at = NULL;
+;
 
 -- name: GetSessionByToken :one
 SELECT s.token, s.user_id, s.created_at, s.expires_at
