@@ -164,5 +164,6 @@ describe("WeeklyTasksPanel", () => {
     expect(
       screen.queryByRole("button", { name: "単発タスク を1増やす" }),
     ).not.toBeInTheDocument();
+    expect(screen.getByText("減点 1点")).toBeInTheDocument();
   });
 });
