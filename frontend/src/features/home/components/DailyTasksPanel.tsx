@@ -18,7 +18,7 @@ export function DailyTasksPanel({ items, onToggle }: Props) {
             <button
               key={item.task.id}
               type="button"
-              className={`min-h-11 rounded-xl p-2.5 text-left ring-1 transition-colors duration-200 ${item.completedToday ? "bg-[color:var(--color-matcha-50)] ring-[color:var(--color-matcha-400)]" : "bg-stone-50 ring-stone-200"}`}
+              className={`min-h-11 rounded-xl p-2.5 text-left ring-1 transition-colors duration-200 ${item.completedToday ? "bg-[color:var(--color-matcha-50)] ring-[color:var(--color-matcha-400)]" : "ring-stone-200"}`}
               onClick={() => onToggle(item.task.id)}
             >
               <div className="font-medium">{item.task.title}</div>
