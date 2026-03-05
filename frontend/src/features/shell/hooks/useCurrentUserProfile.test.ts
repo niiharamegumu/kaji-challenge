@@ -1,17 +1,25 @@
 import { renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import type { MeResponse, TeamMember } from "../../../lib/api/generated/client";
+import type {
+  MeResponse,
+  TeamMember,
+  User,
+} from "../../../lib/api/generated/client";
 import { useCurrentUserProfile } from "./useCurrentUserProfile";
+
+const makeUser = (overrides?: Partial<User>): User => ({
+  id: "u1",
+  email: "owner@example.com",
+  displayName: "Owner",
+  createdAt: "2026-01-01T00:00:00Z",
+  ...overrides,
+});
 
 describe("useCurrentUserProfile", () => {
   it("prefers team member nickname and color", () => {
     const meData: MeResponse = {
-      user: {
-        id: "u1",
-        displayName: "Owner",
-        colorHex: "#111111",
-      },
+      user: makeUser({ colorHex: "#111111" }),
       memberships: [{ teamId: "t1", role: "owner", teamName: "Team A" }],
     };
     const members: TeamMember[] = [
@@ -36,11 +44,7 @@ describe("useCurrentUserProfile", () => {
 
   it("falls back to me displayName and me color when member data is missing", () => {
     const meData: MeResponse = {
-      user: {
-        id: "u1",
-        displayName: "Owner",
-        colorHex: "#111111",
-      },
+      user: makeUser({ colorHex: "#111111" }),
       memberships: [{ teamId: "t1", role: "owner", teamName: "Team A" }],
     };
 
