@@ -1,11 +1,10 @@
-import { useAtom, useAtomValue } from "jotai";
+import { useAtom } from "jotai";
 
 import {
   type CreateTaskRequest,
   TaskType as TaskTypeConst,
   type UpdateTaskRequest,
 } from "../../../lib/api/generated/client";
-import { isLoggedInAtom } from "../../../state/session";
 import { statusMessageAtom } from "../../shell/state/status";
 import { TaskManager } from "../components/TaskManager";
 import {
@@ -17,8 +16,7 @@ import { useTasksQuery } from "../hooks/useAdminQueries";
 import { initialTaskFormState, taskFormAtom } from "../state/forms";
 
 export function AdminTasksPage() {
-  const loggedIn = useAtomValue(isLoggedInAtom);
-  const tasksQuery = useTasksQuery(loggedIn);
+  const tasksQuery = useTasksQuery();
 
   const [taskForm, setTaskForm] = useAtom(taskFormAtom);
   const [, setStatus] = useAtom(statusMessageAtom);
@@ -63,7 +61,7 @@ export function AdminTasksPage() {
     <section className="mt-2 w-full pb-1 md:mt-4">
       <TaskManager
         form={taskForm}
-        tasks={tasksQuery.data ?? []}
+        tasks={tasksQuery.data}
         onFormChange={(updater) => setTaskForm((prev) => updater(prev))}
         onCreate={() => {
           void handleCreateTask();

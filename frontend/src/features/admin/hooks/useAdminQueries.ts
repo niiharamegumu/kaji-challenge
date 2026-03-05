@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useSuspenseQuery } from "@tanstack/react-query";
 
 import {
   getTeamCurrentInvite,
@@ -9,34 +9,39 @@ import {
 import { queryKeys } from "../../../shared/query/queryKeys";
 import { extractHttpStatus } from "../../../shared/utils/errors";
 
-export function useTasksQuery(enabled: boolean) {
-  return useQuery({
+export function useTasksQuery() {
+  return useSuspenseQuery({
     queryKey: queryKeys.tasks,
     queryFn: async () => (await listTasks()).data.items,
-    enabled,
   });
 }
 
-export function usePenaltyRulesQuery(enabled: boolean) {
-  return useQuery({
+export function usePenaltyRulesQuery() {
+  return useSuspenseQuery({
     queryKey: queryKeys.rules,
     queryFn: async () => (await listPenaltyRules()).data.items,
-    enabled,
   });
 }
 
-export function useCurrentTeamMembersQuery(enabled: boolean) {
-  return useQuery({
-    queryKey: queryKeys.teamMembers,
-    queryFn: async () => (await getTeamCurrentMembers()).data.items,
-    enabled,
-  });
-}
-
-export function useCurrentInviteQuery(enabled: boolean) {
-  return useQuery({
-    queryKey: queryKeys.currentInvite,
+export function useCurrentTeamMembersQuery(currentUserId: string | null) {
+  return useSuspenseQuery({
+    queryKey: [...queryKeys.teamMembers, currentUserId ?? "none"],
     queryFn: async () => {
+      if (currentUserId == null) {
+        return [];
+      }
+      return (await getTeamCurrentMembers()).data.items;
+    },
+  });
+}
+
+export function useCurrentInviteQuery(currentUserId: string | null) {
+  return useSuspenseQuery({
+    queryKey: [...queryKeys.currentInvite, currentUserId ?? "none"],
+    queryFn: async () => {
+      if (currentUserId == null) {
+        return null;
+      }
       try {
         return (await getTeamCurrentInvite()).data;
       } catch (error) {
@@ -46,6 +51,5 @@ export function useCurrentInviteQuery(enabled: boolean) {
         throw error;
       }
     },
-    enabled,
   });
 }

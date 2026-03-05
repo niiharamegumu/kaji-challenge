@@ -23,8 +23,8 @@ export function AdminInvitesPage() {
   const { createInvite, joinTeam, leaveTeam } = useInviteMutations(setStatus);
   const { updateNickname, updateColor, updateTeamName } =
     useProfileMutations(setStatus);
-  const membersQuery = useCurrentTeamMembersQuery(Boolean(currentUserId));
-  const currentInviteQuery = useCurrentInviteQuery(Boolean(currentUserId));
+  const membersQuery = useCurrentTeamMembersQuery(currentUserId);
+  const currentInviteQuery = useCurrentInviteQuery(currentUserId);
 
   const [nickname, setNickname] = useState("");
   const [colorHex, setColorHex] = useState("");
@@ -41,10 +41,10 @@ export function AdminInvitesPage() {
           expiresAt: currentInviteQuery.data.expiresAt,
         };
   const currentNickname =
-    membersQuery.data?.find((member) => member.userId === currentUserId)
+    membersQuery.data.find((member) => member.userId === currentUserId)
       ?.nickname ?? "";
   const currentColorHex =
-    membersQuery.data?.find((member) => member.userId === currentUserId)
+    membersQuery.data.find((member) => member.userId === currentUserId)
       ?.colorHex ?? "";
 
   useEffect(() => {
@@ -141,7 +141,7 @@ export function AdminInvitesPage() {
       <InviteManager
         invite={invite}
         joinCode={joinCode}
-        members={membersQuery.data ?? []}
+        members={membersQuery.data}
         nickname={nickname}
         colorHex={colorHex}
         teamName={teamName}
