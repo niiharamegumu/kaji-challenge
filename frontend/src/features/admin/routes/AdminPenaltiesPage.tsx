@@ -1,11 +1,10 @@
-import { useAtom, useAtomValue } from "jotai";
+import { useAtom } from "jotai";
 import { useMemo } from "react";
 
 import type {
   CreatePenaltyRuleRequest,
   UpdatePenaltyRuleRequest,
 } from "../../../lib/api/generated/client";
-import { isLoggedInAtom } from "../../../state/session";
 import { statusMessageAtom } from "../../shell/state/status";
 import { PenaltyRuleManager } from "../components/PenaltyRuleManager";
 import { usePenaltyRuleMutations } from "../hooks/useAdminMutations";
@@ -13,10 +12,9 @@ import { usePenaltyRulesQuery } from "../hooks/useAdminQueries";
 import { initialRuleFormState, ruleFormAtom } from "../state/forms";
 
 export function AdminPenaltiesPage() {
-  const loggedIn = useAtomValue(isLoggedInAtom);
-  const rulesQuery = usePenaltyRulesQuery(loggedIn);
+  const rulesQuery = usePenaltyRulesQuery();
   const activeRules = useMemo(
-    () => (rulesQuery.data ?? []).filter((rule) => rule.deletedAt == null),
+    () => rulesQuery.data.filter((rule) => rule.deletedAt == null),
     [rulesQuery.data],
   );
 

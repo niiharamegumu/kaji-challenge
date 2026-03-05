@@ -9,6 +9,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AppProviders } from "../../../app/providers";
+import { SuspenseQueryBoundary } from "../../../shared/components/SuspenseQueryBoundary";
 import { appQueryClient } from "../../../shared/query/queryClient";
 import { AdminInvitesPage } from "./AdminInvitesPage";
 
@@ -90,7 +91,9 @@ describe("AdminInvitesPage", () => {
   it("does not fetch me on settings page render", async () => {
     render(
       <AppProviders>
-        <AdminInvitesPage />
+        <SuspenseQueryBoundary errorMessage="テスト用エラー">
+          <AdminInvitesPage />
+        </SuspenseQueryBoundary>
       </AppProviders>,
     );
 
@@ -105,7 +108,9 @@ describe("AdminInvitesPage", () => {
 
     render(
       <AppProviders>
-        <AdminInvitesPage />
+        <SuspenseQueryBoundary errorMessage="テスト用エラー">
+          <AdminInvitesPage />
+        </SuspenseQueryBoundary>
       </AppProviders>,
     );
 
@@ -139,7 +144,9 @@ describe("AdminInvitesPage", () => {
 
     render(
       <AppProviders>
-        <AdminInvitesPage />
+        <SuspenseQueryBoundary errorMessage="テスト用エラー">
+          <AdminInvitesPage />
+        </SuspenseQueryBoundary>
       </AppProviders>,
     );
 

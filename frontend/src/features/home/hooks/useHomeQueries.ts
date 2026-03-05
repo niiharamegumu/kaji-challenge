@@ -1,4 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
 
 import {
   getTaskOverview,
@@ -13,12 +17,11 @@ import {
 
 type CompletionAction = "toggle" | "increment" | "decrement";
 
-export function useHomeQuery(enabled: boolean) {
-  return useQuery({
+export function useHomeQuery() {
+  return useSuspenseQuery({
     queryKey: queryKeys.home,
     queryFn: async () => (await getTaskOverview()).data,
-    enabled,
-    refetchInterval: enabled ? 30_000 : false,
+    refetchInterval: 30_000,
     refetchIntervalInBackground: false,
   });
 }

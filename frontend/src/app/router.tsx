@@ -1,5 +1,4 @@
-import { LoaderCircle } from "lucide-react";
-import { Suspense, lazy } from "react";
+import { type ReactNode, lazy } from "react";
 import { Navigate, createBrowserRouter } from "react-router-dom";
 
 import {
@@ -8,6 +7,7 @@ import {
 } from "../features/auth/routes/AuthCallbackPage";
 import { HomePage } from "../features/home/routes/HomePage";
 import { RootLayout } from "../features/shell/routes/RootLayout";
+import { SuspenseQueryBoundary } from "../shared/components/SuspenseQueryBoundary";
 
 const AdminTasksPage = lazy(async () => {
   const module = await import("../features/admin/routes/AdminTasksPage");
@@ -29,15 +29,10 @@ const AdminSummaryPage = lazy(async () => {
   return { default: module.AdminSummaryPage };
 });
 
-const adminFallback = (
-  <div className="mt-4 flex justify-center">
-    <LoaderCircle
-      size={22}
-      className="text-stone-500 animate-spin motion-reduce:animate-none"
-      aria-label="読み込み中"
-      role="status"
-    />
-  </div>
+const withDataBoundary = (element: ReactNode, errorMessage: string) => (
+  <SuspenseQueryBoundary errorMessage={errorMessage}>
+    {element}
+  </SuspenseQueryBoundary>
 );
 
 export const router = createBrowserRouter([
@@ -47,7 +42,10 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <HomePage />,
+        element: withDataBoundary(
+          <HomePage />,
+          "ホーム画面の読み込みに失敗しました。",
+        ),
       },
       {
         path: "admin",
@@ -55,26 +53,23 @@ export const router = createBrowserRouter([
       },
       {
         path: "admin/tasks",
-        element: (
-          <Suspense fallback={adminFallback}>
-            <AdminTasksPage />
-          </Suspense>
+        element: withDataBoundary(
+          <AdminTasksPage />,
+          "タスク画面の読み込みに失敗しました。",
         ),
       },
       {
         path: "admin/penalties",
-        element: (
-          <Suspense fallback={adminFallback}>
-            <AdminPenaltiesPage />
-          </Suspense>
+        element: withDataBoundary(
+          <AdminPenaltiesPage />,
+          "ペナルティ画面の読み込みに失敗しました。",
         ),
       },
       {
         path: "admin/settings",
-        element: (
-          <Suspense fallback={adminFallback}>
-            <AdminInvitesPage />
-          </Suspense>
+        element: withDataBoundary(
+          <AdminInvitesPage />,
+          "設定画面の読み込みに失敗しました。",
         ),
       },
       {
@@ -83,10 +78,9 @@ export const router = createBrowserRouter([
       },
       {
         path: "admin/summary",
-        element: (
-          <Suspense fallback={adminFallback}>
-            <AdminSummaryPage />
-          </Suspense>
+        element: withDataBoundary(
+          <AdminSummaryPage />,
+          "サマリー画面の読み込みに失敗しました。",
         ),
       },
     ],

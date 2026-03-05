@@ -1,9 +1,8 @@
-import { useAtom, useAtomValue } from "jotai";
+import { useAtom } from "jotai";
 import { ChevronRight } from "lucide-react";
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 
-import { isLoggedInAtom } from "../../../state/session";
 import { statusMessageAtom } from "../../shell/state/status";
 import { DailyTasksPanel } from "../components/DailyTasksPanel";
 import { WeeklyTasksPanel } from "../components/WeeklyTasksPanel";
@@ -13,9 +12,8 @@ import {
 } from "../hooks/useHomeQueries";
 
 export function HomePage() {
-  const loggedIn = useAtomValue(isLoggedInAtom);
   const [, setStatus] = useAtom(statusMessageAtom);
-  const homeQuery = useHomeQuery(loggedIn);
+  const homeQuery = useHomeQuery();
   const toggleMutation = useToggleCompletionMutation(setStatus);
 
   const home = homeQuery.data;
@@ -39,14 +37,14 @@ export function HomePage() {
     <div className="mt-2 space-y-1.5 md:mt-4 md:space-y-3">
       <section className="grid gap-2 md:grid-cols-2 md:gap-4">
         <DailyTasksPanel
-          items={home?.dailyTasks ?? []}
+          items={home.dailyTasks}
           onToggle={(taskId) => {
             void toggleMutation.mutateAsync({ taskId, action: "toggle" });
           }}
         />
         <WeeklyTasksPanel
-          items={home?.weeklyTasks ?? []}
-          elapsedDaysInWeek={home?.elapsedDaysInWeek ?? 0}
+          items={home.weeklyTasks}
+          elapsedDaysInWeek={home.elapsedDaysInWeek}
           weeklyProgress={weeklyProgress}
           onToggle={(taskId) => {
             void toggleMutation.mutateAsync({ taskId, action: "toggle" });
