@@ -219,8 +219,8 @@ export function useInviteMutations(setStatus: StatusSetter) {
     mutationFn: async () =>
       postTeamInvite({ expiresInHours: INVITE_CODE_EXPIRES_IN_HOURS }),
     onSuccess: async (response) => {
-      queryClient.setQueryData<InviteCodeResponse>(
-        queryKeys.currentInvite,
+      queryClient.setQueriesData<InviteCodeResponse>(
+        { queryKey: queryKeys.currentInvite },
         response.data,
       );
     },
