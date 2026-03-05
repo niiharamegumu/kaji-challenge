@@ -4,7 +4,10 @@ import { LoaderCircle } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 
-import { getTeamCurrentMembers } from "../../../lib/api/generated/client";
+import {
+  type TeamMember,
+  getTeamCurrentMembers,
+} from "../../../lib/api/generated/client";
 import { queryKeys } from "../../../shared/query/queryKeys";
 import { extractHttpStatus, formatError } from "../../../shared/utils/errors";
 import { isLoggedInAtom, sessionAtom } from "../../../state/session";
@@ -62,19 +65,28 @@ export function RootLayout() {
   const login = useLoginAction(setStatus);
   const logoutAction = useLogoutAction(setStatus, setSession);
   const currentTeamName = meQuery.data?.memberships?.[0]?.teamName ?? "チーム";
-  const preferredNickname =
-    cachedMembersQuery.data
-      ?.find((member) => member.userId === currentUserID)
-      ?.nickname?.trim() ?? "";
+  const membersByUserId = useMemo(() => {
+    const index = new Map<string, TeamMember>();
+    for (const member of cachedMembersQuery.data ?? []) {
+      if (!index.has(member.userId)) {
+        index.set(member.userId, member);
+      }
+    }
+    return index;
+  }, [cachedMembersQuery.data]);
+  const currentUserMember = useMemo(() => {
+    if (currentUserID == null) {
+      return undefined;
+    }
+    return membersByUserId.get(currentUserID);
+  }, [membersByUserId, currentUserID]);
+  const preferredNickname = currentUserMember?.nickname?.trim() ?? "";
   const currentUserName =
     preferredNickname.length > 0
       ? preferredNickname
       : (meQuery.data?.user.displayName ?? "ログイン中");
   const currentUserColorHex =
-    cachedMembersQuery.data?.find((member) => member.userId === currentUserID)
-      ?.colorHex ??
-    meQuery.data?.user.colorHex ??
-    null;
+    currentUserMember?.colorHex ?? meQuery.data?.user.colorHex ?? null;
   const outletContext = useMemo<RootLayoutOutletContext>(
     () => ({
       currentUserId: currentUserID,
