@@ -1,5 +1,5 @@
 import { useSetAtom } from "jotai";
-import { useEffect, useState } from "react";
+import { useActionState, useEffect, useState, useTransition } from "react";
 import { useOutletContext } from "react-router-dom";
 
 import type { RootLayoutOutletContext } from "../../shell/routes/RootLayout";
@@ -15,10 +15,19 @@ import {
 } from "../hooks/useAdminQueries";
 import type { InviteState } from "../state/ui";
 
+type SaveProfileActionState = {
+  status: "idle" | "success" | "error";
+};
+
+const initialSaveProfileActionState: SaveProfileActionState = {
+  status: "idle",
+};
+
 export function AdminInvitesPage() {
   const { currentUserId, currentTeamName } =
     useOutletContext<RootLayoutOutletContext>();
   const [joinCode, setJoinCode] = useState("");
+  const [, startTransition] = useTransition();
   const setStatus = useSetAtom(statusMessageAtom);
   const { createInvite, joinTeam, leaveTeam } = useInviteMutations(setStatus);
   const { updateNickname, updateColor, updateTeamName } =
@@ -107,34 +116,58 @@ export function AdminInvitesPage() {
     }
   };
 
-  const handleSaveNickname = async () => {
-    try {
-      await updateNickname.mutateAsync(nickname);
-      setNicknameDirty(false);
-    } catch {
-      // Error status is handled by mutation onError.
-    }
-  };
+  const [, saveNicknameAction, isSavingNickname] = useActionState(
+    async (
+      _prev: SaveProfileActionState,
+      nextNickname: string,
+    ): Promise<SaveProfileActionState> => {
+      try {
+        await updateNickname.mutateAsync(nextNickname);
+        setNicknameDirty(false);
+        return { status: "success" };
+      } catch {
+        // Error status is handled by mutation onError.
+        return { status: "error" };
+      }
+    },
+    initialSaveProfileActionState,
+  );
 
-  const handleSaveColor = async () => {
-    try {
-      await updateColor.mutateAsync(
-        colorHex.trim().length === 0 ? null : colorHex,
-      );
-      setColorHexDirty(false);
-    } catch {
-      // Error status is handled by mutation onError.
-    }
-  };
+  const [, saveColorAction, isSavingColor] = useActionState(
+    async (
+      _prev: SaveProfileActionState,
+      nextColorHex: string,
+    ): Promise<SaveProfileActionState> => {
+      try {
+        await updateColor.mutateAsync(
+          nextColorHex.trim().length === 0 ? null : nextColorHex,
+        );
+        setColorHexDirty(false);
+        return { status: "success" };
+      } catch {
+        // Error status is handled by mutation onError.
+        return { status: "error" };
+      }
+    },
+    initialSaveProfileActionState,
+  );
 
-  const handleSaveTeamName = async () => {
-    try {
-      await updateTeamName.mutateAsync(teamName);
-      setTeamNameDirty(false);
-    } catch {
-      // Error status is handled by mutation onError.
-    }
-  };
+  const [, saveTeamNameAction, isSavingTeamName] = useActionState(
+    async (
+      _prev: SaveProfileActionState,
+      nextTeamName: string,
+    ): Promise<SaveProfileActionState> => {
+      try {
+        await updateTeamName.mutateAsync(nextTeamName);
+        setTeamNameDirty(false);
+        return { status: "success" };
+      } catch {
+        // Error status is handled by mutation onError.
+        return { status: "error" };
+      }
+    },
+    initialSaveProfileActionState,
+  );
 
   return (
     <section className="mt-2 pb-1 md:mt-4">
@@ -148,9 +181,9 @@ export function AdminInvitesPage() {
         isCreatingInvite={createInvite.isPending}
         isJoiningTeam={joinTeam.isPending}
         isLeavingTeam={leaveTeam.isPending}
-        isSavingNickname={updateNickname.isPending}
-        isSavingColor={updateColor.isPending}
-        isSavingTeamName={updateTeamName.isPending}
+        isSavingNickname={isSavingNickname}
+        isSavingColor={isSavingColor}
+        isSavingTeamName={isSavingTeamName}
         onJoinCodeChange={setJoinCode}
         onNicknameChange={(value) => {
           setNickname(value);
@@ -174,13 +207,19 @@ export function AdminInvitesPage() {
           void handleLeaveTeam();
         }}
         onSaveNickname={() => {
-          void handleSaveNickname();
+          startTransition(() => {
+            saveNicknameAction(nickname);
+          });
         }}
         onSaveColor={() => {
-          void handleSaveColor();
+          startTransition(() => {
+            saveColorAction(colorHex);
+          });
         }}
         onSaveTeamName={() => {
-          void handleSaveTeamName();
+          startTransition(() => {
+            saveTeamNameAction(teamName);
+          });
         }}
       />
     </section>
