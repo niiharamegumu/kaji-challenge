@@ -11,6 +11,7 @@ import { useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AppProviders } from "../../../app/providers";
+import { SuspenseQueryBoundary } from "../../../shared/components/SuspenseQueryBoundary";
 import { appQueryClient } from "../../../shared/query/queryClient";
 import { sessionAtom } from "../../../state/session";
 import { AdminPenaltiesPage } from "./AdminPenaltiesPage";
@@ -76,7 +77,9 @@ describe("AdminTasksPage", () => {
     render(
       <AppProviders>
         <LoginStateSetter />
-        <AdminTasksPage />
+        <SuspenseQueryBoundary errorMessage="テスト用エラー">
+          <AdminTasksPage />
+        </SuspenseQueryBoundary>
       </AppProviders>,
     );
 
@@ -84,7 +87,9 @@ describe("AdminTasksPage", () => {
     render(
       <AppProviders>
         <LoginStateSetter />
-        <AdminPenaltiesPage />
+        <SuspenseQueryBoundary errorMessage="テスト用エラー">
+          <AdminPenaltiesPage />
+        </SuspenseQueryBoundary>
       </AppProviders>,
     );
 
