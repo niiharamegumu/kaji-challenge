@@ -8,7 +8,7 @@ import {
   Circle,
   TriangleAlert,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import {
@@ -57,6 +57,7 @@ const dateFromDateKey = (dateKey: string) => {
 
 export function AdminSummaryPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const [, startTransition] = useTransition();
   const monthPickerRef = useRef<HTMLDivElement>(null);
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
   const monthFromUrl = searchParams.get("month");
@@ -122,17 +123,19 @@ export function AdminSummaryPage() {
   }, []);
 
   const updateMonth = (nextMonth: string) => {
-    if (!monthPattern.test(nextMonth)) {
+    if (!monthPattern.test(nextMonth) || nextMonth === month) {
       return;
     }
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        next.set("month", nextMonth);
-        return next;
-      },
-      { replace: true },
-    );
+    startTransition(() => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.set("month", nextMonth);
+          return next;
+        },
+        { replace: true },
+      );
+    });
   };
 
   const [currentYear, currentMonth] = useMemo(() => {
