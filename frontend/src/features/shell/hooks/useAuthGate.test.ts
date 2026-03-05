@@ -1,12 +1,20 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import type { MeResponse } from "../../../lib/api/generated/client";
+import type { MeResponse, User } from "../../../lib/api/generated/client";
 import { useAuthGate } from "./useAuthGate";
+
+const makeUser = (overrides?: Partial<User>): User => ({
+  id: "u1",
+  email: "owner@example.com",
+  displayName: "Owner",
+  createdAt: "2026-01-01T00:00:00Z",
+  ...overrides,
+});
 
 function buildParams(overrides?: Partial<Parameters<typeof useAuthGate>[0]>) {
   const meData: MeResponse = {
-    user: { id: "u1", displayName: "Owner" },
+    user: makeUser(),
     memberships: [{ teamId: "t1", role: "owner", teamName: "Team A" }],
   };
   return {
