@@ -68,8 +68,10 @@ async function handlePreconditionFailure(
   if (!isPreconditionFailure(error)) {
     return;
   }
-  await invalidateQueryKeys(queryClient, teamMembershipRelatedQueryKeys);
-  await queryClient.invalidateQueries({ queryKey: queryKeys.currentInvite });
+  await Promise.all([
+    invalidateQueryKeys(queryClient, teamMembershipRelatedQueryKeys),
+    queryClient.invalidateQueries({ queryKey: queryKeys.currentInvite }),
+  ]);
   setStatus(
     "他メンバーの更新を検知しました。最新状態に更新したので、もう一度操作してください。",
   );
@@ -235,10 +237,12 @@ export function useInviteMutations(setStatus: StatusSetter) {
     mutationFn: async (code: string) => postTeamJoin({ code }),
     onSuccess: async () => {
       setStatus("チーム参加に成功しました");
-      await invalidateQueryKeys(queryClient, teamMembershipRelatedQueryKeys);
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.currentInvite,
-      });
+      await Promise.all([
+        invalidateQueryKeys(queryClient, teamMembershipRelatedQueryKeys),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.currentInvite,
+        }),
+      ]);
     },
     onError: (error) => {
       if (isPreconditionFailure(error)) {
@@ -257,10 +261,12 @@ export function useInviteMutations(setStatus: StatusSetter) {
     mutationFn: async () => postTeamLeave(),
     onSuccess: async () => {
       setStatus("新しい自分のチームを作成しました");
-      await invalidateQueryKeys(queryClient, teamMembershipRelatedQueryKeys);
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.currentInvite,
-      });
+      await Promise.all([
+        invalidateQueryKeys(queryClient, teamMembershipRelatedQueryKeys),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.currentInvite,
+        }),
+      ]);
     },
     onError: (error) => {
       void handlePreconditionFailure(error, queryClient, setStatus);
