@@ -1,5 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
-import { useAtom, useAtomValue } from "jotai";
+import { useSuspenseQueries } from "@tanstack/react-query";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -7,7 +6,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Circle,
-  LoaderCircle,
   TriangleAlert,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -19,9 +17,6 @@ import {
 } from "../../../lib/api/generated/client";
 import { CompletionSlots } from "../../../shared/components/CompletionSlots";
 import { queryKeys } from "../../../shared/query/queryKeys";
-import { formatError } from "../../../shared/utils/errors";
-import { isLoggedInAtom } from "../../../state/session";
-import { statusMessageAtom } from "../../shell/state/status";
 
 const monthPattern = /^\d{4}-\d{2}$/;
 
@@ -61,52 +56,35 @@ const dateFromDateKey = (dateKey: string) => {
 };
 
 export function AdminSummaryPage() {
-  const loggedIn = useAtomValue(isLoggedInAtom);
   const [searchParams, setSearchParams] = useSearchParams();
   const monthPickerRef = useRef<HTMLDivElement>(null);
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
-  const [, setStatus] = useAtom(statusMessageAtom);
   const monthFromUrl = searchParams.get("month");
   const month =
     monthFromUrl != null && monthPattern.test(monthFromUrl)
       ? monthFromUrl
       : initialMonth();
 
-  const summaryQuery = useQuery({
-    queryKey: [...queryKeys.monthlySummary, month],
-    queryFn: async () => (await getPenaltySummaryMonthly({ month })).data,
-    enabled: loggedIn && monthPattern.test(month),
+  const [summary, rules] = useSuspenseQueries({
+    queries: [
+      {
+        queryKey: [...queryKeys.monthlySummary, month],
+        queryFn: async () => (await getPenaltySummaryMonthly({ month })).data,
+      },
+      {
+        queryKey: [...queryKeys.rules, "withDeleted"],
+        queryFn: async () =>
+          (await listPenaltyRules({ includeDeleted: true })).data.items,
+      },
+    ],
   });
-
-  const rulesQuery = useQuery({
-    queryKey: [...queryKeys.rules, "withDeleted"],
-    queryFn: async () =>
-      (await listPenaltyRules({ includeDeleted: true })).data.items,
-    enabled: loggedIn,
-  });
-
-  useEffect(() => {
-    if (summaryQuery.isError) {
-      setStatus(
-        `月次サマリー取得に失敗しました: ${formatError(summaryQuery.error)}`,
-      );
-    }
-  }, [summaryQuery.error, summaryQuery.isError, setStatus]);
-
-  useEffect(() => {
-    if (rulesQuery.isError) {
-      setStatus(
-        `ペナルティルール取得に失敗しました: ${formatError(rulesQuery.error)}`,
-      );
-    }
-  }, [rulesQuery.error, rulesQuery.isError, setStatus]);
 
   const ruleMap = useMemo(() => {
-    return new Map((rulesQuery.data ?? []).map((rule) => [rule.id, rule]));
-  }, [rulesQuery.data]);
+    return new Map(rules.data.map((rule) => [rule.id, rule]));
+  }, [rules.data]);
 
   const triggeredPenalties = useMemo(() => {
-    const ids = summaryQuery.data?.triggeredPenaltyRuleIds ?? [];
+    const ids = summary.data.triggeredPenaltyRuleIds;
     return ids
       .map((id) => {
         const rule = ruleMap.get(id);
@@ -131,11 +109,11 @@ export function AdminSummaryPage() {
         }
         return a.name.localeCompare(b.name, "ja");
       });
-  }, [summaryQuery.data?.triggeredPenaltyRuleIds, ruleMap]);
+  }, [summary.data.triggeredPenaltyRuleIds, ruleMap]);
 
   const monthlyTaskStatusGroups = useMemo(() => {
-    return summaryQuery.data?.taskStatusByDate ?? [];
-  }, [summaryQuery.data?.taskStatusByDate]);
+    return summary.data.taskStatusByDate;
+  }, [summary.data.taskStatusByDate]);
   const currentDateKey = useMemo(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
@@ -308,20 +286,20 @@ export function AdminSummaryPage() {
             <div className="p-3">
               <p className="text-xs text-stone-700">合計減点</p>
               <p className="mt-1 text-3xl font-bold leading-none text-stone-900">
-                {summaryQuery.data?.totalPenalty ?? 0}
+                {summary.data.totalPenalty}
               </p>
             </div>
             <div className="grid grid-rows-2 border-l border-stone-200">
               <div className="flex items-end justify-between gap-2 p-3">
                 <p className="text-xs text-stone-700">日次減点</p>
                 <p className="text-xl font-semibold leading-none text-stone-900">
-                  {summaryQuery.data?.dailyPenaltyTotal ?? 0}
+                  {summary.data.dailyPenaltyTotal}
                 </p>
               </div>
               <div className="flex items-end justify-between gap-2 border-t border-stone-200 p-3">
                 <p className="text-xs text-stone-700">週次減点</p>
                 <p className="text-xl font-semibold leading-none text-stone-900">
-                  {summaryQuery.data?.weeklyPenaltyTotal ?? 0}
+                  {summary.data.weeklyPenaltyTotal}
                 </p>
               </div>
             </div>
@@ -331,20 +309,7 @@ export function AdminSummaryPage() {
         <div className="mt-4 border-t border-stone-200 pt-3">
           <h3 className="text-base font-semibold">発生しているペナルティ</h3>
 
-          {summaryQuery.isLoading || rulesQuery.isLoading ? (
-            <div className="mt-3 flex justify-center">
-              <LoaderCircle
-                size={22}
-                className="text-stone-500 animate-spin motion-reduce:animate-none"
-                aria-label="読み込み中"
-                role="status"
-              />
-            </div>
-          ) : summaryQuery.isError || rulesQuery.isError ? (
-            <p className="mt-3 text-sm text-rose-700">
-              サマリー情報の取得に失敗しました。時間をおいて再読込してください。
-            </p>
-          ) : triggeredPenalties.length === 0 ? (
+          {triggeredPenalties.length === 0 ? (
             <p className="mt-3 text-sm text-stone-500">
               発動ペナルティはありません。
             </p>
@@ -385,20 +350,7 @@ export function AdminSummaryPage() {
         <div className="mt-4 border-t border-stone-200 pt-3">
           <h3 className="text-base font-semibold">日次サマリー</h3>
 
-          {summaryQuery.isLoading ? (
-            <div className="mt-3 flex justify-center">
-              <LoaderCircle
-                size={22}
-                className="text-stone-500 animate-spin motion-reduce:animate-none"
-                aria-label="読み込み中"
-                role="status"
-              />
-            </div>
-          ) : summaryQuery.isError ? (
-            <p className="mt-3 text-sm text-rose-700">
-              完了タスク一覧の取得に失敗しました。
-            </p>
-          ) : monthlyTaskStatusGroups.length === 0 ? (
+          {monthlyTaskStatusGroups.length === 0 ? (
             <p className="mt-3 text-sm text-stone-500">
               対象月のタスク履歴はありません。
             </p>
