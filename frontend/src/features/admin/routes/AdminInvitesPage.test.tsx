@@ -22,16 +22,13 @@ const mockPostTeamLeave = vi.fn();
 const mockPatchMeNickname = vi.fn();
 const mockPatchMeColor = vi.fn();
 const mockPatchTeamCurrent = vi.fn();
+const mockOutletContext = vi.fn();
 
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<object>("react-router-dom");
   return {
     ...actual,
-    useOutletContext: () => ({
-      currentUserId: "u1",
-      currentTeamName: "Team A",
-      displayName: "Owner",
-    }),
+    useOutletContext: () => mockOutletContext(),
   };
 });
 
@@ -82,6 +79,11 @@ describe("AdminInvitesPage", () => {
     mockPatchMeNickname.mockResolvedValue({ data: {} });
     mockPatchMeColor.mockResolvedValue({ data: {} });
     mockPatchTeamCurrent.mockResolvedValue({ data: {} });
+    mockOutletContext.mockReturnValue({
+      currentUserId: "u1",
+      currentTeamName: "Team A",
+      displayName: "Owner",
+    });
   });
 
   afterEach(() => {
@@ -177,6 +179,77 @@ describe("AdminInvitesPage", () => {
 
     await waitFor(() => {
       expect(mockPatchMeNickname).toHaveBeenCalledWith({ nickname: "" });
+    });
+  });
+
+  it("does not keep dirty nickname draft after current user changes", async () => {
+    mockGetTeamCurrentMembers.mockResolvedValue({
+      data: {
+        items: [
+          {
+            userId: "u1",
+            displayName: "Owner",
+            nickname: "にっく",
+            effectiveName: "にっく",
+            colorHex: "#111111",
+            joinedAt: "2026-02-24T00:00:00Z",
+            role: "owner",
+          },
+          {
+            userId: "u2",
+            displayName: "Partner",
+            nickname: "ぱーとなー",
+            effectiveName: "ぱーとなー",
+            colorHex: "#222222",
+            joinedAt: "2026-02-24T00:00:00Z",
+            role: "member",
+          },
+        ],
+      },
+    });
+    const user = userEvent.setup();
+
+    const { rerender } = render(
+      <AppProviders>
+        <SuspenseQueryBoundary errorMessage="テスト用エラー">
+          <AdminInvitesPage />
+        </SuspenseQueryBoundary>
+      </AppProviders>,
+    );
+
+    const accountHeading = await screen.findByRole("heading", {
+      name: "アカウント設定",
+    });
+    const accountCard = accountHeading.closest("article");
+    if (accountCard == null) {
+      throw new Error("account card not found");
+    }
+    const nicknameInput = within(accountCard).getByLabelText("ニックネーム");
+    await waitFor(() => {
+      expect(nicknameInput).toHaveValue("にっく");
+    });
+    await user.clear(nicknameInput);
+    await user.type(nicknameInput, "編集中");
+    expect(nicknameInput).toHaveValue("編集中");
+
+    mockOutletContext.mockReturnValue({
+      currentUserId: "u2",
+      currentTeamName: "Team B",
+      displayName: "Partner",
+    });
+
+    rerender(
+      <AppProviders>
+        <SuspenseQueryBoundary errorMessage="テスト用エラー">
+          <AdminInvitesPage />
+        </SuspenseQueryBoundary>
+      </AppProviders>,
+    );
+
+    await waitFor(() => {
+      expect(within(accountCard).getByLabelText("ニックネーム")).toHaveValue(
+        "ぱーとなー",
+      );
     });
   });
 });

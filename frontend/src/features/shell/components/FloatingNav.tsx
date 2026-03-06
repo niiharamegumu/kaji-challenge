@@ -42,13 +42,7 @@ export function FloatingNav({
   onLogout,
 }: Props) {
   const [open, setOpen] = useState(false);
-  const location = useLocation();
-
-  useEffect(() => {
-    if (location.pathname) {
-      setOpen(false);
-    }
-  }, [location.pathname]);
+  const { pathname } = useLocation();
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -61,6 +55,14 @@ export function FloatingNav({
       window.removeEventListener("keydown", onKeyDown);
     };
   }, []);
+
+  useEffect(() => {
+    void pathname;
+    const timeoutId = window.setTimeout(() => {
+      setOpen(false);
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [pathname]);
 
   const userBgColor = resolveUserColor(currentUserColorHex);
   const userTextColor = getReadableTextColor(userBgColor);
@@ -111,23 +113,44 @@ export function FloatingNav({
             </button>
           </div>
           <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-            <NavLink to="/" end className={linkClass}>
+            <NavLink
+              to="/"
+              end
+              className={linkClass}
+              onClick={() => setOpen(false)}
+            >
               <House size={18} aria-hidden="true" />
               <span>ホーム</span>
             </NavLink>
-            <NavLink to="/admin/summary" className={linkClass}>
+            <NavLink
+              to="/admin/summary"
+              className={linkClass}
+              onClick={() => setOpen(false)}
+            >
               <ChartColumn size={18} aria-hidden="true" />
               <span>サマリー</span>
             </NavLink>
-            <NavLink to="/admin/tasks" className={linkClass}>
+            <NavLink
+              to="/admin/tasks"
+              className={linkClass}
+              onClick={() => setOpen(false)}
+            >
               <Shield size={18} aria-hidden="true" />
               <span>タスク</span>
             </NavLink>
-            <NavLink to="/admin/penalties" className={linkClass}>
+            <NavLink
+              to="/admin/penalties"
+              className={linkClass}
+              onClick={() => setOpen(false)}
+            >
               <ShieldAlert size={18} aria-hidden="true" />
               <span>ペナルティ</span>
             </NavLink>
-            <NavLink to="/admin/settings" className={linkClass}>
+            <NavLink
+              to="/admin/settings"
+              className={linkClass}
+              onClick={() => setOpen(false)}
+            >
               <Settings size={18} aria-hidden="true" />
               <span>設定</span>
             </NavLink>

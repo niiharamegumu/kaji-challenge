@@ -1,6 +1,5 @@
 import { useAtom } from "jotai";
 import { ChevronRight } from "lucide-react";
-import { useMemo } from "react";
 import { Link } from "react-router-dom";
 
 import { statusMessageAtom } from "../../shell/state/status";
@@ -18,20 +17,12 @@ export function HomePage() {
 
   const home = homeQuery.data;
 
-  const weeklyProgress = useMemo(() => {
-    if (home == null) {
-      return "0/0";
-    }
-    const completedTasks = home.weeklyTasks.filter(
-      (item) => item.weekCompletedCount >= item.requiredCompletionsPerWeek,
-    ).length;
-    const totalTasks = home.weeklyTasks.length;
-    return `${completedTasks}/${totalTasks}`;
-  }, [home]);
-  const currentMonth = useMemo(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  }, []);
+  const weeklyProgress =
+    home == null
+      ? "0/0"
+      : `${home.weeklyTasks.filter((item) => item.weekCompletedCount >= item.requiredCompletionsPerWeek).length}/${home.weeklyTasks.length}`;
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
   return (
     <div className="mt-2 space-y-1.5 md:mt-4 md:space-y-3">

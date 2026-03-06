@@ -66,6 +66,7 @@ export function InviteManager({
   onSaveTeamName,
 }: Props) {
   const [copied, setCopied] = useState(false);
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
 
   useEffect(() => {
     if (!copied) {
@@ -77,11 +78,21 @@ export function InviteManager({
     return () => window.clearTimeout(timer);
   }, [copied]);
 
+  useEffect(() => {
+    if (invite == null) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 60_000);
+    return () => window.clearInterval(timer);
+  }, [invite]);
+
   const nicknameError = getNicknameError(nickname);
   const colorHexError = getColorHexError(colorHex);
   const teamNameError = getTeamNameError(teamName);
   const inviteExpired =
-    invite != null && new Date(invite.expiresAt).getTime() < Date.now();
+    invite != null && new Date(invite.expiresAt).getTime() < currentTime;
 
   const handleCopyInviteCode = async () => {
     if (!invite?.code) {

@@ -1,5 +1,5 @@
 import { useSetAtom } from "jotai";
-import { useActionState, useEffect, useState, useTransition } from "react";
+import { useActionState, useState, useTransition } from "react";
 import { useOutletContext } from "react-router-dom";
 
 import type { RootLayoutOutletContext } from "../../shell/routes/RootLayout";
@@ -35,9 +35,16 @@ export function AdminInvitesPage() {
   const membersQuery = useCurrentTeamMembersQuery(currentUserId);
   const currentInviteQuery = useCurrentInviteQuery(currentUserId);
 
-  const [nickname, setNickname] = useState("");
-  const [colorHex, setColorHex] = useState("");
-  const [teamName, setTeamName] = useState("");
+  const [nicknameDraft, setNicknameDraft] = useState("");
+  const [colorHexDraft, setColorHexDraft] = useState("");
+  const [teamNameDraft, setTeamNameDraft] = useState("");
+  const [nicknameDraftUserId, setNicknameDraftUserId] = useState<string | null>(
+    null,
+  );
+  const [colorHexDraftUserId, setColorHexDraftUserId] = useState<string | null>(
+    null,
+  );
+  const [teamNameDraftKey, setTeamNameDraftKey] = useState("");
   const [nicknameDirty, setNicknameDirty] = useState(false);
   const [colorHexDirty, setColorHexDirty] = useState(false);
   const [teamNameDirty, setTeamNameDirty] = useState(false);
@@ -55,40 +62,19 @@ export function AdminInvitesPage() {
   const currentColorHex =
     membersQuery.data.find((member) => member.userId === currentUserId)
       ?.colorHex ?? "";
-
-  useEffect(() => {
-    if (teamNameDirty) {
-      return;
-    }
-    setTeamName(currentTeamName);
-  }, [currentTeamName, teamNameDirty]);
-
-  useEffect(() => {
-    if (currentUserId == null) {
-      setNickname("");
-      setNicknameDirty(false);
-      setColorHex("");
-      setColorHexDirty(false);
-      return;
-    }
-    if (nicknameDirty) {
-      if (colorHexDirty) {
-        return;
-      }
-    }
-    if (!nicknameDirty) {
-      setNickname(currentNickname);
-    }
-    if (!colorHexDirty) {
-      setColorHex(currentColorHex);
-    }
-  }, [
-    colorHexDirty,
-    currentColorHex,
-    currentNickname,
-    currentUserId,
-    nicknameDirty,
-  ]);
+  const currentTeamKey = `${currentUserId ?? "anonymous"}:${currentTeamName}`;
+  const nickname =
+    nicknameDirty && nicknameDraftUserId === currentUserId
+      ? nicknameDraft
+      : currentNickname;
+  const colorHex =
+    colorHexDirty && colorHexDraftUserId === currentUserId
+      ? colorHexDraft
+      : currentColorHex;
+  const teamName =
+    teamNameDirty && teamNameDraftKey === currentTeamKey
+      ? teamNameDraft
+      : currentTeamName;
 
   const handleCreateInvite = async () => {
     try {
@@ -123,6 +109,8 @@ export function AdminInvitesPage() {
     ): Promise<SaveProfileActionState> => {
       try {
         await updateNickname.mutateAsync(nextNickname);
+        setNicknameDraft(nextNickname);
+        setNicknameDraftUserId(currentUserId);
         setNicknameDirty(false);
         return { status: "success" };
       } catch {
@@ -142,6 +130,8 @@ export function AdminInvitesPage() {
         await updateColor.mutateAsync(
           nextColorHex.trim().length === 0 ? null : nextColorHex,
         );
+        setColorHexDraft(nextColorHex);
+        setColorHexDraftUserId(currentUserId);
         setColorHexDirty(false);
         return { status: "success" };
       } catch {
@@ -159,6 +149,8 @@ export function AdminInvitesPage() {
     ): Promise<SaveProfileActionState> => {
       try {
         await updateTeamName.mutateAsync(nextTeamName);
+        setTeamNameDraft(nextTeamName);
+        setTeamNameDraftKey(currentTeamKey);
         setTeamNameDirty(false);
         return { status: "success" };
       } catch {
@@ -186,15 +178,18 @@ export function AdminInvitesPage() {
         isSavingTeamName={isSavingTeamName}
         onJoinCodeChange={setJoinCode}
         onNicknameChange={(value) => {
-          setNickname(value);
+          setNicknameDraft(value);
+          setNicknameDraftUserId(currentUserId);
           setNicknameDirty(true);
         }}
         onColorHexChange={(value) => {
-          setColorHex(value);
+          setColorHexDraft(value);
+          setColorHexDraftUserId(currentUserId);
           setColorHexDirty(true);
         }}
         onTeamNameChange={(value) => {
-          setTeamName(value);
+          setTeamNameDraft(value);
+          setTeamNameDraftKey(currentTeamKey);
           setTeamNameDirty(true);
         }}
         onCreateInvite={() => {

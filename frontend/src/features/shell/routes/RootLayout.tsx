@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAtom, useAtomValue } from "jotai";
 import { LoaderCircle } from "lucide-react";
-import { useCallback, useEffect, useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { getTeamCurrentMembers } from "../../../lib/api/generated/client";
@@ -102,18 +102,6 @@ export function RootLayout() {
     }
   }, [refetchAfterLogin, setStatus]);
 
-  const onDismissStatus = useCallback(() => {
-    setStatus("");
-  }, [setStatus]);
-
-  const onLogin = useCallback(() => {
-    void login();
-  }, [login]);
-
-  const onLogout = useCallback(() => {
-    void logoutAction();
-  }, [logoutAction]);
-
   if (isAuthChecking) {
     return (
       <main className="ios-safe-main min-h-screen bg-[color:var(--color-washi-50)] px-2 py-3 text-stone-700 md:p-6">
@@ -133,12 +121,24 @@ export function RootLayout() {
     if (location.pathname !== "/") {
       return <Navigate to="/" replace />;
     }
-    return <LoginCard status={status} onLogin={onLogin} />;
+    return (
+      <LoginCard
+        status={status}
+        onLogin={() => {
+          void login();
+        }}
+      />
+    );
   }
 
   return (
     <main className="ios-safe-main min-h-screen bg-[color:var(--color-washi-50)] px-2 py-2.5 pb-28 text-stone-800 md:p-8 md:pb-20">
-      <StatusToast message={status} onDismiss={onDismissStatus} />
+      <StatusToast
+        message={status}
+        onDismiss={() => {
+          setStatus("");
+        }}
+      />
 
       <div className="mx-auto max-w-6xl">
         <header className="rounded-xl border border-stone-200 bg-white/90 p-2.5 shadow-sm backdrop-blur md:rounded-2xl md:p-4">
@@ -162,7 +162,9 @@ export function RootLayout() {
       <FloatingNav
         currentUserName={currentUserName}
         currentUserColorHex={currentUserColorHex}
-        onLogout={onLogout}
+        onLogout={() => {
+          void logoutAction();
+        }}
         onRefresh={() => {
           void refreshTeamState();
         }}

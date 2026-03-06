@@ -18,7 +18,7 @@ ifeq ($(CI),true)
 GEN_BACKEND = cd backend && go generate ./...
 GEN_FRONTEND = cd frontend && npm run gen
 LINT_BACKEND = cd backend && golangci-lint run --go=1.24 ./...
-LINT_FRONTEND = cd frontend && npm run lint
+LINT_FRONTEND = cd frontend && npm run lint:all
 TEST_BACKEND = cd backend && TEST_DATABASE_URL=$${TEST_DATABASE_URL:-postgres://kaji:kaji@localhost:5432/postgres?sslmode=disable} go test ./...
 TEST_FRONTEND = cd frontend && npm run test -- --run
 SECURITY_BACKEND = cd backend && go run github.com/securego/gosec/v2/cmd/gosec@v2.22.8 -exclude-dir=internal/db/sqlc ./... && go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 -format json ./... | go run ./cmd/govulncheck-critical -critical-file ./security/critical_goids.txt
@@ -27,7 +27,7 @@ else
 GEN_BACKEND = $(BACKEND_RUN) go -C /app/backend generate ./...
 GEN_FRONTEND = $(FRONTEND_RUN) npm run gen
 LINT_BACKEND = $(BACKEND_RUN) golangci-lint run --go=1.24 ./...
-LINT_FRONTEND = $(FRONTEND_RUN) npm run lint
+LINT_FRONTEND = $(FRONTEND_RUN) npm run lint:all
 TEST_BACKEND = $(BACKEND_RUN) sh -c "TEST_DATABASE_URL=$${TEST_DATABASE_URL:-postgres://kaji:kaji@postgres:5432/postgres?sslmode=disable} go -C /app/backend test ./..."
 TEST_FRONTEND = $(FRONTEND_RUN) npm run test -- --run
 SECURITY_BACKEND = $(BACKEND_RUN) sh -c "cd /app/backend && go run github.com/securego/gosec/v2/cmd/gosec@v2.22.8 -exclude-dir=internal/db/sqlc ./... && go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 -format json ./... | go run ./cmd/govulncheck-critical -critical-file ./security/critical_goids.txt"
