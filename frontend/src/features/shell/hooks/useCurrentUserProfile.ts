@@ -1,5 +1,3 @@
-import { useMemo } from "react";
-
 import type { MeResponse, TeamMember } from "../../../lib/api/generated/client";
 
 export type CurrentUserProfile = {
@@ -15,21 +13,10 @@ export function useCurrentUserProfile(
 ): CurrentUserProfile {
   const currentUserId = meData?.user.id ?? null;
   const currentTeamName = meData?.memberships?.[0]?.teamName ?? "チーム";
-  const membersByUserId = useMemo(() => {
-    const index = new Map<string, TeamMember>();
-    for (const member of members ?? []) {
-      if (!index.has(member.userId)) {
-        index.set(member.userId, member);
-      }
-    }
-    return index;
-  }, [members]);
-  const currentUserMember = useMemo(() => {
-    if (currentUserId == null) {
-      return undefined;
-    }
-    return membersByUserId.get(currentUserId);
-  }, [membersByUserId, currentUserId]);
+  const currentUserMember =
+    currentUserId == null
+      ? undefined
+      : members?.find((member) => member.userId === currentUserId);
   const preferredNickname = currentUserMember?.nickname?.trim() ?? "";
   const currentUserName =
     preferredNickname.length > 0

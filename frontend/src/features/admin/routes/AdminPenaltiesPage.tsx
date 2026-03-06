@@ -1,5 +1,4 @@
 import { useAtom } from "jotai";
-import { useMemo } from "react";
 
 import type {
   CreatePenaltyRuleRequest,
@@ -13,10 +12,7 @@ import { initialRuleFormState, ruleFormAtom } from "../state/forms";
 
 export function AdminPenaltiesPage() {
   const rulesQuery = usePenaltyRulesQuery();
-  const activeRules = useMemo(
-    () => rulesQuery.data.filter((rule) => rule.deletedAt == null),
-    [rulesQuery.data],
-  );
+  const activeRules = rulesQuery.data.filter((rule) => rule.deletedAt == null);
 
   const [ruleForm, setRuleForm] = useAtom(ruleFormAtom);
   const [, setStatus] = useAtom(statusMessageAtom);
