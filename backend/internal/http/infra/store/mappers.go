@@ -45,6 +45,14 @@ func (r ruleRecord) toAPI() api.PenaltyRule {
 }
 
 func (m monthSummary) toAPI() api.MonthlyPenaltySummary {
+	triggeredRuleIDs := m.TriggeredRuleID
+	if triggeredRuleIDs == nil {
+		triggeredRuleIDs = []string{}
+	}
+	taskStatusByDate := m.TaskStatusByDate
+	if taskStatusByDate == nil {
+		taskStatusByDate = []api.MonthlyTaskStatusGroup{}
+	}
 	return api.MonthlyPenaltySummary{
 		Month:                   m.Month,
 		TeamId:                  m.TeamID,
@@ -52,8 +60,8 @@ func (m monthSummary) toAPI() api.MonthlyPenaltySummary {
 		WeeklyPenaltyTotal:      m.WeeklyPenalty,
 		TotalPenalty:            m.DailyPenalty + m.WeeklyPenalty,
 		IsClosed:                m.IsClosed,
-		TriggeredPenaltyRuleIds: m.TriggeredRuleID,
-		TaskStatusByDate:        m.TaskStatusByDate,
+		TriggeredPenaltyRuleIds: triggeredRuleIDs,
+		TaskStatusByDate:        taskStatusByDate,
 	}
 }
 

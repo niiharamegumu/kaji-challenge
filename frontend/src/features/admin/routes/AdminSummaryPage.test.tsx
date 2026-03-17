@@ -84,4 +84,28 @@ describe("AdminSummaryPage", () => {
     );
     expect(screen.getByRole("button", { name: "再試行" })).toBeInTheDocument();
   });
+
+  it("renders safely when summary arrays are null", async () => {
+    mockGetPenaltySummaryMonthly.mockResolvedValue({
+      data: {
+        totalPenalty: 0,
+        dailyPenaltyTotal: 0,
+        weeklyPenaltyTotal: 0,
+        triggeredPenaltyRuleIds: null,
+        taskStatusByDate: null,
+      },
+    });
+    mockListPenaltyRules.mockResolvedValue({ data: { items: null } });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: "月次サマリー" }),
+      ).toBeInTheDocument();
+    });
+    expect(
+      screen.getByText("発動ペナルティはありません。"),
+    ).toBeInTheDocument();
+  });
 });
