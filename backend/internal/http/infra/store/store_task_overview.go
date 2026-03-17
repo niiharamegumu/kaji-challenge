@@ -117,7 +117,6 @@ func (s *Store) GetTaskOverview(ctx context.Context, userID string) (resp api.Ta
 }
 
 func (s *Store) GetMonthlySummary(ctx context.Context, userID string, month *string) (api.MonthlyPenaltySummary, error) {
-	startedAt := time.Now()
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return api.MonthlyPenaltySummary{}, err
@@ -126,23 +125,6 @@ func (s *Store) GetMonthlySummary(ctx context.Context, userID string, month *str
 	if month != nil && *month != "" {
 		targetMonth = *month
 	}
-	triggeredCount := 0
-	groupCount := 0
-	defer func() {
-		s.logSQLPerformance(
-			"get_monthly_summary",
-			startedAt,
-			0,
-			fmt.Sprintf(
-				"team_id=%s month=%s triggered_count=%d group_count=%d error=%t",
-				teamID,
-				targetMonth,
-				triggeredCount,
-				groupCount,
-				err != nil,
-			),
-		)
-	}()
 	summary, err := s.ensureMonthSummaryLocked(ctx, teamID, targetMonth)
 	if err != nil {
 		return api.MonthlyPenaltySummary{}, err
@@ -181,12 +163,10 @@ func (s *Store) GetMonthlySummary(ctx context.Context, userID string, month *str
 			}
 		}
 	}
-	triggeredCount = len(triggered)
 	taskStatusByDate, err := s.buildMonthlyTaskStatusByDate(ctx, teamID, targetMonth)
 	if err != nil {
 		return api.MonthlyPenaltySummary{}, err
 	}
-	groupCount = len(taskStatusByDate)
 	return monthSummary{
 		TeamID:           summary.TeamID,
 		Month:            monthKeyFromTime(summary.MonthStart.Time, s.loc),
@@ -210,33 +190,10 @@ type monthlyTaskStatusRecord struct {
 }
 
 func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month string) ([]api.MonthlyTaskStatusGroup, error) {
-	startedAt := time.Now()
 	monthStart, err := monthStartFromKey(month, s.loc)
 	if err != nil {
 		return nil, err
 	}
-	taskRowCount := 0
-	dailyRowCount := 0
-	weeklyRowCount := 0
-	weeklySlotRowCount := 0
-	groupCount := 0
-	defer func() {
-		s.logSQLPerformance(
-			"build_monthly_task_status_by_date",
-			startedAt,
-			4,
-			fmt.Sprintf(
-				"team_id=%s month=%s task_rows=%d daily_rows=%d weekly_rows=%d weekly_slot_rows=%d groups=%d",
-				teamID,
-				month,
-				taskRowCount,
-				dailyRowCount,
-				weeklyRowCount,
-				weeklySlotRowCount,
-				groupCount,
-			),
-		)
-	}()
 	monthEnd := monthStart.AddDate(0, 1, 0)
 	todayStart := dateOnly(time.Now().In(s.loc), s.loc)
 	displayEndExclusive := monthEnd
@@ -256,7 +213,6 @@ func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month 
 	if err != nil {
 		return nil, err
 	}
-	taskRowCount = len(taskRows)
 	tasks := make([]monthlyTaskStatusRecord, 0, len(taskRows))
 	for _, row := range taskRows {
 		tasks = append(tasks, monthlyTaskStatusRecord{
@@ -279,7 +235,6 @@ func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month 
 	if err != nil {
 		return nil, err
 	}
-	dailyRowCount = len(dailyRows)
 	dailyDone := map[string]map[string]bool{}
 	dailyActors := map[string]map[string]*api.TaskCompletionActor{}
 	for _, row := range dailyRows {
@@ -302,7 +257,6 @@ func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month 
 	if err != nil {
 		return nil, err
 	}
-	weeklyRowCount = len(weeklyRows)
 	weeklyCounts := map[string]map[string]int{}
 	for _, row := range weeklyRows {
 		weekStartKey := row.WeekStart.Time.In(s.loc).Format("2006-01-02")
@@ -319,7 +273,6 @@ func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month 
 	if err != nil {
 		return nil, err
 	}
-	weeklySlotRowCount = len(weeklySlotRows)
 	weeklyActors := map[string]map[string]map[int]*api.TaskCompletionActor{}
 	for _, row := range weeklySlotRows {
 		weekStartKey := row.WeekStart.Time.In(s.loc).Format("2006-01-02")
@@ -413,8 +366,6 @@ func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month 
 			Items: items,
 		})
 	}
-	groupCount = len(groups)
-
 	return groups, nil
 }
 

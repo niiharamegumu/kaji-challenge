@@ -7,3 +7,8 @@ keep_vars = true
 directory = "./dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
+
+[observability]
+[observability.logs]
+enabled = true
+invocation_logs = true

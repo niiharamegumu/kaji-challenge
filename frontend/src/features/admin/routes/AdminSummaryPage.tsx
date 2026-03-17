@@ -55,14 +55,10 @@ const dateFromDateKey = (dateKey: string) => {
   return new Date(year, month - 1, day);
 };
 
-const asArray = <T,>(value: T[] | null | undefined, label: string): T[] => {
+const asArray = <T,>(value: T[] | null | undefined): T[] => {
   if (Array.isArray(value)) {
     return value;
   }
-  console.warn("AdminSummaryPage received non-array payload", {
-    label,
-    value,
-  });
   return [];
 };
 
@@ -92,15 +88,9 @@ export function AdminSummaryPage() {
   });
 
   const summaryData = summary.data;
-  const rulesData = asArray(rules.data, "penaltyRules");
-  const triggeredPenaltyRuleIds = asArray(
-    summaryData.triggeredPenaltyRuleIds,
-    "triggeredPenaltyRuleIds",
-  );
-  const monthlyTaskStatusGroups = asArray(
-    summaryData.taskStatusByDate,
-    "taskStatusByDate",
-  );
+  const rulesData = asArray(rules.data);
+  const triggeredPenaltyRuleIds = asArray(summaryData.triggeredPenaltyRuleIds);
+  const monthlyTaskStatusGroups = asArray(summaryData.taskStatusByDate);
 
   const ruleMap = useMemo(() => {
     return new Map(rulesData.map((rule) => [rule.id, rule]));
