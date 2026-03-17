@@ -99,6 +99,153 @@ func TestCloseWeekAndMonthForTeam(t *testing.T) {
 	}
 }
 
+func TestToggleTaskCompletionCompletesPastDailyTaskInOpenMonthAndRecalculatesPenalty(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	now := time.Date(2026, 3, 17, 9, 0, 0, 0, s.loc)
+	s.now = func() time.Time { return now }
+
+	createdAt := dateOnly(now, s.loc).AddDate(0, 0, -2).Add(10 * time.Hour)
+	teamID, userID := createTeamWithMember(t, s, "past-daily-open@example.com", createdAt)
+	taskID := createTaskWithIDAt(t, s, teamID, api.Daily, 4, 1, createdAt)
+	targetDate := dateOnly(now, s.loc).AddDate(0, 0, -1)
+
+	if _, err := s.closeDayForTargetLocked(ctx, targetDate, teamID); err != nil {
+		t.Fatalf("closeDayForTargetLocked failed: %v", err)
+	}
+
+	before := getMonthSummary(t, s, teamID, monthKeyFromTime(targetDate, s.loc))
+	if before.DailyPenaltyTotal != 4 {
+		t.Fatalf("expected daily penalty total=4 before completion, got %d", before.DailyPenaltyTotal)
+	}
+
+	action := api.Complete
+	res, err := s.ToggleTaskCompletion(withLatestIfMatchForUser(t, s, ctx, userID), userID, taskID, targetDate, &action)
+	if err != nil {
+		t.Fatalf("ToggleTaskCompletion failed: %v", err)
+	}
+	if !res.Completed {
+		t.Fatalf("expected completion response to be completed")
+	}
+
+	after := getMonthSummary(t, s, teamID, monthKeyFromTime(targetDate, s.loc))
+	if after.DailyPenaltyTotal != 0 {
+		t.Fatalf("expected daily penalty total=0 after completion, got %d", after.DailyPenaltyTotal)
+	}
+}
+
+func TestToggleTaskCompletionRejectsPastDailyToggleAction(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	now := time.Date(2026, 3, 17, 9, 0, 0, 0, s.loc)
+	s.now = func() time.Time { return now }
+
+	createdAt := dateOnly(now, s.loc).AddDate(0, 0, -2).Add(10 * time.Hour)
+	teamID, userID := createTeamWithMember(t, s, "past-daily-toggle@example.com", createdAt)
+	taskID := createTaskWithIDAt(t, s, teamID, api.Daily, 2, 1, createdAt)
+	targetDate := dateOnly(now, s.loc).AddDate(0, 0, -1)
+	action := api.Toggle
+
+	if _, err := s.ToggleTaskCompletion(withLatestIfMatchForUser(t, s, ctx, userID), userID, taskID, targetDate, &action); err == nil {
+		t.Fatalf("expected ToggleTaskCompletion to reject toggle action for past daily task")
+	}
+}
+
+func TestToggleTaskCompletionRejectsPastDailyCompleteForClosedMonth(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	now := time.Date(2026, 3, 17, 9, 0, 0, 0, s.loc)
+	s.now = func() time.Time { return now }
+
+	createdAt := dateOnly(now, s.loc).AddDate(0, 0, -2).Add(10 * time.Hour)
+	teamID, userID := createTeamWithMember(t, s, "past-daily-closed@example.com", createdAt)
+	taskID := createTaskWithIDAt(t, s, teamID, api.Daily, 2, 1, createdAt)
+	targetDate := dateOnly(now, s.loc).AddDate(0, 0, -1)
+	monthStart, err := monthStartFromKey(monthKeyFromTime(targetDate, s.loc), s.loc)
+	if err != nil {
+		t.Fatalf("monthStartFromKey failed: %v", err)
+	}
+	if err := s.q.UpsertMonthlyPenaltySummary(ctx, dbsqlc.UpsertMonthlyPenaltySummaryParams{
+		TeamID:             teamID,
+		MonthStart:         toPgDate(monthStart),
+		DailyPenaltyTotal:  0,
+		WeeklyPenaltyTotal: 0,
+		IsClosed:           true,
+	}); err != nil {
+		t.Fatalf("failed to seed closed monthly summary: %v", err)
+	}
+
+	action := api.Complete
+	if _, err := s.ToggleTaskCompletion(withLatestIfMatchForUser(t, s, ctx, userID), userID, taskID, targetDate, &action); err == nil {
+		t.Fatalf("expected ToggleTaskCompletion to reject complete action for closed month")
+	}
+}
+
+func TestToggleTaskCompletionCompleteIsIdempotentForPastDailyTask(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	now := time.Date(2026, 3, 17, 9, 0, 0, 0, s.loc)
+	s.now = func() time.Time { return now }
+
+	createdAt := dateOnly(now, s.loc).AddDate(0, 0, -2).Add(10 * time.Hour)
+	teamID, userID := createTeamWithMember(t, s, "past-daily-idempotent@example.com", createdAt)
+	taskID := createTaskWithIDAt(t, s, teamID, api.Daily, 3, 1, createdAt)
+	targetDate := dateOnly(now, s.loc).AddDate(0, 0, -1)
+
+	if _, err := s.closeDayForTargetLocked(ctx, targetDate, teamID); err != nil {
+		t.Fatalf("closeDayForTargetLocked failed: %v", err)
+	}
+
+	action := api.Complete
+	if _, err := s.ToggleTaskCompletion(withLatestIfMatchForUser(t, s, ctx, userID), userID, taskID, targetDate, &action); err != nil {
+		t.Fatalf("first ToggleTaskCompletion failed: %v", err)
+	}
+	first := getMonthSummary(t, s, teamID, monthKeyFromTime(targetDate, s.loc))
+
+	if _, err := s.ToggleTaskCompletion(withLatestIfMatchForUser(t, s, ctx, userID), userID, taskID, targetDate, &action); err != nil {
+		t.Fatalf("second ToggleTaskCompletion failed: %v", err)
+	}
+	second := getMonthSummary(t, s, teamID, monthKeyFromTime(targetDate, s.loc))
+
+	if first.DailyPenaltyTotal != second.DailyPenaltyTotal {
+		t.Fatalf("expected idempotent daily penalty totals, got %d then %d", first.DailyPenaltyTotal, second.DailyPenaltyTotal)
+	}
+}
+
+func TestToggleTaskCompletionRejectsFutureDailyComplete(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	now := time.Date(2026, 3, 17, 9, 0, 0, 0, s.loc)
+	s.now = func() time.Time { return now }
+
+	createdAt := dateOnly(now, s.loc).AddDate(0, 0, -2).Add(10 * time.Hour)
+	teamID, userID := createTeamWithMember(t, s, "past-daily-future@example.com", createdAt)
+	taskID := createTaskWithIDAt(t, s, teamID, api.Daily, 2, 1, createdAt)
+	targetDate := dateOnly(now, s.loc).AddDate(0, 0, 1)
+	action := api.Complete
+
+	if _, err := s.ToggleTaskCompletion(withLatestIfMatchForUser(t, s, ctx, userID), userID, taskID, targetDate, &action); err == nil {
+		t.Fatalf("expected ToggleTaskCompletion to reject future daily task completion")
+	}
+}
+
+func TestToggleTaskCompletionRejectsPreviousMonthDailyComplete(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	now := time.Date(2026, 3, 17, 9, 0, 0, 0, s.loc)
+	s.now = func() time.Time { return now }
+
+	createdAt := time.Date(2026, 2, 27, 10, 0, 0, 0, s.loc)
+	teamID, userID := createTeamWithMember(t, s, "past-daily-prev-month@example.com", createdAt)
+	taskID := createTaskWithIDAt(t, s, teamID, api.Daily, 2, 1, createdAt)
+	targetDate := time.Date(2026, 2, 28, 0, 0, 0, 0, s.loc)
+	action := api.Complete
+
+	if _, err := s.ToggleTaskCompletion(withLatestIfMatchForUser(t, s, ctx, userID), userID, taskID, targetDate, &action); err == nil {
+		t.Fatalf("expected ToggleTaskCompletion to reject previous-month daily task completion")
+	}
+}
+
 func TestCatchUpDayLockedProcessesMissingDays(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
@@ -455,8 +602,14 @@ func createTask(t *testing.T, s *Store, teamID string, taskType api.TaskType, pe
 
 func createTaskAt(t *testing.T, s *Store, teamID string, taskType api.TaskType, penalty, required int, createdAt time.Time) {
 	t.Helper()
+	_ = createTaskWithIDAt(t, s, teamID, taskType, penalty, required, createdAt)
+}
+
+func createTaskWithIDAt(t *testing.T, s *Store, teamID string, taskType api.TaskType, penalty, required int, createdAt time.Time) string {
+	t.Helper()
+	taskID := s.nextID("task")
 	if err := s.q.CreateTask(context.Background(), dbsqlc.CreateTaskParams{
-		ID:                         s.nextID("task"),
+		ID:                         taskID,
 		TeamID:                     teamID,
 		Title:                      "close target task",
 		Notes:                      pgtype.Text{},
@@ -469,6 +622,7 @@ func createTaskAt(t *testing.T, s *Store, teamID string, taskType api.TaskType, 
 	}); err != nil {
 		t.Fatalf("failed to create task: %v", err)
 	}
+	return taskID
 }
 
 func createPenaltyRuleAt(t *testing.T, s *Store, teamID string, threshold int, name string, createdAt time.Time) string {

@@ -27,6 +27,18 @@ SELECT COALESCE(SUM(c.penalty_points), 0)::bigint AS total_penalty
 FROM candidates c
 JOIN deduped d ON d.task_id = c.task_id;
 
+-- name: SumDailyPenaltyForDate :one
+SELECT COALESCE(SUM(t.penalty_points), 0)::bigint AS total_penalty
+FROM tasks t
+LEFT JOIN task_completion_daily d
+  ON d.task_id = t.id
+ AND d.target_date = $2
+WHERE t.team_id = $1
+  AND t.type = 'daily'
+  AND t.created_at < $3
+  AND (t.deleted_at IS NULL OR t.deleted_at >= $3)
+  AND d.task_id IS NULL;
+
 -- name: SumWeeklyPenaltyForClose :one
 WITH candidates AS (
   SELECT t.id AS task_id, t.penalty_points

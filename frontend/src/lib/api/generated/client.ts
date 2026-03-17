@@ -213,6 +213,9 @@ export interface UpdateTaskRequest {
   requiredCompletionsPerWeek?: number;
 }
 
+/**
+ * For daily tasks, `toggle` is only for today and `complete` is only for past days in the current open month.
+ */
 export type ToggleTaskCompletionRequestAction = typeof ToggleTaskCompletionRequestAction[keyof typeof ToggleTaskCompletionRequestAction];
 
 
@@ -220,10 +223,12 @@ export const ToggleTaskCompletionRequestAction = {
   toggle: 'toggle',
   increment: 'increment',
   decrement: 'decrement',
+  complete: 'complete',
 } as const;
 
 export interface ToggleTaskCompletionRequest {
   targetDate: string;
+  /** For daily tasks, `toggle` is only for today and `complete` is only for past days in the current open month. */
   action?: ToggleTaskCompletionRequestAction;
 }
 

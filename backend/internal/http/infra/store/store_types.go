@@ -47,6 +47,7 @@ type Store struct {
 	oidc *oidcClient
 
 	trimSessionsForUserExec func(ctx context.Context, exec dbsqlc.DBTX, userID string, keepCount int32) error
+	now                     func() time.Time
 }
 
 type userRecord struct {

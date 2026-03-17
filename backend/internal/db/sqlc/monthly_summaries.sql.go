@@ -149,6 +149,23 @@ func (q *Queries) ListTriggeredRuleIDsByMonth(ctx context.Context, arg ListTrigg
 	return items, nil
 }
 
+const setDailyPenaltyTotal = `-- name: SetDailyPenaltyTotal :exec
+UPDATE monthly_penalty_summaries
+SET daily_penalty_total = $3
+WHERE team_id = $1 AND month_start = $2
+`
+
+type SetDailyPenaltyTotalParams struct {
+	TeamID            string      `json:"team_id"`
+	MonthStart        pgtype.Date `json:"month_start"`
+	DailyPenaltyTotal int32       `json:"daily_penalty_total"`
+}
+
+func (q *Queries) SetDailyPenaltyTotal(ctx context.Context, arg SetDailyPenaltyTotalParams) error {
+	_, err := q.db.Exec(ctx, setDailyPenaltyTotal, arg.TeamID, arg.MonthStart, arg.DailyPenaltyTotal)
+	return err
+}
+
 const upsertMonthlyPenaltySummary = `-- name: UpsertMonthlyPenaltySummary :exec
 INSERT INTO monthly_penalty_summaries (team_id, month_start, daily_penalty_total, weekly_penalty_total, is_closed)
 VALUES ($1, $2, $3, $4, $5)

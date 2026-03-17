@@ -53,6 +53,7 @@ func newStore() *Store {
 		authRequests:   map[string]authRequest{},
 		exchangeCodes:  map[string]exchangeCodeRecord{},
 		trimSessionsForUserExec: defaultTrimSessionsForUserExec,
+		now:            func() time.Time { return time.Now().In(loc) },
 	}
 	if hook := consumeNextStoreTrimSessionsForUserExecForTest(); hook != nil {
 		s.trimSessionsForUserExec = hook

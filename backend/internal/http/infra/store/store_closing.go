@@ -191,6 +191,56 @@ func (s *Store) closeDayForTargetLocked(ctx context.Context, targetDate time.Tim
 	return true, nil
 }
 
+func (s *Store) recalculateOpenMonthDailyPenaltyLocked(ctx context.Context, teamID, month string) error {
+	monthStart, err := monthStartFromKey(month, s.loc)
+	if err != nil {
+		return err
+	}
+	summary, err := s.ensureMonthSummaryLocked(ctx, teamID, month)
+	if err != nil {
+		return err
+	}
+	if summary.IsClosed {
+		return errMonthAlreadyClosed
+	}
+
+	monthEnd := monthStart.AddDate(0, 1, 0)
+	targets, err := s.queries(ctx).ListCloseRunTargetDatesInRange(ctx, dbsqlc.ListCloseRunTargetDatesInRangeParams{
+		TeamID:     teamID,
+		Scope:      "close_day",
+		TargetDate: toPgDate(monthStart),
+		TargetDate_2: toPgDate(monthEnd),
+	})
+	if err != nil {
+		return err
+	}
+
+	var totalPenalty int64
+	for _, target := range targets {
+		targetDate := dateOnly(target.Time, s.loc)
+		cutoff := targetDate.AddDate(0, 0, 1)
+		dayPenalty, err := s.queries(ctx).SumDailyPenaltyForDate(ctx, dbsqlc.SumDailyPenaltyForDateParams{
+			TeamID:     teamID,
+			TargetDate: toPgDate(targetDate),
+			CreatedAt:  toPgTimestamptz(cutoff),
+		})
+		if err != nil {
+			return err
+		}
+		totalPenalty += dayPenalty
+	}
+
+	penalty32, err := safeInt64ToInt32(totalPenalty, "daily penalty")
+	if err != nil {
+		return err
+	}
+	return s.queries(ctx).SetDailyPenaltyTotal(ctx, dbsqlc.SetDailyPenaltyTotalParams{
+		TeamID:            teamID,
+		MonthStart:        toPgDate(monthStart),
+		DailyPenaltyTotal: penalty32,
+	})
+}
+
 func (s *Store) closeWeekForTargetLocked(ctx context.Context, previousWeekStart time.Time, teamID string) (bool, error) {
 	startedAt := time.Now()
 	queryCount := 0

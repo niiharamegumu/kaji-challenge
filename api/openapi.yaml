@@ -762,7 +762,8 @@ components:
           format: date
         action:
           type: string
-          enum: [toggle, increment, decrement]
+          description: For daily tasks, `toggle` is only for today and `complete` is only for past days in the current open month.
+          enum: [toggle, increment, decrement, complete]
           default: toggle
 
     TaskCompletionResponse:

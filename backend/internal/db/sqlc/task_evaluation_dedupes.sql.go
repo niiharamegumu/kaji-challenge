@@ -75,6 +75,32 @@ func (q *Queries) SumDailyPenaltyForClose(ctx context.Context, arg SumDailyPenal
 	return total_penalty, err
 }
 
+const sumDailyPenaltyForDate = `-- name: SumDailyPenaltyForDate :one
+SELECT COALESCE(SUM(t.penalty_points), 0)::bigint AS total_penalty
+FROM tasks t
+LEFT JOIN task_completion_daily d
+  ON d.task_id = t.id
+ AND d.target_date = $2
+WHERE t.team_id = $1
+  AND t.type = 'daily'
+  AND t.created_at < $3
+  AND (t.deleted_at IS NULL OR t.deleted_at >= $3)
+  AND d.task_id IS NULL
+`
+
+type SumDailyPenaltyForDateParams struct {
+	TeamID     string             `json:"team_id"`
+	TargetDate pgtype.Date        `json:"target_date"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) SumDailyPenaltyForDate(ctx context.Context, arg SumDailyPenaltyForDateParams) (int64, error) {
+	row := q.db.QueryRow(ctx, sumDailyPenaltyForDate, arg.TeamID, arg.TargetDate, arg.CreatedAt)
+	var total_penalty int64
+	err := row.Scan(&total_penalty)
+	return total_penalty, err
+}
+
 const sumWeeklyPenaltyForClose = `-- name: SumWeeklyPenaltyForClose :one
 WITH candidates AS (
   SELECT t.id AS task_id, t.penalty_points

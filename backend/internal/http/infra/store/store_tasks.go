@@ -236,11 +236,8 @@ func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string,
 			if task.TeamID != teamID || task.DeletedAt != nil {
 				return errors.New("task not found")
 			}
-			today := dateOnly(time.Now().In(s.loc), s.loc)
+			today := dateOnly(s.now(), s.loc)
 			targetDate := dateOnly(target.In(s.loc), s.loc)
-			if task.Type == api.Daily && !sameDate(targetDate, today) {
-				return errors.New("daily completion can only be toggled for today")
-			}
 			if task.Type == api.Weekly {
 				weekStart := startOfWeek(today, s.loc)
 				weekEnd := weekStart.AddDate(0, 0, 6)
@@ -251,8 +248,30 @@ func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string,
 
 			targetPg := toPgDate(targetDate)
 			if task.Type == api.Daily {
-				if mode != api.Toggle {
-					return errors.New("daily tasks only support toggle action")
+				isToday := sameDate(targetDate, today)
+				targetMonth := monthKeyFromTime(targetDate, s.loc)
+				currentMonth := monthKeyFromTime(today, s.loc)
+				if isToday {
+					if mode != api.Toggle {
+						return errors.New("daily tasks only support toggle action for today")
+					}
+				} else {
+					if targetDate.After(today) {
+						return errors.New("daily completion cannot be changed for future dates")
+					}
+					if targetMonth != currentMonth {
+						return errors.New("daily completion can only be completed for past days in current month")
+					}
+					summary, err := s.ensureMonthSummaryLocked(txCtx, teamID, targetMonth)
+					if err != nil {
+						return err
+					}
+					if summary.IsClosed {
+						return errors.New("daily completion cannot be changed for closed month")
+					}
+					if mode != api.Complete {
+						return errors.New("past daily completion only supports complete action")
+					}
 				}
 				exists, err := q.HasTaskCompletionDaily(txCtx, dbsqlc.HasTaskCompletionDailyParams{
 					TaskID:     taskID,
@@ -262,6 +281,15 @@ func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string,
 					return err
 				}
 				if exists {
+					res = api.TaskCompletionResponse{
+						TaskId:               taskID,
+						TargetDate:           toDate(targetDate),
+						Completed:            true,
+						WeeklyCompletedCount: 0,
+					}
+					if !isToday && mode == api.Complete {
+						return nil
+					}
 					if err := q.DeleteTaskCompletionDaily(txCtx, dbsqlc.DeleteTaskCompletionDailyParams{
 						TaskID:     taskID,
 						TargetDate: targetPg,
@@ -276,11 +304,16 @@ func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string,
 					}); err != nil {
 						return err
 					}
+					if !isToday && mode == api.Complete {
+						if err := s.recalculateOpenMonthDailyPenaltyLocked(txCtx, teamID, targetMonth); err != nil {
+							return err
+						}
+					}
 				}
 				res = api.TaskCompletionResponse{
 					TaskId:               taskID,
 					TargetDate:           toDate(targetDate),
-					Completed:            !exists,
+					Completed:            isToday && !exists || (!isToday && mode == api.Complete),
 					WeeklyCompletedCount: 0,
 				}
 				return nil
