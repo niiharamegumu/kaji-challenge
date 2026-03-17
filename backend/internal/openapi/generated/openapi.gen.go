@@ -37,6 +37,7 @@ const (
 
 // Defines values for ToggleTaskCompletionRequestAction.
 const (
+	Complete  ToggleTaskCompletionRequestAction = "complete"
 	Decrement ToggleTaskCompletionRequestAction = "decrement"
 	Increment ToggleTaskCompletionRequestAction = "increment"
 	Toggle    ToggleTaskCompletionRequestAction = "toggle"
@@ -260,11 +261,12 @@ type TeamMembershipRole string
 
 // ToggleTaskCompletionRequest defines model for ToggleTaskCompletionRequest.
 type ToggleTaskCompletionRequest struct {
+	// Action For daily tasks, `toggle` is only for today and `complete` is only for past days in the current open month.
 	Action     *ToggleTaskCompletionRequestAction `json:"action,omitempty"`
 	TargetDate openapi_types.Date                 `json:"targetDate"`
 }
 
-// ToggleTaskCompletionRequestAction defines model for ToggleTaskCompletionRequest.Action.
+// ToggleTaskCompletionRequestAction For daily tasks, `toggle` is only for today and `complete` is only for past days in the current open month.
 type ToggleTaskCompletionRequestAction string
 
 // UpdateColorRequest defines model for UpdateColorRequest.

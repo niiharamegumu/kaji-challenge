@@ -1,6 +1,11 @@
-import { useSuspenseQueries } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueryClient,
+  useSuspenseQueries,
+} from "@tanstack/react-query";
 import {
   AlertTriangle,
+  Check,
   CheckCircle2,
   ChevronDown,
   ChevronLeft,
@@ -14,9 +19,16 @@ import { useSearchParams } from "react-router-dom";
 import {
   getPenaltySummaryMonthly,
   listPenaltyRules,
+  postTaskCompletionToggle,
 } from "../../../lib/api/generated/client";
 import { CompletionSlots } from "../../../shared/components/CompletionSlots";
 import { queryKeys } from "../../../shared/query/queryKeys";
+import {
+  dateStringInJST,
+  formatError,
+  isPreconditionFailure,
+} from "../../../shared/utils/errors";
+import { ConfirmModal } from "../components/ConfirmModal";
 
 const monthPattern = /^\d{4}-\d{2}$/;
 
@@ -63,10 +75,17 @@ const asArray = <T,>(value: T[] | null | undefined): T[] => {
 };
 
 export function AdminSummaryPage() {
+  const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const [, startTransition] = useTransition();
   const monthPickerRef = useRef<HTMLDivElement>(null);
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
+  const [status, setStatus] = useState("");
+  const [confirmTarget, setConfirmTarget] = useState<{
+    taskId: string;
+    taskTitle: string;
+    date: string;
+  } | null>(null);
   const monthFromUrl = searchParams.get("month");
   const month =
     monthFromUrl != null && monthPattern.test(monthFromUrl)
@@ -122,12 +141,44 @@ export function AdminSummaryPage() {
         return a.name.localeCompare(b.name, "ja");
       });
   }, [triggeredPenaltyRuleIds, ruleMap]);
-  const currentDateKey = useMemo(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
-      now.getDate(),
-    ).padStart(2, "0")}`;
-  }, []);
+  const currentDateKey = useMemo(() => dateStringInJST(), []);
+  const currentMonthKey = currentDateKey.slice(0, 7);
+
+  const completePastDailyTask = useMutation({
+    mutationFn: async ({
+      taskId,
+      targetDate,
+    }: {
+      taskId: string;
+      targetDate: string;
+    }) =>
+      postTaskCompletionToggle(taskId, {
+        targetDate,
+        action: "complete",
+      }),
+    onSuccess: async () => {
+      setStatus("過去日タスクを完了に更新しました");
+      setConfirmTarget(null);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.monthlySummary }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.home }),
+      ]);
+    },
+    onError: async (error) => {
+      if (isPreconditionFailure(error)) {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: queryKeys.monthlySummary }),
+          queryClient.invalidateQueries({ queryKey: queryKeys.home }),
+        ]);
+        setStatus(
+          "他メンバーの更新を検知しました。最新状態に更新したので、もう一度操作してください。",
+        );
+        setConfirmTarget(null);
+        return;
+      }
+      setStatus(`更新失敗: ${formatError(error)}`);
+    },
+  });
 
   const updateMonth = (nextMonth: string) => {
     if (!monthPattern.test(nextMonth) || nextMonth === month) {
@@ -183,6 +234,9 @@ export function AdminSummaryPage() {
         <div className="flex items-start justify-between gap-2 max-[360px]:flex-wrap max-[360px]:items-end">
           <div className="shrink-0">
             <h2 className="text-lg font-semibold">月次サマリー</h2>
+            {status !== "" ? (
+              <p className="mt-1 text-sm text-stone-600">{status}</p>
+            ) : null}
           </div>
           <div className="ml-auto grid w-auto min-w-0 justify-items-end max-[360px]:w-full">
             <div className="flex items-center gap-1.5 sm:gap-2">
@@ -396,6 +450,12 @@ export function AdminSummaryPage() {
                         const isWeekly = item.type === "weekly";
                         const showCrossMonthBadge =
                           isWeekly && isCrossMonthWeek;
+                        const canCompletePastDaily =
+                          !summaryData.isClosed &&
+                          month === currentMonthKey &&
+                          group.date < currentDateKey &&
+                          item.type === "daily" &&
+                          !item.completed;
                         return (
                           <li
                             key={`${group.date}-${item.taskId}`}
@@ -458,11 +518,31 @@ export function AdminSummaryPage() {
                                     </span>
                                   ) : null}
                                 </div>
-                                <CompletionSlots
-                                  compact
-                                  className="shrink-0 justify-end"
-                                  slots={item.completionSlots}
-                                />
+                                <div className="flex shrink-0 items-center gap-1.5">
+                                  {canCompletePastDaily ? (
+                                    <button
+                                      type="button"
+                                      aria-label="過去日タスクを完了にする"
+                                      title="完了にする"
+                                      className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-[color:var(--color-matcha-400)] bg-white text-[color:var(--color-matcha-700)] transition-colors hover:bg-[color:var(--color-matcha-50)]"
+                                      onClick={() =>
+                                        setConfirmTarget({
+                                          taskId: item.taskId,
+                                          taskTitle: item.title,
+                                          date: group.date,
+                                        })
+                                      }
+                                    >
+                                      <Check size={12} aria-hidden="true" />
+                                    </button>
+                                  ) : (
+                                    <CompletionSlots
+                                      compact
+                                      className="justify-end"
+                                      slots={item.completionSlots}
+                                    />
+                                  )}
+                                </div>
                               </div>
                             </div>
                           </li>
@@ -476,6 +556,26 @@ export function AdminSummaryPage() {
           )}
         </div>
       </article>
+      <ConfirmModal
+        isOpen={confirmTarget != null}
+        title="過去日のタスクを完了に変更しますか？"
+        message={
+          confirmTarget == null
+            ? ""
+            : `${confirmTarget.date} の「${confirmTarget.taskTitle}」を完了済みに変更します。当月中の過去分だけ操作でき、この操作は確定後に未完了へ戻せません。`
+        }
+        confirmLabel="完了にする"
+        onCancel={() => setConfirmTarget(null)}
+        onConfirm={() => {
+          if (confirmTarget == null || completePastDailyTask.isPending) {
+            return;
+          }
+          void completePastDailyTask.mutateAsync({
+            taskId: confirmTarget.taskId,
+            targetDate: confirmTarget.date,
+          });
+        }}
+      />
     </section>
   );
 }

@@ -49,3 +49,45 @@ func (q *Queries) InsertCloseRun(ctx context.Context, arg InsertCloseRunParams) 
 	}
 	return result.RowsAffected(), nil
 }
+
+const listCloseRunTargetDatesInRange = `-- name: ListCloseRunTargetDatesInRange :many
+SELECT target_date
+FROM close_runs
+WHERE team_id = $1
+  AND scope = $2
+  AND target_date >= $3
+  AND target_date < $4
+ORDER BY target_date
+`
+
+type ListCloseRunTargetDatesInRangeParams struct {
+	TeamID       string      `json:"team_id"`
+	Scope        string      `json:"scope"`
+	TargetDate   pgtype.Date `json:"target_date"`
+	TargetDate_2 pgtype.Date `json:"target_date_2"`
+}
+
+func (q *Queries) ListCloseRunTargetDatesInRange(ctx context.Context, arg ListCloseRunTargetDatesInRangeParams) ([]pgtype.Date, error) {
+	rows, err := q.db.Query(ctx, listCloseRunTargetDatesInRange,
+		arg.TeamID,
+		arg.Scope,
+		arg.TargetDate,
+		arg.TargetDate_2,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []pgtype.Date
+	for rows.Next() {
+		var target_date pgtype.Date
+		if err := rows.Scan(&target_date); err != nil {
+			return nil, err
+		}
+		items = append(items, target_date)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

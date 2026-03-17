@@ -8,3 +8,12 @@ SELECT MAX(target_date)::date AS target_date
 FROM close_runs
 WHERE team_id = $1
   AND scope = $2;
+
+-- name: ListCloseRunTargetDatesInRange :many
+SELECT target_date
+FROM close_runs
+WHERE team_id = $1
+  AND scope = $2
+  AND target_date >= $3
+  AND target_date < $4
+ORDER BY target_date;
