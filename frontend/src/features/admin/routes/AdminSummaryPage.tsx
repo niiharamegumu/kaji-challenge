@@ -55,6 +55,17 @@ const dateFromDateKey = (dateKey: string) => {
   return new Date(year, month - 1, day);
 };
 
+const asArray = <T,>(value: T[] | null | undefined, label: string): T[] => {
+  if (Array.isArray(value)) {
+    return value;
+  }
+  console.warn("AdminSummaryPage received non-array payload", {
+    label,
+    value,
+  });
+  return [];
+};
+
 export function AdminSummaryPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [, startTransition] = useTransition();
@@ -80,13 +91,23 @@ export function AdminSummaryPage() {
     ],
   });
 
+  const summaryData = summary.data;
+  const rulesData = asArray(rules.data, "penaltyRules");
+  const triggeredPenaltyRuleIds = asArray(
+    summaryData.triggeredPenaltyRuleIds,
+    "triggeredPenaltyRuleIds",
+  );
+  const monthlyTaskStatusGroups = asArray(
+    summaryData.taskStatusByDate,
+    "taskStatusByDate",
+  );
+
   const ruleMap = useMemo(() => {
-    return new Map(rules.data.map((rule) => [rule.id, rule]));
-  }, [rules.data]);
+    return new Map(rulesData.map((rule) => [rule.id, rule]));
+  }, [rulesData]);
 
   const triggeredPenalties = useMemo(() => {
-    const ids = summary.data.triggeredPenaltyRuleIds;
-    return ids
+    return triggeredPenaltyRuleIds
       .map((id) => {
         const rule = ruleMap.get(id);
         if (rule == null) {
@@ -110,11 +131,7 @@ export function AdminSummaryPage() {
         }
         return a.name.localeCompare(b.name, "ja");
       });
-  }, [summary.data.triggeredPenaltyRuleIds, ruleMap]);
-
-  const monthlyTaskStatusGroups = useMemo(() => {
-    return summary.data.taskStatusByDate;
-  }, [summary.data.taskStatusByDate]);
+  }, [triggeredPenaltyRuleIds, ruleMap]);
   const currentDateKey = useMemo(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
@@ -289,20 +306,20 @@ export function AdminSummaryPage() {
             <div className="p-3">
               <p className="text-xs text-stone-700">合計減点</p>
               <p className="mt-1 text-3xl font-bold leading-none text-stone-900">
-                {summary.data.totalPenalty}
+                {summaryData.totalPenalty}
               </p>
             </div>
             <div className="grid grid-rows-2 border-l border-stone-200">
               <div className="flex items-end justify-between gap-2 p-3">
                 <p className="text-xs text-stone-700">日次減点</p>
                 <p className="text-xl font-semibold leading-none text-stone-900">
-                  {summary.data.dailyPenaltyTotal}
+                  {summaryData.dailyPenaltyTotal}
                 </p>
               </div>
               <div className="flex items-end justify-between gap-2 border-t border-stone-200 p-3">
                 <p className="text-xs text-stone-700">週次減点</p>
                 <p className="text-xl font-semibold leading-none text-stone-900">
-                  {summary.data.weeklyPenaltyTotal}
+                  {summaryData.weeklyPenaltyTotal}
                 </p>
               </div>
             </div>
