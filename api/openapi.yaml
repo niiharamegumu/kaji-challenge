@@ -392,6 +392,167 @@ paths:
         '204':
           description: Penalty rule deleted
 
+  /v1/shopping-items:
+    get:
+      operationId: listShoppingItems
+      summary: List shopping items in current team
+      responses:
+        '200':
+          description: Shopping items
+          headers:
+            ETag:
+              description: Current team revision ETag
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ShoppingListItem'
+    post:
+      operationId: postShoppingItem
+      summary: Create shopping item
+      description: Requires the latest team revision via the If-Match header.
+      parameters:
+        - in: header
+          name: If-Match
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateShoppingListItemRequest'
+      responses:
+        '201':
+          description: Shopping item created
+          headers:
+            ETag:
+              description: Updated team revision ETag
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShoppingListItem'
+        '412':
+          description: Team revision mismatch
+        '428':
+          description: Missing If-Match header
+
+  /v1/shopping-items/{itemId}:
+    patch:
+      operationId: patchShoppingItem
+      summary: Update shopping item
+      description: Requires the latest team revision via the If-Match header.
+      parameters:
+        - in: path
+          name: itemId
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: If-Match
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateShoppingListItemRequest'
+      responses:
+        '200':
+          description: Shopping item updated
+          headers:
+            ETag:
+              description: Updated team revision ETag
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShoppingListItem'
+        '412':
+          description: Team revision mismatch
+        '428':
+          description: Missing If-Match header
+    delete:
+      operationId: deleteShoppingItem
+      summary: Delete shopping item
+      description: Requires the latest team revision via the If-Match header.
+      parameters:
+        - in: path
+          name: itemId
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: If-Match
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Shopping item deleted
+          headers:
+            ETag:
+              description: Updated team revision ETag
+              schema:
+                type: string
+        '412':
+          description: Team revision mismatch
+        '428':
+          description: Missing If-Match header
+
+  /v1/shopping-items/reorder:
+    post:
+      operationId: postShoppingItemsReorder
+      summary: Reorder shopping items
+      description: Requires the latest team revision via the If-Match header.
+      parameters:
+        - in: header
+          name: If-Match
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReorderShoppingListItemsRequest'
+      responses:
+        '200':
+          description: Shopping items reordered
+          headers:
+            ETag:
+              description: Updated team revision ETag
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ShoppingListItem'
+        '412':
+          description: Team revision mismatch
+        '428':
+          description: Missing If-Match header
+
   /v1/tasks/overview:
     get:
       operationId: getTaskOverview
@@ -856,6 +1017,73 @@ components:
         description:
           type: string
           maxLength: 500
+
+    ShoppingListItem:
+      type: object
+      required: [id, teamId, name, position, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        teamId:
+          type: string
+        name:
+          type: string
+        quantity:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        position:
+          type: integer
+          minimum: 1
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateShoppingListItemRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        quantity:
+          type: string
+          maxLength: 100
+        notes:
+          type: string
+          maxLength: 500
+
+    UpdateShoppingListItemRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        quantity:
+          type: string
+          maxLength: 100
+          nullable: true
+        notes:
+          type: string
+          maxLength: 500
+          nullable: true
+
+    ReorderShoppingListItemsRequest:
+      type: object
+      required: [itemIds]
+      properties:
+        itemIds:
+          type: array
+          minItems: 1
+          items:
+            type: string
 
     TaskOverviewDailyTask:
       type: object

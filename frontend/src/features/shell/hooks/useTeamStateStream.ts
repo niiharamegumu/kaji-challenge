@@ -27,6 +27,7 @@ export function useTeamStateStream(
         queryClient.invalidateQueries({ queryKey: queryKeys.home }),
         queryClient.invalidateQueries({ queryKey: queryKeys.tasks }),
         queryClient.invalidateQueries({ queryKey: queryKeys.rules }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.shoppingItems }),
         queryClient.invalidateQueries({ queryKey: queryKeys.monthlySummary }),
       ]);
     } finally {
@@ -56,6 +57,11 @@ export function useTeamStateStream(
       operations.push(
         queryClient.invalidateQueries({ queryKey: queryKeys.rules }),
         queryClient.invalidateQueries({ queryKey: queryKeys.monthlySummary }),
+      );
+    }
+    if (pending.has("shopping_item")) {
+      operations.push(
+        queryClient.invalidateQueries({ queryKey: queryKeys.shoppingItems }),
       );
     }
     if (

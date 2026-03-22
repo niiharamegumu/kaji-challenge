@@ -29,6 +29,13 @@ const AdminSummaryPage = lazy(async () => {
   return { default: module.AdminSummaryPage };
 });
 
+const ShoppingListPage = lazy(async () => {
+  const module = await import(
+    "../features/shopping-list/routes/ShoppingListPage"
+  );
+  return { default: module.ShoppingListPage };
+});
+
 const withDataBoundary = (element: ReactNode, errorMessage: string) => (
   <SuspenseQueryBoundary errorMessage={errorMessage}>
     {element}
@@ -81,6 +88,13 @@ export const router = createBrowserRouter([
         element: withDataBoundary(
           <AdminSummaryPage />,
           "サマリー画面の読み込みに失敗しました。",
+        ),
+      },
+      {
+        path: "shopping-list",
+        element: withDataBoundary(
+          <ShoppingListPage />,
+          "買い物リスト画面の読み込みに失敗しました。",
         ),
       },
     ],

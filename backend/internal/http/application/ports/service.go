@@ -12,6 +12,7 @@ type Services struct {
 	Team         TeamService
 	Task         TaskService
 	Penalty      PenaltyService
+	ShoppingList ShoppingListService
 	TaskOverview TaskOverviewService
 	Admin        AdminService
 }
@@ -54,6 +55,14 @@ type PenaltyService interface {
 	CreatePenaltyRule(ctx context.Context, userID string, req api.CreatePenaltyRuleRequest) (api.PenaltyRule, error)
 	PatchPenaltyRule(ctx context.Context, userID, ruleID string, req api.UpdatePenaltyRuleRequest) (api.PenaltyRule, error)
 	DeletePenaltyRule(ctx context.Context, userID, ruleID string) error
+}
+
+type ShoppingListService interface {
+	ListShoppingItems(ctx context.Context, userID string) ([]api.ShoppingListItem, error)
+	CreateShoppingItem(ctx context.Context, userID string, req api.CreateShoppingListItemRequest) (api.ShoppingListItem, error)
+	PatchShoppingItem(ctx context.Context, userID, itemID string, req api.UpdateShoppingListItemRequest) (api.ShoppingListItem, error)
+	DeleteShoppingItem(ctx context.Context, userID, itemID string) error
+	ReorderShoppingItems(ctx context.Context, userID string, req api.ReorderShoppingListItemsRequest) ([]api.ShoppingListItem, error)
 }
 
 type TaskOverviewService interface {

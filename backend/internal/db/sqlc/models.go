@@ -71,6 +71,17 @@ type Session struct {
 	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
 }
 
+type ShoppingItem struct {
+	ID        string             `json:"id"`
+	TeamID    string             `json:"team_id"`
+	Name      string             `json:"name"`
+	Quantity  pgtype.Text        `json:"quantity"`
+	Notes     pgtype.Text        `json:"notes"`
+	Position  int32              `json:"position"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Task struct {
 	ID                         string             `json:"id"`
 	TeamID                     string             `json:"team_id"`

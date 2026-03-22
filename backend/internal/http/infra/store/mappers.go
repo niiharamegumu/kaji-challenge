@@ -44,6 +44,19 @@ func (r ruleRecord) toAPI() api.PenaltyRule {
 	}
 }
 
+func (i shoppingItemRecord) toAPI() api.ShoppingListItem {
+	return api.ShoppingListItem{
+		Id:        i.ID,
+		TeamId:    i.TeamID,
+		Name:      i.Name,
+		Quantity:  i.Quantity,
+		Notes:     i.Notes,
+		Position:  i.Position,
+		CreatedAt: i.CreatedAt,
+		UpdatedAt: i.UpdatedAt,
+	}
+}
+
 func (m monthSummary) toAPI() api.MonthlyPenaltySummary {
 	triggeredRuleIDs := m.TriggeredRuleID
 	if triggeredRuleIDs == nil {
@@ -123,5 +136,18 @@ func ruleFromDB(row dbsqlc.PenaltyRule, loc *time.Location) ruleRecord {
 		DeletedAt:   ptrFromTimestamptz(row.DeletedAt, loc),
 		CreatedAt:   row.CreatedAt.Time.In(loc),
 		UpdatedAt:   row.UpdatedAt.Time.In(loc),
+	}
+}
+
+func shoppingItemFromDB(row dbsqlc.ShoppingItem, loc *time.Location) shoppingItemRecord {
+	return shoppingItemRecord{
+		ID:        row.ID,
+		TeamID:    row.TeamID,
+		Name:      row.Name,
+		Quantity:  ptrFromText(row.Quantity),
+		Notes:     ptrFromText(row.Notes),
+		Position:  int(row.Position),
+		CreatedAt: row.CreatedAt.Time.In(loc),
+		UpdatedAt: row.UpdatedAt.Time.In(loc),
 	}
 }

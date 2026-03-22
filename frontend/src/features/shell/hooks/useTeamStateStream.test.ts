@@ -34,6 +34,9 @@ describe("useTeamStateStream", () => {
       queryKey: queryKeys.rules,
     });
     expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.shoppingItems,
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.monthlySummary,
     });
   });
