@@ -102,12 +102,17 @@ describe("ShoppingListManager", () => {
       name: "https://example.com/path?q=1",
     });
     expect(link).toHaveAttribute("href", "https://example.com/path?q=1");
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noreferrer");
     expect(
       screen.getByText("<script>alert(1)</script>", { exact: false }),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("link", { name: "javascript:alert(1)" }),
     ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "牛乳 をドラッグして並び替え" }),
+    ).toBeInTheDocument();
   });
 
   it("reorders items from the drag-and-drop path", () => {
