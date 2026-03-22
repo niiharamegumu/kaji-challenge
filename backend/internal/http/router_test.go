@@ -1346,15 +1346,15 @@ func TestShoppingCreateRejectsMissingIfMatch(t *testing.T) {
 	req.AddCookie(&http.Cookie{Name: "kaji_session", Value: token})
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusPreconditionRequired {
-		t.Fatalf("expected 428, got %d: %s", res.Code, res.Body.String())
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", res.Code, res.Body.String())
 	}
 	var body map[string]string
 	if err := json.Unmarshal(res.Body.Bytes(), &body); err != nil {
 		t.Fatalf("failed to parse response: %v", err)
 	}
-	if body["code"] != "precondition_required" {
-		t.Fatalf("expected precondition_required code, got %q", body["code"])
+	if body["msg"] == "" {
+		t.Fatalf("expected openapi validation error message")
 	}
 }
 
