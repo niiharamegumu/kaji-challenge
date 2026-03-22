@@ -15,6 +15,7 @@ const mockGetMe = vi.fn();
 const mockGetTeamCurrentMembers = vi.fn();
 const mockGetTeamCurrentInvite = vi.fn();
 const mockPostTeamInvite = vi.fn();
+const mockListShoppingItems = vi.fn();
 
 vi.mock("./lib/api/generated/client", () => ({
   TaskType: { daily: "daily", weekly: "weekly" },
@@ -30,6 +31,11 @@ vi.mock("./lib/api/generated/client", () => ({
     mockGetTeamCurrentMembers(...args),
   getTeamCurrentInvite: (...args: unknown[]) =>
     mockGetTeamCurrentInvite(...args),
+  listShoppingItems: (...args: unknown[]) => mockListShoppingItems(...args),
+  postShoppingItem: vi.fn(),
+  patchShoppingItem: vi.fn(),
+  deleteShoppingItem: vi.fn(),
+  postShoppingItemsReorder: vi.fn(),
   postTask: vi.fn(),
   postTaskCompletionToggle: vi.fn(),
   patchTask: vi.fn(),
@@ -60,6 +66,7 @@ describe("App", () => {
     mockGetTeamCurrentMembers.mockReset();
     mockGetTeamCurrentInvite.mockReset();
     mockPostTeamInvite.mockReset();
+    mockListShoppingItems.mockReset();
 
     mockGetTaskOverview.mockResolvedValue({
       data: {
@@ -76,6 +83,7 @@ describe("App", () => {
     mockSummary.mockResolvedValue({ data: { totalPenalty: 0 } });
     mockGetTeamCurrentMembers.mockResolvedValue({ data: { items: [] } });
     mockGetTeamCurrentInvite.mockResolvedValue({ data: null });
+    mockListShoppingItems.mockResolvedValue({ data: { items: [] } });
     mockPostTeamInvite.mockResolvedValue({
       data: {
         code: "NEWCODE",
@@ -137,6 +145,7 @@ describe("App", () => {
     await waitFor(() => {
       expect(screen.getByRole("link", { name: "ホーム" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "タスク" })).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "買い物" })).toBeInTheDocument();
       expect(
         screen.getByRole("link", { name: "サマリー" }),
       ).toBeInTheDocument();

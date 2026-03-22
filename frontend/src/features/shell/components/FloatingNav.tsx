@@ -6,6 +6,7 @@ import {
   Settings,
   Shield,
   ShieldAlert,
+  ShoppingCart,
   UserCircle2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -137,6 +138,14 @@ export function FloatingNav({
             >
               <Shield size={18} aria-hidden="true" />
               <span>タスク</span>
+            </NavLink>
+            <NavLink
+              to="/shopping-list"
+              className={linkClass}
+              onClick={() => setOpen(false)}
+            >
+              <ShoppingCart size={18} aria-hidden="true" />
+              <span>買い物</span>
             </NavLink>
             <NavLink
               to="/admin/penalties"
