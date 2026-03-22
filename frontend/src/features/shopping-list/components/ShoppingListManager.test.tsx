@@ -1,4 +1,4 @@
-import { act, render } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -72,6 +72,44 @@ vi.mock("@dnd-kit/utilities", () => ({
 }));
 
 describe("ShoppingListManager", () => {
+  it("linkifies only http and https URLs in notes", () => {
+    render(
+      <ShoppingListManager
+        form={{ name: "", quantity: "", notes: "" }}
+        items={[
+          {
+            id: "item-1",
+            teamId: "team-1",
+            name: "牛乳",
+            quantity: null,
+            notes:
+              "公式 https://example.com/path?q=1 と <script>alert(1)</script> と javascript:alert(1)",
+            position: 1,
+            createdAt: "2026-03-01T00:00:00Z",
+            updatedAt: "2026-03-01T00:00:00Z",
+          },
+        ]}
+        isReordering={false}
+        onFormChange={() => undefined}
+        onCreate={() => undefined}
+        onDelete={() => undefined}
+        onReorder={() => undefined}
+        onUpdate={async () => undefined}
+      />,
+    );
+
+    const link = screen.getByRole("link", {
+      name: "https://example.com/path?q=1",
+    });
+    expect(link).toHaveAttribute("href", "https://example.com/path?q=1");
+    expect(
+      screen.getByText("<script>alert(1)</script>", { exact: false }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "javascript:alert(1)" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("reorders items from the drag-and-drop path", () => {
     const onReorder = vi.fn();
 

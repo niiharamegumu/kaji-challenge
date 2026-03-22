@@ -26,7 +26,7 @@ import {
   ShoppingBasket,
   X,
 } from "lucide-react";
-import type { ChangeEvent } from "react";
+import type { ChangeEvent, ReactNode } from "react";
 import { startTransition, useOptimistic, useState } from "react";
 
 import type {
@@ -76,6 +76,68 @@ const jstDateFormatter = new Intl.DateTimeFormat("ja-JP", {
 
 function formatCreatedAt(value: string) {
   return jstDateFormatter.format(new Date(value));
+}
+
+const urlPattern = /https?:\/\/[^\s]+/g;
+const trailingPunctuationPattern = /[).,!?:;]+$/;
+
+function isHttpUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function renderNotesWithLinks(value: string): ReactNode {
+  const parts: ReactNode[] = [];
+  let lastIndex = 0;
+
+  for (const match of value.matchAll(urlPattern)) {
+    const matchedUrl = match[0];
+    const startIndex = match.index ?? 0;
+    let urlText = matchedUrl;
+    let trailingText = "";
+
+    const trailingMatch = matchedUrl.match(trailingPunctuationPattern);
+    if (trailingMatch != null) {
+      trailingText = trailingMatch[0];
+      urlText = matchedUrl.slice(0, -trailingText.length);
+    }
+
+    if (startIndex > lastIndex) {
+      parts.push(value.slice(lastIndex, startIndex));
+    }
+
+    if (isHttpUrl(urlText)) {
+      parts.push(
+        <a
+          key={`${urlText}-${startIndex}`}
+          href={urlText}
+          target="_blank"
+          rel="noreferrer"
+          className="underline decoration-stone-300 underline-offset-2 transition-colors hover:text-stone-900"
+        >
+          {urlText}
+        </a>,
+      );
+    } else {
+      parts.push(urlText);
+    }
+
+    if (trailingText !== "") {
+      parts.push(trailingText);
+    }
+
+    lastIndex = startIndex + matchedUrl.length;
+  }
+
+  if (lastIndex < value.length) {
+    parts.push(value.slice(lastIndex));
+  }
+
+  return parts;
 }
 
 function SortableShoppingItem({
@@ -215,7 +277,7 @@ function SortableShoppingItem({
               </div>
               {item.notes != null && item.notes !== "" ? (
                 <div className="mt-1 whitespace-pre-wrap break-words text-xs text-stone-600">
-                  {item.notes}
+                  {renderNotesWithLinks(item.notes)}
                 </div>
               ) : null}
               <div className="mt-2 text-[11px] text-stone-500">
