@@ -1336,6 +1336,51 @@ func TestWriteRejectsMissingIfMatch(t *testing.T) {
 	}
 }
 
+func TestShoppingCreateRejectsMissingIfMatch(t *testing.T) {
+	r := newTestRouter(t)
+	token := login(t, r)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/shopping-items", strings.NewReader(`{"name":"牛乳"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", "http://localhost:5173")
+	req.AddCookie(&http.Cookie{Name: "kaji_session", Value: token})
+	res := httptest.NewRecorder()
+	r.ServeHTTP(res, req)
+	if res.Code != http.StatusPreconditionRequired {
+		t.Fatalf("expected 428, got %d: %s", res.Code, res.Body.String())
+	}
+	var body map[string]string
+	if err := json.Unmarshal(res.Body.Bytes(), &body); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	if body["code"] != "precondition_required" {
+		t.Fatalf("expected precondition_required code, got %q", body["code"])
+	}
+}
+
+func TestShoppingCreateRejectsStaleIfMatch(t *testing.T) {
+	r := newTestRouter(t)
+	token := login(t, r)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/shopping-items", strings.NewReader(`{"name":"牛乳"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", "http://localhost:5173")
+	req.Header.Set("If-Match", `W/"team:dummy:rev:999999"`)
+	req.AddCookie(&http.Cookie{Name: "kaji_session", Value: token})
+	res := httptest.NewRecorder()
+	r.ServeHTTP(res, req)
+	if res.Code != http.StatusPreconditionFailed {
+		t.Fatalf("expected 412, got %d: %s", res.Code, res.Body.String())
+	}
+	var body map[string]string
+	if err := json.Unmarshal(res.Body.Bytes(), &body); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	if body["code"] != "precondition_failed" {
+		t.Fatalf("expected precondition_failed code, got %q", body["code"])
+	}
+}
+
 func TestShoppingReorderReturnsFreshETagForChainedWrites(t *testing.T) {
 	r := newTestRouter(t)
 	token := login(t, r)
