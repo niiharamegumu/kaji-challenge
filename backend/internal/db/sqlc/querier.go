@@ -15,10 +15,12 @@ type Querier interface {
 	AddTriggeredRuleForMonth(ctx context.Context, arg AddTriggeredRuleForMonthParams) error
 	ClearTaskAssigneeByTeamAndUser(ctx context.Context, arg ClearTaskAssigneeByTeamAndUserParams) error
 	CloseMonthlyPenaltySummary(ctx context.Context, arg CloseMonthlyPenaltySummaryParams) error
+	CompactShoppingItemPositionsAfter(ctx context.Context, arg CompactShoppingItemPositionsAfterParams) error
 	ConsumeExchangeCode(ctx context.Context, code string) error
 	CreateInviteCode(ctx context.Context, arg CreateInviteCodeParams) error
 	CreatePenaltyRule(ctx context.Context, arg CreatePenaltyRuleParams) error
 	CreateSession(ctx context.Context, arg CreateSessionParams) error
+	CreateShoppingItem(ctx context.Context, arg CreateShoppingItemParams) error
 	CreateTask(ctx context.Context, arg CreateTaskParams) error
 	CreateTaskCompletionDaily(ctx context.Context, arg CreateTaskCompletionDailyParams) error
 	CreateTeam(ctx context.Context, arg CreateTeamParams) error
@@ -28,6 +30,7 @@ type Querier interface {
 	DeleteInviteCodesByTeamID(ctx context.Context, teamID string) error
 	DeleteLatestTaskCompletionWeeklyEntry(ctx context.Context, arg DeleteLatestTaskCompletionWeeklyEntryParams) (int64, error)
 	DeleteSession(ctx context.Context, token string) error
+	DeleteShoppingItem(ctx context.Context, id string) (int64, error)
 	DeleteTask(ctx context.Context, id string) error
 	DeleteTaskCompletionDaily(ctx context.Context, arg DeleteTaskCompletionDailyParams) error
 	DeleteTaskCompletionDailyByTaskID(ctx context.Context, taskID string) error
@@ -45,6 +48,8 @@ type Querier interface {
 	GetOldestOtherTeamMember(ctx context.Context, arg GetOldestOtherTeamMemberParams) (string, error)
 	GetPenaltyRuleByID(ctx context.Context, id string) (PenaltyRule, error)
 	GetSessionByToken(ctx context.Context, token string) (Session, error)
+	GetShoppingItemByID(ctx context.Context, id string) (ShoppingItem, error)
+	GetShoppingItemMaxPositionByTeamID(ctx context.Context, teamID string) (int32, error)
 	GetTaskByID(ctx context.Context, id string) (GetTaskByIDRow, error)
 	GetTaskCompletionWeeklyEntryCount(ctx context.Context, arg GetTaskCompletionWeeklyEntryCountParams) (int64, error)
 	GetTeamStateRevision(ctx context.Context, id string) (int64, error)
@@ -65,6 +70,7 @@ type Querier interface {
 	ListMembershipsByUserID(ctx context.Context, userID string) ([]ListMembershipsByUserIDRow, error)
 	ListPenaltyRulesByTeamID(ctx context.Context, teamID string) ([]PenaltyRule, error)
 	ListPenaltyRulesEffectiveAtByTeamID(ctx context.Context, arg ListPenaltyRulesEffectiveAtByTeamIDParams) ([]PenaltyRule, error)
+	ListShoppingItemsByTeamID(ctx context.Context, teamID string) ([]ShoppingItem, error)
 	ListTaskCompletionDailyByMonthAndTeam(ctx context.Context, arg ListTaskCompletionDailyByMonthAndTeamParams) ([]ListTaskCompletionDailyByMonthAndTeamRow, error)
 	ListTaskCompletionDailyByTeamAndDate(ctx context.Context, arg ListTaskCompletionDailyByTeamAndDateParams) ([]ListTaskCompletionDailyByTeamAndDateRow, error)
 	ListTaskCompletionWeeklyByMonthAndTeam(ctx context.Context, arg ListTaskCompletionWeeklyByMonthAndTeamParams) ([]ListTaskCompletionWeeklyByMonthAndTeamRow, error)
@@ -85,6 +91,8 @@ type Querier interface {
 	SumDailyPenaltyForDate(ctx context.Context, arg SumDailyPenaltyForDateParams) (int64, error)
 	SumWeeklyPenaltyForClose(ctx context.Context, arg SumWeeklyPenaltyForCloseParams) (int64, error)
 	UpdatePenaltyRule(ctx context.Context, arg UpdatePenaltyRuleParams) error
+	UpdateShoppingItem(ctx context.Context, arg UpdateShoppingItemParams) error
+	UpdateShoppingItemPosition(ctx context.Context, arg UpdateShoppingItemPositionParams) error
 	UpdateTask(ctx context.Context, arg UpdateTaskParams) error
 	UpdateTeamMemberRole(ctx context.Context, arg UpdateTeamMemberRoleParams) error
 	UpdateTeamName(ctx context.Context, arg UpdateTeamNameParams) error
