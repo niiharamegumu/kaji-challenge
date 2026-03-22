@@ -23,6 +23,11 @@ import {
 
 type StatusSetter = (message: string) => void;
 
+const hasShoppingItems = (
+  value: unknown,
+): value is { items?: ShoppingListItem[] } =>
+  value != null && typeof value === "object" && "items" in value;
+
 export function useShoppingItemsQuery() {
   return useSuspenseQuery({
     queryKey: queryKeys.shoppingItems,
@@ -101,10 +106,14 @@ export function useShoppingItemMutations(setStatus: StatusSetter) {
   });
 
   const reorderItems = useMutation({
-    mutationFn: async (payload: ReorderShoppingListItemsRequest) =>
-      postShoppingItemsReorder(payload),
-    onSuccess: (response) => {
-      const items = response.data.items ?? [];
+    mutationFn: async (payload: ReorderShoppingListItemsRequest) => {
+      const response = await postShoppingItemsReorder(payload);
+      if (!hasShoppingItems(response.data)) {
+        throw new Error("unexpected shopping reorder response");
+      }
+      return response.data.items ?? [];
+    },
+    onSuccess: (items) => {
       queryClient.setQueryData<ShoppingListItem[]>(
         queryKeys.shoppingItems,
         items,
