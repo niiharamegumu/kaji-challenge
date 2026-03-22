@@ -91,6 +91,24 @@ func (m mockPenaltyService) PatchPenaltyRule(context.Context, string, string, ap
 }
 func (m mockPenaltyService) DeletePenaltyRule(context.Context, string, string) error { return nil }
 
+type mockShoppingListService struct{}
+
+func (m mockShoppingListService) ListShoppingItems(context.Context, string) ([]api.ShoppingListItem, error) {
+	return nil, nil
+}
+func (m mockShoppingListService) CreateShoppingItem(context.Context, string, api.CreateShoppingListItemRequest) (api.ShoppingListItem, error) {
+	return api.ShoppingListItem{}, nil
+}
+func (m mockShoppingListService) PatchShoppingItem(context.Context, string, string, api.UpdateShoppingListItemRequest) (api.ShoppingListItem, error) {
+	return api.ShoppingListItem{}, nil
+}
+func (m mockShoppingListService) DeleteShoppingItem(context.Context, string, string) error {
+	return nil
+}
+func (m mockShoppingListService) ReorderShoppingItems(context.Context, string, api.ReorderShoppingListItemsRequest) ([]api.ShoppingListItem, error) {
+	return nil, nil
+}
+
 type mockTaskOverviewService struct{}
 
 func (m mockTaskOverviewService) GetTaskOverview(context.Context, string) (api.TaskOverviewResponse, error) {
@@ -118,6 +136,7 @@ func newTestHandler(teamErr error) *Handler {
 		Team:         mockTeamService{err: teamErr},
 		Task:         mockTaskService{},
 		Penalty:      mockPenaltyService{},
+		ShoppingList: mockShoppingListService{},
 		TaskOverview: mockTaskOverviewService{},
 		Admin:        mockAdminService{},
 	}, nil)
@@ -180,5 +199,24 @@ func TestGetTaskOverviewWithoutUserReturns401(t *testing.T) {
 
 	if res.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d", res.Code)
+	}
+}
+
+func TestPostShoppingItemsReorderInvalidBodyReturns400(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	h := newTestHandler(nil)
+	r := gin.New()
+	r.POST("/v1/shopping-items/reorder", func(c *gin.Context) {
+		c.Set(AuthUserIDKey, "u1")
+		h.PostShoppingItemsReorder(c, api.PostShoppingItemsReorderParams{})
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/shopping-items/reorder", strings.NewReader("{"))
+	req.Header.Set("Content-Type", "application/json")
+	res := httptest.NewRecorder()
+	r.ServeHTTP(res, req)
+
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", res.Code)
 	}
 }

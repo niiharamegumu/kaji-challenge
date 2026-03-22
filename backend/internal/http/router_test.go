@@ -1336,6 +1336,66 @@ func TestWriteRejectsMissingIfMatch(t *testing.T) {
 	}
 }
 
+func TestShoppingReorderReturnsFreshETagForChainedWrites(t *testing.T) {
+	r := newTestRouter(t)
+	token := login(t, r)
+
+	firstCreate := doRequest(t, r, http.MethodPost, "/v1/shopping-items", `{"name":"牛乳"}`, token)
+	if firstCreate.Code != http.StatusCreated {
+		t.Fatalf("expected first create 201, got %d: %s", firstCreate.Code, firstCreate.Body.String())
+	}
+	var firstItem api.ShoppingListItem
+	if err := json.Unmarshal(firstCreate.Body.Bytes(), &firstItem); err != nil {
+		t.Fatalf("failed to parse first shopping item: %v", err)
+	}
+
+	secondCreate := doRequest(t, r, http.MethodPost, "/v1/shopping-items", `{"name":"卵"}`, token)
+	if secondCreate.Code != http.StatusCreated {
+		t.Fatalf("expected second create 201, got %d: %s", secondCreate.Code, secondCreate.Body.String())
+	}
+	var secondItem api.ShoppingListItem
+	if err := json.Unmarshal(secondCreate.Body.Bytes(), &secondItem); err != nil {
+		t.Fatalf("failed to parse second shopping item: %v", err)
+	}
+
+	reorderEtag := fetchLatestETag(t, r, token)
+	if reorderEtag == "" {
+		t.Fatalf("expected latest ETag before reorder")
+	}
+
+	reorderReq := httptest.NewRequest(http.MethodPost, "/v1/shopping-items/reorder", strings.NewReader(
+		fmt.Sprintf(`{"itemIds":["%s","%s"]}`, secondItem.Id, firstItem.Id),
+	))
+	reorderReq.Header.Set("Content-Type", "application/json")
+	reorderReq.Header.Set("Origin", "http://localhost:5173")
+	reorderReq.Header.Set("If-Match", reorderEtag)
+	reorderReq.AddCookie(&http.Cookie{Name: "kaji_session", Value: token})
+	reorderRes := httptest.NewRecorder()
+	r.ServeHTTP(reorderRes, reorderReq)
+	if reorderRes.Code != http.StatusOK {
+		t.Fatalf("expected reorder 200, got %d: %s", reorderRes.Code, reorderRes.Body.String())
+	}
+
+	nextEtag := strings.TrimSpace(reorderRes.Header().Get("ETag"))
+	if nextEtag == "" {
+		t.Fatalf("expected reorder response to include fresh ETag")
+	}
+	if nextEtag == reorderEtag {
+		t.Fatalf("expected reorder to advance ETag")
+	}
+
+	patchReq := httptest.NewRequest(http.MethodPatch, "/v1/shopping-items/"+firstItem.Id, strings.NewReader(`{"notes":"特売"}`))
+	patchReq.Header.Set("Content-Type", "application/json")
+	patchReq.Header.Set("Origin", "http://localhost:5173")
+	patchReq.Header.Set("If-Match", nextEtag)
+	patchReq.AddCookie(&http.Cookie{Name: "kaji_session", Value: token})
+	patchRes := httptest.NewRecorder()
+	r.ServeHTTP(patchRes, patchReq)
+	if patchRes.Code != http.StatusOK {
+		t.Fatalf("expected chained patch 200, got %d: %s", patchRes.Code, patchRes.Body.String())
+	}
+}
+
 func TestSessionExchangeRequiresOrigin(t *testing.T) {
 	r := newTestRouter(t)
 
