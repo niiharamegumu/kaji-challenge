@@ -10,6 +10,7 @@
     "lint": "biome check .",
     "lint:compiler": "eslint \"src/**/*.{ts,tsx}\"",
     "lint:all": "npm run lint && npm run lint:compiler",
+    "typecheck": "tsc -b",
     "test": "vitest",
     "gen": "orval --config ../api/orval.config.ts",
     "pwa:assets": "pwa-assets-generator public/app.png -p minimal --override",
