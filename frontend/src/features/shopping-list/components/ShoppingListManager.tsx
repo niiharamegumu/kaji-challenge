@@ -17,8 +17,6 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
-  ArrowDown,
-  ArrowUp,
   Check,
   GripVertical,
   Pencil,
@@ -26,7 +24,7 @@ import {
   ShoppingBasket,
   X,
 } from "lucide-react";
-import type { ChangeEvent } from "react";
+import type { ChangeEvent, ReactNode } from "react";
 import { startTransition, useOptimistic, useState } from "react";
 
 import type {
@@ -78,31 +76,85 @@ function formatCreatedAt(value: string) {
   return jstDateFormatter.format(new Date(value));
 }
 
+const urlPattern = /https?:\/\/[^\s]+/g;
+const trailingPunctuationPattern = /[).,!?:;]+$/;
+
+function isHttpUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function renderNotesWithLinks(value: string): ReactNode {
+  const parts: ReactNode[] = [];
+  let lastIndex = 0;
+
+  for (const match of value.matchAll(urlPattern)) {
+    const matchedUrl = match[0];
+    const startIndex = match.index ?? 0;
+    let urlText = matchedUrl;
+    let trailingText = "";
+
+    const trailingMatch = matchedUrl.match(trailingPunctuationPattern);
+    if (trailingMatch != null) {
+      trailingText = trailingMatch[0];
+      urlText = matchedUrl.slice(0, -trailingText.length);
+    }
+
+    if (startIndex > lastIndex) {
+      parts.push(value.slice(lastIndex, startIndex));
+    }
+
+    if (isHttpUrl(urlText)) {
+      parts.push(
+        <a
+          key={`${urlText}-${startIndex}`}
+          href={urlText}
+          target="_blank"
+          rel="noreferrer"
+          className="rounded-sm text-stone-800 underline decoration-stone-400 underline-offset-2 transition-colors hover:text-stone-950 hover:decoration-stone-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-400"
+        >
+          {urlText}
+        </a>,
+      );
+    } else {
+      parts.push(urlText);
+    }
+
+    if (trailingText !== "") {
+      parts.push(trailingText);
+    }
+
+    lastIndex = startIndex + matchedUrl.length;
+  }
+
+  if (lastIndex < value.length) {
+    parts.push(value.slice(lastIndex));
+  }
+
+  return parts;
+}
+
 function SortableShoppingItem({
   item,
-  isFirst,
-  isLast,
   isEditing,
   editState,
   onStartEdit,
   onChangeEditState,
   onCancelEdit,
   onSaveEdit,
-  onMoveUp,
-  onMoveDown,
   onComplete,
 }: {
   item: ShoppingListItem;
-  isFirst: boolean;
-  isLast: boolean;
   isEditing: boolean;
   editState: EditState;
   onStartEdit: (item: ShoppingListItem) => void;
   onChangeEditState: (next: EditState) => void;
   onCancelEdit: () => void;
   onSaveEdit: (itemId: string) => void;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
   onComplete: () => void;
 }) {
   const {
@@ -133,9 +185,8 @@ function SortableShoppingItem({
       ref={setNodeRef}
       style={style}
       className={`relative rounded-xl border border-stone-200 bg-white p-3 shadow-sm ${
-        isEditing ? "cursor-default" : "cursor-pointer"
+        isEditing ? "cursor-default" : "cursor-default"
       } ${isDragging ? "opacity-70" : ""}`}
-      {...dragProps}
     >
       {isEditing ? (
         <div className="grid gap-2">
@@ -203,7 +254,7 @@ function SortableShoppingItem({
         </div>
       ) : (
         <>
-          <div className="flex items-start gap-3 pr-8">
+          <div className="flex items-start gap-3 pr-10">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <div className="font-medium text-stone-900">{item.name}</div>
@@ -215,7 +266,7 @@ function SortableShoppingItem({
               </div>
               {item.notes != null && item.notes !== "" ? (
                 <div className="mt-1 whitespace-pre-wrap break-words text-xs text-stone-600">
-                  {item.notes}
+                  {renderNotesWithLinks(item.notes)}
                 </div>
               ) : null}
               <div className="mt-2 text-[11px] text-stone-500">
@@ -226,34 +277,12 @@ function SortableShoppingItem({
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <button
               type="button"
-              className="flex h-9 cursor-pointer items-center gap-1 rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 text-xs text-stone-700 transition-colors hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-40"
-              onClick={onMoveUp}
-              disabled={isFirst}
-              aria-label={`${item.name} を上に移動`}
-              onPointerDown={(event) => event.stopPropagation()}
-            >
-              <ArrowUp size={14} aria-hidden="true" />
-              <span className="sr-only sm:not-sr-only">上へ</span>
-            </button>
-            <button
-              type="button"
-              className="flex h-9 cursor-pointer items-center gap-1 rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 text-xs text-stone-700 transition-colors hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-40"
-              onClick={onMoveDown}
-              disabled={isLast}
-              aria-label={`${item.name} を下に移動`}
-              onPointerDown={(event) => event.stopPropagation()}
-            >
-              <ArrowDown size={14} aria-hidden="true" />
-              <span className="sr-only sm:not-sr-only">下へ</span>
-            </button>
-            <button
-              type="button"
               className="flex h-9 cursor-pointer items-center gap-1 rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 text-xs text-stone-700 transition-colors hover:bg-stone-100"
               onClick={() => onStartEdit(item)}
+              aria-label="編集"
               onPointerDown={(event) => event.stopPropagation()}
             >
               <Pencil size={14} aria-hidden="true" />
-              <span className="sr-only sm:not-sr-only">編集</span>
             </button>
             <button
               type="button"
@@ -268,12 +297,14 @@ function SortableShoppingItem({
         </>
       )}
       {!isEditing ? (
-        <div
-          className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-stone-400"
-          aria-hidden="true"
+        <button
+          type="button"
+          className="absolute top-1/2 right-3 flex h-8 w-8 -translate-y-1/2 cursor-grab items-center justify-center rounded-md text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700 active:cursor-grabbing focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-400"
+          onPointerDown={(event) => event.stopPropagation()}
+          {...dragProps}
         >
           <GripVertical size={16} aria-hidden="true" />
-        </div>
+        </button>
       ) : null}
     </li>
   );
@@ -346,18 +377,6 @@ export function ShoppingListManager({
       return;
     }
     applyReorder(String(active.id), String(over.id));
-  };
-
-  const moveItem = (index: number, delta: number) => {
-    const nextIndex = index + delta;
-    if (nextIndex < 0 || nextIndex >= optimisticItems.length) {
-      return;
-    }
-    const nextItems = arrayMove(optimisticItems, index, nextIndex);
-    startTransition(() => {
-      setOptimisticItems(nextItems);
-    });
-    onReorder(nextItems.map((item) => item.id));
   };
 
   const startEdit = (item: ShoppingListItem) => {
@@ -493,12 +512,10 @@ export function ShoppingListManager({
               strategy={verticalListSortingStrategy}
             >
               <ul className="mt-4 grid gap-2">
-                {optimisticItems.map((item, index) => (
+                {optimisticItems.map((item) => (
                   <SortableShoppingItem
                     key={item.id}
                     item={item}
-                    isFirst={index === 0}
-                    isLast={index === optimisticItems.length - 1}
                     isEditing={editingItemId === item.id}
                     editState={editState}
                     onStartEdit={startEdit}
@@ -507,8 +524,6 @@ export function ShoppingListManager({
                     onSaveEdit={(itemId) => {
                       void saveEdit(itemId);
                     }}
-                    onMoveUp={() => moveItem(index, -1)}
-                    onMoveDown={() => moveItem(index, 1)}
                     onComplete={() =>
                       setPendingCompleteItem({ id: item.id, name: item.name })
                     }
