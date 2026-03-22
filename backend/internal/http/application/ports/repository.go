@@ -42,6 +42,14 @@ type PenaltyRepository interface {
 	DeletePenaltyRule(ctx context.Context, userID, ruleID string) error
 }
 
+type ShoppingListRepository interface {
+	ListShoppingItems(ctx context.Context, userID string) ([]api.ShoppingListItem, error)
+	CreateShoppingItem(ctx context.Context, userID string, req api.CreateShoppingListItemRequest) (api.ShoppingListItem, error)
+	PatchShoppingItem(ctx context.Context, userID, itemID string, req api.UpdateShoppingListItemRequest) (api.ShoppingListItem, error)
+	DeleteShoppingItem(ctx context.Context, userID, itemID string) error
+	ReorderShoppingItems(ctx context.Context, userID string, req api.ReorderShoppingListItemsRequest) ([]api.ShoppingListItem, error)
+}
+
 type TaskOverviewRepository interface {
 	GetTaskOverview(ctx context.Context, userID string) (api.TaskOverviewResponse, error)
 	GetMonthlySummary(ctx context.Context, userID string, month *string) (api.MonthlyPenaltySummary, error)
@@ -58,6 +66,7 @@ type Dependencies struct {
 	TeamRepo         TeamRepository
 	TaskRepo         TaskRepository
 	PenaltyRepo      PenaltyRepository
+	ShoppingListRepo ShoppingListRepository
 	TaskOverviewRepo TaskOverviewRepository
 	AdminRepo        AdminRepository
 }

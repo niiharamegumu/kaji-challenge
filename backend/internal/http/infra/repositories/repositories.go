@@ -37,6 +37,12 @@ type Store interface {
 	PatchPenaltyRule(ctx context.Context, userID, ruleID string, req api.UpdatePenaltyRuleRequest) (api.PenaltyRule, error)
 	DeletePenaltyRule(ctx context.Context, userID, ruleID string) error
 
+	ListShoppingItems(ctx context.Context, userID string) ([]api.ShoppingListItem, error)
+	CreateShoppingItem(ctx context.Context, userID string, req api.CreateShoppingListItemRequest) (api.ShoppingListItem, error)
+	PatchShoppingItem(ctx context.Context, userID, itemID string, req api.UpdateShoppingListItemRequest) (api.ShoppingListItem, error)
+	DeleteShoppingItem(ctx context.Context, userID, itemID string) error
+	ReorderShoppingItems(ctx context.Context, userID string, req api.ReorderShoppingListItemsRequest) ([]api.ShoppingListItem, error)
+
 	GetTaskOverview(ctx context.Context, userID string) (api.TaskOverviewResponse, error)
 	GetMonthlySummary(ctx context.Context, userID string, month *string) (api.MonthlyPenaltySummary, error)
 
@@ -49,6 +55,7 @@ type authRepo struct{ store Store }
 type teamRepo struct{ store Store }
 type taskRepo struct{ store Store }
 type penaltyRepo struct{ store Store }
+type shoppingListRepo struct{ store Store }
 type taskOverviewRepo struct{ store Store }
 type adminRepo struct{ store Store }
 
@@ -58,6 +65,7 @@ func NewServices(s Store) *ports.Services {
 		TeamRepo:         teamRepo{store: s},
 		TaskRepo:         taskRepo{store: s},
 		PenaltyRepo:      penaltyRepo{store: s},
+		ShoppingListRepo: shoppingListRepo{store: s},
 		TaskOverviewRepo: taskOverviewRepo{store: s},
 		AdminRepo:        adminRepo{store: s},
 	}

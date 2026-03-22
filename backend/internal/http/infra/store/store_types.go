@@ -93,6 +93,17 @@ type ruleRecord struct {
 	UpdatedAt   time.Time
 }
 
+type shoppingItemRecord struct {
+	ID        string
+	TeamID    string
+	Name      string
+	Quantity  *string
+	Notes     *string
+	Position  int
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
 type monthSummary struct {
 	TeamID           string
 	Month            string
