@@ -288,6 +288,55 @@ export interface UpdatePenaltyRuleRequest {
   description?: string;
 }
 
+export interface ShoppingListItem {
+  id: string;
+  teamId: string;
+  name: string;
+  /** @nullable */
+  quantity?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  /** @minimum 1 */
+  position: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateShoppingListItemRequest {
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
+  name: string;
+  /** @maxLength 100 */
+  quantity?: string;
+  /** @maxLength 500 */
+  notes?: string;
+}
+
+export interface UpdateShoppingListItemRequest {
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
+  name?: string;
+  /**
+   * @maxLength 100
+   * @nullable
+   */
+  quantity?: string | null;
+  /**
+   * @maxLength 500
+   * @nullable
+   */
+  notes?: string | null;
+}
+
+export interface ReorderShoppingListItemsRequest {
+  /** @minItems 1 */
+  itemIds: string[];
+}
+
 export interface TaskOverviewDailyTask {
   task: Task;
   completedToday: boolean;
@@ -366,6 +415,14 @@ includeDeleted?: boolean;
 
 export type ListPenaltyRules200 = {
   items: PenaltyRule[];
+};
+
+export type ListShoppingItems200 = {
+  items: ShoppingListItem[];
+};
+
+export type PostShoppingItemsReorder200 = {
+  items: ShoppingListItem[];
 };
 
 export type GetPenaltySummaryMonthlyParams = {
@@ -1233,6 +1290,242 @@ export const deletePenaltyRule = async (ruleId: string, options?: RequestInit): 
     method: 'DELETE'
     
     
+  }
+);}
+
+
+
+/**
+ * @summary List shopping items in current team
+ */
+export type listShoppingItemsResponse200 = {
+  data: ListShoppingItems200
+  status: 200
+}
+    
+export type listShoppingItemsResponseSuccess = (listShoppingItemsResponse200) & {
+  headers: Headers;
+};
+;
+
+export type listShoppingItemsResponse = (listShoppingItemsResponseSuccess)
+
+export const getListShoppingItemsUrl = () => {
+
+
+  
+
+  return `/v1/shopping-items`
+}
+
+export const listShoppingItems = async ( options?: RequestInit): Promise<listShoppingItemsResponse> => {
+  
+  return customFetch<listShoppingItemsResponse>(getListShoppingItemsUrl(),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+
+
+
+/**
+ * Requires the latest team revision via the If-Match header.
+ * @summary Create shopping item
+ */
+export type postShoppingItemResponse201 = {
+  data: ShoppingListItem
+  status: 201
+}
+
+export type postShoppingItemResponse412 = {
+  data: void
+  status: 412
+}
+
+export type postShoppingItemResponse428 = {
+  data: void
+  status: 428
+}
+    
+export type postShoppingItemResponseSuccess = (postShoppingItemResponse201) & {
+  headers: Headers;
+};
+export type postShoppingItemResponseError = (postShoppingItemResponse412 | postShoppingItemResponse428) & {
+  headers: Headers;
+};
+
+export type postShoppingItemResponse = (postShoppingItemResponseSuccess | postShoppingItemResponseError)
+
+export const getPostShoppingItemUrl = () => {
+
+
+  
+
+  return `/v1/shopping-items`
+}
+
+export const postShoppingItem = async (createShoppingListItemRequest: CreateShoppingListItemRequest, options?: RequestInit): Promise<postShoppingItemResponse> => {
+  
+  return customFetch<postShoppingItemResponse>(getPostShoppingItemUrl(),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      createShoppingListItemRequest,)
+  }
+);}
+
+
+
+/**
+ * Requires the latest team revision via the If-Match header.
+ * @summary Update shopping item
+ */
+export type patchShoppingItemResponse200 = {
+  data: ShoppingListItem
+  status: 200
+}
+
+export type patchShoppingItemResponse412 = {
+  data: void
+  status: 412
+}
+
+export type patchShoppingItemResponse428 = {
+  data: void
+  status: 428
+}
+    
+export type patchShoppingItemResponseSuccess = (patchShoppingItemResponse200) & {
+  headers: Headers;
+};
+export type patchShoppingItemResponseError = (patchShoppingItemResponse412 | patchShoppingItemResponse428) & {
+  headers: Headers;
+};
+
+export type patchShoppingItemResponse = (patchShoppingItemResponseSuccess | patchShoppingItemResponseError)
+
+export const getPatchShoppingItemUrl = (itemId: string,) => {
+
+
+  
+
+  return `/v1/shopping-items/${itemId}`
+}
+
+export const patchShoppingItem = async (itemId: string,
+    updateShoppingListItemRequest: UpdateShoppingListItemRequest, options?: RequestInit): Promise<patchShoppingItemResponse> => {
+  
+  return customFetch<patchShoppingItemResponse>(getPatchShoppingItemUrl(itemId),
+  {      
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      updateShoppingListItemRequest,)
+  }
+);}
+
+
+
+/**
+ * Requires the latest team revision via the If-Match header.
+ * @summary Delete shopping item
+ */
+export type deleteShoppingItemResponse204 = {
+  data: void
+  status: 204
+}
+
+export type deleteShoppingItemResponse412 = {
+  data: void
+  status: 412
+}
+
+export type deleteShoppingItemResponse428 = {
+  data: void
+  status: 428
+}
+    
+export type deleteShoppingItemResponseSuccess = (deleteShoppingItemResponse204) & {
+  headers: Headers;
+};
+export type deleteShoppingItemResponseError = (deleteShoppingItemResponse412 | deleteShoppingItemResponse428) & {
+  headers: Headers;
+};
+
+export type deleteShoppingItemResponse = (deleteShoppingItemResponseSuccess | deleteShoppingItemResponseError)
+
+export const getDeleteShoppingItemUrl = (itemId: string,) => {
+
+
+  
+
+  return `/v1/shopping-items/${itemId}`
+}
+
+export const deleteShoppingItem = async (itemId: string, options?: RequestInit): Promise<deleteShoppingItemResponse> => {
+  
+  return customFetch<deleteShoppingItemResponse>(getDeleteShoppingItemUrl(itemId),
+  {      
+    ...options,
+    method: 'DELETE'
+    
+    
+  }
+);}
+
+
+
+/**
+ * Requires the latest team revision via the If-Match header.
+ * @summary Reorder shopping items
+ */
+export type postShoppingItemsReorderResponse200 = {
+  data: PostShoppingItemsReorder200
+  status: 200
+}
+
+export type postShoppingItemsReorderResponse412 = {
+  data: void
+  status: 412
+}
+
+export type postShoppingItemsReorderResponse428 = {
+  data: void
+  status: 428
+}
+    
+export type postShoppingItemsReorderResponseSuccess = (postShoppingItemsReorderResponse200) & {
+  headers: Headers;
+};
+export type postShoppingItemsReorderResponseError = (postShoppingItemsReorderResponse412 | postShoppingItemsReorderResponse428) & {
+  headers: Headers;
+};
+
+export type postShoppingItemsReorderResponse = (postShoppingItemsReorderResponseSuccess | postShoppingItemsReorderResponseError)
+
+export const getPostShoppingItemsReorderUrl = () => {
+
+
+  
+
+  return `/v1/shopping-items/reorder`
+}
+
+export const postShoppingItemsReorder = async (reorderShoppingListItemsRequest: ReorderShoppingListItemsRequest, options?: RequestInit): Promise<postShoppingItemsReorderResponse> => {
+  
+  return customFetch<postShoppingItemsReorderResponse>(getPostShoppingItemsReorderUrl(),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      reorderShoppingListItemsRequest,)
   }
 );}
 

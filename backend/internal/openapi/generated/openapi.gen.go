@@ -81,6 +81,13 @@ type CreatePenaltyRuleRequest struct {
 	Threshold   int     `json:"threshold"`
 }
 
+// CreateShoppingListItemRequest defines model for CreateShoppingListItemRequest.
+type CreateShoppingListItemRequest struct {
+	Name     string  `json:"name"`
+	Notes    *string `json:"notes,omitempty"`
+	Quantity *string `json:"quantity,omitempty"`
+}
+
 // CreateTaskRequest defines model for CreateTaskRequest.
 type CreateTaskRequest struct {
 	AssigneeUserId             *string  `json:"assigneeUserId,omitempty"`
@@ -159,6 +166,23 @@ type PenaltyRule struct {
 	TeamId      string     `json:"teamId"`
 	Threshold   int        `json:"threshold"`
 	UpdatedAt   time.Time  `json:"updatedAt"`
+}
+
+// ReorderShoppingListItemsRequest defines model for ReorderShoppingListItemsRequest.
+type ReorderShoppingListItemsRequest struct {
+	ItemIds []string `json:"itemIds"`
+}
+
+// ShoppingListItem defines model for ShoppingListItem.
+type ShoppingListItem struct {
+	CreatedAt time.Time `json:"createdAt"`
+	Id        string    `json:"id"`
+	Name      string    `json:"name"`
+	Notes     *string   `json:"notes"`
+	Position  int       `json:"position"`
+	Quantity  *string   `json:"quantity"`
+	TeamId    string    `json:"teamId"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 // Task defines model for Task.
@@ -302,6 +326,13 @@ type UpdatePenaltyRuleRequest struct {
 	Threshold   *int    `json:"threshold,omitempty"`
 }
 
+// UpdateShoppingListItemRequest defines model for UpdateShoppingListItemRequest.
+type UpdateShoppingListItemRequest struct {
+	Name     *string `json:"name,omitempty"`
+	Notes    *string `json:"notes"`
+	Quantity *string `json:"quantity"`
+}
+
 // UpdateTaskRequest defines model for UpdateTaskRequest.
 type UpdateTaskRequest struct {
 	AssigneeUserId             *string `json:"assigneeUserId,omitempty"`
@@ -336,6 +367,26 @@ type GetPenaltySummaryMonthlyParams struct {
 	Month *string `form:"month,omitempty" json:"month,omitempty"`
 }
 
+// PostShoppingItemParams defines parameters for PostShoppingItem.
+type PostShoppingItemParams struct {
+	IfMatch string `json:"If-Match"`
+}
+
+// PostShoppingItemsReorderParams defines parameters for PostShoppingItemsReorder.
+type PostShoppingItemsReorderParams struct {
+	IfMatch string `json:"If-Match"`
+}
+
+// DeleteShoppingItemParams defines parameters for DeleteShoppingItem.
+type DeleteShoppingItemParams struct {
+	IfMatch string `json:"If-Match"`
+}
+
+// PatchShoppingItemParams defines parameters for PatchShoppingItem.
+type PatchShoppingItemParams struct {
+	IfMatch string `json:"If-Match"`
+}
+
 // ListTasksParams defines parameters for ListTasks.
 type ListTasksParams struct {
 	Type *TaskType `form:"type,omitempty" json:"type,omitempty"`
@@ -355,6 +406,15 @@ type PostPenaltyRuleJSONRequestBody = CreatePenaltyRuleRequest
 
 // PatchPenaltyRuleJSONRequestBody defines body for PatchPenaltyRule for application/json ContentType.
 type PatchPenaltyRuleJSONRequestBody = UpdatePenaltyRuleRequest
+
+// PostShoppingItemJSONRequestBody defines body for PostShoppingItem for application/json ContentType.
+type PostShoppingItemJSONRequestBody = CreateShoppingListItemRequest
+
+// PostShoppingItemsReorderJSONRequestBody defines body for PostShoppingItemsReorder for application/json ContentType.
+type PostShoppingItemsReorderJSONRequestBody = ReorderShoppingListItemsRequest
+
+// PatchShoppingItemJSONRequestBody defines body for PatchShoppingItem for application/json ContentType.
+type PatchShoppingItemJSONRequestBody = UpdateShoppingListItemRequest
 
 // PostTaskJSONRequestBody defines body for PostTask for application/json ContentType.
 type PostTaskJSONRequestBody = CreateTaskRequest
@@ -424,6 +484,21 @@ type ServerInterface interface {
 	// Monthly penalty summary
 	// (GET /v1/penalty-summaries/monthly)
 	GetPenaltySummaryMonthly(c *gin.Context, params GetPenaltySummaryMonthlyParams)
+	// List shopping items in current team
+	// (GET /v1/shopping-items)
+	ListShoppingItems(c *gin.Context)
+	// Create shopping item
+	// (POST /v1/shopping-items)
+	PostShoppingItem(c *gin.Context, params PostShoppingItemParams)
+	// Reorder shopping items
+	// (POST /v1/shopping-items/reorder)
+	PostShoppingItemsReorder(c *gin.Context, params PostShoppingItemsReorderParams)
+	// Delete shopping item
+	// (DELETE /v1/shopping-items/{itemId})
+	DeleteShoppingItem(c *gin.Context, itemId string, params DeleteShoppingItemParams)
+	// Update shopping item
+	// (PATCH /v1/shopping-items/{itemId})
+	PatchShoppingItem(c *gin.Context, itemId string, params PatchShoppingItemParams)
 	// List tasks in current team
 	// (GET /v1/tasks)
 	ListTasks(c *gin.Context, params ListTasksParams)
@@ -786,6 +861,215 @@ func (siw *ServerInterfaceWrapper) GetPenaltySummaryMonthly(c *gin.Context) {
 	siw.Handler.GetPenaltySummaryMonthly(c, params)
 }
 
+// ListShoppingItems operation middleware
+func (siw *ServerInterfaceWrapper) ListShoppingItems(c *gin.Context) {
+
+	c.Set(CookieAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.ListShoppingItems(c)
+}
+
+// PostShoppingItem operation middleware
+func (siw *ServerInterfaceWrapper) PostShoppingItem(c *gin.Context) {
+
+	var err error
+
+	c.Set(CookieAuthScopes, []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PostShoppingItemParams
+
+	headers := c.Request.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandler(c, fmt.Errorf("Expected one value for If-Match, got %d", n), http.StatusBadRequest)
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter If-Match: %w", err), http.StatusBadRequest)
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		siw.ErrorHandler(c, fmt.Errorf("Header parameter If-Match is required, but not found"), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.PostShoppingItem(c, params)
+}
+
+// PostShoppingItemsReorder operation middleware
+func (siw *ServerInterfaceWrapper) PostShoppingItemsReorder(c *gin.Context) {
+
+	var err error
+
+	c.Set(CookieAuthScopes, []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PostShoppingItemsReorderParams
+
+	headers := c.Request.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandler(c, fmt.Errorf("Expected one value for If-Match, got %d", n), http.StatusBadRequest)
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter If-Match: %w", err), http.StatusBadRequest)
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		siw.ErrorHandler(c, fmt.Errorf("Header parameter If-Match is required, but not found"), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.PostShoppingItemsReorder(c, params)
+}
+
+// DeleteShoppingItem operation middleware
+func (siw *ServerInterfaceWrapper) DeleteShoppingItem(c *gin.Context) {
+
+	var err error
+
+	// ------------- Path parameter "itemId" -------------
+	var itemId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "itemId", c.Param("itemId"), &itemId, runtime.BindStyledParameterOptions{Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter itemId: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	c.Set(CookieAuthScopes, []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteShoppingItemParams
+
+	headers := c.Request.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandler(c, fmt.Errorf("Expected one value for If-Match, got %d", n), http.StatusBadRequest)
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter If-Match: %w", err), http.StatusBadRequest)
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		siw.ErrorHandler(c, fmt.Errorf("Header parameter If-Match is required, but not found"), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.DeleteShoppingItem(c, itemId, params)
+}
+
+// PatchShoppingItem operation middleware
+func (siw *ServerInterfaceWrapper) PatchShoppingItem(c *gin.Context) {
+
+	var err error
+
+	// ------------- Path parameter "itemId" -------------
+	var itemId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "itemId", c.Param("itemId"), &itemId, runtime.BindStyledParameterOptions{Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter itemId: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	c.Set(CookieAuthScopes, []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PatchShoppingItemParams
+
+	headers := c.Request.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandler(c, fmt.Errorf("Expected one value for If-Match, got %d", n), http.StatusBadRequest)
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter If-Match: %w", err), http.StatusBadRequest)
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		siw.ErrorHandler(c, fmt.Errorf("Header parameter If-Match is required, but not found"), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.PatchShoppingItem(c, itemId, params)
+}
+
 // ListTasks operation middleware
 func (siw *ServerInterfaceWrapper) ListTasks(c *gin.Context) {
 
@@ -1055,6 +1339,11 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	router.DELETE(options.BaseURL+"/v1/penalty-rules/:ruleId", wrapper.DeletePenaltyRule)
 	router.PATCH(options.BaseURL+"/v1/penalty-rules/:ruleId", wrapper.PatchPenaltyRule)
 	router.GET(options.BaseURL+"/v1/penalty-summaries/monthly", wrapper.GetPenaltySummaryMonthly)
+	router.GET(options.BaseURL+"/v1/shopping-items", wrapper.ListShoppingItems)
+	router.POST(options.BaseURL+"/v1/shopping-items", wrapper.PostShoppingItem)
+	router.POST(options.BaseURL+"/v1/shopping-items/reorder", wrapper.PostShoppingItemsReorder)
+	router.DELETE(options.BaseURL+"/v1/shopping-items/:itemId", wrapper.DeleteShoppingItem)
+	router.PATCH(options.BaseURL+"/v1/shopping-items/:itemId", wrapper.PatchShoppingItem)
 	router.GET(options.BaseURL+"/v1/tasks", wrapper.ListTasks)
 	router.POST(options.BaseURL+"/v1/tasks", wrapper.PostTask)
 	router.GET(options.BaseURL+"/v1/tasks/overview", wrapper.GetTaskOverview)
