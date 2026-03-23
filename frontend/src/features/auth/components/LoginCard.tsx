@@ -1,11 +1,15 @@
 import { LogIn } from "lucide-react";
 
+import { useMarkInitialScreenReady } from "../../../app/boot";
+
 type Props = {
   status: string;
   onLogin: () => void;
 };
 
 export function LoginCard({ status, onLogin }: Props) {
+  useMarkInitialScreenReady();
+
   return (
     <main className="ios-safe-main flex min-h-screen items-center justify-center bg-[color:var(--color-washi-50)] px-2 py-4 text-stone-800 md:p-6">
       <div className="mx-auto max-w-4xl rounded-xl border border-stone-200 bg-white/90 p-3 shadow-sm backdrop-blur animate-enter md:rounded-2xl md:p-8">

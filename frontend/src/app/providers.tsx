@@ -3,13 +3,16 @@ import { Provider as JotaiProvider } from "jotai";
 import type { PropsWithChildren } from "react";
 
 import { appQueryClient } from "../shared/query/queryClient";
+import { BootFlowProvider } from "./boot";
 
 export function AppProviders({ children }: PropsWithChildren) {
   return (
-    <JotaiProvider>
-      <QueryClientProvider client={appQueryClient}>
-        {children}
-      </QueryClientProvider>
-    </JotaiProvider>
+    <BootFlowProvider>
+      <JotaiProvider>
+        <QueryClientProvider client={appQueryClient}>
+          {children}
+        </QueryClientProvider>
+      </JotaiProvider>
+    </BootFlowProvider>
   );
 }

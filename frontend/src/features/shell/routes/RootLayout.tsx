@@ -1,10 +1,11 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAtom, useAtomValue } from "jotai";
-import { LoaderCircle } from "lucide-react";
-import { useEffect, useMemo } from "react";
+import { Suspense, lazy, useEffect, useMemo } from "react";
 import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 
+import { useBootFlow } from "../../../app/boot";
 import { getTeamCurrentMembers } from "../../../lib/api/generated/client";
+import { BootScreen } from "../../../shared/components/BootScreen";
 import { queryKeys } from "../../../shared/query/queryKeys";
 import { isLoggedInAtom, sessionAtom } from "../../../state/session";
 import { LoginCard } from "../../auth/components/LoginCard";
@@ -15,12 +16,16 @@ import {
 } from "../../auth/hooks/useAuthActions";
 import { useExchangeCodeFallback } from "../../auth/hooks/useExchangeCodeFallback";
 import { consumeFlashStatus } from "../../auth/state/flash";
-import { FloatingNav } from "../components/FloatingNav";
 import { StatusToast } from "../components/StatusToast";
 import { useAuthGate } from "../hooks/useAuthGate";
 import { useCurrentUserProfile } from "../hooks/useCurrentUserProfile";
 import { useTeamStateStream } from "../hooks/useTeamStateStream";
 import { statusMessageAtom } from "../state/status";
+
+const FloatingNav = lazy(async () => {
+  const module = await import("../components/FloatingNav");
+  return { default: module.FloatingNav };
+});
 
 export type RootLayoutOutletContext = {
   currentUserId: string | null;
@@ -30,6 +35,7 @@ export type RootLayoutOutletContext = {
 };
 
 export function RootLayout() {
+  const { isInitialBootPending, markAuthResolved } = useBootFlow();
   const queryClient = useQueryClient();
   const [, setSession] = useAtom(sessionAtom);
   const [status, setStatus] = useAtom(statusMessageAtom);
@@ -102,19 +108,14 @@ export function RootLayout() {
     }
   }, [refetchAfterLogin, setStatus]);
 
+  useEffect(() => {
+    if (!isAuthChecking) {
+      markAuthResolved();
+    }
+  }, [isAuthChecking, markAuthResolved]);
+
   if (isAuthChecking) {
-    return (
-      <main className="ios-safe-main min-h-screen bg-[color:var(--color-washi-50)] px-2 py-3 text-stone-700 md:p-6">
-        <div className="flex justify-center">
-          <LoaderCircle
-            size={24}
-            className="text-stone-500 animate-spin motion-reduce:animate-none"
-            aria-label="読み込み中"
-            role="status"
-          />
-        </div>
-      </main>
-    );
+    return <BootScreen />;
   }
 
   if (!isAuthenticated) {
@@ -159,17 +160,21 @@ export function RootLayout() {
         <Outlet context={outletContext} />
       </div>
 
-      <FloatingNav
-        currentUserName={currentUserName}
-        currentUserColorHex={currentUserColorHex}
-        onLogout={() => {
-          void logoutAction();
-        }}
-        onRefresh={() => {
-          void refreshTeamState();
-        }}
-        isRefreshing={isRefreshing}
-      />
+      {!isInitialBootPending ? (
+        <Suspense fallback={null}>
+          <FloatingNav
+            currentUserName={currentUserName}
+            currentUserColorHex={currentUserColorHex}
+            onLogout={() => {
+              void logoutAction();
+            }}
+            onRefresh={() => {
+              void refreshTeamState();
+            }}
+            isRefreshing={isRefreshing}
+          />
+        </Suspense>
+      ) : null}
     </main>
   );
 }

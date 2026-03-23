@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { RouterProvider } from "react-router-dom";
 
+import { markReactMounted, useBootFlow } from "./app/boot";
 import { AppProviders } from "./app/providers";
 import {
   applyPWAUpdateNow,
@@ -9,9 +10,15 @@ import {
 } from "./app/pwa";
 import { router } from "./app/router";
 import { StatusToast } from "./features/shell/components/StatusToast";
+import { BootScreen } from "./shared/components/BootScreen";
 
-function App() {
+function AppShell() {
   const [needRefresh, setNeedRefresh] = useState(false);
+  const { isInitialBootPending } = useBootFlow();
+
+  useEffect(() => {
+    markReactMounted();
+  }, []);
 
   useEffect(() => {
     return subscribePWAState((state) => {
@@ -20,8 +27,9 @@ function App() {
   }, []);
 
   return (
-    <AppProviders>
+    <>
       <RouterProvider router={router} />
+      {isInitialBootPending ? <BootScreen mode="overlay" /> : null}
       {needRefresh ? (
         <StatusToast
           message="新しいバージョンを利用できます。更新して最新状態にしますか？"
@@ -32,6 +40,14 @@ function App() {
           }}
         />
       ) : null}
+    </>
+  );
+}
+
+function App() {
+  return (
+    <AppProviders>
+      <AppShell />
     </AppProviders>
   );
 }
