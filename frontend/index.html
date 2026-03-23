@@ -14,9 +14,77 @@
     <link rel="icon" type="image/png" href="/icons/pwa-192x192.png" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon-180x180.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
+    <style>
+      body {
+        margin: 0;
+        background: #ffffff;
+      }
+
+      .boot-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #ffffff;
+        opacity: 1;
+        transition: opacity 180ms ease;
+      }
+
+      .boot-splash--fade {
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .boot-splash__icon {
+        width: 80px;
+        height: 80px;
+        animation: boot-splash-pulse 1.6s ease-in-out infinite;
+      }
+
+      .boot-splash__sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+
+      @keyframes boot-splash-pulse {
+        0%,
+        100% {
+          opacity: 1;
+          transform: scale(1);
+        }
+
+        50% {
+          opacity: 0.8;
+          transform: scale(0.98);
+        }
+      }
+    </style>
     <title>KajiChalle</title>
   </head>
   <body>
+    <div id="boot-splash" class="boot-splash" role="status" aria-live="polite">
+      <img
+        class="boot-splash__icon"
+        src="/icons/pwa-192x192.png"
+        alt=""
+        width="80"
+        height="80"
+        fetchpriority="high"
+      />
+      <span class="boot-splash__sr-only">読み込み中</span>
+    </div>
+    <script>
+      window.performance?.mark?.("boot:html-splash-visible");
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

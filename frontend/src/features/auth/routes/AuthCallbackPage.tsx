@@ -1,6 +1,8 @@
 import { type LoaderFunctionArgs, redirect } from "react-router-dom";
 
+import { useMarkInitialScreenReady } from "../../../app/boot";
 import { postAuthSessionsExchange } from "../../../lib/api/generated/client";
+import { BootScreen } from "../../../shared/components/BootScreen";
 import { formatError } from "../../../shared/utils/errors";
 import { writeFlashStatus } from "../state/flash";
 
@@ -42,9 +44,7 @@ function authCallbackErrorMessage(errorCode: string) {
 }
 
 export function AuthCallbackPage() {
-  return (
-    <main className="min-h-screen px-2 py-4 text-stone-700 md:p-6">
-      <p>ログイン処理中です...</p>
-    </main>
-  );
+  useMarkInitialScreenReady();
+
+  return <BootScreen />;
 }

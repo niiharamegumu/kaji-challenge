@@ -97,6 +97,10 @@ describe("App", () => {
   it("renders login before authentication", async () => {
     render(<App />);
 
+    expect(
+      screen.getAllByRole("status", { name: "読み込み中" }).length,
+    ).toBeGreaterThan(0);
+
     await waitFor(() => {
       expect(screen.getByText("KajiChalle")).toBeInTheDocument();
       expect(

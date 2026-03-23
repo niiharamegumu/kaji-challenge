@@ -5,9 +5,14 @@ import {
   AuthCallbackPage,
   authCallbackLoader,
 } from "../features/auth/routes/AuthCallbackPage";
-import { HomePage } from "../features/home/routes/HomePage";
 import { RootLayout } from "../features/shell/routes/RootLayout";
 import { SuspenseQueryBoundary } from "../shared/components/SuspenseQueryBoundary";
+import { InitialViewReady } from "./boot";
+
+const HomePage = lazy(async () => {
+  const module = await import("../features/home/routes/HomePage");
+  return { default: module.HomePage };
+});
 
 const AdminTasksPage = lazy(async () => {
   const module = await import("../features/admin/routes/AdminTasksPage");
@@ -37,8 +42,8 @@ const ShoppingListPage = lazy(async () => {
 });
 
 const withDataBoundary = (element: ReactNode, errorMessage: string) => (
-  <SuspenseQueryBoundary errorMessage={errorMessage}>
-    {element}
+  <SuspenseQueryBoundary errorMessage={errorMessage} fullScreenOnInitial>
+    <InitialViewReady>{element}</InitialViewReady>
   </SuspenseQueryBoundary>
 );
 
