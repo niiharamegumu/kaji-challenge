@@ -21,6 +21,7 @@ type Props = {
   currentUserName: string;
   currentUserColorHex?: string | null;
   isRefreshing: boolean;
+  onRouteIntent: (path: string) => void;
   onRefresh: () => void;
   onLogout: () => void;
 };
@@ -39,6 +40,7 @@ export function FloatingNav({
   currentUserName,
   currentUserColorHex,
   isRefreshing,
+  onRouteIntent,
   onRefresh,
   onLogout,
 }: Props) {
@@ -67,6 +69,11 @@ export function FloatingNav({
 
   const userBgColor = resolveUserColor(currentUserColorHex);
   const userTextColor = getReadableTextColor(userBgColor);
+  const bindRouteIntent = (path: string) => ({
+    onMouseEnter: () => onRouteIntent(path),
+    onFocus: () => onRouteIntent(path),
+    onTouchStart: () => onRouteIntent(path),
+  });
 
   return (
     <>
@@ -119,6 +126,7 @@ export function FloatingNav({
               end
               className={linkClass}
               onClick={() => setOpen(false)}
+              {...bindRouteIntent("/")}
             >
               <House size={18} aria-hidden="true" />
               <span>ホーム</span>
@@ -127,6 +135,7 @@ export function FloatingNav({
               to="/admin/summary"
               className={linkClass}
               onClick={() => setOpen(false)}
+              {...bindRouteIntent("/admin/summary")}
             >
               <ChartColumn size={18} aria-hidden="true" />
               <span>サマリー</span>
@@ -135,6 +144,7 @@ export function FloatingNav({
               to="/admin/tasks"
               className={linkClass}
               onClick={() => setOpen(false)}
+              {...bindRouteIntent("/admin/tasks")}
             >
               <Shield size={18} aria-hidden="true" />
               <span>タスク</span>
@@ -143,6 +153,7 @@ export function FloatingNav({
               to="/shopping-list"
               className={linkClass}
               onClick={() => setOpen(false)}
+              {...bindRouteIntent("/shopping-list")}
             >
               <ShoppingCart size={18} aria-hidden="true" />
               <span>買い物</span>
@@ -151,6 +162,7 @@ export function FloatingNav({
               to="/admin/penalties"
               className={linkClass}
               onClick={() => setOpen(false)}
+              {...bindRouteIntent("/admin/penalties")}
             >
               <ShieldAlert size={18} aria-hidden="true" />
               <span>ペナルティ</span>
@@ -159,6 +171,7 @@ export function FloatingNav({
               to="/admin/settings"
               className={linkClass}
               onClick={() => setOpen(false)}
+              {...bindRouteIntent("/admin/settings")}
             >
               <Settings size={18} aria-hidden="true" />
               <span>設定</span>

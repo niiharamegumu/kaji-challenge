@@ -1,4 +1,10 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -16,8 +22,12 @@ const mockGetTeamCurrentMembers = vi.fn();
 const mockGetTeamCurrentInvite = vi.fn();
 const mockPostTeamInvite = vi.fn();
 const mockListShoppingItems = vi.fn();
-const mockPreloadHomePageChunk = vi.fn();
 const mockPrefetchHomeData = vi.fn();
+const mockPreloadAdminTasksPageChunk = vi.fn();
+const mockPreloadAdminPenaltiesPageChunk = vi.fn();
+const mockPreloadAdminInvitesPageChunk = vi.fn();
+const mockPreloadAdminSummaryPageChunk = vi.fn();
+const mockPreloadShoppingListPageChunk = vi.fn();
 
 vi.mock("./lib/api/generated/client", () => ({
   TaskType: { daily: "daily", weekly: "weekly" },
@@ -50,9 +60,25 @@ vi.mock("./lib/api/generated/client", () => ({
 }));
 
 vi.mock("./features/home/preload", () => ({
-  preloadHomePageChunk: (...args: unknown[]) =>
-    mockPreloadHomePageChunk(...args),
   prefetchHomeData: (...args: unknown[]) => mockPrefetchHomeData(...args),
+}));
+
+vi.mock("./app/route-chunks", () => ({
+  AdminTasksPage: () => <div>tasks page</div>,
+  AdminPenaltiesPage: () => <div>penalties page</div>,
+  AdminInvitesPage: () => <div>settings page</div>,
+  AdminSummaryPage: () => <div>summary page</div>,
+  ShoppingListPage: () => <div>shopping page</div>,
+  preloadAdminTasksPageChunk: (...args: unknown[]) =>
+    mockPreloadAdminTasksPageChunk(...args),
+  preloadAdminPenaltiesPageChunk: (...args: unknown[]) =>
+    mockPreloadAdminPenaltiesPageChunk(...args),
+  preloadAdminInvitesPageChunk: (...args: unknown[]) =>
+    mockPreloadAdminInvitesPageChunk(...args),
+  preloadAdminSummaryPageChunk: (...args: unknown[]) =>
+    mockPreloadAdminSummaryPageChunk(...args),
+  preloadShoppingListPageChunk: (...args: unknown[]) =>
+    mockPreloadShoppingListPageChunk(...args),
 }));
 
 describe("App", () => {
@@ -75,8 +101,12 @@ describe("App", () => {
     mockGetTeamCurrentInvite.mockReset();
     mockPostTeamInvite.mockReset();
     mockListShoppingItems.mockReset();
-    mockPreloadHomePageChunk.mockReset();
     mockPrefetchHomeData.mockReset();
+    mockPreloadAdminTasksPageChunk.mockReset();
+    mockPreloadAdminPenaltiesPageChunk.mockReset();
+    mockPreloadAdminInvitesPageChunk.mockReset();
+    mockPreloadAdminSummaryPageChunk.mockReset();
+    mockPreloadShoppingListPageChunk.mockReset();
 
     mockGetTaskOverview.mockResolvedValue({
       data: {
@@ -101,8 +131,12 @@ describe("App", () => {
         teamId: "team-1",
       },
     });
-    mockPreloadHomePageChunk.mockResolvedValue(undefined);
     mockPrefetchHomeData.mockResolvedValue(undefined);
+    mockPreloadAdminTasksPageChunk.mockResolvedValue(undefined);
+    mockPreloadAdminPenaltiesPageChunk.mockResolvedValue(undefined);
+    mockPreloadAdminInvitesPageChunk.mockResolvedValue(undefined);
+    mockPreloadAdminSummaryPageChunk.mockResolvedValue(undefined);
+    mockPreloadShoppingListPageChunk.mockResolvedValue(undefined);
     mockGetMe.mockRejectedValue(new Error("request failed: 401"));
   });
 
@@ -164,6 +198,24 @@ describe("App", () => {
       expect(screen.getByRole("link", { name: "買い物" })).toBeInTheDocument();
       expect(
         screen.getByRole("link", { name: "サマリー" }),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("shows the home shell while task overview is still loading", async () => {
+    mockGetMe.mockResolvedValue({
+      data: { user: { id: "u1", displayName: "Owner" }, memberships: [] },
+    });
+    mockGetTaskOverview.mockImplementation(() => new Promise(() => {}));
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: "チーム" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("status", { name: "ホームを読み込み中" }),
       ).toBeInTheDocument();
     });
   });
@@ -231,11 +283,10 @@ describe("App", () => {
     await waitFor(() => {
       expect(screen.getByText("夜ごはんの後に実施")).toBeInTheDocument();
     });
-    expect(mockPreloadHomePageChunk).toHaveBeenCalledTimes(1);
     expect(mockPrefetchHomeData).toHaveBeenCalledTimes(1);
   });
 
-  it("does not prefetch home resources before authentication", async () => {
+  it("does not prefetch home data before authentication", async () => {
     render(<App />);
 
     await waitFor(() => {
@@ -244,11 +295,10 @@ describe("App", () => {
       ).toBeInTheDocument();
     });
 
-    expect(mockPreloadHomePageChunk).not.toHaveBeenCalled();
     expect(mockPrefetchHomeData).not.toHaveBeenCalled();
   });
 
-  it("does not prefetch home data outside the home route", async () => {
+  it("prefetches home data after session restore even outside the home route", async () => {
     window.history.pushState({}, "", "/admin/summary");
     mockGetMe.mockResolvedValue({
       data: { user: { id: "u1", displayName: "Owner" }, memberships: [] },
@@ -260,7 +310,9 @@ describe("App", () => {
       expect(window.location.pathname).toBe("/admin/summary");
     });
 
-    expect(mockPrefetchHomeData).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(mockPrefetchHomeData).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("keeps current URL on reload when session is valid", async () => {
@@ -310,5 +362,31 @@ describe("App", () => {
       { timeout: 4_000 },
     );
     expect(screen.getByRole("button", { name: "再試行" })).toBeInTheDocument();
+  });
+
+  it("preloads route chunks when nav links receive intent", async () => {
+    mockGetMe.mockResolvedValue({
+      data: { user: { id: "u1", displayName: "Owner" }, memberships: [] },
+    });
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    const navOpenButton = await screen.findByRole("button", {
+      name: "ナビゲーションを開く",
+    });
+    await user.click(navOpenButton);
+
+    const taskLink = screen.getByRole("link", { name: "タスク" });
+    const summaryLink = screen.getByRole("link", { name: "サマリー" });
+    const shoppingLink = screen.getByRole("link", { name: "買い物" });
+
+    fireEvent.mouseEnter(taskLink);
+    fireEvent.focus(summaryLink);
+    fireEvent.touchStart(shoppingLink);
+
+    expect(mockPreloadAdminTasksPageChunk).toHaveBeenCalledTimes(1);
+    expect(mockPreloadAdminSummaryPageChunk).toHaveBeenCalledTimes(1);
+    expect(mockPreloadShoppingListPageChunk).toHaveBeenCalledTimes(1);
   });
 });

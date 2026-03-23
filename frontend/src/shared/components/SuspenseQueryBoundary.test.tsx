@@ -1,8 +1,12 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
-import { type ReactNode, lazy } from "react";
+import { type ReactNode, lazy, useEffect } from "react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { BootFlowProvider, InitialViewReady } from "../../app/boot";
+import {
+  BootFlowProvider,
+  InitialViewReady,
+  useBootFlow,
+} from "../../app/boot";
 import { SuspenseQueryBoundary } from "./SuspenseQueryBoundary";
 
 const NeverResolves = lazy(
@@ -20,21 +24,34 @@ afterEach(() => {
   cleanup();
 });
 
+function BootReady({ children }: { children: ReactNode }) {
+  const { markAuthResolved, markReactMounted } = useBootFlow();
+
+  useEffect(() => {
+    markReactMounted();
+    markAuthResolved();
+  }, [markAuthResolved, markReactMounted]);
+
+  return <>{children}</>;
+}
+
 function BoundaryHarness({ showPending }: { showPending: boolean }) {
   return (
     <BootFlowProvider>
-      <SuspenseQueryBoundary
-        errorMessage="読み込みに失敗しました。"
-        fullScreenOnInitial
-      >
-        {showPending ? (
-          <NeverResolves />
-        ) : (
-          <InitialViewReady>
-            <div>ready</div>
-          </InitialViewReady>
-        )}
-      </SuspenseQueryBoundary>
+      <BootReady>
+        <SuspenseQueryBoundary
+          errorMessage="読み込みに失敗しました。"
+          fullScreenOnInitial
+        >
+          {showPending ? (
+            <NeverResolves />
+          ) : (
+            <InitialViewReady>
+              <div>ready</div>
+            </InitialViewReady>
+          )}
+        </SuspenseQueryBoundary>
+      </BootReady>
     </BootFlowProvider>
   );
 }

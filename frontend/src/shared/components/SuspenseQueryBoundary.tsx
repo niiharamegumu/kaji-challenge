@@ -15,6 +15,7 @@ type SuspenseQueryBoundaryProps = {
   children: ReactNode;
   errorMessage: string;
   fullScreenOnInitial?: boolean;
+  loadingFallback?: ReactNode;
 };
 
 function BoundaryFallback({
@@ -49,20 +50,23 @@ export function SuspenseQueryBoundary({
   children,
   errorMessage,
   fullScreenOnInitial = false,
+  loadingFallback,
 }: SuspenseQueryBoundaryProps) {
   const { isInitialBootPending } = useBootFlow();
   const shouldUseFullScreen = fullScreenOnInitial && isInitialBootPending;
-  const loadingFallback = shouldUseFullScreen ? (
+  const resolvedLoadingFallback = shouldUseFullScreen ? (
     <BootScreen />
   ) : (
-    <div className="mt-4 flex justify-center">
-      <LoaderCircle
-        size={22}
-        className="text-stone-500 animate-spin motion-reduce:animate-none"
-        aria-label="読み込み中"
-        role="status"
-      />
-    </div>
+    (loadingFallback ?? (
+      <div className="mt-4 flex justify-center">
+        <LoaderCircle
+          size={22}
+          className="text-stone-500 animate-spin motion-reduce:animate-none"
+          aria-label="読み込み中"
+          role="status"
+        />
+      </div>
+    ))
   );
 
   return (
@@ -78,7 +82,7 @@ export function SuspenseQueryBoundary({
             />
           )}
         >
-          <Suspense fallback={loadingFallback}>{children}</Suspense>
+          <Suspense fallback={resolvedLoadingFallback}>{children}</Suspense>
         </ErrorBoundary>
       )}
     </QueryErrorResetBoundary>
