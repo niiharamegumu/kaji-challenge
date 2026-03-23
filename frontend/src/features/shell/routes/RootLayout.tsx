@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAtom, useAtomValue } from "jotai";
-import { Suspense, lazy, useEffect, useMemo } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef } from "react";
 import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { useBootFlow } from "../../../app/boot";
@@ -16,6 +16,7 @@ import {
 } from "../../auth/hooks/useAuthActions";
 import { useExchangeCodeFallback } from "../../auth/hooks/useExchangeCodeFallback";
 import { consumeFlashStatus } from "../../auth/state/flash";
+import { prefetchHomeData, preloadHomePageChunk } from "../../home/preload";
 import { StatusToast } from "../components/StatusToast";
 import { useAuthGate } from "../hooks/useAuthGate";
 import { useCurrentUserProfile } from "../hooks/useCurrentUserProfile";
@@ -36,6 +37,8 @@ export type RootLayoutOutletContext = {
 
 export function RootLayout() {
   const { isInitialBootPending, markAuthResolved } = useBootFlow();
+  const homeChunkPreloadedRef = useRef(false);
+  const homeDataPrefetchedRef = useRef(false);
   const queryClient = useQueryClient();
   const [, setSession] = useAtom(sessionAtom);
   const [status, setStatus] = useAtom(statusMessageAtom);
@@ -96,23 +99,60 @@ export function RootLayout() {
     }).format(now);
     return `${fullDate}（${weekday}）`;
   }, []);
-  useExchangeCodeFallback(setSession, setStatus, refetchAfterLogin);
+  const preloadHomeChunkOnce = useCallback(() => {
+    if (homeChunkPreloadedRef.current) {
+      return;
+    }
+    homeChunkPreloadedRef.current = true;
+    void preloadHomePageChunk();
+  }, []);
+  const handleLoginSuccess = useCallback(() => {
+    preloadHomeChunkOnce();
+    refetchAfterLogin();
+  }, [preloadHomeChunkOnce, refetchAfterLogin]);
+  useExchangeCodeFallback(setSession, setStatus, handleLoginSuccess);
 
   useEffect(() => {
     const flash = consumeFlashStatus();
     if (flash != null) {
       setStatus(flash.message);
       if (flash.kind === "login_success") {
+        preloadHomeChunkOnce();
         refetchAfterLogin();
       }
     }
-  }, [refetchAfterLogin, setStatus]);
+  }, [preloadHomeChunkOnce, refetchAfterLogin, setStatus]);
 
   useEffect(() => {
     if (!isAuthChecking) {
       markAuthResolved();
     }
   }, [isAuthChecking, markAuthResolved]);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      homeChunkPreloadedRef.current = false;
+      homeDataPrefetchedRef.current = false;
+    }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (location.pathname === "/" && isAuthenticated) {
+      preloadHomeChunkOnce();
+    }
+  }, [isAuthenticated, location.pathname, preloadHomeChunkOnce]);
+
+  useEffect(() => {
+    if (
+      location.pathname !== "/" ||
+      !meQuery.isSuccess ||
+      homeDataPrefetchedRef.current
+    ) {
+      return;
+    }
+    homeDataPrefetchedRef.current = true;
+    void prefetchHomeData(queryClient);
+  }, [location.pathname, meQuery.isSuccess, queryClient]);
 
   if (isAuthChecking) {
     return <BootScreen />;
