@@ -16,6 +16,8 @@ const mockGetTeamCurrentMembers = vi.fn();
 const mockGetTeamCurrentInvite = vi.fn();
 const mockPostTeamInvite = vi.fn();
 const mockListShoppingItems = vi.fn();
+const mockPreloadHomePageChunk = vi.fn();
+const mockPrefetchHomeData = vi.fn();
 
 vi.mock("./lib/api/generated/client", () => ({
   TaskType: { daily: "daily", weekly: "weekly" },
@@ -47,6 +49,12 @@ vi.mock("./lib/api/generated/client", () => ({
   postTeamJoin: vi.fn(),
 }));
 
+vi.mock("./features/home/preload", () => ({
+  preloadHomePageChunk: (...args: unknown[]) =>
+    mockPreloadHomePageChunk(...args),
+  prefetchHomeData: (...args: unknown[]) => mockPrefetchHomeData(...args),
+}));
+
 describe("App", () => {
   afterEach(() => {
     cleanup();
@@ -67,6 +75,8 @@ describe("App", () => {
     mockGetTeamCurrentInvite.mockReset();
     mockPostTeamInvite.mockReset();
     mockListShoppingItems.mockReset();
+    mockPreloadHomePageChunk.mockReset();
+    mockPrefetchHomeData.mockReset();
 
     mockGetTaskOverview.mockResolvedValue({
       data: {
@@ -91,6 +101,8 @@ describe("App", () => {
         teamId: "team-1",
       },
     });
+    mockPreloadHomePageChunk.mockResolvedValue(undefined);
+    mockPrefetchHomeData.mockResolvedValue(undefined);
     mockGetMe.mockRejectedValue(new Error("request failed: 401"));
   });
 
@@ -219,6 +231,36 @@ describe("App", () => {
     await waitFor(() => {
       expect(screen.getByText("夜ごはんの後に実施")).toBeInTheDocument();
     });
+    expect(mockPreloadHomePageChunk).toHaveBeenCalledTimes(1);
+    expect(mockPrefetchHomeData).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not prefetch home resources before authentication", async () => {
+    render(<App />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Googleでログイン" }),
+      ).toBeInTheDocument();
+    });
+
+    expect(mockPreloadHomePageChunk).not.toHaveBeenCalled();
+    expect(mockPrefetchHomeData).not.toHaveBeenCalled();
+  });
+
+  it("does not prefetch home data outside the home route", async () => {
+    window.history.pushState({}, "", "/admin/summary");
+    mockGetMe.mockResolvedValue({
+      data: { user: { id: "u1", displayName: "Owner" }, memberships: [] },
+    });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe("/admin/summary");
+    });
+
+    expect(mockPrefetchHomeData).not.toHaveBeenCalled();
   });
 
   it("keeps current URL on reload when session is valid", async () => {
