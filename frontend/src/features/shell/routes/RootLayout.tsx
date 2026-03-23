@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAtom, useAtomValue } from "jotai";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef } from "react";
 import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { useBootFlow } from "../../../app/boot";
@@ -24,12 +24,41 @@ import {
 import { useExchangeCodeFallback } from "../../auth/hooks/useExchangeCodeFallback";
 import { consumeFlashStatus } from "../../auth/state/flash";
 import { prefetchHomeData } from "../../home/preload";
-import { FloatingNav } from "../components/FloatingNav";
 import { StatusToast } from "../components/StatusToast";
 import { useAuthGate } from "../hooks/useAuthGate";
 import { useCurrentUserProfile } from "../hooks/useCurrentUserProfile";
 import { useTeamStateStream } from "../hooks/useTeamStateStream";
 import { statusMessageAtom } from "../state/status";
+
+const FloatingNav = lazy(async () => {
+  const module = await import("../components/FloatingNav");
+  return { default: module.FloatingNav };
+});
+
+const idlePreloadDelayMs = 1200;
+
+function scheduleIdleWork(work: () => void) {
+  if (typeof globalThis === "undefined") {
+    return () => {};
+  }
+
+  if (
+    typeof globalThis.requestIdleCallback === "function" &&
+    typeof globalThis.cancelIdleCallback === "function"
+  ) {
+    const callbackId = globalThis.requestIdleCallback(() => {
+      work();
+    });
+    return () => {
+      if (typeof globalThis.cancelIdleCallback === "function") {
+        globalThis.cancelIdleCallback(callbackId);
+      }
+    };
+  }
+
+  const timeoutId = globalThis.setTimeout(work, idlePreloadDelayMs);
+  return () => globalThis.clearTimeout(timeoutId);
+}
 
 export type RootLayoutOutletContext = {
   currentUserId: string | null;
@@ -39,7 +68,7 @@ export type RootLayoutOutletContext = {
 };
 
 export function RootLayout() {
-  const { markAuthResolved } = useBootFlow();
+  const { isInitialBootPending, markAuthResolved } = useBootFlow();
   const homeDataPrefetchedRef = useRef(false);
   const queryClient = useQueryClient();
   const [, setSession] = useAtom(sessionAtom);
@@ -139,10 +168,33 @@ export function RootLayout() {
   }, [isAuthenticated]);
 
   useEffect(() => {
-    if (meQuery.isSuccess) {
+    if (location.pathname === "/" && meQuery.isSuccess) {
       prefetchHomeDataOnce();
     }
-  }, [meQuery.isSuccess, prefetchHomeDataOnce]);
+  }, [location.pathname, meQuery.isSuccess, prefetchHomeDataOnce]);
+
+  useEffect(() => {
+    if (!isAuthenticated || isInitialBootPending) {
+      return;
+    }
+
+    return scheduleIdleWork(() => {
+      void preloadAdminTasksPageChunk();
+      void preloadAdminSummaryPageChunk();
+      void preloadAdminPenaltiesPageChunk();
+      void preloadAdminInvitesPageChunk();
+      void preloadShoppingListPageChunk();
+
+      if (location.pathname !== "/") {
+        prefetchHomeDataOnce();
+      }
+    });
+  }, [
+    isAuthenticated,
+    isInitialBootPending,
+    location.pathname,
+    prefetchHomeDataOnce,
+  ]);
 
   const handleRouteIntent = useCallback((path: string) => {
     switch (path) {
@@ -212,18 +264,22 @@ export function RootLayout() {
         <Outlet context={outletContext} />
       </div>
 
-      <FloatingNav
-        currentUserName={currentUserName}
-        currentUserColorHex={currentUserColorHex}
-        isRefreshing={isRefreshing}
-        onRouteIntent={handleRouteIntent}
-        onLogout={() => {
-          void logoutAction();
-        }}
-        onRefresh={() => {
-          void refreshTeamState();
-        }}
-      />
+      {!isInitialBootPending ? (
+        <Suspense fallback={null}>
+          <FloatingNav
+            currentUserName={currentUserName}
+            currentUserColorHex={currentUserColorHex}
+            isRefreshing={isRefreshing}
+            onRouteIntent={handleRouteIntent}
+            onLogout={() => {
+              void logoutAction();
+            }}
+            onRefresh={() => {
+              void refreshTeamState();
+            }}
+          />
+        </Suspense>
+      ) : null}
     </main>
   );
 }

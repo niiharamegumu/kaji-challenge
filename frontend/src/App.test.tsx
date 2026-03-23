@@ -298,21 +298,54 @@ describe("App", () => {
     expect(mockPrefetchHomeData).not.toHaveBeenCalled();
   });
 
-  it("prefetches home data after session restore even outside the home route", async () => {
-    window.history.pushState({}, "", "/admin/summary");
-    mockGetMe.mockResolvedValue({
-      data: { user: { id: "u1", displayName: "Owner" }, memberships: [] },
-    });
+  it("warms route chunks and home data after session restore outside the home route", async () => {
+    const originalRequestIdleCallback = globalThis.requestIdleCallback;
+    const originalCancelIdleCallback = globalThis.cancelIdleCallback;
+    let idleCallback: IdleRequestCallback | undefined;
 
-    render(<App />);
-
-    await waitFor(() => {
-      expect(window.location.pathname).toBe("/admin/summary");
+    globalThis.requestIdleCallback = vi.fn((callback: IdleRequestCallback) => {
+      idleCallback = callback;
+      return 1;
     });
+    globalThis.cancelIdleCallback = vi.fn();
 
-    await waitFor(() => {
-      expect(mockPrefetchHomeData).toHaveBeenCalledTimes(1);
-    });
+    try {
+      window.history.pushState({}, "", "/admin/summary");
+      mockGetMe.mockResolvedValue({
+        data: { user: { id: "u1", displayName: "Owner" }, memberships: [] },
+      });
+
+      render(<App />);
+
+      await waitFor(() => {
+        expect(window.location.pathname).toBe("/admin/summary");
+      });
+
+      expect(mockPrefetchHomeData).not.toHaveBeenCalled();
+      expect(mockPreloadAdminTasksPageChunk).not.toHaveBeenCalled();
+
+      await waitFor(() => {
+        expect(globalThis.requestIdleCallback).toHaveBeenCalledTimes(1);
+        expect(idleCallback).toBeTypeOf("function");
+      });
+
+      idleCallback?.({
+        didTimeout: false,
+        timeRemaining: () => 50,
+      });
+
+      await waitFor(() => {
+        expect(mockPrefetchHomeData).toHaveBeenCalledTimes(1);
+        expect(mockPreloadAdminTasksPageChunk).toHaveBeenCalledTimes(1);
+        expect(mockPreloadAdminSummaryPageChunk).toHaveBeenCalledTimes(1);
+        expect(mockPreloadAdminPenaltiesPageChunk).toHaveBeenCalledTimes(1);
+        expect(mockPreloadAdminInvitesPageChunk).toHaveBeenCalledTimes(1);
+        expect(mockPreloadShoppingListPageChunk).toHaveBeenCalledTimes(1);
+      });
+    } finally {
+      globalThis.requestIdleCallback = originalRequestIdleCallback;
+      globalThis.cancelIdleCallback = originalCancelIdleCallback;
+    }
   });
 
   it("keeps current URL on reload when session is valid", async () => {
