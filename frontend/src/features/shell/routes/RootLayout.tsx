@@ -1,9 +1,16 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAtom, useAtomValue } from "jotai";
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { useBootFlow } from "../../../app/boot";
+import {
+  preloadAdminInvitesPageChunk,
+  preloadAdminPenaltiesPageChunk,
+  preloadAdminSummaryPageChunk,
+  preloadAdminTasksPageChunk,
+  preloadShoppingListPageChunk,
+} from "../../../app/route-chunks";
 import { getTeamCurrentMembers } from "../../../lib/api/generated/client";
 import { BootScreen } from "../../../shared/components/BootScreen";
 import { queryKeys } from "../../../shared/query/queryKeys";
@@ -16,17 +23,13 @@ import {
 } from "../../auth/hooks/useAuthActions";
 import { useExchangeCodeFallback } from "../../auth/hooks/useExchangeCodeFallback";
 import { consumeFlashStatus } from "../../auth/state/flash";
-import { prefetchHomeData, preloadHomePageChunk } from "../../home/preload";
+import { prefetchHomeData } from "../../home/preload";
+import { FloatingNav } from "../components/FloatingNav";
 import { StatusToast } from "../components/StatusToast";
 import { useAuthGate } from "../hooks/useAuthGate";
 import { useCurrentUserProfile } from "../hooks/useCurrentUserProfile";
 import { useTeamStateStream } from "../hooks/useTeamStateStream";
 import { statusMessageAtom } from "../state/status";
-
-const FloatingNav = lazy(async () => {
-  const module = await import("../components/FloatingNav");
-  return { default: module.FloatingNav };
-});
 
 export type RootLayoutOutletContext = {
   currentUserId: string | null;
@@ -36,8 +39,7 @@ export type RootLayoutOutletContext = {
 };
 
 export function RootLayout() {
-  const { isInitialBootPending, markAuthResolved } = useBootFlow();
-  const homeChunkPreloadedRef = useRef(false);
+  const { markAuthResolved } = useBootFlow();
   const homeDataPrefetchedRef = useRef(false);
   const queryClient = useQueryClient();
   const [, setSession] = useAtom(sessionAtom);
@@ -99,17 +101,18 @@ export function RootLayout() {
     }).format(now);
     return `${fullDate}（${weekday}）`;
   }, []);
-  const preloadHomeChunkOnce = useCallback(() => {
-    if (homeChunkPreloadedRef.current) {
+  const prefetchHomeDataOnce = useCallback(() => {
+    if (homeDataPrefetchedRef.current) {
       return;
     }
-    homeChunkPreloadedRef.current = true;
-    void preloadHomePageChunk();
-  }, []);
+    homeDataPrefetchedRef.current = true;
+    void prefetchHomeData(queryClient);
+  }, [queryClient]);
+
   const handleLoginSuccess = useCallback(() => {
-    preloadHomeChunkOnce();
+    prefetchHomeDataOnce();
     refetchAfterLogin();
-  }, [preloadHomeChunkOnce, refetchAfterLogin]);
+  }, [prefetchHomeDataOnce, refetchAfterLogin]);
   useExchangeCodeFallback(setSession, setStatus, handleLoginSuccess);
 
   useEffect(() => {
@@ -117,11 +120,11 @@ export function RootLayout() {
     if (flash != null) {
       setStatus(flash.message);
       if (flash.kind === "login_success") {
-        preloadHomeChunkOnce();
+        prefetchHomeDataOnce();
         refetchAfterLogin();
       }
     }
-  }, [preloadHomeChunkOnce, refetchAfterLogin, setStatus]);
+  }, [prefetchHomeDataOnce, refetchAfterLogin, setStatus]);
 
   useEffect(() => {
     if (!isAuthChecking) {
@@ -131,28 +134,37 @@ export function RootLayout() {
 
   useEffect(() => {
     if (!isAuthenticated) {
-      homeChunkPreloadedRef.current = false;
       homeDataPrefetchedRef.current = false;
     }
   }, [isAuthenticated]);
 
   useEffect(() => {
-    if (location.pathname === "/" && isAuthenticated) {
-      preloadHomeChunkOnce();
+    if (meQuery.isSuccess) {
+      prefetchHomeDataOnce();
     }
-  }, [isAuthenticated, location.pathname, preloadHomeChunkOnce]);
+  }, [meQuery.isSuccess, prefetchHomeDataOnce]);
 
-  useEffect(() => {
-    if (
-      location.pathname !== "/" ||
-      !meQuery.isSuccess ||
-      homeDataPrefetchedRef.current
-    ) {
-      return;
+  const handleRouteIntent = useCallback((path: string) => {
+    switch (path) {
+      case "/admin/tasks":
+        void preloadAdminTasksPageChunk();
+        break;
+      case "/admin/summary":
+        void preloadAdminSummaryPageChunk();
+        break;
+      case "/admin/penalties":
+        void preloadAdminPenaltiesPageChunk();
+        break;
+      case "/admin/settings":
+        void preloadAdminInvitesPageChunk();
+        break;
+      case "/shopping-list":
+        void preloadShoppingListPageChunk();
+        break;
+      default:
+        break;
     }
-    homeDataPrefetchedRef.current = true;
-    void prefetchHomeData(queryClient);
-  }, [location.pathname, meQuery.isSuccess, queryClient]);
+  }, []);
 
   if (isAuthChecking) {
     return <BootScreen />;
@@ -200,21 +212,18 @@ export function RootLayout() {
         <Outlet context={outletContext} />
       </div>
 
-      {!isInitialBootPending ? (
-        <Suspense fallback={null}>
-          <FloatingNav
-            currentUserName={currentUserName}
-            currentUserColorHex={currentUserColorHex}
-            onLogout={() => {
-              void logoutAction();
-            }}
-            onRefresh={() => {
-              void refreshTeamState();
-            }}
-            isRefreshing={isRefreshing}
-          />
-        </Suspense>
-      ) : null}
+      <FloatingNav
+        currentUserName={currentUserName}
+        currentUserColorHex={currentUserColorHex}
+        isRefreshing={isRefreshing}
+        onRouteIntent={handleRouteIntent}
+        onLogout={() => {
+          void logoutAction();
+        }}
+        onRefresh={() => {
+          void refreshTeamState();
+        }}
+      />
     </main>
   );
 }

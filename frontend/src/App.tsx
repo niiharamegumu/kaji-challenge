@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { RouterProvider } from "react-router-dom";
 
-import { markReactMounted, useBootFlow } from "./app/boot";
+import { useBootFlow } from "./app/boot";
 import { AppProviders } from "./app/providers";
 import {
   applyPWAUpdateNow,
@@ -14,11 +14,11 @@ import { BootScreen } from "./shared/components/BootScreen";
 
 function AppShell() {
   const [needRefresh, setNeedRefresh] = useState(false);
-  const { isInitialBootPending } = useBootFlow();
+  const { isInitialBootPending, markReactMounted } = useBootFlow();
 
   useEffect(() => {
     markReactMounted();
-  }, []);
+  }, [markReactMounted]);
 
   useEffect(() => {
     return subscribePWAState((state) => {

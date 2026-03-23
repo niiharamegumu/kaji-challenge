@@ -1,48 +1,35 @@
-import { type ReactNode, lazy } from "react";
+import type { ReactNode } from "react";
 import { Navigate, createBrowserRouter } from "react-router-dom";
 
 import {
   AuthCallbackPage,
   authCallbackLoader,
 } from "../features/auth/routes/AuthCallbackPage";
+import { HomePage, HomePageSkeleton } from "../features/home/routes/HomePage";
 import { RootLayout } from "../features/shell/routes/RootLayout";
 import { SuspenseQueryBoundary } from "../shared/components/SuspenseQueryBoundary";
 import { InitialViewReady } from "./boot";
+import {
+  AdminInvitesPage,
+  AdminPenaltiesPage,
+  AdminSummaryPage,
+  AdminTasksPage,
+  ShoppingListPage,
+} from "./route-chunks";
 
-const HomePage = lazy(async () => {
-  const module = await import("../features/home/routes/HomePage");
-  return { default: module.HomePage };
-});
-
-const AdminTasksPage = lazy(async () => {
-  const module = await import("../features/admin/routes/AdminTasksPage");
-  return { default: module.AdminTasksPage };
-});
-
-const AdminPenaltiesPage = lazy(async () => {
-  const module = await import("../features/admin/routes/AdminPenaltiesPage");
-  return { default: module.AdminPenaltiesPage };
-});
-
-const AdminInvitesPage = lazy(async () => {
-  const module = await import("../features/admin/routes/AdminInvitesPage");
-  return { default: module.AdminInvitesPage };
-});
-
-const AdminSummaryPage = lazy(async () => {
-  const module = await import("../features/admin/routes/AdminSummaryPage");
-  return { default: module.AdminSummaryPage };
-});
-
-const ShoppingListPage = lazy(async () => {
-  const module = await import(
-    "../features/shopping-list/routes/ShoppingListPage"
-  );
-  return { default: module.ShoppingListPage };
-});
-
-const withDataBoundary = (element: ReactNode, errorMessage: string) => (
-  <SuspenseQueryBoundary errorMessage={errorMessage} fullScreenOnInitial>
+const withDataBoundary = (
+  element: ReactNode,
+  errorMessage: string,
+  options?: {
+    fullScreenOnInitial?: boolean;
+    loadingFallback?: ReactNode;
+  },
+) => (
+  <SuspenseQueryBoundary
+    errorMessage={errorMessage}
+    fullScreenOnInitial={options?.fullScreenOnInitial}
+    loadingFallback={options?.loadingFallback}
+  >
     <InitialViewReady>{element}</InitialViewReady>
   </SuspenseQueryBoundary>
 );
@@ -57,6 +44,7 @@ export const router = createBrowserRouter([
         element: withDataBoundary(
           <HomePage />,
           "ホーム画面の読み込みに失敗しました。",
+          { loadingFallback: <HomePageSkeleton /> },
         ),
       },
       {
@@ -68,6 +56,7 @@ export const router = createBrowserRouter([
         element: withDataBoundary(
           <AdminTasksPage />,
           "タスク画面の読み込みに失敗しました。",
+          { fullScreenOnInitial: true },
         ),
       },
       {
@@ -75,6 +64,7 @@ export const router = createBrowserRouter([
         element: withDataBoundary(
           <AdminPenaltiesPage />,
           "ペナルティ画面の読み込みに失敗しました。",
+          { fullScreenOnInitial: true },
         ),
       },
       {
@@ -82,6 +72,7 @@ export const router = createBrowserRouter([
         element: withDataBoundary(
           <AdminInvitesPage />,
           "設定画面の読み込みに失敗しました。",
+          { fullScreenOnInitial: true },
         ),
       },
       {
@@ -93,6 +84,7 @@ export const router = createBrowserRouter([
         element: withDataBoundary(
           <AdminSummaryPage />,
           "サマリー画面の読み込みに失敗しました。",
+          { fullScreenOnInitial: true },
         ),
       },
       {
@@ -100,6 +92,7 @@ export const router = createBrowserRouter([
         element: withDataBoundary(
           <ShoppingListPage />,
           "買い物リスト画面の読み込みに失敗しました。",
+          { fullScreenOnInitial: true },
         ),
       },
     ],

@@ -1,7 +1,6 @@
 import {
   type PropsWithChildren,
   createContext,
-  startTransition,
   useCallback,
   useContext,
   useEffect,
@@ -21,6 +20,7 @@ type BootMarkName = (typeof bootMarks)[keyof typeof bootMarks];
 
 type BootContextValue = {
   isInitialBootPending: boolean;
+  markReactMounted: () => void;
   markAuthResolved: () => void;
   markInitialScreenReady: () => void;
 };
@@ -92,14 +92,29 @@ function hideBootSplash() {
   window.setTimeout(remove, 220);
 }
 
-export function markReactMounted() {
-  markPerformance(bootMarks.reactMounted);
-}
-
 export function BootFlowProvider({ children }: PropsWithChildren) {
   const [isInitialBootPending, setIsInitialBootPending] = useState(true);
+  const reactMountedRef = useRef(false);
   const authResolvedRef = useRef(false);
   const initialReadyRef = useRef(false);
+
+  const completeInitialBootIfReady = useCallback(() => {
+    if (!reactMountedRef.current || !authResolvedRef.current) {
+      return;
+    }
+
+    hideBootSplash();
+    setIsInitialBootPending(false);
+  }, []);
+
+  const markReactMounted = useCallback(() => {
+    if (reactMountedRef.current) {
+      return;
+    }
+    reactMountedRef.current = true;
+    markPerformance(bootMarks.reactMounted);
+    completeInitialBootIfReady();
+  }, [completeInitialBootIfReady]);
 
   const markAuthResolved = useCallback(() => {
     if (authResolvedRef.current) {
@@ -107,7 +122,8 @@ export function BootFlowProvider({ children }: PropsWithChildren) {
     }
     authResolvedRef.current = true;
     markPerformance(bootMarks.authResolved);
-  }, []);
+    completeInitialBootIfReady();
+  }, [completeInitialBootIfReady]);
 
   const markInitialScreenReady = useCallback(() => {
     if (initialReadyRef.current) {
@@ -116,19 +132,21 @@ export function BootFlowProvider({ children }: PropsWithChildren) {
     initialReadyRef.current = true;
     markPerformance(bootMarks.initialReady);
     reportBootMetrics();
-    hideBootSplash();
-    startTransition(() => {
-      setIsInitialBootPending(false);
-    });
   }, []);
 
   const value = useMemo<BootContextValue>(
     () => ({
       isInitialBootPending,
+      markReactMounted,
       markAuthResolved,
       markInitialScreenReady,
     }),
-    [isInitialBootPending, markAuthResolved, markInitialScreenReady],
+    [
+      isInitialBootPending,
+      markReactMounted,
+      markAuthResolved,
+      markInitialScreenReady,
+    ],
   );
 
   return <BootContext.Provider value={value}>{children}</BootContext.Provider>;

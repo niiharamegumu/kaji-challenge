@@ -10,6 +10,43 @@ import {
   useToggleCompletionMutation,
 } from "../hooks/useHomeQueries";
 
+export function HomePageSkeleton() {
+  return (
+    <output
+      className="mt-2 space-y-1.5 md:mt-4 md:space-y-3"
+      aria-label="ホームを読み込み中"
+      aria-live="polite"
+    >
+      <section className="grid gap-2 md:grid-cols-2 md:gap-4">
+        {["daily", "weekly"].map((panel) => (
+          <article
+            key={panel}
+            className="animate-pulse rounded-xl border border-stone-200 bg-white/90 p-2.5 shadow-sm md:rounded-2xl md:p-4"
+          >
+            <div className="h-6 w-28 rounded bg-stone-200" />
+            <div className="mt-3 space-y-2">
+              {[0, 1, 2].map((row) => (
+                <div
+                  key={`${panel}-${row}`}
+                  className="rounded-xl border border-stone-100 bg-stone-50 p-3"
+                >
+                  <div className="h-4 w-2/5 rounded bg-stone-200" />
+                  <div className="mt-2 h-3 w-4/5 rounded bg-stone-100" />
+                  <div className="mt-3 h-3 w-3/5 rounded bg-stone-100" />
+                </div>
+              ))}
+            </div>
+          </article>
+        ))}
+      </section>
+
+      <div className="px-1">
+        <div className="h-4 w-36 rounded bg-stone-200" />
+      </div>
+    </output>
+  );
+}
+
 export function HomePage() {
   const [, setStatus] = useAtom(statusMessageAtom);
   const homeQuery = useHomeQuery();
