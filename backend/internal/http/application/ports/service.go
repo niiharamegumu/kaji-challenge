@@ -13,6 +13,7 @@ type Services struct {
 	Task         TaskService
 	Penalty      PenaltyService
 	ShoppingList ShoppingListService
+	Reminder     ReminderService
 	TaskOverview TaskOverviewService
 	Admin        AdminService
 }
@@ -63,6 +64,14 @@ type ShoppingListService interface {
 	PatchShoppingItem(ctx context.Context, userID, itemID string, req api.UpdateShoppingListItemRequest) (api.ShoppingListItem, error)
 	DeleteShoppingItem(ctx context.Context, userID, itemID string) error
 	ReorderShoppingItems(ctx context.Context, userID string, req api.ReorderShoppingListItemsRequest) ([]api.ShoppingListItem, error)
+}
+
+type ReminderService interface {
+	ListReminders(ctx context.Context, userID string, from, to time.Time) ([]api.ReminderCalendarDay, error)
+	ListReminderDefinitions(ctx context.Context, userID string) ([]api.Reminder, error)
+	CreateReminder(ctx context.Context, userID string, req api.CreateReminderRequest) (api.Reminder, error)
+	PatchReminder(ctx context.Context, userID, reminderID string, req api.UpdateReminderRequest) (api.Reminder, error)
+	DeleteReminder(ctx context.Context, userID, reminderID string) error
 }
 
 type TaskOverviewService interface {
