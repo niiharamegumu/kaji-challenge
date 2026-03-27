@@ -44,7 +44,7 @@ func TestCloseDayForTeamIsIdempotent(t *testing.T) {
 	ctx := context.Background()
 
 	teamID, _ := createTeamWithMember(t, s, "daily@example.com", time.Now().In(s.loc))
-	createTask(t, s, teamID, api.Daily, 7, 1)
+	createTask(t, s, teamID, api.TaskTypeDaily, 7, 1)
 
 	if _, err := s.CloseDayForTeam(ctx, teamID); err != nil {
 		t.Fatalf("first CloseDayForTeam failed: %v", err)
@@ -67,7 +67,7 @@ func TestCloseWeekAndMonthForTeam(t *testing.T) {
 	thisWeekStart := startOfWeek(dateOnly(now, s.loc), s.loc)
 	base := thisWeekStart.AddDate(0, 0, -6)
 	teamID, userID := createTeamWithMember(t, s, "weekly@example.com", base)
-	createTaskAt(t, s, teamID, api.Weekly, 5, 2, base)
+	createTaskAt(t, s, teamID, api.TaskTypeWeekly, 5, 2, base)
 
 	weekResA, err := s.CloseWeekForTeam(ctx, teamID)
 	if err != nil {
@@ -107,7 +107,7 @@ func TestToggleTaskCompletionCompletesPastDailyTaskInOpenMonthAndRecalculatesPen
 
 	createdAt := dateOnly(now, s.loc).AddDate(0, 0, -2).Add(10 * time.Hour)
 	teamID, userID := createTeamWithMember(t, s, "past-daily-open@example.com", createdAt)
-	taskID := createTaskWithIDAt(t, s, teamID, api.Daily, 4, 1, createdAt)
+	taskID := createTaskWithIDAt(t, s, teamID, api.TaskTypeDaily, 4, 1, createdAt)
 	targetDate := dateOnly(now, s.loc).AddDate(0, 0, -1)
 
 	if _, err := s.closeDayForTargetLocked(ctx, targetDate, teamID); err != nil {
@@ -142,7 +142,7 @@ func TestToggleTaskCompletionRejectsPastDailyToggleAction(t *testing.T) {
 
 	createdAt := dateOnly(now, s.loc).AddDate(0, 0, -2).Add(10 * time.Hour)
 	teamID, userID := createTeamWithMember(t, s, "past-daily-toggle@example.com", createdAt)
-	taskID := createTaskWithIDAt(t, s, teamID, api.Daily, 2, 1, createdAt)
+	taskID := createTaskWithIDAt(t, s, teamID, api.TaskTypeDaily, 2, 1, createdAt)
 	targetDate := dateOnly(now, s.loc).AddDate(0, 0, -1)
 	action := api.Toggle
 
@@ -159,7 +159,7 @@ func TestToggleTaskCompletionRejectsPastDailyCompleteForClosedMonth(t *testing.T
 
 	createdAt := dateOnly(now, s.loc).AddDate(0, 0, -2).Add(10 * time.Hour)
 	teamID, userID := createTeamWithMember(t, s, "past-daily-closed@example.com", createdAt)
-	taskID := createTaskWithIDAt(t, s, teamID, api.Daily, 2, 1, createdAt)
+	taskID := createTaskWithIDAt(t, s, teamID, api.TaskTypeDaily, 2, 1, createdAt)
 	targetDate := dateOnly(now, s.loc).AddDate(0, 0, -1)
 	monthStart, err := monthStartFromKey(monthKeyFromTime(targetDate, s.loc), s.loc)
 	if err != nil {
@@ -189,7 +189,7 @@ func TestToggleTaskCompletionCompleteIsIdempotentForPastDailyTask(t *testing.T) 
 
 	createdAt := dateOnly(now, s.loc).AddDate(0, 0, -2).Add(10 * time.Hour)
 	teamID, userID := createTeamWithMember(t, s, "past-daily-idempotent@example.com", createdAt)
-	taskID := createTaskWithIDAt(t, s, teamID, api.Daily, 3, 1, createdAt)
+	taskID := createTaskWithIDAt(t, s, teamID, api.TaskTypeDaily, 3, 1, createdAt)
 	targetDate := dateOnly(now, s.loc).AddDate(0, 0, -1)
 
 	if _, err := s.closeDayForTargetLocked(ctx, targetDate, teamID); err != nil {
@@ -220,7 +220,7 @@ func TestToggleTaskCompletionRejectsFutureDailyComplete(t *testing.T) {
 
 	createdAt := dateOnly(now, s.loc).AddDate(0, 0, -2).Add(10 * time.Hour)
 	teamID, userID := createTeamWithMember(t, s, "past-daily-future@example.com", createdAt)
-	taskID := createTaskWithIDAt(t, s, teamID, api.Daily, 2, 1, createdAt)
+	taskID := createTaskWithIDAt(t, s, teamID, api.TaskTypeDaily, 2, 1, createdAt)
 	targetDate := dateOnly(now, s.loc).AddDate(0, 0, 1)
 	action := api.Complete
 
@@ -237,7 +237,7 @@ func TestToggleTaskCompletionRejectsPreviousMonthDailyComplete(t *testing.T) {
 
 	createdAt := time.Date(2026, 2, 27, 10, 0, 0, 0, s.loc)
 	teamID, userID := createTeamWithMember(t, s, "past-daily-prev-month@example.com", createdAt)
-	taskID := createTaskWithIDAt(t, s, teamID, api.Daily, 2, 1, createdAt)
+	taskID := createTaskWithIDAt(t, s, teamID, api.TaskTypeDaily, 2, 1, createdAt)
 	targetDate := time.Date(2026, 2, 28, 0, 0, 0, 0, s.loc)
 	action := api.Complete
 
@@ -252,7 +252,7 @@ func TestCatchUpDayLockedProcessesMissingDays(t *testing.T) {
 	base := time.Date(2026, 1, 1, 12, 0, 0, 0, s.loc)
 
 	teamID, _ := createTeamWithMember(t, s, "catchup-day@example.com", base)
-	createTaskAt(t, s, teamID, api.Daily, 2, 1, base)
+	createTaskAt(t, s, teamID, api.TaskTypeDaily, 2, 1, base)
 
 	if _, err := s.closeDayForTargetLocked(ctx, time.Date(2026, 1, 1, 0, 0, 0, 0, s.loc), teamID); err != nil {
 		t.Fatalf("initial closeDayForTargetLocked failed: %v", err)
@@ -291,14 +291,14 @@ func TestCatchUpDayLockedUsesTargetTimeTaskSnapshot(t *testing.T) {
 	base := time.Date(2026, 1, 1, 12, 0, 0, 0, s.loc)
 
 	teamID, _ := createTeamWithMember(t, s, "snapshot-day@example.com", base)
-	createTaskAt(t, s, teamID, api.Daily, 1, 1, time.Date(2026, 1, 1, 10, 0, 0, 0, s.loc))
+	createTaskAt(t, s, teamID, api.TaskTypeDaily, 1, 1, time.Date(2026, 1, 1, 10, 0, 0, 0, s.loc))
 
 	if _, err := s.closeDayForTargetLocked(ctx, time.Date(2026, 1, 1, 0, 0, 0, 0, s.loc), teamID); err != nil {
 		t.Fatalf("initial closeDayForTargetLocked failed: %v", err)
 	}
 
 	// This task is created on 1/3 noon. It must not affect targetDate=1/2 (cutoff=1/3 00:00).
-	createTaskAt(t, s, teamID, api.Daily, 1, 1, time.Date(2026, 1, 3, 12, 0, 0, 0, s.loc))
+	createTaskAt(t, s, teamID, api.TaskTypeDaily, 1, 1, time.Date(2026, 1, 3, 12, 0, 0, 0, s.loc))
 
 	processed, err := s.catchUpDayLocked(ctx, time.Date(2026, 1, 4, 9, 0, 0, 0, s.loc), teamID)
 	if err != nil {
@@ -322,7 +322,7 @@ func TestCatchUpWeekLockedProcessesMissingWeeks(t *testing.T) {
 	base := time.Date(2026, 1, 1, 12, 0, 0, 0, s.loc)
 
 	teamID, _ := createTeamWithMember(t, s, "catchup-week@example.com", base)
-	createTaskAt(t, s, teamID, api.Weekly, 3, 2, base)
+	createTaskAt(t, s, teamID, api.TaskTypeWeekly, 3, 2, base)
 
 	if _, err := s.closeWeekForTargetLocked(ctx, time.Date(2026, 1, 5, 0, 0, 0, 0, s.loc), teamID); err != nil {
 		t.Fatalf("initial closeWeekForTargetLocked failed: %v", err)
@@ -353,7 +353,7 @@ func TestCloseWeekForTargetLockedAddsPenaltyToWeekEndMonth(t *testing.T) {
 
 	createdAt := time.Date(2026, 1, 1, 10, 0, 0, 0, s.loc)
 	teamID, userID := createTeamWithMember(t, s, "week-end-month@example.com", createdAt)
-	createTaskAt(t, s, teamID, api.Weekly, 4, 1, createdAt)
+	createTaskAt(t, s, teamID, api.TaskTypeWeekly, 4, 1, createdAt)
 
 	didRun, err := s.closeWeekForTargetLocked(ctx, time.Date(2025, 12, 29, 0, 0, 0, 0, s.loc), teamID)
 	if err != nil {
@@ -387,7 +387,7 @@ func TestCloseDayForTargetLockedFailsWhenMonthAlreadyClosed(t *testing.T) {
 
 	createdAt := time.Date(2025, 12, 15, 10, 0, 0, 0, s.loc)
 	teamID, _ := createTeamWithMember(t, s, "closed-month-day@example.com", createdAt)
-	createTaskAt(t, s, teamID, api.Daily, 2, 1, createdAt)
+	createTaskAt(t, s, teamID, api.TaskTypeDaily, 2, 1, createdAt)
 
 	if _, _, err := s.closeMonthForTargetLocked(ctx, time.Date(2025, 12, 1, 0, 0, 0, 0, s.loc), teamID); err != nil {
 		t.Fatalf("closeMonthForTargetLocked failed: %v", err)
@@ -416,7 +416,7 @@ func TestCloseWeekForTargetLockedFailsWhenTargetMonthAlreadyClosed(t *testing.T)
 
 	createdAt := time.Date(2026, 1, 1, 10, 0, 0, 0, s.loc)
 	teamID, _ := createTeamWithMember(t, s, "closed-month-week@example.com", createdAt)
-	createTaskAt(t, s, teamID, api.Weekly, 3, 1, createdAt)
+	createTaskAt(t, s, teamID, api.TaskTypeWeekly, 3, 1, createdAt)
 
 	if _, _, err := s.closeMonthForTargetLocked(ctx, time.Date(2026, 1, 1, 0, 0, 0, 0, s.loc), teamID); err != nil {
 		t.Fatalf("closeMonthForTargetLocked failed: %v", err)
@@ -523,7 +523,7 @@ func TestCatchUpMonthLockedProcessesMissingMonths(t *testing.T) {
 	ctx := context.Background()
 
 	teamID, _ := createTeamWithMember(t, s, "catchup-month@example.com", time.Date(2025, 11, 15, 10, 0, 0, 0, s.loc))
-	createTaskAt(t, s, teamID, api.Daily, 1, 1, time.Date(2025, 11, 15, 10, 0, 0, 0, s.loc))
+	createTaskAt(t, s, teamID, api.TaskTypeDaily, 1, 1, time.Date(2025, 11, 15, 10, 0, 0, 0, s.loc))
 
 	processed, lastMonth, err := s.catchUpMonthLocked(ctx, time.Date(2026, 2, 10, 9, 0, 0, 0, s.loc), teamID)
 	if err != nil {

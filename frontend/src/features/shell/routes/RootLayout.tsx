@@ -9,6 +9,7 @@ import {
   preloadAdminPenaltiesPageChunk,
   preloadAdminSummaryPageChunk,
   preloadAdminTasksPageChunk,
+  preloadReminderCalendarPageChunk,
   preloadShoppingListPageChunk,
 } from "../../../app/route-chunks";
 import { getTeamCurrentMembers } from "../../../lib/api/generated/client";
@@ -183,6 +184,7 @@ export function RootLayout() {
       void preloadAdminSummaryPageChunk();
       void preloadAdminPenaltiesPageChunk();
       void preloadAdminInvitesPageChunk();
+      void preloadReminderCalendarPageChunk();
       void preloadShoppingListPageChunk();
 
       if (location.pathname !== "/") {
@@ -209,6 +211,9 @@ export function RootLayout() {
         break;
       case "/admin/settings":
         void preloadAdminInvitesPageChunk();
+        break;
+      case "/calendar":
+        void preloadReminderCalendarPageChunk();
         break;
       case "/shopping-list":
         void preloadShoppingListPageChunk();

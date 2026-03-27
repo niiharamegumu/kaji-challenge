@@ -14,6 +14,7 @@ import {
   AdminPenaltiesPage,
   AdminSummaryPage,
   AdminTasksPage,
+  ReminderCalendarPage,
   ShoppingListPage,
 } from "./route-chunks";
 
@@ -84,6 +85,14 @@ export const router = createBrowserRouter([
         element: withDataBoundary(
           <AdminSummaryPage />,
           "サマリー画面の読み込みに失敗しました。",
+          { fullScreenOnInitial: true },
+        ),
+      },
+      {
+        path: "calendar",
+        element: withDataBoundary(
+          <ReminderCalendarPage />,
+          "カレンダー画面の読み込みに失敗しました。",
           { fullScreenOnInitial: true },
         ),
       },

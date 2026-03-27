@@ -6,5 +6,7 @@ export const queryKeys = {
   tasks: ["tasks"] as const,
   rules: ["rules"] as const,
   shoppingItems: ["shopping-items"] as const,
+  reminders: ["reminders"] as const,
+  reminderDefinitions: ["reminder-definitions"] as const,
   monthlySummary: ["monthly-summary"] as const,
 };

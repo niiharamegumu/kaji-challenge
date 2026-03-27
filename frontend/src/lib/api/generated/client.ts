@@ -149,6 +149,93 @@ export const TaskType = {
   weekly: 'weekly',
 } as const;
 
+export type ReminderKind = typeof ReminderKind[keyof typeof ReminderKind];
+
+
+export const ReminderKind = {
+  one_time: 'one_time',
+  recurring: 'recurring',
+} as const;
+
+export type ReminderScheduleType = typeof ReminderScheduleType[keyof typeof ReminderScheduleType];
+
+
+export const ReminderScheduleType = {
+  daily: 'daily',
+  weekly: 'weekly',
+  monthly: 'monthly',
+} as const;
+
+export interface Reminder {
+  id: string;
+  teamId: string;
+  title: string;
+  /** @nullable */
+  notes?: string | null;
+  kind: ReminderKind;
+  scheduleType?: ReminderScheduleType | null;
+  startDate: string;
+  /** @nullable */
+  endDate?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateReminderRequest {
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
+  title: string;
+  /** @maxLength 500 */
+  notes?: string;
+  kind: ReminderKind;
+  scheduleType?: ReminderScheduleType;
+  startDate: string;
+  endDate?: string;
+}
+
+export interface UpdateReminderRequest {
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
+  title?: string;
+  /**
+   * @maxLength 500
+   * @nullable
+   */
+  notes?: string | null;
+  kind?: ReminderKind;
+  scheduleType?: ReminderScheduleType | null;
+  startDate?: string;
+  /** @nullable */
+  endDate?: string | null;
+}
+
+export interface ReminderOccurrence {
+  reminderId: string;
+  date: string;
+  title: string;
+  /** @nullable */
+  notes?: string | null;
+  kind: ReminderKind;
+  scheduleType?: ReminderScheduleType | null;
+}
+
+export interface ReminderCalendarDay {
+  date: string;
+  items: ReminderOccurrence[];
+}
+
+export interface ReminderCalendarResponse {
+  days: ReminderCalendarDay[];
+}
+
+export interface ReminderListResponse {
+  items: Reminder[];
+}
+
 export interface Task {
   id: string;
   teamId: string;
@@ -361,6 +448,7 @@ export interface TaskOverviewResponse {
   monthlyPenaltyTotal: number;
   dailyTasks: TaskOverviewDailyTask[];
   weeklyTasks: TaskOverviewWeeklyTask[];
+  weeklyReminders: ReminderOccurrence[];
 }
 
 export interface MonthlyTaskStatusItem {
@@ -407,6 +495,11 @@ type?: TaskType;
 
 export type ListTasks200 = {
   items: Task[];
+};
+
+export type ListRemindersParams = {
+from: string;
+to: string;
 };
 
 export type ListPenaltyRulesParams = {
@@ -1136,6 +1229,196 @@ export const postTaskCompletionToggle = async (taskId: string,
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(
       toggleTaskCompletionRequest,)
+  }
+);}
+
+
+
+/**
+ * @summary List future reminder occurrences in current team
+ */
+export type listRemindersResponse200 = {
+  data: ReminderCalendarResponse
+  status: 200
+}
+    
+export type listRemindersResponseSuccess = (listRemindersResponse200) & {
+  headers: Headers;
+};
+;
+
+export type listRemindersResponse = (listRemindersResponseSuccess)
+
+export const getListRemindersUrl = (params: ListRemindersParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/v1/reminders?${stringifiedParams}` : `/v1/reminders`
+}
+
+export const listReminders = async (params: ListRemindersParams, options?: RequestInit): Promise<listRemindersResponse> => {
+  
+  return customFetch<listRemindersResponse>(getListRemindersUrl(params),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+
+
+
+/**
+ * @summary Create reminder
+ */
+export type postReminderResponse201 = {
+  data: Reminder
+  status: 201
+}
+    
+export type postReminderResponseSuccess = (postReminderResponse201) & {
+  headers: Headers;
+};
+;
+
+export type postReminderResponse = (postReminderResponseSuccess)
+
+export const getPostReminderUrl = () => {
+
+
+  
+
+  return `/v1/reminders`
+}
+
+export const postReminder = async (createReminderRequest: CreateReminderRequest, options?: RequestInit): Promise<postReminderResponse> => {
+  
+  return customFetch<postReminderResponse>(getPostReminderUrl(),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      createReminderRequest,)
+  }
+);}
+
+
+
+/**
+ * @summary List reminder definitions in current team
+ */
+export type listReminderDefinitionsResponse200 = {
+  data: ReminderListResponse
+  status: 200
+}
+    
+export type listReminderDefinitionsResponseSuccess = (listReminderDefinitionsResponse200) & {
+  headers: Headers;
+};
+;
+
+export type listReminderDefinitionsResponse = (listReminderDefinitionsResponseSuccess)
+
+export const getListReminderDefinitionsUrl = () => {
+
+
+  
+
+  return `/v1/reminders/list`
+}
+
+export const listReminderDefinitions = async ( options?: RequestInit): Promise<listReminderDefinitionsResponse> => {
+  
+  return customFetch<listReminderDefinitionsResponse>(getListReminderDefinitionsUrl(),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+
+
+
+/**
+ * @summary Update reminder
+ */
+export type patchReminderResponse200 = {
+  data: Reminder
+  status: 200
+}
+    
+export type patchReminderResponseSuccess = (patchReminderResponse200) & {
+  headers: Headers;
+};
+;
+
+export type patchReminderResponse = (patchReminderResponseSuccess)
+
+export const getPatchReminderUrl = (reminderId: string,) => {
+
+
+  
+
+  return `/v1/reminders/${reminderId}`
+}
+
+export const patchReminder = async (reminderId: string,
+    updateReminderRequest: UpdateReminderRequest, options?: RequestInit): Promise<patchReminderResponse> => {
+  
+  return customFetch<patchReminderResponse>(getPatchReminderUrl(reminderId),
+  {      
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      updateReminderRequest,)
+  }
+);}
+
+
+
+/**
+ * @summary Delete reminder
+ */
+export type deleteReminderResponse204 = {
+  data: void
+  status: 204
+}
+    
+export type deleteReminderResponseSuccess = (deleteReminderResponse204) & {
+  headers: Headers;
+};
+;
+
+export type deleteReminderResponse = (deleteReminderResponseSuccess)
+
+export const getDeleteReminderUrl = (reminderId: string,) => {
+
+
+  
+
+  return `/v1/reminders/${reminderId}`
+}
+
+export const deleteReminder = async (reminderId: string, options?: RequestInit): Promise<deleteReminderResponse> => {
+  
+  return customFetch<deleteReminderResponse>(getDeleteReminderUrl(reminderId),
+  {      
+    ...options,
+    method: 'DELETE'
+    
+    
   }
 );}
 

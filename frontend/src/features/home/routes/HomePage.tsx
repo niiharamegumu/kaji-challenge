@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 
 import { statusMessageAtom } from "../../shell/state/status";
 import { DailyTasksPanel } from "../components/DailyTasksPanel";
+import { WeeklyRemindersPanel } from "../components/WeeklyRemindersPanel";
 import { WeeklyTasksPanel } from "../components/WeeklyTasksPanel";
 import {
   useHomeQuery,
@@ -85,6 +86,8 @@ export function HomePage() {
           }}
         />
       </section>
+
+      <WeeklyRemindersPanel items={home.weeklyReminders} />
 
       <div className="px-1">
         <Link

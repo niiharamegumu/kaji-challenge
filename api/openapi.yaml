@@ -315,6 +315,95 @@ paths:
               schema:
                 $ref: '#/components/schemas/TaskCompletionResponse'
 
+  /v1/reminders:
+    get:
+      operationId: listReminders
+      summary: List future reminder occurrences in current team
+      parameters:
+        - in: query
+          name: from
+          required: true
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: to
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Reminder occurrences
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReminderCalendarResponse'
+    post:
+      operationId: postReminder
+      summary: Create reminder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReminderRequest'
+      responses:
+        '201':
+          description: Reminder created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reminder'
+
+  /v1/reminders/list:
+    get:
+      operationId: listReminderDefinitions
+      summary: List reminder definitions in current team
+      responses:
+        '200':
+          description: Reminder definitions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReminderListResponse'
+
+  /v1/reminders/{reminderId}:
+    patch:
+      operationId: patchReminder
+      summary: Update reminder
+      parameters:
+        - in: path
+          name: reminderId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateReminderRequest'
+      responses:
+        '200':
+          description: Reminder updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reminder'
+    delete:
+      operationId: deleteReminder
+      summary: Delete reminder
+      parameters:
+        - in: path
+          name: reminderId
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Reminder deleted
+
   /v1/penalty-rules:
     get:
       operationId: listPenaltyRules
@@ -837,6 +926,142 @@ components:
       type: string
       enum: [daily, weekly]
 
+    ReminderKind:
+      type: string
+      enum: [one_time, recurring]
+
+    ReminderScheduleType:
+      type: string
+      enum: [daily, weekly, monthly]
+
+    Reminder:
+      type: object
+      required: [id, teamId, title, kind, startDate, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        teamId:
+          type: string
+        title:
+          type: string
+        notes:
+          type: string
+          nullable: true
+        kind:
+          $ref: '#/components/schemas/ReminderKind'
+        scheduleType:
+          $ref: '#/components/schemas/ReminderScheduleType'
+          nullable: true
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateReminderRequest:
+      type: object
+      required: [title, kind, startDate]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 100
+        notes:
+          type: string
+          maxLength: 500
+        kind:
+          $ref: '#/components/schemas/ReminderKind'
+        scheduleType:
+          $ref: '#/components/schemas/ReminderScheduleType'
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+
+    UpdateReminderRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 100
+        notes:
+          type: string
+          maxLength: 500
+          nullable: true
+        kind:
+          $ref: '#/components/schemas/ReminderKind'
+        scheduleType:
+          $ref: '#/components/schemas/ReminderScheduleType'
+          nullable: true
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+          nullable: true
+
+    ReminderOccurrence:
+      type: object
+      required: [reminderId, date, title, kind]
+      properties:
+        reminderId:
+          type: string
+        date:
+          type: string
+          format: date
+        title:
+          type: string
+        notes:
+          type: string
+          nullable: true
+        kind:
+          $ref: '#/components/schemas/ReminderKind'
+        scheduleType:
+          $ref: '#/components/schemas/ReminderScheduleType'
+          nullable: true
+
+    ReminderCalendarDay:
+      type: object
+      required: [date, items]
+      properties:
+        date:
+          type: string
+          format: date
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReminderOccurrence'
+
+    ReminderCalendarResponse:
+      type: object
+      required: [days]
+      properties:
+        days:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReminderCalendarDay'
+
+    ReminderListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Reminder'
+
     Task:
       type: object
       required:
@@ -1116,7 +1341,7 @@ components:
 
     TaskOverviewResponse:
       type: object
-      required: [month, today, elapsedDaysInWeek, monthlyPenaltyTotal, dailyTasks, weeklyTasks]
+      required: [month, today, elapsedDaysInWeek, monthlyPenaltyTotal, dailyTasks, weeklyTasks, weeklyReminders]
       properties:
         month:
           type: string
@@ -1136,6 +1361,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/TaskOverviewWeeklyTask'
+        weeklyReminders:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReminderOccurrence'
 
     MonthlyTaskStatusItem:
       type: object

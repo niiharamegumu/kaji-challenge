@@ -8,6 +8,8 @@ const loadAdminInvitesPage = () =>
   import("../features/admin/routes/AdminInvitesPage");
 const loadAdminSummaryPage = () =>
   import("../features/admin/routes/AdminSummaryPage");
+const loadReminderCalendarPage = () =>
+  import("../features/reminders/routes/ReminderCalendarPage");
 const loadShoppingListPage = () =>
   import("../features/shopping-list/routes/ShoppingListPage");
 
@@ -22,6 +24,9 @@ let adminInvitesPagePromise: Promise<
 > | null = null;
 let adminSummaryPagePromise: Promise<
   typeof import("../features/admin/routes/AdminSummaryPage")
+> | null = null;
+let reminderCalendarPagePromise: Promise<
+  typeof import("../features/reminders/routes/ReminderCalendarPage")
 > | null = null;
 let shoppingListPagePromise: Promise<
   typeof import("../features/shopping-list/routes/ShoppingListPage")
@@ -47,6 +52,11 @@ export function preloadAdminSummaryPageChunk() {
   return adminSummaryPagePromise;
 }
 
+export function preloadReminderCalendarPageChunk() {
+  reminderCalendarPagePromise ??= loadReminderCalendarPage();
+  return reminderCalendarPagePromise;
+}
+
 export function preloadShoppingListPageChunk() {
   shoppingListPagePromise ??= loadShoppingListPage();
   return shoppingListPagePromise;
@@ -70,6 +80,11 @@ export const AdminInvitesPage = lazy(async () => {
 export const AdminSummaryPage = lazy(async () => {
   const module = await preloadAdminSummaryPageChunk();
   return { default: module.AdminSummaryPage };
+});
+
+export const ReminderCalendarPage = lazy(async () => {
+  const module = await preloadReminderCalendarPageChunk();
+  return { default: module.ReminderCalendarPage };
 });
 
 export const ShoppingListPage = lazy(async () => {

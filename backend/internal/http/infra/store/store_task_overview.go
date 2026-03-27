@@ -25,13 +25,22 @@ func (s *Store) GetTaskOverview(ctx context.Context, userID string) (resp api.Ta
 	now := time.Now().In(s.loc)
 	today := dateOnly(now, s.loc)
 	weekStart := startOfWeek(today, s.loc)
+	weekEnd := weekStart.AddDate(0, 0, 6)
 	monthKey := monthKeyFromTime(today, s.loc)
 	monthly, err := s.ensureMonthSummaryLocked(ctx, teamID, monthKey)
 	if err != nil {
 		return api.TaskOverviewResponse{}, err
 	}
+	if err := s.cleanupExpiredOneTimeReminders(ctx, teamID); err != nil {
+		return api.TaskOverviewResponse{}, err
+	}
 	daily := []api.TaskOverviewDailyTask{}
 	weekly := []api.TaskOverviewWeeklyTask{}
+	type overviewReminderOccurrence struct {
+		occurrence api.ReminderOccurrence
+		createdAt  time.Time
+	}
+	weeklyReminderItems := []overviewReminderOccurrence{}
 
 	tasks, err := s.q.ListUndeletedTasksByTeamID(ctx, teamID)
 	queryCount++
@@ -82,10 +91,24 @@ func (s *Store) GetTaskOverview(ctx context.Context, userID string) (resp api.Ta
 		}
 		weeklySlotsByTaskID[row.TaskID][int(row.Slot)] = taskCompletionActorPtr(row.CompletedByUserID, row.CompletedByEffectiveName, row.CompletedByColorHex)
 	}
+	reminderRows, err := s.q.ListRemindersByTeamID(ctx, teamID)
+	queryCount++
+	if err != nil {
+		return api.TaskOverviewResponse{}, err
+	}
+	for _, row := range reminderRows {
+		record := reminderFromDB(row, s.loc)
+		for _, occurrence := range expandReminderOccurrences(record, today, weekEnd, today) {
+			weeklyReminderItems = append(weeklyReminderItems, overviewReminderOccurrence{
+				occurrence: occurrence,
+				createdAt:  record.CreatedAt,
+			})
+		}
+	}
 
 	for _, row := range tasks {
 		t := taskFromUndeletedListRow(row, s.loc)
-		if t.Type == api.Daily {
+		if t.Type == api.TaskTypeDaily {
 			daily = append(daily, api.TaskOverviewDailyTask{
 				Task:           t.toAPI(),
 				CompletedToday: dailyDone[t.ID],
@@ -103,6 +126,16 @@ func (s *Store) GetTaskOverview(ctx context.Context, userID string) (resp api.Ta
 
 	sort.Slice(daily, func(i, j int) bool { return daily[i].Task.CreatedAt.Before(daily[j].Task.CreatedAt) })
 	sort.Slice(weekly, func(i, j int) bool { return weekly[i].Task.CreatedAt.Before(weekly[j].Task.CreatedAt) })
+	sort.Slice(weeklyReminderItems, func(i, j int) bool {
+		if weeklyReminderItems[i].occurrence.Date.Time.Equal(weeklyReminderItems[j].occurrence.Date.Time) {
+			return weeklyReminderItems[i].createdAt.Before(weeklyReminderItems[j].createdAt)
+		}
+		return weeklyReminderItems[i].occurrence.Date.Time.Before(weeklyReminderItems[j].occurrence.Date.Time)
+	})
+	weeklyReminders := make([]api.ReminderOccurrence, 0, len(weeklyReminderItems))
+	for _, item := range weeklyReminderItems {
+		weeklyReminders = append(weeklyReminders, item.occurrence)
+	}
 
 	elapsed := int(today.Sub(weekStart).Hours()/24) + 1
 	resp = api.TaskOverviewResponse{
@@ -112,6 +145,7 @@ func (s *Store) GetTaskOverview(ctx context.Context, userID string) (resp api.Ta
 		MonthlyPenaltyTotal: int(monthly.DailyPenaltyTotal + monthly.WeeklyPenaltyTotal),
 		DailyTasks:          daily,
 		WeeklyTasks:         weekly,
+		WeeklyReminders:     weeklyReminders,
 	}
 	return resp, nil
 }
@@ -309,7 +343,7 @@ func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month 
 			completed := false
 			var completionSlots []api.TaskCompletionSlot
 			switch task.Type {
-			case api.Daily:
+			case api.TaskTypeDaily:
 				if task.CreatedAt.In(s.loc).After(dayEnd.Add(-time.Nanosecond)) {
 					continue
 				}
@@ -320,7 +354,7 @@ func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month 
 				completionSlots = buildCompletionSlots(1, map[int]*api.TaskCompletionActor{
 					1: dailyActors[dayKey][task.ID],
 				})
-			case api.Weekly:
+			case api.TaskTypeWeekly:
 				weekStart, ok := weeklyAnchorByDay[dayKey]
 				if !ok {
 					continue

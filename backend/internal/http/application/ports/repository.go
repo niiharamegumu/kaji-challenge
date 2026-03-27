@@ -50,6 +50,14 @@ type ShoppingListRepository interface {
 	ReorderShoppingItems(ctx context.Context, userID string, req api.ReorderShoppingListItemsRequest) ([]api.ShoppingListItem, error)
 }
 
+type ReminderRepository interface {
+	ListReminders(ctx context.Context, userID string, from, to time.Time) ([]api.ReminderCalendarDay, error)
+	ListReminderDefinitions(ctx context.Context, userID string) ([]api.Reminder, error)
+	CreateReminder(ctx context.Context, userID string, req api.CreateReminderRequest) (api.Reminder, error)
+	PatchReminder(ctx context.Context, userID, reminderID string, req api.UpdateReminderRequest) (api.Reminder, error)
+	DeleteReminder(ctx context.Context, userID, reminderID string) error
+}
+
 type TaskOverviewRepository interface {
 	GetTaskOverview(ctx context.Context, userID string) (api.TaskOverviewResponse, error)
 	GetMonthlySummary(ctx context.Context, userID string, month *string) (api.MonthlyPenaltySummary, error)
@@ -67,6 +75,7 @@ type Dependencies struct {
 	TaskRepo         TaskRepository
 	PenaltyRepo      PenaltyRepository
 	ShoppingListRepo ShoppingListRepository
+	ReminderRepo     ReminderRepository
 	TaskOverviewRepo TaskOverviewRepository
 	AdminRepo        AdminRepository
 }

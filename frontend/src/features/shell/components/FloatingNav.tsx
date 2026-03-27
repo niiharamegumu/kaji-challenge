@@ -1,4 +1,5 @@
 import {
+  CalendarDays,
   ChartColumn,
   House,
   LogOut,
@@ -148,6 +149,15 @@ export function FloatingNav({
             >
               <Shield size={18} aria-hidden="true" />
               <span>タスク</span>
+            </NavLink>
+            <NavLink
+              to="/calendar"
+              className={linkClass}
+              onClick={() => setOpen(false)}
+              {...bindRouteIntent("/calendar")}
+            >
+              <CalendarDays size={18} aria-hidden="true" />
+              <span>カレンダー</span>
             </NavLink>
             <NavLink
               to="/shopping-list"

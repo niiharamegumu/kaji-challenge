@@ -42,7 +42,7 @@ func (s *Store) CreateTask(ctx context.Context, userID string, req api.CreateTas
 	}
 
 	required := 1
-	if req.Type == api.Weekly && req.RequiredCompletionsPerWeek != nil {
+	if req.Type == api.TaskTypeWeekly && req.RequiredCompletionsPerWeek != nil {
 		required = *req.RequiredCompletionsPerWeek
 	}
 	required, err = normalizeRequiredCompletionsPerWeek(req.Type, required)
@@ -133,7 +133,7 @@ func (s *Store) PatchTask(ctx context.Context, userID, taskID string, req api.Up
 			if req.AssigneeUserId != nil {
 				task.AssigneeID = req.AssigneeUserId
 			}
-			if req.RequiredCompletionsPerWeek != nil && task.Type == api.Weekly {
+			if req.RequiredCompletionsPerWeek != nil && task.Type == api.TaskTypeWeekly {
 				required, err := normalizeRequiredCompletionsPerWeek(
 					task.Type,
 					*req.RequiredCompletionsPerWeek,
@@ -169,7 +169,7 @@ func (s *Store) PatchTask(ctx context.Context, userID, taskID string, req api.Up
 }
 
 func normalizeRequiredCompletionsPerWeek(taskType api.TaskType, required int) (int, error) {
-	if taskType == api.Daily {
+	if taskType == api.TaskTypeDaily {
 		return requiredCompletionsPerWeekMin, nil
 	}
 	if required < requiredCompletionsPerWeekMin || required > requiredCompletionsPerWeekMax {
@@ -238,7 +238,7 @@ func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string,
 			}
 			today := dateOnly(s.now(), s.loc)
 			targetDate := dateOnly(target.In(s.loc), s.loc)
-			if task.Type == api.Weekly {
+			if task.Type == api.TaskTypeWeekly {
 				weekStart := startOfWeek(today, s.loc)
 				weekEnd := weekStart.AddDate(0, 0, 6)
 				if targetDate.Before(weekStart) || targetDate.After(weekEnd) {
@@ -247,7 +247,7 @@ func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string,
 			}
 
 			targetPg := toPgDate(targetDate)
-			if task.Type == api.Daily {
+			if task.Type == api.TaskTypeDaily {
 				isToday := sameDate(targetDate, today)
 				targetMonth := monthKeyFromTime(targetDate, s.loc)
 				currentMonth := monthKeyFromTime(today, s.loc)

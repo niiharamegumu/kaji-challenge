@@ -44,6 +44,14 @@ func ptrFromTimestamptz(t pgtype.Timestamptz, loc *time.Location) *time.Time {
 	return &v
 }
 
+func ptrFromDate(d pgtype.Date, loc *time.Location) *time.Time {
+	if !d.Valid {
+		return nil
+	}
+	v := dateOnly(d.Time, loc)
+	return &v
+}
+
 func uuidStringFromPtr(s *string) string {
 	if s == nil {
 		return ""
@@ -138,6 +146,14 @@ func randomToken() (string, error) {
 
 func toDate(t time.Time) openapi_types.Date {
 	return openapi_types.Date{Time: dateOnly(t, t.Location())}
+}
+
+func datePtr(t *time.Time) *openapi_types.Date {
+	if t == nil {
+		return nil
+	}
+	v := toDate(*t)
+	return &v
 }
 
 func monthKeyFromTime(t time.Time, loc *time.Location) string {

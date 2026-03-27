@@ -10,13 +10,46 @@ import (
 	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 )
 
+func TestGetTaskOverviewWeeklyRemindersSortsByDateThenCreatedAt(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	now := time.Now().In(s.loc)
+	today := dateOnly(now, s.loc)
+	teamID, userID := createTeamWithMember(t, s, "overview-reminders-sort@example.com", today.Add(9*time.Hour))
+
+	laterDate := today.AddDate(0, 0, 1)
+	createReminderAt(t, s, teamID, "z-later-date", api.OneTime, nil, today.Add(3*time.Hour), laterDate, nil)
+	createReminderAt(t, s, teamID, "z-created-second", api.OneTime, nil, today.Add(time.Hour), today, nil)
+	createReminderAt(t, s, teamID, "a-created-first", api.OneTime, nil, today.Add(30*time.Minute), today, nil)
+
+	overview, err := s.GetTaskOverview(ctx, userID)
+	if err != nil {
+		t.Fatalf("GetTaskOverview failed: %v", err)
+	}
+
+	if len(overview.WeeklyReminders) < 3 {
+		t.Fatalf("expected at least 3 weekly reminders, got %d", len(overview.WeeklyReminders))
+	}
+
+	if overview.WeeklyReminders[0].Title != "a-created-first" {
+		t.Fatalf("expected first same-day reminder to be oldest created item, got %q", overview.WeeklyReminders[0].Title)
+	}
+	if overview.WeeklyReminders[1].Title != "z-created-second" {
+		t.Fatalf("expected second same-day reminder to be second oldest created item, got %q", overview.WeeklyReminders[1].Title)
+	}
+	if overview.WeeklyReminders[2].Title != "z-later-date" {
+		t.Fatalf("expected later-date reminder after same-day reminders, got %q", overview.WeeklyReminders[2].Title)
+	}
+}
+
 func TestBuildMonthlyTaskStatusByDateDailyOmitAfterDeleteTime(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 
 	base := time.Date(2026, 1, 1, 9, 0, 0, 0, s.loc)
 	teamID, _ := createTeamWithMember(t, s, "summary-daily-delete@example.com", base)
-	taskID := createTaskAtWithID(t, s, teamID, api.Daily, 2, 1, base)
+	taskID := createTaskAtWithID(t, s, teamID, api.TaskTypeDaily, 2, 1, base)
 
 	if err := s.q.CreateTaskCompletionDaily(ctx, dbsqlc.CreateTaskCompletionDailyParams{
 		TaskID:     taskID,
@@ -49,7 +82,7 @@ func TestBuildMonthlyTaskStatusByDateWeeklyOmitFromDeleteWeek(t *testing.T) {
 
 	base := time.Date(2026, 1, 1, 9, 0, 0, 0, s.loc)
 	teamID, _ := createTeamWithMember(t, s, "summary-weekly-delete@example.com", base)
-	taskID := createTaskAtWithID(t, s, teamID, api.Weekly, 3, 1, base)
+	taskID := createTaskAtWithID(t, s, teamID, api.TaskTypeWeekly, 3, 1, base)
 
 	if err := insertWeeklyCompletionEntriesForTest(ctx, s, taskID, time.Date(2026, 1, 5, 0, 0, 0, 0, s.loc), 1); err != nil {
 		t.Fatalf("failed to create previous-week completion: %v", err)
@@ -82,7 +115,7 @@ func TestBuildMonthlyTaskStatusByDateWeeklyCrossMonthShownOnMonthStart(t *testin
 
 	base := time.Date(2026, 1, 1, 9, 0, 0, 0, s.loc)
 	teamID, _ := createTeamWithMember(t, s, "summary-weekly-cross-month@example.com", base)
-	taskID := createTaskAtWithID(t, s, teamID, api.Weekly, 3, 1, base)
+	taskID := createTaskAtWithID(t, s, teamID, api.TaskTypeWeekly, 3, 1, base)
 
 	if err := insertWeeklyCompletionEntriesForTest(ctx, s, taskID, time.Date(2025, 12, 29, 0, 0, 0, 0, s.loc), 1); err != nil {
 		t.Fatalf("failed to create cross-month weekly completion: %v", err)
@@ -112,7 +145,7 @@ func TestBuildMonthlyTaskStatusByDateIncludesNotes(t *testing.T) {
 	base := time.Date(2026, 1, 1, 9, 0, 0, 0, s.loc)
 	teamID, _ := createTeamWithMember(t, s, "summary-notes@example.com", base)
 	notes := "食器を片付ける"
-	taskID := createTaskAtWithIDAndNotes(t, s, teamID, api.Daily, 2, 1, base, &notes)
+	taskID := createTaskAtWithIDAndNotes(t, s, teamID, api.TaskTypeDaily, 2, 1, base, &notes)
 
 	groups, err := s.buildMonthlyTaskStatusByDate(ctx, teamID, "2026-01")
 	if err != nil {
@@ -139,7 +172,7 @@ func TestBuildMonthlyTaskStatusByDateLeavesNotesNilWhenEmpty(t *testing.T) {
 
 	base := time.Date(2026, 1, 1, 9, 0, 0, 0, s.loc)
 	teamID, _ := createTeamWithMember(t, s, "summary-notes-empty@example.com", base)
-	taskID := createTaskAtWithID(t, s, teamID, api.Daily, 2, 1, base)
+	taskID := createTaskAtWithID(t, s, teamID, api.TaskTypeDaily, 2, 1, base)
 
 	groups, err := s.buildMonthlyTaskStatusByDate(ctx, teamID, "2026-01")
 	if err != nil {
@@ -170,7 +203,7 @@ func TestBuildMonthlyTaskStatusByDateCurrentMonthDoesNotIncludeFutureDates(t *te
 	month := monthStart.Format("2006-01")
 
 	teamID, _ := createTeamWithMember(t, s, "summary-current-month@example.com", monthStart.Add(9*time.Hour))
-	taskID := createTaskAtWithID(t, s, teamID, api.Daily, 2, 1, monthStart.Add(9*time.Hour))
+	taskID := createTaskAtWithID(t, s, teamID, api.TaskTypeDaily, 2, 1, monthStart.Add(9*time.Hour))
 
 	groups, err := s.buildMonthlyTaskStatusByDate(ctx, teamID, month)
 	if err != nil {
@@ -204,7 +237,7 @@ func TestBuildMonthlyTaskStatusByDateFutureMonthReturnsEmpty(t *testing.T) {
 	futureMonth := futureMonthStart.Format("2006-01")
 
 	teamID, _ := createTeamWithMember(t, s, "summary-future-month@example.com", today.Add(9*time.Hour))
-	createTaskAtWithID(t, s, teamID, api.Daily, 2, 1, futureMonthStart.Add(9*time.Hour))
+	createTaskAtWithID(t, s, teamID, api.TaskTypeDaily, 2, 1, futureMonthStart.Add(9*time.Hour))
 
 	groups, err := s.buildMonthlyTaskStatusByDate(ctx, teamID, futureMonth)
 	if err != nil {
@@ -227,7 +260,7 @@ func TestBuildMonthlyTaskStatusByDatePastMonthKeepsMonthEnd(t *testing.T) {
 	pastMonthLastDay := pastMonthStart.AddDate(0, 1, -1).Format("2006-01-02")
 
 	teamID, _ := createTeamWithMember(t, s, "summary-past-month@example.com", pastMonthStart.Add(9*time.Hour))
-	taskID := createTaskAtWithID(t, s, teamID, api.Daily, 2, 1, pastMonthStart.Add(9*time.Hour))
+	taskID := createTaskAtWithID(t, s, teamID, api.TaskTypeDaily, 2, 1, pastMonthStart.Add(9*time.Hour))
 
 	groups, err := s.buildMonthlyTaskStatusByDate(ctx, teamID, pastMonth)
 	if err != nil {
@@ -241,6 +274,36 @@ func TestBuildMonthlyTaskStatusByDatePastMonthKeepsMonthEnd(t *testing.T) {
 func createTaskAtWithID(t *testing.T, s *Store, teamID string, taskType api.TaskType, penalty, required int, createdAt time.Time) string {
 	t.Helper()
 	return createTaskAtWithIDAndNotes(t, s, teamID, taskType, penalty, required, createdAt, nil)
+}
+
+func createReminderAt(
+	t *testing.T,
+	s *Store,
+	teamID string,
+	title string,
+	kind api.ReminderKind,
+	scheduleType *api.ReminderScheduleType,
+	createdAt time.Time,
+	startDate time.Time,
+	endDate *time.Time,
+) string {
+	t.Helper()
+	reminderID := s.nextID("rem")
+	if err := s.q.CreateReminder(context.Background(), dbsqlc.CreateReminderParams{
+		ID:           reminderID,
+		TeamID:       teamID,
+		Title:        title,
+		Notes:        pgtype.Text{},
+		Kind:         string(kind),
+		ScheduleType: textFromPtr(reminderScheduleTypeString(scheduleType)),
+		StartDate:    toPgDate(startDate),
+		EndDate:      pgDateFromPtr(endDate),
+		CreatedAt:    toPgTimestamptz(createdAt),
+		UpdatedAt:    toPgTimestamptz(createdAt),
+	}); err != nil {
+		t.Fatalf("failed to create reminder: %v", err)
+	}
+	return reminderID
 }
 
 func createTaskAtWithIDAndNotes(t *testing.T, s *Store, teamID string, taskType api.TaskType, penalty, required int, createdAt time.Time, notes *string) string {
