@@ -17,10 +17,23 @@ const (
 	CookieAuthScopes = "cookieAuth.Scopes"
 )
 
+// Defines values for ReminderKind.
+const (
+	OneTime   ReminderKind = "one_time"
+	Recurring ReminderKind = "recurring"
+)
+
+// Defines values for ReminderScheduleType.
+const (
+	ReminderScheduleTypeDaily   ReminderScheduleType = "daily"
+	ReminderScheduleTypeMonthly ReminderScheduleType = "monthly"
+	ReminderScheduleTypeWeekly  ReminderScheduleType = "weekly"
+)
+
 // Defines values for TaskType.
 const (
-	Daily  TaskType = "daily"
-	Weekly TaskType = "weekly"
+	TaskTypeDaily  TaskType = "daily"
+	TaskTypeWeekly TaskType = "weekly"
 )
 
 // Defines values for TeamMemberRole.
@@ -79,6 +92,16 @@ type CreatePenaltyRuleRequest struct {
 	Description *string `json:"description,omitempty"`
 	Name        string  `json:"name"`
 	Threshold   int     `json:"threshold"`
+}
+
+// CreateReminderRequest defines model for CreateReminderRequest.
+type CreateReminderRequest struct {
+	EndDate      *openapi_types.Date   `json:"endDate,omitempty"`
+	Kind         ReminderKind          `json:"kind"`
+	Notes        *string               `json:"notes,omitempty"`
+	ScheduleType *ReminderScheduleType `json:"scheduleType,omitempty"`
+	StartDate    openapi_types.Date    `json:"startDate"`
+	Title        string                `json:"title"`
 }
 
 // CreateShoppingListItemRequest defines model for CreateShoppingListItemRequest.
@@ -168,6 +191,52 @@ type PenaltyRule struct {
 	UpdatedAt   time.Time  `json:"updatedAt"`
 }
 
+// Reminder defines model for Reminder.
+type Reminder struct {
+	CreatedAt    time.Time             `json:"createdAt"`
+	EndDate      *openapi_types.Date   `json:"endDate"`
+	Id           string                `json:"id"`
+	Kind         ReminderKind          `json:"kind"`
+	Notes        *string               `json:"notes"`
+	ScheduleType *ReminderScheduleType `json:"scheduleType,omitempty"`
+	StartDate    openapi_types.Date    `json:"startDate"`
+	TeamId       string                `json:"teamId"`
+	Title        string                `json:"title"`
+	UpdatedAt    time.Time             `json:"updatedAt"`
+}
+
+// ReminderCalendarDay defines model for ReminderCalendarDay.
+type ReminderCalendarDay struct {
+	Date  openapi_types.Date   `json:"date"`
+	Items []ReminderOccurrence `json:"items"`
+}
+
+// ReminderCalendarResponse defines model for ReminderCalendarResponse.
+type ReminderCalendarResponse struct {
+	Days []ReminderCalendarDay `json:"days"`
+}
+
+// ReminderKind defines model for ReminderKind.
+type ReminderKind string
+
+// ReminderListResponse defines model for ReminderListResponse.
+type ReminderListResponse struct {
+	Items []Reminder `json:"items"`
+}
+
+// ReminderOccurrence defines model for ReminderOccurrence.
+type ReminderOccurrence struct {
+	Date         openapi_types.Date    `json:"date"`
+	Kind         ReminderKind          `json:"kind"`
+	Notes        *string               `json:"notes"`
+	ReminderId   string                `json:"reminderId"`
+	ScheduleType *ReminderScheduleType `json:"scheduleType,omitempty"`
+	Title        string                `json:"title"`
+}
+
+// ReminderScheduleType defines model for ReminderScheduleType.
+type ReminderScheduleType string
+
 // ReorderShoppingListItemsRequest defines model for ReorderShoppingListItemsRequest.
 type ReorderShoppingListItemsRequest struct {
 	ItemIds []string `json:"itemIds"`
@@ -234,6 +303,7 @@ type TaskOverviewResponse struct {
 	Month               string                   `json:"month"`
 	MonthlyPenaltyTotal int                      `json:"monthlyPenaltyTotal"`
 	Today               openapi_types.Date       `json:"today"`
+	WeeklyReminders     []ReminderOccurrence     `json:"weeklyReminders"`
 	WeeklyTasks         []TaskOverviewWeeklyTask `json:"weeklyTasks"`
 }
 
@@ -326,6 +396,16 @@ type UpdatePenaltyRuleRequest struct {
 	Threshold   *int    `json:"threshold,omitempty"`
 }
 
+// UpdateReminderRequest defines model for UpdateReminderRequest.
+type UpdateReminderRequest struct {
+	EndDate      *openapi_types.Date   `json:"endDate"`
+	Kind         *ReminderKind         `json:"kind,omitempty"`
+	Notes        *string               `json:"notes"`
+	ScheduleType *ReminderScheduleType `json:"scheduleType,omitempty"`
+	StartDate    *openapi_types.Date   `json:"startDate,omitempty"`
+	Title        *string               `json:"title,omitempty"`
+}
+
 // UpdateShoppingListItemRequest defines model for UpdateShoppingListItemRequest.
 type UpdateShoppingListItemRequest struct {
 	Name     *string `json:"name,omitempty"`
@@ -367,6 +447,12 @@ type GetPenaltySummaryMonthlyParams struct {
 	Month *string `form:"month,omitempty" json:"month,omitempty"`
 }
 
+// ListRemindersParams defines parameters for ListReminders.
+type ListRemindersParams struct {
+	From openapi_types.Date `form:"from" json:"from"`
+	To   openapi_types.Date `form:"to" json:"to"`
+}
+
 // PostShoppingItemParams defines parameters for PostShoppingItem.
 type PostShoppingItemParams struct {
 	IfMatch string `json:"If-Match"`
@@ -406,6 +492,12 @@ type PostPenaltyRuleJSONRequestBody = CreatePenaltyRuleRequest
 
 // PatchPenaltyRuleJSONRequestBody defines body for PatchPenaltyRule for application/json ContentType.
 type PatchPenaltyRuleJSONRequestBody = UpdatePenaltyRuleRequest
+
+// PostReminderJSONRequestBody defines body for PostReminder for application/json ContentType.
+type PostReminderJSONRequestBody = CreateReminderRequest
+
+// PatchReminderJSONRequestBody defines body for PatchReminder for application/json ContentType.
+type PatchReminderJSONRequestBody = UpdateReminderRequest
 
 // PostShoppingItemJSONRequestBody defines body for PostShoppingItem for application/json ContentType.
 type PostShoppingItemJSONRequestBody = CreateShoppingListItemRequest
@@ -484,6 +576,21 @@ type ServerInterface interface {
 	// Monthly penalty summary
 	// (GET /v1/penalty-summaries/monthly)
 	GetPenaltySummaryMonthly(c *gin.Context, params GetPenaltySummaryMonthlyParams)
+	// List future reminder occurrences in current team
+	// (GET /v1/reminders)
+	ListReminders(c *gin.Context, params ListRemindersParams)
+	// Create reminder
+	// (POST /v1/reminders)
+	PostReminder(c *gin.Context)
+	// List reminder definitions in current team
+	// (GET /v1/reminders/list)
+	ListReminderDefinitions(c *gin.Context)
+	// Delete reminder
+	// (DELETE /v1/reminders/{reminderId})
+	DeleteReminder(c *gin.Context, reminderId string)
+	// Update reminder
+	// (PATCH /v1/reminders/{reminderId})
+	PatchReminder(c *gin.Context, reminderId string)
 	// List shopping items in current team
 	// (GET /v1/shopping-items)
 	ListShoppingItems(c *gin.Context)
@@ -859,6 +966,138 @@ func (siw *ServerInterfaceWrapper) GetPenaltySummaryMonthly(c *gin.Context) {
 	}
 
 	siw.Handler.GetPenaltySummaryMonthly(c, params)
+}
+
+// ListReminders operation middleware
+func (siw *ServerInterfaceWrapper) ListReminders(c *gin.Context) {
+
+	var err error
+
+	c.Set(CookieAuthScopes, []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListRemindersParams
+
+	// ------------- Required query parameter "from" -------------
+
+	if paramValue := c.Query("from"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandler(c, fmt.Errorf("Query argument from is required, but not found"), http.StatusBadRequest)
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "from", c.Request.URL.Query(), &params.From)
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter from: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// ------------- Required query parameter "to" -------------
+
+	if paramValue := c.Query("to"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandler(c, fmt.Errorf("Query argument to is required, but not found"), http.StatusBadRequest)
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "to", c.Request.URL.Query(), &params.To)
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter to: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.ListReminders(c, params)
+}
+
+// PostReminder operation middleware
+func (siw *ServerInterfaceWrapper) PostReminder(c *gin.Context) {
+
+	c.Set(CookieAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.PostReminder(c)
+}
+
+// ListReminderDefinitions operation middleware
+func (siw *ServerInterfaceWrapper) ListReminderDefinitions(c *gin.Context) {
+
+	c.Set(CookieAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.ListReminderDefinitions(c)
+}
+
+// DeleteReminder operation middleware
+func (siw *ServerInterfaceWrapper) DeleteReminder(c *gin.Context) {
+
+	var err error
+
+	// ------------- Path parameter "reminderId" -------------
+	var reminderId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "reminderId", c.Param("reminderId"), &reminderId, runtime.BindStyledParameterOptions{Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter reminderId: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	c.Set(CookieAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.DeleteReminder(c, reminderId)
+}
+
+// PatchReminder operation middleware
+func (siw *ServerInterfaceWrapper) PatchReminder(c *gin.Context) {
+
+	var err error
+
+	// ------------- Path parameter "reminderId" -------------
+	var reminderId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "reminderId", c.Param("reminderId"), &reminderId, runtime.BindStyledParameterOptions{Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter reminderId: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	c.Set(CookieAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.PatchReminder(c, reminderId)
 }
 
 // ListShoppingItems operation middleware
@@ -1339,6 +1578,11 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	router.DELETE(options.BaseURL+"/v1/penalty-rules/:ruleId", wrapper.DeletePenaltyRule)
 	router.PATCH(options.BaseURL+"/v1/penalty-rules/:ruleId", wrapper.PatchPenaltyRule)
 	router.GET(options.BaseURL+"/v1/penalty-summaries/monthly", wrapper.GetPenaltySummaryMonthly)
+	router.GET(options.BaseURL+"/v1/reminders", wrapper.ListReminders)
+	router.POST(options.BaseURL+"/v1/reminders", wrapper.PostReminder)
+	router.GET(options.BaseURL+"/v1/reminders/list", wrapper.ListReminderDefinitions)
+	router.DELETE(options.BaseURL+"/v1/reminders/:reminderId", wrapper.DeleteReminder)
+	router.PATCH(options.BaseURL+"/v1/reminders/:reminderId", wrapper.PatchReminder)
 	router.GET(options.BaseURL+"/v1/shopping-items", wrapper.ListShoppingItems)
 	router.POST(options.BaseURL+"/v1/shopping-items", wrapper.PostShoppingItem)
 	router.POST(options.BaseURL+"/v1/shopping-items/reorder", wrapper.PostShoppingItemsReorder)
