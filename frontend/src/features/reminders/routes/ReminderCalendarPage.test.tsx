@@ -1,4 +1,5 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ReactElement } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -123,6 +124,52 @@ describe("ReminderCalendarPage", () => {
     expect(
       screen.getByRole("dialog", { name: "3月27日(金) のリマインダー" }),
     ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "追加" })).toBeInTheDocument();
+  });
+
+  it("keeps the mobile agenda sheet open after creating a reminder", async () => {
+    setViewport(390);
+    const user = userEvent.setup();
+    const createReminder = vi.fn().mockResolvedValue(undefined);
+    mockUseReminderMutations.mockReturnValue({
+      createReminder: { mutateAsync: createReminder },
+      updateReminder: { mutateAsync: vi.fn() },
+      removeReminder: { mutateAsync: vi.fn() },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/calendar?date=2026-03-27"]}>
+        <ReminderCalendarPage />
+      </MemoryRouter>,
+    );
+
+    const agendaDialogs = screen.getAllByRole("dialog", {
+      name: "3月27日(金) のリマインダー",
+    });
+    const agendaDialog = agendaDialogs[agendaDialogs.length - 1];
+
+    expect(agendaDialog).toBeDefined();
+
+    await user.click(
+      within(agendaDialog as HTMLElement).getByRole("button", {
+        name: "追加",
+      }),
+    );
+    await user.type(screen.getByLabelText("タイトル"), "new reminder");
+    await user.click(screen.getByRole("button", { name: "追加する" }));
+
+    expect(createReminder).toHaveBeenCalledWith({
+      title: "new reminder",
+      notes: undefined,
+      kind: "one_time",
+      startDate: "2026-03-27",
+      scheduleType: undefined,
+      endDate: undefined,
+    });
+    expect(
+      screen.getAllByRole("dialog", { name: "3月27日(金) のリマインダー" })
+        .length,
+    ).toBeGreaterThan(0);
   });
 
   it("shows desktop drag-and-drop description and passes events to FullCalendar on desktop", () => {
