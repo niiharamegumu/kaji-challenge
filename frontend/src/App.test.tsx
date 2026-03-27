@@ -241,6 +241,20 @@ describe("App", () => {
     });
   });
 
+  it("shows shopping list panel on home after authentication", async () => {
+    mockGetMe.mockResolvedValue({
+      data: { user: { id: "u1", displayName: "Owner" }, memberships: [] },
+    });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: "買い物リスト" }),
+      ).toBeInTheDocument();
+    });
+  });
+
   it("keeps logged-out state when getMe returns 401", async () => {
     render(<App />);
 
