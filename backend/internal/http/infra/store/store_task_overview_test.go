@@ -10,6 +10,39 @@ import (
 	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 )
 
+func TestGetTaskOverviewWeeklyRemindersSortsByDateThenCreatedAt(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	now := time.Now().In(s.loc)
+	today := dateOnly(now, s.loc)
+	teamID, userID := createTeamWithMember(t, s, "overview-reminders-sort@example.com", today.Add(9*time.Hour))
+
+	laterDate := today.AddDate(0, 0, 1)
+	createReminderAt(t, s, teamID, "z-later-date", api.OneTime, nil, today.Add(3*time.Hour), laterDate, nil)
+	createReminderAt(t, s, teamID, "z-created-second", api.OneTime, nil, today.Add(time.Hour), today, nil)
+	createReminderAt(t, s, teamID, "a-created-first", api.OneTime, nil, today.Add(30*time.Minute), today, nil)
+
+	overview, err := s.GetTaskOverview(ctx, userID)
+	if err != nil {
+		t.Fatalf("GetTaskOverview failed: %v", err)
+	}
+
+	if len(overview.WeeklyReminders) < 3 {
+		t.Fatalf("expected at least 3 weekly reminders, got %d", len(overview.WeeklyReminders))
+	}
+
+	if overview.WeeklyReminders[0].Title != "a-created-first" {
+		t.Fatalf("expected first same-day reminder to be oldest created item, got %q", overview.WeeklyReminders[0].Title)
+	}
+	if overview.WeeklyReminders[1].Title != "z-created-second" {
+		t.Fatalf("expected second same-day reminder to be second oldest created item, got %q", overview.WeeklyReminders[1].Title)
+	}
+	if overview.WeeklyReminders[2].Title != "z-later-date" {
+		t.Fatalf("expected later-date reminder after same-day reminders, got %q", overview.WeeklyReminders[2].Title)
+	}
+}
+
 func TestBuildMonthlyTaskStatusByDateDailyOmitAfterDeleteTime(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
@@ -241,6 +274,36 @@ func TestBuildMonthlyTaskStatusByDatePastMonthKeepsMonthEnd(t *testing.T) {
 func createTaskAtWithID(t *testing.T, s *Store, teamID string, taskType api.TaskType, penalty, required int, createdAt time.Time) string {
 	t.Helper()
 	return createTaskAtWithIDAndNotes(t, s, teamID, taskType, penalty, required, createdAt, nil)
+}
+
+func createReminderAt(
+	t *testing.T,
+	s *Store,
+	teamID string,
+	title string,
+	kind api.ReminderKind,
+	scheduleType *api.ReminderScheduleType,
+	createdAt time.Time,
+	startDate time.Time,
+	endDate *time.Time,
+) string {
+	t.Helper()
+	reminderID := s.nextID("rem")
+	if err := s.q.CreateReminder(context.Background(), dbsqlc.CreateReminderParams{
+		ID:           reminderID,
+		TeamID:       teamID,
+		Title:        title,
+		Notes:        pgtype.Text{},
+		Kind:         string(kind),
+		ScheduleType: textFromPtr(reminderScheduleTypeString(scheduleType)),
+		StartDate:    toPgDate(startDate),
+		EndDate:      pgDateFromPtr(endDate),
+		CreatedAt:    toPgTimestamptz(createdAt),
+		UpdatedAt:    toPgTimestamptz(createdAt),
+	}); err != nil {
+		t.Fatalf("failed to create reminder: %v", err)
+	}
+	return reminderID
 }
 
 func createTaskAtWithIDAndNotes(t *testing.T, s *Store, teamID string, taskType api.TaskType, penalty, required int, createdAt time.Time, notes *string) string {

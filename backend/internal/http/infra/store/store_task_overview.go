@@ -36,7 +36,11 @@ func (s *Store) GetTaskOverview(ctx context.Context, userID string) (resp api.Ta
 	}
 	daily := []api.TaskOverviewDailyTask{}
 	weekly := []api.TaskOverviewWeeklyTask{}
-	weeklyReminders := []api.ReminderOccurrence{}
+	type overviewReminderOccurrence struct {
+		occurrence api.ReminderOccurrence
+		createdAt  time.Time
+	}
+	weeklyReminderItems := []overviewReminderOccurrence{}
 
 	tasks, err := s.q.ListUndeletedTasksByTeamID(ctx, teamID)
 	queryCount++
@@ -94,7 +98,12 @@ func (s *Store) GetTaskOverview(ctx context.Context, userID string) (resp api.Ta
 	}
 	for _, row := range reminderRows {
 		record := reminderFromDB(row, s.loc)
-		weeklyReminders = append(weeklyReminders, expandReminderOccurrences(record, today, weekEnd, today)...)
+		for _, occurrence := range expandReminderOccurrences(record, today, weekEnd, today) {
+			weeklyReminderItems = append(weeklyReminderItems, overviewReminderOccurrence{
+				occurrence: occurrence,
+				createdAt:  record.CreatedAt,
+			})
+		}
 	}
 
 	for _, row := range tasks {
@@ -117,12 +126,16 @@ func (s *Store) GetTaskOverview(ctx context.Context, userID string) (resp api.Ta
 
 	sort.Slice(daily, func(i, j int) bool { return daily[i].Task.CreatedAt.Before(daily[j].Task.CreatedAt) })
 	sort.Slice(weekly, func(i, j int) bool { return weekly[i].Task.CreatedAt.Before(weekly[j].Task.CreatedAt) })
-	sort.Slice(weeklyReminders, func(i, j int) bool {
-		if weeklyReminders[i].Date.Time.Equal(weeklyReminders[j].Date.Time) {
-			return weeklyReminders[i].Title < weeklyReminders[j].Title
+	sort.Slice(weeklyReminderItems, func(i, j int) bool {
+		if weeklyReminderItems[i].occurrence.Date.Time.Equal(weeklyReminderItems[j].occurrence.Date.Time) {
+			return weeklyReminderItems[i].createdAt.Before(weeklyReminderItems[j].createdAt)
 		}
-		return weeklyReminders[i].Date.Time.Before(weeklyReminders[j].Date.Time)
+		return weeklyReminderItems[i].occurrence.Date.Time.Before(weeklyReminderItems[j].occurrence.Date.Time)
 	})
+	weeklyReminders := make([]api.ReminderOccurrence, 0, len(weeklyReminderItems))
+	for _, item := range weeklyReminderItems {
+		weeklyReminders = append(weeklyReminders, item.occurrence)
+	}
 
 	elapsed := int(today.Sub(weekStart).Hours()/24) + 1
 	resp = api.TaskOverviewResponse{

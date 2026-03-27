@@ -92,6 +92,12 @@ function buildInitialFormState(selectedDate: string): ReminderFormState {
   };
 }
 
+function calendarDescription(isMobile: boolean) {
+  return isMobile
+    ? "未来の予定だけを表示します。日付変更は編集から行えます。"
+    : "未来の予定だけを表示します。ドラッグで日付を変更できます。";
+}
+
 function toFormState(reminder: Reminder): ReminderFormState {
   return {
     title: reminder.title,
@@ -433,10 +439,13 @@ function MobileAgendaSheet({
 
 export function ReminderCalendarPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const initialSelectedDate = normalizeDateKey(searchParams.get("date"));
+  const initialDateParam = searchParams.get("date");
+  const initialSelectedDate = normalizeDateKey(initialDateParam);
   const isMobile = useIsMobile();
   const [selectedDate, setSelectedDate] = useState(initialSelectedDate);
-  const [mobileAgendaOpen, setMobileAgendaOpen] = useState(false);
+  const [mobileAgendaOpen, setMobileAgendaOpen] = useState(
+    () => isMobile && initialDateParam != null,
+  );
   const [visibleMonth, setVisibleMonth] = useState(
     monthKeyFromDateKey(initialSelectedDate),
   );
@@ -740,7 +749,7 @@ export function ReminderCalendarPage() {
           <div>
             <h2 className="text-lg font-semibold">リマインダーカレンダー</h2>
             <p className="mt-1 text-sm text-stone-500">
-              未来の予定だけを表示します。ドラッグで日付を変更できます。
+              {calendarDescription(isMobile)}
             </p>
           </div>
         </div>
