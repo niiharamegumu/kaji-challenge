@@ -130,9 +130,9 @@ export function HomePage() {
           onReorder={(itemIds) => {
             void reorderItems.mutateAsync({ itemIds });
           }}
-          onUpdate={(itemId, payload) =>
-            updateItem.mutateAsync({ itemId, payload })
-          }
+          onUpdate={async (itemId, payload) => {
+            await updateItem.mutateAsync({ itemId, payload });
+          }}
         />
       </section>
 
