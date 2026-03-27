@@ -1,4 +1,5 @@
 import { useAtom } from "jotai";
+import { useState } from "react";
 
 import type {
   CreatePenaltyRuleRequest,
@@ -13,6 +14,7 @@ import { initialRuleFormState, ruleFormAtom } from "../state/forms";
 export function AdminPenaltiesPage() {
   const rulesQuery = usePenaltyRulesQuery();
   const activeRules = rulesQuery.data.filter((rule) => rule.deletedAt == null);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
 
   const [ruleForm, setRuleForm] = useAtom(ruleFormAtom);
   const [, setStatus] = useAtom(statusMessageAtom);
@@ -40,10 +42,11 @@ export function AdminPenaltiesPage() {
       <PenaltyRuleManager
         form={ruleForm}
         rules={activeRules}
+        isCreateOpen={isCreateOpen}
+        onCloseCreate={() => setIsCreateOpen(false)}
         onFormChange={(updater) => setRuleForm((prev) => updater(prev))}
-        onCreate={() => {
-          void handleCreateRule();
-        }}
+        onOpenCreate={() => setIsCreateOpen(true)}
+        onCreate={handleCreateRule}
         onDelete={(ruleId) => {
           void removeRule.mutateAsync(ruleId);
         }}

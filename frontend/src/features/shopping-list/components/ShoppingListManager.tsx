@@ -31,9 +31,10 @@ import type {
   ShoppingListItem,
   UpdateShoppingListItemRequest,
 } from "../../../lib/api/generated/client";
+import { FormSheet } from "../../../shared/components/FormSheet";
 import { ConfirmModal } from "../../admin/components/ConfirmModal";
 
-type ShoppingItemFormState = {
+export type ShoppingItemFormState = {
   name: string;
   quantity: string;
   notes: string;
@@ -42,17 +43,39 @@ type ShoppingItemFormState = {
 type Props = {
   form: ShoppingItemFormState;
   items: ShoppingListItem[];
+  isCreateOpen: boolean;
   isReordering: boolean;
+  onCloseCreate: () => void;
   onFormChange: (
     updater: (prev: ShoppingItemFormState) => ShoppingItemFormState,
   ) => void;
-  onCreate: () => void;
+  onOpenCreate: () => void;
+  onCreate: () => Promise<void>;
   onDelete: (itemId: string) => void;
   onReorder: (itemIds: string[]) => void;
   onUpdate: (
     itemId: string,
     payload: UpdateShoppingListItemRequest,
   ) => Promise<void>;
+};
+
+type ShoppingListItemsSectionProps = {
+  items: ShoppingListItem[];
+  isReordering: boolean;
+  onDelete: (itemId: string) => void;
+  onReorder: (itemIds: string[]) => void;
+  onUpdate: (
+    itemId: string,
+    payload: UpdateShoppingListItemRequest,
+  ) => Promise<void>;
+  title?: string;
+  description?: string;
+  headerContent?: ReactNode;
+  showSectionChrome?: boolean;
+  articleClassName?: string;
+  listClassName?: string;
+  emptyClassName?: string;
+  emptyMessage?: string;
 };
 
 type EditState = {
@@ -184,9 +207,7 @@ function SortableShoppingItem({
     <li
       ref={setNodeRef}
       style={style}
-      className={`relative rounded-xl border border-stone-200 bg-white p-3 shadow-sm ${
-        isEditing ? "cursor-default" : "cursor-default"
-      } ${isDragging ? "opacity-70" : ""}`}
+      className={`relative rounded-xl border border-stone-200 bg-white p-3 shadow-sm ${isDragging ? "opacity-70" : ""}`}
     >
       {isEditing ? (
         <div className="grid gap-2">
@@ -310,16 +331,87 @@ function SortableShoppingItem({
   );
 }
 
-export function ShoppingListManager({
+function ShoppingItemForm({
   form,
+  onFormChange,
+}: {
+  form: ShoppingItemFormState;
+  onFormChange: (
+    updater: (prev: ShoppingItemFormState) => ShoppingItemFormState,
+  ) => void;
+}) {
+  const handleChange =
+    (key: keyof ShoppingItemFormState) =>
+    (event: ChangeEvent<HTMLInputElement>) => {
+      onFormChange((prev) => ({ ...prev, [key]: event.target.value }));
+    };
+
+  return (
+    <div className="grid gap-2">
+      <label
+        className="text-xs text-stone-700 sm:text-sm"
+        htmlFor="shopping-item-name"
+      >
+        名前
+      </label>
+      <input
+        id="shopping-item-name"
+        className="h-10 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
+        value={form.name}
+        onChange={handleChange("name")}
+        placeholder="例: 牛乳"
+      />
+      <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid gap-1.5">
+          <label
+            className="text-xs text-stone-700 sm:text-sm"
+            htmlFor="shopping-item-quantity"
+          >
+            数量
+          </label>
+          <input
+            id="shopping-item-quantity"
+            className="h-10 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
+            value={form.quantity}
+            onChange={handleChange("quantity")}
+            placeholder="例: 2本"
+          />
+        </div>
+        <div className="grid gap-1.5">
+          <label
+            className="text-xs text-stone-700 sm:text-sm"
+            htmlFor="shopping-item-notes"
+          >
+            メモ
+          </label>
+          <input
+            id="shopping-item-notes"
+            className="h-10 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
+            value={form.notes}
+            onChange={handleChange("notes")}
+            placeholder="例: 低脂肪乳"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function ShoppingListItemsSection({
   items,
   isReordering,
-  onFormChange,
-  onCreate,
   onDelete,
   onReorder,
   onUpdate,
-}: Props) {
+  title = "現在の買い物",
+  description,
+  headerContent,
+  showSectionChrome = true,
+  articleClassName = "mt-3 rounded-xl border border-stone-200 bg-white/90 p-3 shadow-sm md:mt-4 md:rounded-2xl md:p-6",
+  listClassName = "mt-4",
+  emptyClassName = "mt-4 rounded-xl border border-dashed border-stone-300 bg-stone-50/80 px-4 py-8 text-center text-sm text-stone-600",
+  emptyMessage = "買い物項目はまだありません。必要なものを追加してください。",
+}: ShoppingListItemsSectionProps) {
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editState, setEditState] = useState<EditState>({
     name: "",
@@ -346,14 +438,6 @@ export function ShoppingListManager({
   );
 
   const itemIds = optimisticItems.map((item) => item.id);
-
-  const handleChange =
-    (key: keyof ShoppingItemFormState) =>
-    (event: ChangeEvent<HTMLInputElement>) => {
-      onFormChange((prev) => ({ ...prev, [key]: event.target.value }));
-    };
-
-  const canCreate = form.name.trim().length > 0;
 
   const applyReorder = (activeId: string, overId: string) => {
     if (activeId === overId) {
@@ -406,101 +490,34 @@ export function ShoppingListManager({
 
   return (
     <>
-      <article className="animate-enter rounded-xl border border-stone-200 bg-white/90 p-3 shadow-sm md:rounded-2xl md:p-6">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold text-stone-900">
-              買い物リスト
-            </h2>
-            <p className="mt-1 text-sm text-stone-600">
-              今必要なものだけをチームで共有します。購入済みにすると一覧から消えます。
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-4 grid gap-2">
-          <label
-            className="text-xs text-stone-700 sm:text-sm"
-            htmlFor="shopping-item-name"
-          >
-            名前
-          </label>
-          <input
-            id="shopping-item-name"
-            className="h-10 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
-            value={form.name}
-            onChange={handleChange("name")}
-            placeholder="例: 牛乳"
-          />
-          <div className="grid gap-2 sm:grid-cols-2">
-            <div className="grid gap-1.5">
-              <label
-                className="text-xs text-stone-700 sm:text-sm"
-                htmlFor="shopping-item-quantity"
-              >
-                数量
-              </label>
-              <input
-                id="shopping-item-quantity"
-                className="h-10 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
-                value={form.quantity}
-                onChange={handleChange("quantity")}
-                placeholder="例: 2本"
-              />
+      <article className={articleClassName}>
+        {showSectionChrome ? (
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-semibold text-stone-900">
+                {title}
+              </h3>
+              {description != null ? (
+                <p className="mt-1 text-sm text-stone-600">{description}</p>
+              ) : null}
             </div>
-            <div className="grid gap-1.5">
-              <label
-                className="text-xs text-stone-700 sm:text-sm"
-                htmlFor="shopping-item-notes"
-              >
-                メモ
-              </label>
-              <input
-                id="shopping-item-notes"
-                className="h-10 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
-                value={form.notes}
-                onChange={handleChange("notes")}
-                placeholder="例: 低脂肪乳"
-              />
+            <div className="flex items-center gap-2">
+              {headerContent}
+              {isReordering ? (
+                <span className="text-xs text-stone-500">
+                  並び順を保存中...
+                </span>
+              ) : null}
             </div>
           </div>
-          <div className="mt-1 flex justify-start">
-            <button
-              type="button"
-              className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-stone-900 px-3 py-2 text-sm text-white transition-colors duration-200 hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-50 sm:h-11 sm:w-auto sm:min-w-40"
-              onClick={onCreate}
-              disabled={!canCreate}
-            >
-              <Plus size={16} aria-hidden="true" />
-              <span>追加する</span>
-            </button>
+        ) : isReordering ? (
+          <div className="text-right text-xs text-stone-500">
+            並び順を保存中...
           </div>
-        </div>
-      </article>
-
-      <article className="mt-3 rounded-xl border border-stone-200 bg-white/90 p-3 shadow-sm md:mt-4 md:rounded-2xl md:p-6">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h3 className="text-base font-semibold text-stone-900">
-              現在の買い物
-            </h3>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="rounded-full border border-stone-200 bg-stone-50 px-3 py-1 text-xs text-stone-700">
-              <span className="whitespace-nowrap">
-                {optimisticItems.length}件
-              </span>
-            </span>
-            {isReordering ? (
-              <span className="text-xs text-stone-500">並び順を保存中...</span>
-            ) : null}
-          </div>
-        </div>
+        ) : null}
 
         {optimisticItems.length === 0 ? (
-          <div className="mt-4 rounded-xl border border-dashed border-stone-300 bg-stone-50/80 px-4 py-8 text-center text-sm text-stone-600">
-            買い物項目はまだありません。必要なものを追加してください。
-          </div>
+          <div className={emptyClassName}>{emptyMessage}</div>
         ) : (
           <DndContext
             sensors={sensors}
@@ -511,7 +528,7 @@ export function ShoppingListManager({
               items={itemIds}
               strategy={verticalListSortingStrategy}
             >
-              <ul className="mt-4 grid gap-2">
+              <ul className={`grid gap-2 ${listClassName}`}>
                 {optimisticItems.map((item) => (
                   <SortableShoppingItem
                     key={item.id}
@@ -553,6 +570,72 @@ export function ShoppingListManager({
           setPendingCompleteItem(null);
         }}
       />
+    </>
+  );
+}
+
+export function ShoppingListManager({
+  form,
+  items,
+  isCreateOpen,
+  isReordering,
+  onCloseCreate,
+  onFormChange,
+  onOpenCreate,
+  onCreate,
+  onDelete,
+  onReorder,
+  onUpdate,
+}: Props) {
+  const canCreate = form.name.trim().length > 0;
+
+  return (
+    <>
+      <article className="animate-enter rounded-xl border border-stone-200 bg-white/90 p-3 shadow-sm md:rounded-2xl md:p-6">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold text-stone-900">買い物リスト</h2>
+          <button
+            type="button"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-stone-900 text-white transition-colors hover:bg-stone-800"
+            onClick={onOpenCreate}
+            aria-label="追加"
+          >
+            <Plus size={16} aria-hidden="true" />
+          </button>
+        </div>
+        <div className="mt-4 border-t border-stone-200 pt-4">
+          <ShoppingListItemsSection
+            items={items}
+            isReordering={isReordering}
+            onDelete={onDelete}
+            onReorder={onReorder}
+            onUpdate={onUpdate}
+            articleClassName=""
+            headerContent={
+              <span className="rounded-full border border-stone-200 bg-stone-50 px-3 py-1 text-xs text-stone-700">
+                <span className="whitespace-nowrap">{items.length}件</span>
+              </span>
+            }
+          />
+        </div>
+        <p className="mt-4 text-xs text-stone-500">
+          今必要なものだけをチームで共有します。購入済みにすると一覧から消えます。
+        </p>
+      </article>
+
+      <FormSheet
+        isOpen={isCreateOpen}
+        title="買い物項目を追加"
+        submitLabel="追加する"
+        submitIcon={<Plus size={16} aria-hidden="true" />}
+        submitDisabled={!canCreate}
+        onClose={onCloseCreate}
+        onSubmit={() => {
+          void onCreate().then(onCloseCreate);
+        }}
+      >
+        <ShoppingItemForm form={form} onFormChange={onFormChange} />
+      </FormSheet>
     </>
   );
 }

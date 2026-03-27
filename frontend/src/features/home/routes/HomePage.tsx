@@ -3,7 +3,12 @@ import { ChevronRight } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { statusMessageAtom } from "../../shell/state/status";
+import {
+  useShoppingItemMutations,
+  useShoppingItemsQuery,
+} from "../../shopping-list/hooks/useShoppingList";
 import { DailyTasksPanel } from "../components/DailyTasksPanel";
+import { HomeShoppingListPanel } from "../components/HomeShoppingListPanel";
 import { WeeklyRemindersPanel } from "../components/WeeklyRemindersPanel";
 import { WeeklyTasksPanel } from "../components/WeeklyTasksPanel";
 import {
@@ -41,6 +46,29 @@ export function HomePageSkeleton() {
         ))}
       </section>
 
+      <section className="grid gap-2 md:grid-cols-2 md:gap-4">
+        {["reminders", "shopping"].map((panel) => (
+          <article
+            key={panel}
+            className="animate-pulse rounded-xl border border-stone-200 bg-white/90 p-2.5 shadow-sm md:rounded-2xl md:p-4"
+          >
+            <div className="h-6 w-28 rounded bg-stone-200" />
+            <div className="mt-3 space-y-2">
+              {[0, 1, 2].map((row) => (
+                <div
+                  key={`${panel}-${row}`}
+                  className="rounded-xl border border-stone-100 bg-stone-50 p-3"
+                >
+                  <div className="h-4 w-2/5 rounded bg-stone-200" />
+                  <div className="mt-2 h-3 w-4/5 rounded bg-stone-100" />
+                  <div className="mt-3 h-3 w-3/5 rounded bg-stone-100" />
+                </div>
+              ))}
+            </div>
+          </article>
+        ))}
+      </section>
+
       <div className="px-1">
         <div className="h-4 w-36 rounded bg-stone-200" />
       </div>
@@ -51,9 +79,13 @@ export function HomePageSkeleton() {
 export function HomePage() {
   const [, setStatus] = useAtom(statusMessageAtom);
   const homeQuery = useHomeQuery();
+  const shoppingItemsQuery = useShoppingItemsQuery();
   const toggleMutation = useToggleCompletionMutation(setStatus);
+  const { updateItem, removeItem, reorderItems } =
+    useShoppingItemMutations(setStatus);
 
   const home = homeQuery.data;
+  const shoppingItems = shoppingItemsQuery.data;
 
   const weeklyProgress =
     home == null
@@ -87,7 +119,22 @@ export function HomePage() {
         />
       </section>
 
-      <WeeklyRemindersPanel items={home.weeklyReminders} />
+      <section className="grid gap-2 md:grid-cols-2 md:gap-4">
+        <WeeklyRemindersPanel items={home.weeklyReminders} />
+        <HomeShoppingListPanel
+          items={shoppingItems}
+          isReordering={reorderItems.isPending}
+          onDelete={(itemId) => {
+            void removeItem.mutateAsync(itemId);
+          }}
+          onReorder={(itemIds) => {
+            void reorderItems.mutateAsync({ itemIds });
+          }}
+          onUpdate={async (itemId, payload) => {
+            await updateItem.mutateAsync({ itemId, payload });
+          }}
+        />
+      </section>
 
       <div className="px-1">
         <Link

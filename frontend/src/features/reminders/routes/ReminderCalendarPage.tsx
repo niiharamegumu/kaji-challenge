@@ -34,6 +34,7 @@ import {
   ReminderKind as ReminderKindConst,
   ReminderScheduleType as ReminderScheduleTypeConst,
 } from "../../../lib/api/generated/client";
+import { FormSheet } from "../../../shared/components/FormSheet";
 import { ConfirmModal } from "../../admin/components/ConfirmModal";
 import { statusMessageAtom } from "../../shell/state/status";
 import {
@@ -134,164 +135,119 @@ function ReminderSheet({
 
   const isRecurring = form.kind === ReminderKindConst.recurring;
 
-  return createPortal(
-    <>
-      <button
-        type="button"
-        className="fixed inset-0 z-[60] bg-stone-900/20"
-        aria-label="リマインダー編集を閉じる"
-        onClick={onClose}
-      />
-      <dialog
-        open
-        className="fixed bottom-0 left-1/2 z-[70] w-[min(42rem,calc(100%-1rem))] -translate-x-1/2 rounded-t-3xl border border-stone-200 bg-white px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-4 shadow-2xl md:bottom-4 md:rounded-3xl"
-        aria-modal="true"
-        aria-label={title}
-      >
-        <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-stone-200" />
-        <div className="mx-auto max-w-xl">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-lg font-semibold text-stone-900">{title}</h2>
-            <button
-              type="button"
-              className="rounded-md px-2 py-1 text-sm text-stone-600 transition-colors hover:bg-stone-100"
-              onClick={onClose}
+  return (
+    <FormSheet
+      isOpen={isOpen}
+      title={title}
+      submitLabel={submitLabel}
+      submitDisabled={form.title.trim() === "" || form.startDate === ""}
+      onClose={onClose}
+      onSubmit={onSubmit}
+      footerStart={
+        onDelete != null ? (
+          <button
+            type="button"
+            className="inline-flex h-10 items-center gap-1 rounded-xl border border-rose-300 bg-rose-50 px-3 text-sm text-rose-700 transition-colors hover:bg-rose-100"
+            onClick={onDelete}
+          >
+            <Trash2 size={15} aria-hidden="true" />
+            <span>削除</span>
+          </button>
+        ) : null
+      }
+    >
+      <div className="grid gap-3">
+        <label className="grid gap-1.5">
+          <span className="text-sm font-medium text-stone-700">タイトル</span>
+          <input
+            className="h-11 rounded-xl border border-stone-300 bg-white px-3 text-sm"
+            value={form.title}
+            onChange={(event) =>
+              onChange({ ...form, title: event.target.value })
+            }
+          />
+        </label>
+        <label className="grid gap-1.5">
+          <span className="text-sm font-medium text-stone-700">メモ</span>
+          <textarea
+            className="min-h-24 rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm"
+            value={form.notes}
+            onChange={(event) =>
+              onChange({ ...form, notes: event.target.value })
+            }
+          />
+        </label>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="grid gap-1.5">
+            <span className="text-sm font-medium text-stone-700">種別</span>
+            <select
+              className="h-11 rounded-xl border border-stone-300 bg-white px-3 text-sm"
+              value={form.kind}
+              onChange={(event) =>
+                onChange({
+                  ...form,
+                  kind: event.target.value as ReminderKind,
+                  endDate:
+                    event.target.value === ReminderKindConst.one_time
+                      ? ""
+                      : form.endDate,
+                })
+              }
             >
-              閉じる
-            </button>
-          </div>
-          <div className="mt-4 grid gap-3">
+              <option value={ReminderKindConst.one_time}>1回だけ</option>
+              <option value={ReminderKindConst.recurring}>定期</option>
+            </select>
+          </label>
+          {isRecurring ? (
             <label className="grid gap-1.5">
               <span className="text-sm font-medium text-stone-700">
-                タイトル
+                くり返し
               </span>
-              <input
+              <select
                 className="h-11 rounded-xl border border-stone-300 bg-white px-3 text-sm"
-                value={form.title}
+                value={form.scheduleType}
                 onChange={(event) =>
-                  onChange({ ...form, title: event.target.value })
+                  onChange({
+                    ...form,
+                    scheduleType: event.target.value as ReminderScheduleType,
+                  })
                 }
-              />
-            </label>
-            <label className="grid gap-1.5">
-              <span className="text-sm font-medium text-stone-700">メモ</span>
-              <textarea
-                className="min-h-24 rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm"
-                value={form.notes}
-                onChange={(event) =>
-                  onChange({ ...form, notes: event.target.value })
-                }
-              />
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              <label className="grid gap-1.5">
-                <span className="text-sm font-medium text-stone-700">種別</span>
-                <select
-                  className="h-11 rounded-xl border border-stone-300 bg-white px-3 text-sm"
-                  value={form.kind}
-                  onChange={(event) =>
-                    onChange({
-                      ...form,
-                      kind: event.target.value as ReminderKind,
-                      endDate:
-                        event.target.value === ReminderKindConst.one_time
-                          ? ""
-                          : form.endDate,
-                    })
-                  }
-                >
-                  <option value={ReminderKindConst.one_time}>1回だけ</option>
-                  <option value={ReminderKindConst.recurring}>定期</option>
-                </select>
-              </label>
-              {isRecurring ? (
-                <label className="grid gap-1.5">
-                  <span className="text-sm font-medium text-stone-700">
-                    くり返し
-                  </span>
-                  <select
-                    className="h-11 rounded-xl border border-stone-300 bg-white px-3 text-sm"
-                    value={form.scheduleType}
-                    onChange={(event) =>
-                      onChange({
-                        ...form,
-                        scheduleType: event.target
-                          .value as ReminderScheduleType,
-                      })
-                    }
-                  >
-                    <option value={ReminderScheduleTypeConst.daily}>
-                      毎日
-                    </option>
-                    <option value={ReminderScheduleTypeConst.weekly}>
-                      毎週
-                    </option>
-                    <option value={ReminderScheduleTypeConst.monthly}>
-                      毎月
-                    </option>
-                  </select>
-                </label>
-              ) : null}
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <label
-                className={`grid gap-1.5 ${!isRecurring ? "col-span-2" : ""}`}
               >
-                <span className="text-sm font-medium text-stone-700">
-                  開始日
-                </span>
-                <input
-                  type="date"
-                  className="h-11 rounded-xl border border-stone-300 bg-white px-3 text-sm"
-                  value={form.startDate}
-                  onChange={(event) =>
-                    onChange({ ...form, startDate: event.target.value })
-                  }
-                />
-              </label>
-              {isRecurring ? (
-                <label className="grid gap-1.5">
-                  <span className="text-sm font-medium text-stone-700">
-                    終了日
-                  </span>
-                  <input
-                    type="date"
-                    className="h-11 rounded-xl border border-stone-300 bg-white px-3 text-sm"
-                    value={form.endDate}
-                    onChange={(event) =>
-                      onChange({ ...form, endDate: event.target.value })
-                    }
-                  />
-                </label>
-              ) : null}
-            </div>
-          </div>
-          <div className="mt-5 flex items-center justify-between gap-3">
-            <div>
-              {onDelete != null ? (
-                <button
-                  type="button"
-                  className="inline-flex h-10 items-center gap-1 rounded-xl border border-rose-300 bg-rose-50 px-3 text-sm text-rose-700 transition-colors hover:bg-rose-100"
-                  onClick={onDelete}
-                >
-                  <Trash2 size={15} aria-hidden="true" />
-                  <span>削除</span>
-                </button>
-              ) : null}
-            </div>
-            <button
-              type="button"
-              className="inline-flex h-11 items-center rounded-xl bg-stone-900 px-4 text-sm font-medium text-white transition-colors hover:bg-stone-800"
-              onClick={onSubmit}
-              disabled={form.title.trim() === "" || form.startDate === ""}
-            >
-              {submitLabel}
-            </button>
-          </div>
+                <option value={ReminderScheduleTypeConst.daily}>毎日</option>
+                <option value={ReminderScheduleTypeConst.weekly}>毎週</option>
+                <option value={ReminderScheduleTypeConst.monthly}>毎月</option>
+              </select>
+            </label>
+          ) : null}
         </div>
-      </dialog>
-    </>,
-    document.body,
+        <div className="grid grid-cols-2 gap-3">
+          <label className={`grid gap-1.5 ${!isRecurring ? "col-span-2" : ""}`}>
+            <span className="text-sm font-medium text-stone-700">開始日</span>
+            <input
+              type="date"
+              className="h-11 rounded-xl border border-stone-300 bg-white px-3 text-sm"
+              value={form.startDate}
+              onChange={(event) =>
+                onChange({ ...form, startDate: event.target.value })
+              }
+            />
+          </label>
+          {isRecurring ? (
+            <label className="grid gap-1.5">
+              <span className="text-sm font-medium text-stone-700">終了日</span>
+              <input
+                type="date"
+                className="h-11 rounded-xl border border-stone-300 bg-white px-3 text-sm"
+                value={form.endDate}
+                onChange={(event) =>
+                  onChange({ ...form, endDate: event.target.value })
+                }
+              />
+            </label>
+          ) : null}
+        </div>
+      </div>
+    </FormSheet>
   );
 }
 
@@ -690,10 +646,21 @@ export function ReminderCalendarPage() {
           background: transparent;
         }
         .reminder-calendar .fc .fc-scrollgrid {
+          border: 0;
           border-collapse: separate;
           border-spacing: 0;
           border-radius: 1rem;
           overflow: hidden;
+        }
+        .reminder-calendar .fc-theme-standard td,
+        .reminder-calendar .fc-theme-standard th {
+          border-color: rgb(231 229 228);
+        }
+        .reminder-calendar .fc-theme-standard tr > :last-child {
+          border-right: 0;
+        }
+        .reminder-calendar .fc-theme-standard tbody tr:last-child td {
+          border-bottom: 0;
         }
         .reminder-calendar .fc .fc-daygrid-body-balanced .fc-daygrid-day-events {
           min-height: 0;
@@ -748,9 +715,6 @@ export function ReminderCalendarPage() {
         <div className="flex items-center justify-between gap-2">
           <div>
             <h2 className="text-lg font-semibold">リマインダーカレンダー</h2>
-            <p className="mt-1 text-sm text-stone-500">
-              {calendarDescription(isMobile)}
-            </p>
           </div>
         </div>
 
@@ -855,6 +819,9 @@ export function ReminderCalendarPage() {
             onEdit={openEditSheet}
           />
         </section>
+        <p className="mt-4 text-xs text-stone-500">
+          {calendarDescription(isMobile)}
+        </p>
       </article>
 
       <MobileAgendaSheet
