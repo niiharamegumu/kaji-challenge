@@ -1,4 +1,4 @@
-import { ShoppingBasket } from "lucide-react";
+import { ShoppingCart } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import type {
@@ -33,7 +33,7 @@ export function HomeShoppingListPanel({
           to="/shopping-list"
           className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-stone-300 bg-white px-2.5 py-1.5 text-sm font-medium text-stone-700 transition-colors hover:bg-stone-50 hover:text-stone-900"
         >
-          <ShoppingBasket size={16} aria-hidden="true" />
+          <ShoppingCart size={16} aria-hidden="true" />
           <span>買い物へ</span>
         </Link>
       </div>
