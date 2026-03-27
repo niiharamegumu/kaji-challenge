@@ -27,10 +27,17 @@ const mockPreloadAdminTasksPageChunk = vi.fn();
 const mockPreloadAdminPenaltiesPageChunk = vi.fn();
 const mockPreloadAdminInvitesPageChunk = vi.fn();
 const mockPreloadAdminSummaryPageChunk = vi.fn();
+const mockPreloadReminderCalendarPageChunk = vi.fn();
 const mockPreloadShoppingListPageChunk = vi.fn();
 
 vi.mock("./lib/api/generated/client", () => ({
   TaskType: { daily: "daily", weekly: "weekly" },
+  ReminderKind: { one_time: "one_time", recurring: "recurring" },
+  ReminderScheduleType: {
+    daily: "daily",
+    weekly: "weekly",
+    monthly: "monthly",
+  },
   getAuthGoogleStart: (...args: unknown[]) => mockGetAuthStart(...args),
   postAuthSessionsExchange: vi.fn(),
   postAuthLogout: vi.fn(),
@@ -44,6 +51,11 @@ vi.mock("./lib/api/generated/client", () => ({
   getTeamCurrentInvite: (...args: unknown[]) =>
     mockGetTeamCurrentInvite(...args),
   listShoppingItems: (...args: unknown[]) => mockListShoppingItems(...args),
+  listReminders: vi.fn(),
+  listReminderDefinitions: vi.fn(),
+  postReminder: vi.fn(),
+  patchReminder: vi.fn(),
+  deleteReminder: vi.fn(),
   postShoppingItem: vi.fn(),
   patchShoppingItem: vi.fn(),
   deleteShoppingItem: vi.fn(),
@@ -68,6 +80,7 @@ vi.mock("./app/route-chunks", () => ({
   AdminPenaltiesPage: () => <div>penalties page</div>,
   AdminInvitesPage: () => <div>settings page</div>,
   AdminSummaryPage: () => <div>summary page</div>,
+  ReminderCalendarPage: () => <div>calendar page</div>,
   ShoppingListPage: () => <div>shopping page</div>,
   preloadAdminTasksPageChunk: (...args: unknown[]) =>
     mockPreloadAdminTasksPageChunk(...args),
@@ -77,6 +90,8 @@ vi.mock("./app/route-chunks", () => ({
     mockPreloadAdminInvitesPageChunk(...args),
   preloadAdminSummaryPageChunk: (...args: unknown[]) =>
     mockPreloadAdminSummaryPageChunk(...args),
+  preloadReminderCalendarPageChunk: (...args: unknown[]) =>
+    mockPreloadReminderCalendarPageChunk(...args),
   preloadShoppingListPageChunk: (...args: unknown[]) =>
     mockPreloadShoppingListPageChunk(...args),
 }));
@@ -106,6 +121,7 @@ describe("App", () => {
     mockPreloadAdminPenaltiesPageChunk.mockReset();
     mockPreloadAdminInvitesPageChunk.mockReset();
     mockPreloadAdminSummaryPageChunk.mockReset();
+    mockPreloadReminderCalendarPageChunk.mockReset();
     mockPreloadShoppingListPageChunk.mockReset();
 
     mockGetTaskOverview.mockResolvedValue({
@@ -116,6 +132,7 @@ describe("App", () => {
         monthlyPenaltyTotal: 0,
         dailyTasks: [],
         weeklyTasks: [],
+        weeklyReminders: [],
       },
     });
     mockListTasks.mockResolvedValue({ data: { items: [] } });
@@ -136,6 +153,7 @@ describe("App", () => {
     mockPreloadAdminPenaltiesPageChunk.mockResolvedValue(undefined);
     mockPreloadAdminInvitesPageChunk.mockResolvedValue(undefined);
     mockPreloadAdminSummaryPageChunk.mockResolvedValue(undefined);
+    mockPreloadReminderCalendarPageChunk.mockResolvedValue(undefined);
     mockPreloadShoppingListPageChunk.mockResolvedValue(undefined);
     mockGetMe.mockRejectedValue(new Error("request failed: 401"));
   });
@@ -196,6 +214,9 @@ describe("App", () => {
       expect(screen.getByRole("link", { name: "ホーム" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "タスク" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "買い物" })).toBeInTheDocument();
+      expect(
+        screen.getByRole("link", { name: "カレンダー" }),
+      ).toBeInTheDocument();
       expect(
         screen.getByRole("link", { name: "サマリー" }),
       ).toBeInTheDocument();
@@ -275,6 +296,7 @@ describe("App", () => {
           },
         ],
         weeklyTasks: [],
+        weeklyReminders: [],
       },
     });
 
