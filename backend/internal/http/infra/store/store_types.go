@@ -104,6 +104,19 @@ type shoppingItemRecord struct {
 	UpdatedAt time.Time
 }
 
+type reminderRecord struct {
+	ID           string
+	TeamID       string
+	Title        string
+	Notes        *string
+	Kind         api.ReminderKind
+	ScheduleType *api.ReminderScheduleType
+	StartDate    time.Time
+	EndDate      *time.Time
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
 type monthSummary struct {
 	TeamID           string
 	Month            string

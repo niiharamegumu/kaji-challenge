@@ -16,7 +16,7 @@ func TestBuildMonthlyTaskStatusByDateDailyOmitAfterDeleteTime(t *testing.T) {
 
 	base := time.Date(2026, 1, 1, 9, 0, 0, 0, s.loc)
 	teamID, _ := createTeamWithMember(t, s, "summary-daily-delete@example.com", base)
-	taskID := createTaskAtWithID(t, s, teamID, api.Daily, 2, 1, base)
+	taskID := createTaskAtWithID(t, s, teamID, api.TaskTypeDaily, 2, 1, base)
 
 	if err := s.q.CreateTaskCompletionDaily(ctx, dbsqlc.CreateTaskCompletionDailyParams{
 		TaskID:     taskID,
@@ -49,7 +49,7 @@ func TestBuildMonthlyTaskStatusByDateWeeklyOmitFromDeleteWeek(t *testing.T) {
 
 	base := time.Date(2026, 1, 1, 9, 0, 0, 0, s.loc)
 	teamID, _ := createTeamWithMember(t, s, "summary-weekly-delete@example.com", base)
-	taskID := createTaskAtWithID(t, s, teamID, api.Weekly, 3, 1, base)
+	taskID := createTaskAtWithID(t, s, teamID, api.TaskTypeWeekly, 3, 1, base)
 
 	if err := insertWeeklyCompletionEntriesForTest(ctx, s, taskID, time.Date(2026, 1, 5, 0, 0, 0, 0, s.loc), 1); err != nil {
 		t.Fatalf("failed to create previous-week completion: %v", err)
@@ -82,7 +82,7 @@ func TestBuildMonthlyTaskStatusByDateWeeklyCrossMonthShownOnMonthStart(t *testin
 
 	base := time.Date(2026, 1, 1, 9, 0, 0, 0, s.loc)
 	teamID, _ := createTeamWithMember(t, s, "summary-weekly-cross-month@example.com", base)
-	taskID := createTaskAtWithID(t, s, teamID, api.Weekly, 3, 1, base)
+	taskID := createTaskAtWithID(t, s, teamID, api.TaskTypeWeekly, 3, 1, base)
 
 	if err := insertWeeklyCompletionEntriesForTest(ctx, s, taskID, time.Date(2025, 12, 29, 0, 0, 0, 0, s.loc), 1); err != nil {
 		t.Fatalf("failed to create cross-month weekly completion: %v", err)
@@ -112,7 +112,7 @@ func TestBuildMonthlyTaskStatusByDateIncludesNotes(t *testing.T) {
 	base := time.Date(2026, 1, 1, 9, 0, 0, 0, s.loc)
 	teamID, _ := createTeamWithMember(t, s, "summary-notes@example.com", base)
 	notes := "食器を片付ける"
-	taskID := createTaskAtWithIDAndNotes(t, s, teamID, api.Daily, 2, 1, base, &notes)
+	taskID := createTaskAtWithIDAndNotes(t, s, teamID, api.TaskTypeDaily, 2, 1, base, &notes)
 
 	groups, err := s.buildMonthlyTaskStatusByDate(ctx, teamID, "2026-01")
 	if err != nil {
@@ -139,7 +139,7 @@ func TestBuildMonthlyTaskStatusByDateLeavesNotesNilWhenEmpty(t *testing.T) {
 
 	base := time.Date(2026, 1, 1, 9, 0, 0, 0, s.loc)
 	teamID, _ := createTeamWithMember(t, s, "summary-notes-empty@example.com", base)
-	taskID := createTaskAtWithID(t, s, teamID, api.Daily, 2, 1, base)
+	taskID := createTaskAtWithID(t, s, teamID, api.TaskTypeDaily, 2, 1, base)
 
 	groups, err := s.buildMonthlyTaskStatusByDate(ctx, teamID, "2026-01")
 	if err != nil {
@@ -170,7 +170,7 @@ func TestBuildMonthlyTaskStatusByDateCurrentMonthDoesNotIncludeFutureDates(t *te
 	month := monthStart.Format("2006-01")
 
 	teamID, _ := createTeamWithMember(t, s, "summary-current-month@example.com", monthStart.Add(9*time.Hour))
-	taskID := createTaskAtWithID(t, s, teamID, api.Daily, 2, 1, monthStart.Add(9*time.Hour))
+	taskID := createTaskAtWithID(t, s, teamID, api.TaskTypeDaily, 2, 1, monthStart.Add(9*time.Hour))
 
 	groups, err := s.buildMonthlyTaskStatusByDate(ctx, teamID, month)
 	if err != nil {
@@ -204,7 +204,7 @@ func TestBuildMonthlyTaskStatusByDateFutureMonthReturnsEmpty(t *testing.T) {
 	futureMonth := futureMonthStart.Format("2006-01")
 
 	teamID, _ := createTeamWithMember(t, s, "summary-future-month@example.com", today.Add(9*time.Hour))
-	createTaskAtWithID(t, s, teamID, api.Daily, 2, 1, futureMonthStart.Add(9*time.Hour))
+	createTaskAtWithID(t, s, teamID, api.TaskTypeDaily, 2, 1, futureMonthStart.Add(9*time.Hour))
 
 	groups, err := s.buildMonthlyTaskStatusByDate(ctx, teamID, futureMonth)
 	if err != nil {
@@ -227,7 +227,7 @@ func TestBuildMonthlyTaskStatusByDatePastMonthKeepsMonthEnd(t *testing.T) {
 	pastMonthLastDay := pastMonthStart.AddDate(0, 1, -1).Format("2006-01-02")
 
 	teamID, _ := createTeamWithMember(t, s, "summary-past-month@example.com", pastMonthStart.Add(9*time.Hour))
-	taskID := createTaskAtWithID(t, s, teamID, api.Daily, 2, 1, pastMonthStart.Add(9*time.Hour))
+	taskID := createTaskAtWithID(t, s, teamID, api.TaskTypeDaily, 2, 1, pastMonthStart.Add(9*time.Hour))
 
 	groups, err := s.buildMonthlyTaskStatusByDate(ctx, teamID, pastMonth)
 	if err != nil {

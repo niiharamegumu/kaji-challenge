@@ -57,6 +57,21 @@ func (i shoppingItemRecord) toAPI() api.ShoppingListItem {
 	}
 }
 
+func (r reminderRecord) toAPI() api.Reminder {
+	return api.Reminder{
+		Id:           r.ID,
+		TeamId:       r.TeamID,
+		Title:        r.Title,
+		Notes:        r.Notes,
+		Kind:         r.Kind,
+		ScheduleType: r.ScheduleType,
+		StartDate:    toDate(r.StartDate),
+		EndDate:      datePtr(r.EndDate),
+		CreatedAt:    r.CreatedAt,
+		UpdatedAt:    r.UpdatedAt,
+	}
+}
+
 func (m monthSummary) toAPI() api.MonthlyPenaltySummary {
 	triggeredRuleIDs := m.TriggeredRuleID
 	if triggeredRuleIDs == nil {
@@ -75,6 +90,26 @@ func (m monthSummary) toAPI() api.MonthlyPenaltySummary {
 		IsClosed:                m.IsClosed,
 		TriggeredPenaltyRuleIds: triggeredRuleIDs,
 		TaskStatusByDate:        taskStatusByDate,
+	}
+}
+
+func reminderFromDB(row dbsqlc.Reminder, loc *time.Location) reminderRecord {
+	var scheduleType *api.ReminderScheduleType
+	if row.ScheduleType.Valid {
+		value := api.ReminderScheduleType(row.ScheduleType.String)
+		scheduleType = &value
+	}
+	return reminderRecord{
+		ID:           row.ID,
+		TeamID:       row.TeamID,
+		Title:        row.Title,
+		Notes:        ptrFromText(row.Notes),
+		Kind:         api.ReminderKind(row.Kind),
+		ScheduleType: scheduleType,
+		StartDate:    row.StartDate.Time.In(loc),
+		EndDate:      ptrFromDate(row.EndDate, loc),
+		CreatedAt:    row.CreatedAt.Time.In(loc),
+		UpdatedAt:    row.UpdatedAt.Time.In(loc),
 	}
 }
 
