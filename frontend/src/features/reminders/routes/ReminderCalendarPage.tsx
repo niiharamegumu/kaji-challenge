@@ -16,6 +16,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Pencil,
+  Plus,
   Trash2,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -274,22 +275,24 @@ function useIsMobile(breakpoint = 768) {
 function ReminderAgendaList({
   selectedOccurrences,
   reminderMap,
+  className,
   onEdit,
 }: {
   selectedOccurrences: ReminderOccurrence[];
   reminderMap: Map<string, Reminder>;
+  className?: string;
   onEdit: (reminder: Reminder, dateKey: string) => void;
 }) {
   if (selectedOccurrences.length === 0) {
     return (
-      <p className="mt-3 text-sm text-stone-500">
+      <p className={className ?? "text-sm text-stone-500"}>
         この日のリマインダーはありません。
       </p>
     );
   }
 
   return (
-    <ul className="mt-3 space-y-2">
+    <ul className={className ?? "space-y-2"}>
       {selectedOccurrences.map((occurrence: ReminderOccurrence) => {
         const reminder = reminderMap.get(occurrence.reminderId);
         return (
@@ -332,16 +335,20 @@ function ReminderAgendaList({
 function MobileAgendaSheet({
   isOpen,
   dateLabel,
+  canCreate,
   selectedOccurrences,
   reminderMap,
   onClose,
+  onCreate,
   onEdit,
 }: {
   isOpen: boolean;
   dateLabel: string;
+  canCreate: boolean;
   selectedOccurrences: ReminderOccurrence[];
   reminderMap: Map<string, Reminder>;
   onClose: () => void;
+  onCreate: () => void;
   onEdit: (reminder: Reminder, dateKey: string) => void;
 }) {
   if (!isOpen || typeof document === "undefined") {
@@ -373,20 +380,39 @@ function MobileAgendaSheet({
             <h3 className="text-base font-semibold text-stone-900">
               {dateLabel}
             </h3>
+            {canCreate ? (
+              <button
+                type="button"
+                className="inline-flex h-9 w-9 items-center justify-center text-stone-900 transition-colors hover:text-stone-700"
+                aria-label="追加"
+                onClick={onCreate}
+              >
+                <Plus size={16} aria-hidden="true" strokeWidth={2.25} />
+              </button>
+            ) : null}
           </div>
-          <button
-            type="button"
-            className="rounded-md px-2 py-1 text-sm text-stone-600 transition-colors hover:bg-stone-100"
-            onClick={onClose}
-          >
-            閉じる
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="rounded-md px-2 py-1 text-sm text-stone-600 transition-colors hover:bg-stone-100"
+              onClick={onClose}
+            >
+              閉じる
+            </button>
+          </div>
         </div>
-        <ReminderAgendaList
-          selectedOccurrences={selectedOccurrences}
-          reminderMap={reminderMap}
-          onEdit={onEdit}
-        />
+        <div className="mt-3">
+          <ReminderAgendaList
+            selectedOccurrences={selectedOccurrences}
+            reminderMap={reminderMap}
+            className={
+              selectedOccurrences.length === 0
+                ? "text-sm text-stone-500"
+                : "space-y-2"
+            }
+            onEdit={onEdit}
+          />
+        </div>
       </dialog>
     </>,
     document.body,
@@ -436,6 +462,7 @@ export function ReminderCalendarPage() {
   );
 
   const selectedOccurrences = occurrencesByDate.get(selectedDate) ?? [];
+  const canCreateOnSelectedDate = selectedDate >= todayDateKey();
 
   const events = useMemo(
     () =>
@@ -481,17 +508,13 @@ export function ReminderCalendarPage() {
   };
 
   const handleDateClick = (arg: DateClickArg) => {
-    const target = arg.jsEvent.target;
-    if (
-      target instanceof HTMLElement &&
-      target.closest(".reminder-day-number") != null
-    ) {
+    if (isMobile) {
+      updateSelectedDate(arg.dateStr);
+      setMobileAgendaOpen(true);
       return;
     }
-    if (arg.dateStr < todayDateKey()) {
-      return;
-    }
-    openCreateSheet(arg.dateStr);
+
+    updateSelectedDate(arg.dateStr);
   };
 
   const renderDayCellContent = (arg: DayCellContentArg) => {
@@ -502,32 +525,85 @@ export function ReminderCalendarPage() {
     const occurrenceCount = occurrenceCountByDate.get(dateKey) ?? 0;
     const dayNumber = String(arg.date.getDate());
     const mobileDots = mobileDotIds.slice(0, Math.min(occurrenceCount, 3));
+    const canCreate = dateKey >= todayDateKey();
 
     return (
-      <div className="flex w-full flex-col items-center gap-1">
-        <button
-          type="button"
-          className={`reminder-day-number inline-flex min-h-7 min-w-7 cursor-pointer items-center justify-center rounded-full px-1.5 text-xs font-medium transition-colors ${
-            isSelected
-              ? "bg-amber-100 text-stone-900"
-              : "text-stone-700 hover:bg-stone-100"
-          } ${arg.isOther ? "text-stone-400" : ""}`}
-          aria-label={`${formatDateLabel(dateKey)}を選択`}
-          onMouseDown={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-          }}
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            updateSelectedDate(dateKey);
-            if (isMobile) {
-              setMobileAgendaOpen(true);
-            }
-          }}
-        >
-          {dayNumber}
-        </button>
+      <div
+        className={`flex w-full flex-col items-center ${
+          isMobile ? "h-full justify-between gap-0.5" : "items-stretch gap-1"
+        }`}
+      >
+        {!isMobile ? (
+          <div className="flex w-full items-start justify-between">
+            {canCreate ? (
+              <button
+                type="button"
+                className="inline-flex h-7 w-7 items-center justify-center text-stone-500 transition-colors hover:text-stone-800"
+                aria-label={`${formatDateLabel(dateKey)}に追加`}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  openCreateSheet(dateKey);
+                }}
+              >
+                <Plus size={16} aria-hidden="true" strokeWidth={2.25} />
+              </button>
+            ) : (
+              <span className="block h-7 w-7" aria-hidden="true" />
+            )}
+            <button
+              type="button"
+              className={`reminder-day-number inline-flex min-h-7 min-w-7 cursor-pointer items-center justify-center rounded-full px-1.5 text-xs font-medium transition-colors ${
+                isSelected
+                  ? "bg-amber-100 text-stone-900"
+                  : "text-stone-700 hover:bg-stone-100"
+              } ${arg.isOther ? "text-stone-400" : ""}`}
+              aria-label={`${formatDateLabel(dateKey)}を選択`}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                updateSelectedDate(dateKey);
+              }}
+            >
+              {dayNumber}
+            </button>
+          </div>
+        ) : null}
+        {isMobile ? (
+          <button
+            type="button"
+            className={`reminder-day-number inline-flex min-w-7 cursor-pointer items-center justify-center rounded-full px-1.5 text-xs font-medium transition-colors ${
+              isMobile ? "min-h-9 py-1.5" : "min-h-7"
+            } ${
+              isSelected
+                ? "bg-amber-100 text-stone-900"
+                : "text-stone-700 hover:bg-stone-100"
+            } ${arg.isOther ? "text-stone-400" : ""}`}
+            aria-label={`${formatDateLabel(dateKey)}を選択`}
+            onMouseDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              updateSelectedDate(dateKey);
+              if (isMobile) {
+                setMobileAgendaOpen(true);
+              }
+            }}
+          >
+            {dayNumber}
+          </button>
+        ) : null}
         {isMobile && occurrenceCount > 0 ? (
           <span
             className="inline-flex items-center justify-center gap-1"
@@ -598,6 +674,9 @@ export function ReminderCalendarPage() {
       };
       void createReminder.mutateAsync(payload).then(() => {
         setSheetMode(null);
+        if (isMobile) {
+          setMobileAgendaOpen(true);
+        }
       });
       return;
     }
@@ -671,6 +750,13 @@ export function ReminderCalendarPage() {
         .reminder-calendar .fc .fc-daygrid-day.reminder-selected-day {
           background: rgb(250 245 235);
         }
+        .reminder-calendar .fc .fc-daygrid-day-top {
+          display: block;
+        }
+        .reminder-calendar .fc .fc-daygrid-day-number {
+          display: block;
+          padding: 0;
+        }
         .reminder-calendar .fc .fc-daygrid-event {
           border: 0;
           background: transparent;
@@ -691,8 +777,8 @@ export function ReminderCalendarPage() {
             font-size: 0.95rem;
           }
           .reminder-calendar .fc .fc-daygrid-day-frame {
-            min-height: 5.3rem;
-            padding: 0.15rem;
+            min-height: 3.55rem;
+            padding: 0.2rem 0.15rem 0.15rem;
           }
           .reminder-calendar .fc .fc-daygrid-day-top {
             display: block;
@@ -702,6 +788,7 @@ export function ReminderCalendarPage() {
           }
           .reminder-calendar .reminder-day-number {
             width: 100%;
+            border-radius: 0.9rem;
           }
           .reminder-calendar .fc .fc-daygrid-day-events {
             display: none;
@@ -816,6 +903,11 @@ export function ReminderCalendarPage() {
           <ReminderAgendaList
             selectedOccurrences={selectedOccurrences}
             reminderMap={reminderMap}
+            className={
+              selectedOccurrences.length === 0
+                ? "mt-3 text-sm text-stone-500"
+                : "mt-3 space-y-2"
+            }
             onEdit={openEditSheet}
           />
         </section>
@@ -827,9 +919,11 @@ export function ReminderCalendarPage() {
       <MobileAgendaSheet
         isOpen={isMobile && mobileAgendaOpen}
         dateLabel={formatDateLabel(selectedDate)}
+        canCreate={canCreateOnSelectedDate}
         selectedOccurrences={selectedOccurrences}
         reminderMap={reminderMap}
         onClose={() => setMobileAgendaOpen(false)}
+        onCreate={() => openCreateSheet(selectedDate)}
         onEdit={openEditSheet}
       />
 
