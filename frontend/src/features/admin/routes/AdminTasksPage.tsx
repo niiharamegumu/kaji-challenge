@@ -1,4 +1,5 @@
 import { useAtom } from "jotai";
+import { useState } from "react";
 
 import {
   type CreateTaskRequest,
@@ -17,6 +18,7 @@ import { initialTaskFormState, taskFormAtom } from "../state/forms";
 
 export function AdminTasksPage() {
   const tasksQuery = useTasksQuery();
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
 
   const [taskForm, setTaskForm] = useAtom(taskFormAtom);
   const [, setStatus] = useAtom(statusMessageAtom);
@@ -62,10 +64,11 @@ export function AdminTasksPage() {
       <TaskManager
         form={taskForm}
         tasks={tasksQuery.data}
+        isCreateOpen={isCreateOpen}
+        onCloseCreate={() => setIsCreateOpen(false)}
         onFormChange={(updater) => setTaskForm((prev) => updater(prev))}
-        onCreate={() => {
-          void handleCreateTask();
-        }}
+        onOpenCreate={() => setIsCreateOpen(true)}
+        onCreate={handleCreateTask}
         onDelete={(taskId) => {
           void removeTask.mutateAsync(taskId);
         }}

@@ -1,4 +1,4 @@
-import { ChevronDown, CirclePlus, Pencil, Trash2, X } from "lucide-react";
+import { ChevronDown, Pencil, Plus, Trash2, X } from "lucide-react";
 import type { ChangeEvent } from "react";
 import { useMemo, useState } from "react";
 
@@ -7,6 +7,7 @@ import {
   TaskType as TaskTypeConst,
   type UpdateTaskRequest,
 } from "../../../lib/api/generated/client";
+import { FormSheet } from "../../../shared/components/FormSheet";
 import {
   WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MAX,
   WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MIN,
@@ -17,8 +18,11 @@ import { DeleteConfirmModal } from "./DeleteConfirmModal";
 type Props = {
   form: TaskFormState;
   tasks: Task[];
+  isCreateOpen: boolean;
+  onCloseCreate: () => void;
   onFormChange: (updater: (prev: TaskFormState) => TaskFormState) => void;
-  onCreate: () => void;
+  onOpenCreate: () => void;
+  onCreate: () => Promise<void>;
   onDelete: (taskId: string) => void;
   onUpdate: (taskId: string, payload: UpdateTaskRequest) => Promise<void>;
 };
@@ -33,10 +37,113 @@ type PendingDeleteTask = {
   title: string;
 };
 
+function TaskCreateForm({
+  form,
+  onFormChange,
+}: {
+  form: TaskFormState;
+  onFormChange: (updater: (prev: TaskFormState) => TaskFormState) => void;
+}) {
+  const handleChange =
+    (key: keyof TaskFormState) =>
+    (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+      onFormChange((prev) => ({ ...prev, [key]: event.target.value }));
+    };
+
+  return (
+    <div className="grid gap-1.5">
+      <label className="text-xs text-stone-700 sm:text-sm" htmlFor="task-title">
+        タスク名
+      </label>
+      <input
+        id="task-title"
+        className="h-10 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
+        value={form.title}
+        onChange={handleChange("title")}
+      />
+      <label className="text-xs text-stone-700 sm:text-sm" htmlFor="task-notes">
+        メモ
+      </label>
+      <input
+        id="task-notes"
+        className="h-10 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
+        value={form.notes}
+        onChange={handleChange("notes")}
+      />
+      <div
+        className={`grid gap-1.5 ${form.type === TaskTypeConst.weekly ? "grid-cols-1 sm:grid-cols-2 md:grid-cols-3" : "grid-cols-1 sm:grid-cols-2"}`}
+      >
+        <div className="grid min-w-0 gap-1">
+          <label
+            className="text-xs text-stone-700 sm:text-sm"
+            htmlFor="task-type"
+          >
+            種別
+          </label>
+          <div className="relative">
+            <select
+              id="task-type"
+              className="h-10 w-full appearance-none rounded-lg border border-stone-300 bg-white py-2 pl-3 pr-10 text-sm sm:h-11 sm:pr-12"
+              value={form.type}
+              onChange={handleChange("type")}
+            >
+              <option value={TaskTypeConst.daily}>毎日</option>
+              <option value={TaskTypeConst.weekly}>週間</option>
+            </select>
+            <ChevronDown
+              size={18}
+              className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-stone-500 sm:right-4"
+              aria-hidden="true"
+            />
+          </div>
+        </div>
+        <div className="grid min-w-0 gap-1">
+          <label
+            className="text-xs text-stone-700 sm:text-sm"
+            htmlFor="task-penalty-points"
+          >
+            未達減点
+          </label>
+          <input
+            id="task-penalty-points"
+            className="h-10 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
+            type="number"
+            min={0}
+            value={form.penaltyPoints}
+            onChange={handleChange("penaltyPoints")}
+          />
+        </div>
+        {form.type === TaskTypeConst.weekly ? (
+          <div className="grid min-w-0 gap-1">
+            <label
+              className="text-xs text-stone-700 sm:text-sm"
+              htmlFor="task-weekly-required"
+            >
+              週間必要回数
+            </label>
+            <input
+              id="task-weekly-required"
+              className="h-10 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
+              type="number"
+              min={WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MIN}
+              max={WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MAX}
+              value={form.requiredCompletionsPerWeek}
+              onChange={handleChange("requiredCompletionsPerWeek")}
+            />
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export function TaskManager({
   form,
   tasks,
+  isCreateOpen,
+  onCloseCreate,
   onFormChange,
+  onOpenCreate,
   onCreate,
   onDelete,
   onUpdate,
@@ -48,12 +155,6 @@ export function TaskManager({
   });
   const [pendingDeleteTask, setPendingDeleteTask] =
     useState<PendingDeleteTask | null>(null);
-
-  const handleChange =
-    (key: keyof TaskFormState) =>
-    (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-      onFormChange((prev) => ({ ...prev, [key]: event.target.value }));
-    };
 
   const dailyTasks = useMemo(
     () => tasks.filter((task) => task.type === TaskTypeConst.daily),
@@ -221,108 +322,29 @@ export function TaskManager({
     );
   };
 
+  const canCreate =
+    form.title.trim().length > 0 &&
+    (form.type !== TaskTypeConst.weekly ||
+      (Number.isInteger(Number(form.requiredCompletionsPerWeek)) &&
+        Number(form.requiredCompletionsPerWeek) >=
+          WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MIN &&
+        Number(form.requiredCompletionsPerWeek) <=
+          WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MAX));
+
   return (
     <article className="animate-enter rounded-xl border border-stone-200 bg-white/90 p-2.5 shadow-sm md:rounded-2xl md:p-6">
-      <h2 className="text-lg font-semibold">タスク管理</h2>
-      <div className="mt-3 grid gap-1.5">
-        <label
-          className="text-xs text-stone-700 sm:text-sm"
-          htmlFor="task-title"
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold">タスク管理</h2>
+        <button
+          type="button"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-stone-900 text-white transition-colors hover:bg-stone-800"
+          onClick={onOpenCreate}
+          aria-label="追加"
         >
-          タスク名
-        </label>
-        <input
-          id="task-title"
-          className="h-10 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
-          value={form.title}
-          onChange={handleChange("title")}
-        />
-        <label
-          className="text-xs text-stone-700 sm:text-sm"
-          htmlFor="task-notes"
-        >
-          メモ
-        </label>
-        <input
-          id="task-notes"
-          className="h-10 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
-          value={form.notes}
-          onChange={handleChange("notes")}
-        />
-        <div
-          className={`grid gap-1.5 ${form.type === TaskTypeConst.weekly ? "grid-cols-1 sm:grid-cols-2 md:grid-cols-3" : "grid-cols-1 sm:grid-cols-2"}`}
-        >
-          <div className="grid min-w-0 gap-1">
-            <label
-              className="text-xs text-stone-700 sm:text-sm"
-              htmlFor="task-type"
-            >
-              種別
-            </label>
-            <div className="relative">
-              <select
-                id="task-type"
-                className="h-10 w-full appearance-none rounded-lg border border-stone-300 bg-white py-2 pl-3 pr-10 text-sm sm:h-11 sm:pr-12"
-                value={form.type}
-                onChange={handleChange("type")}
-              >
-                <option value={TaskTypeConst.daily}>毎日</option>
-                <option value={TaskTypeConst.weekly}>週間</option>
-              </select>
-              <ChevronDown
-                size={18}
-                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-stone-500 sm:right-4"
-                aria-hidden="true"
-              />
-            </div>
-          </div>
-          <div className="grid min-w-0 gap-1">
-            <label
-              className="text-xs text-stone-700 sm:text-sm"
-              htmlFor="task-penalty-points"
-            >
-              未達減点
-            </label>
-            <input
-              id="task-penalty-points"
-              className="h-10 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
-              type="number"
-              min={0}
-              value={form.penaltyPoints}
-              onChange={handleChange("penaltyPoints")}
-            />
-          </div>
-          {form.type === TaskTypeConst.weekly && (
-            <div className="grid min-w-0 gap-1">
-              <label
-                className="text-xs text-stone-700 sm:text-sm"
-                htmlFor="task-weekly-required"
-              >
-                週間必要回数
-              </label>
-              <input
-                id="task-weekly-required"
-                className="h-10 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
-                type="number"
-                min={WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MIN}
-                max={WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MAX}
-                value={form.requiredCompletionsPerWeek}
-                onChange={handleChange("requiredCompletionsPerWeek")}
-              />
-            </div>
-          )}
-        </div>
-        <div className="mt-1 flex justify-start">
-          <button
-            type="button"
-            className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-stone-900 px-3 py-2 text-sm text-white transition-colors duration-200 hover:bg-stone-800 sm:h-11 sm:w-auto sm:min-w-40"
-            onClick={onCreate}
-          >
-            <CirclePlus size={16} aria-hidden="true" />
-            <span>タスク追加</span>
-          </button>
-        </div>
+          <Plus size={16} aria-hidden="true" />
+        </button>
       </div>
+
       <div className="mt-4 border-t border-stone-200 pt-3">
         <div>
           <h3 className="text-base font-semibold">毎日</h3>
@@ -350,6 +372,20 @@ export function TaskManager({
           )}
         </div>
       </div>
+
+      <FormSheet
+        isOpen={isCreateOpen}
+        title="タスクを追加"
+        submitLabel="追加する"
+        submitIcon={<Plus size={16} aria-hidden="true" />}
+        submitDisabled={!canCreate}
+        onClose={onCloseCreate}
+        onSubmit={() => {
+          void onCreate().then(onCloseCreate);
+        }}
+      >
+        <TaskCreateForm form={form} onFormChange={onFormChange} />
+      </FormSheet>
 
       <DeleteConfirmModal
         isOpen={pendingDeleteTask != null}

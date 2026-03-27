@@ -99,7 +99,10 @@ describe("AdminTasksPage", () => {
 
     renderPage();
 
-    await user.click(await screen.findByRole("button", { name: "タスク追加" }));
+    await user.click(await screen.findByRole("button", { name: "追加" }));
+    const dialog = await screen.findByRole("dialog", { name: "タスクを追加" });
+    await user.type(within(dialog).getByLabelText("タスク名"), "食器片付け");
+    await user.click(within(dialog).getByRole("button", { name: "追加する" }));
 
     await waitFor(() => {
       expect(mockPostTask).toHaveBeenCalled();
@@ -111,6 +114,8 @@ describe("AdminTasksPage", () => {
     const user = userEvent.setup();
 
     renderPage();
+
+    await user.click(await screen.findByRole("button", { name: "追加" }));
 
     const titleInput = await screen.findByLabelText("タスク名");
     const notesInput = screen.getByLabelText("メモ");
@@ -125,7 +130,7 @@ describe("AdminTasksPage", () => {
     await user.type(penaltyInput, "3");
     await user.clear(requiredInput);
     await user.type(requiredInput, "2");
-    await user.click(screen.getByRole("button", { name: "タスク追加" }));
+    await user.click(screen.getByRole("button", { name: "追加する" }));
 
     await waitFor(() => {
       expect(mockPostTask).toHaveBeenCalledWith({
@@ -138,15 +143,24 @@ describe("AdminTasksPage", () => {
     });
 
     await waitFor(() => {
-      expect(titleInput).toHaveValue("");
-      expect(notesInput).toHaveValue("");
-      expect(typeSelect).toHaveValue("daily");
-      expect(penaltyInput).toHaveValue(1);
-      expect(screen.queryByLabelText("週間必要回数")).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("dialog", { name: "タスクを追加" }),
+      ).not.toBeInTheDocument();
     });
 
-    await user.selectOptions(typeSelect, "weekly");
-    expect(await screen.findByLabelText("週間必要回数")).toHaveValue(1);
+    await user.click(await screen.findByRole("button", { name: "追加" }));
+    const reopenedDialog = await screen.findByRole("dialog", {
+      name: "タスクを追加",
+    });
+    const reopened = within(reopenedDialog);
+    expect(reopened.getByLabelText("タスク名")).toHaveValue("");
+    expect(reopened.getByLabelText("メモ")).toHaveValue("");
+    expect(reopened.getByLabelText("種別")).toHaveValue("daily");
+    expect(reopened.getByLabelText("未達減点")).toHaveValue(1);
+    expect(reopened.queryByLabelText("週間必要回数")).not.toBeInTheDocument();
+
+    await user.selectOptions(reopened.getByLabelText("種別"), "weekly");
+    expect(await reopened.findByLabelText("週間必要回数")).toHaveValue(1);
   });
 
   it("starts editing with current values and saves task title/notes", async () => {
@@ -530,12 +544,19 @@ describe("AdminTasksPage", () => {
 
     renderPenaltiesPage();
 
-    const nameInput = await screen.findByLabelText("ルール名");
-    const thresholdInput = screen.getByLabelText("発動しきい値");
-    await user.type(nameInput, "減点10で通知");
-    await user.clear(thresholdInput);
-    await user.type(thresholdInput, "10");
-    await user.click(screen.getByRole("button", { name: "ルール追加" }));
+    await user.click(await screen.findByRole("button", { name: "追加" }));
+    const dialog = await screen.findByRole("dialog", {
+      name: "ペナルティルールを追加",
+    });
+    expect(dialog).toBeInTheDocument();
+    const dialogWithin = within(dialog);
+    await user.type(
+      await dialogWithin.findByLabelText("ルール名"),
+      "減点10で通知",
+    );
+    await user.clear(dialogWithin.getByLabelText("発動しきい値"));
+    await user.type(dialogWithin.getByLabelText("発動しきい値"), "10");
+    await user.click(dialogWithin.getByRole("button", { name: "追加する" }));
 
     await waitFor(() => {
       expect(mockPostPenaltyRule).toHaveBeenCalledWith({
@@ -545,8 +566,17 @@ describe("AdminTasksPage", () => {
     });
 
     await waitFor(() => {
-      expect(nameInput).toHaveValue("");
-      expect(thresholdInput).toHaveValue(1);
+      expect(
+        screen.queryByRole("dialog", { name: "ペナルティルールを追加" }),
+      ).not.toBeInTheDocument();
     });
+
+    await user.click(screen.getByRole("button", { name: "追加" }));
+    const reopenedDialog = await screen.findByRole("dialog", {
+      name: "ペナルティルールを追加",
+    });
+    const reopened = within(reopenedDialog);
+    expect(reopened.getByLabelText("ルール名")).toHaveValue("");
+    expect(reopened.getByLabelText("発動しきい値")).toHaveValue(1);
   });
 });
