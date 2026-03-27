@@ -122,7 +122,7 @@ export function InviteManager({
     <section className="space-y-2 pb-1 md:space-y-4">
       <header className="py-0.5">
         <h2 className="text-lg font-semibold text-stone-900">設定</h2>
-        <p className="mt-1 text-sm text-stone-600">
+        <p className="mt-2 text-xs text-stone-500">
           チーム設定とアカウント設定を管理できます。
         </p>
       </header>
