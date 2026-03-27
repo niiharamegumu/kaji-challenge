@@ -37,6 +37,12 @@ describe("useTeamStateStream", () => {
       queryKey: queryKeys.shoppingItems,
     });
     expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.reminders,
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.reminderDefinitions,
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.monthlySummary,
     });
   });

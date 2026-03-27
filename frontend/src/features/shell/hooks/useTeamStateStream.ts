@@ -28,6 +28,10 @@ export function useTeamStateStream(
         queryClient.invalidateQueries({ queryKey: queryKeys.tasks }),
         queryClient.invalidateQueries({ queryKey: queryKeys.rules }),
         queryClient.invalidateQueries({ queryKey: queryKeys.shoppingItems }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.reminders }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.reminderDefinitions,
+        }),
         queryClient.invalidateQueries({ queryKey: queryKeys.monthlySummary }),
       ]);
     } finally {
@@ -62,6 +66,15 @@ export function useTeamStateStream(
     if (pending.has("shopping_item")) {
       operations.push(
         queryClient.invalidateQueries({ queryKey: queryKeys.shoppingItems }),
+      );
+    }
+    if (pending.has("reminder")) {
+      operations.push(
+        queryClient.invalidateQueries({ queryKey: queryKeys.home }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.reminders }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.reminderDefinitions,
+        }),
       );
     }
     if (

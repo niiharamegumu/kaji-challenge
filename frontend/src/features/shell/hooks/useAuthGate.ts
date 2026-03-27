@@ -13,6 +13,8 @@ const protectedQueryKeys = [
   queryKeys.home,
   queryKeys.tasks,
   queryKeys.rules,
+  queryKeys.reminders,
+  queryKeys.reminderDefinitions,
   queryKeys.monthlySummary,
 ] as const;
 
