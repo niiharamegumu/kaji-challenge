@@ -64,6 +64,19 @@ type PenaltyRule struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
+type Reminder struct {
+	ID           string             `json:"id"`
+	TeamID       string             `json:"team_id"`
+	Title        string             `json:"title"`
+	Notes        pgtype.Text        `json:"notes"`
+	Kind         string             `json:"kind"`
+	ScheduleType pgtype.Text        `json:"schedule_type"`
+	StartDate    pgtype.Date        `json:"start_date"`
+	EndDate      pgtype.Date        `json:"end_date"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Session struct {
 	Token     string             `json:"token"`
 	UserID    string             `json:"user_id"`
