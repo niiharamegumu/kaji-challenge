@@ -7,16 +7,11 @@ import type {
 } from "../../../lib/api/generated/client";
 import { statusMessageAtom } from "../../shell/state/status";
 import { ShoppingListManager } from "../components/ShoppingListManager";
+import type { ShoppingItemFormState } from "../components/ShoppingListManager";
 import {
   useShoppingItemMutations,
   useShoppingItemsQuery,
 } from "../hooks/useShoppingList";
-
-type ShoppingItemFormState = {
-  name: string;
-  quantity: string;
-  notes: string;
-};
 
 const initialFormState: ShoppingItemFormState = {
   name: "",
@@ -30,6 +25,7 @@ export function ShoppingListPage() {
   const { createItem, updateItem, removeItem, reorderItems } =
     useShoppingItemMutations(setStatus);
   const [form, setForm] = useState(initialFormState);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
 
   const handleCreate = async () => {
     const payload: CreateShoppingListItemRequest = {
@@ -61,13 +57,14 @@ export function ShoppingListPage() {
       <ShoppingListManager
         form={form}
         items={shoppingItemsQuery.data}
+        isCreateOpen={isCreateOpen}
         isReordering={reorderItems.isPending}
+        onCloseCreate={() => setIsCreateOpen(false)}
         onFormChange={(updater) => {
           setForm((prev) => updater(prev));
         }}
-        onCreate={() => {
-          void handleCreate();
-        }}
+        onOpenCreate={() => setIsCreateOpen(true)}
+        onCreate={handleCreate}
         onDelete={(itemId) => {
           void handleDelete(itemId);
         }}

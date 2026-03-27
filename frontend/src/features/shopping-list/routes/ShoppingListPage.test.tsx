@@ -66,6 +66,11 @@ describe("ShoppingListPage", () => {
     const user = userEvent.setup();
     renderPage();
 
+    await user.click(await screen.findByRole("button", { name: "追加" }));
+    expect(
+      await screen.findByRole("dialog", { name: "買い物項目を追加" }),
+    ).toBeInTheDocument();
+
     await user.type(await screen.findByLabelText("名前"), "牛乳");
     await user.type(screen.getByLabelText("数量"), "2本");
     await user.type(screen.getByLabelText("メモ"), "低脂肪");
@@ -77,6 +82,12 @@ describe("ShoppingListPage", () => {
         quantity: "2本",
         notes: "低脂肪",
       });
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("dialog", { name: "買い物項目を追加" }),
+      ).not.toBeInTheDocument();
     });
   });
 

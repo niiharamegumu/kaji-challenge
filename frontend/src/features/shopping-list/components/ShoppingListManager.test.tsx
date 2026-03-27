@@ -89,9 +89,12 @@ describe("ShoppingListManager", () => {
             updatedAt: "2026-03-01T00:00:00Z",
           },
         ]}
+        isCreateOpen={false}
         isReordering={false}
+        onCloseCreate={() => undefined}
         onFormChange={() => undefined}
-        onCreate={() => undefined}
+        onOpenCreate={() => undefined}
+        onCreate={async () => undefined}
         onDelete={() => undefined}
         onReorder={() => undefined}
         onUpdate={async () => undefined}
@@ -143,9 +146,12 @@ describe("ShoppingListManager", () => {
             updatedAt: "2026-03-01T00:00:00Z",
           },
         ]}
+        isCreateOpen={false}
         isReordering={false}
+        onCloseCreate={() => undefined}
         onFormChange={() => undefined}
-        onCreate={() => undefined}
+        onOpenCreate={() => undefined}
+        onCreate={async () => undefined}
         onDelete={() => undefined}
         onReorder={onReorder}
         onUpdate={async () => undefined}
