@@ -307,8 +307,15 @@ func (s *Store) ReorderTasks(ctx context.Context, userID string, req api.Reorder
 				return errors.New("taskIds must match current tasks in the team and type")
 			}
 
+			maxPosition, err := qtx.GetTaskMaxPositionByTeamAndType(txCtx, dbsqlc.GetTaskMaxPositionByTeamAndTypeParams{
+				TeamID: teamID,
+				Type:   string(reorderType),
+			})
+			if err != nil {
+				return err
+			}
 			now := s.now()
-			offsetBase := len(req.TaskIds) + 1
+			offsetBase := int(maxPosition) + 1
 			for index, taskID := range req.TaskIds {
 				tempPosition, convErr := safeInt32(offsetBase+index, "position")
 				if convErr != nil {

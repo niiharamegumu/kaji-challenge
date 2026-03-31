@@ -132,6 +132,38 @@ func TestReorderTasksPersistsRequestedOrderWithinType(t *testing.T) {
 	}
 }
 
+func TestReorderTasksHandlesNonContiguousPositions(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	base := time.Date(2026, 3, 1, 9, 0, 0, 0, s.loc)
+	_, userID := createTeamWithMember(t, s, "task-reorder-gapped@example.com", base)
+	teamID := teamIDForUser(t, s, userID)
+
+	firstID := createTaskWithIDAt(t, s, teamID, api.TaskTypeDaily, 1, 1, base)
+	secondID := createTaskWithIDAt(t, s, teamID, api.TaskTypeDaily, 2, 1, base.Add(time.Minute))
+	thirdID := createTaskWithIDAt(t, s, teamID, api.TaskTypeDaily, 3, 1, base.Add(2*time.Minute))
+
+	if err := s.q.DeleteTask(ctx, secondID); err != nil {
+		t.Fatalf("failed to create gapped positions: %v", err)
+	}
+
+	items, err := s.ReorderTasks(withLatestIfMatchForUser(t, s, ctx, userID), userID, api.ReorderTasksRequest{
+		TaskIds: []string{thirdID, firstID},
+	})
+	if err != nil {
+		t.Fatalf("ReorderTasks with gapped positions failed: %v", err)
+	}
+	if len(items) != 2 {
+		t.Fatalf("expected 2 reordered tasks, got %d", len(items))
+	}
+	if items[0].Id != thirdID || items[0].Position != 1 {
+		t.Fatalf("unexpected first task after reorder with gaps: %#v", items[0])
+	}
+	if items[1].Id != firstID || items[1].Position != 2 {
+		t.Fatalf("unexpected second task after reorder with gaps: %#v", items[1])
+	}
+}
+
 func TestReorderTasksRejectsMismatchedTypeAndIDs(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
