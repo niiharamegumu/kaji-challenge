@@ -608,6 +608,13 @@ func createTaskAt(t *testing.T, s *Store, teamID string, taskType api.TaskType, 
 func createTaskWithIDAt(t *testing.T, s *Store, teamID string, taskType api.TaskType, penalty, required int, createdAt time.Time) string {
 	t.Helper()
 	taskID := s.nextID("task")
+	maxPosition, err := s.q.GetTaskMaxPositionByTeamAndType(context.Background(), dbsqlc.GetTaskMaxPositionByTeamAndTypeParams{
+		TeamID: teamID,
+		Type:   string(taskType),
+	})
+	if err != nil {
+		t.Fatalf("failed to get max task position: %v", err)
+	}
 	if err := s.q.CreateTask(context.Background(), dbsqlc.CreateTaskParams{
 		ID:                         taskID,
 		TeamID:                     teamID,
@@ -617,6 +624,7 @@ func createTaskWithIDAt(t *testing.T, s *Store, teamID string, taskType api.Task
 		PenaltyPoints:              int32(penalty),
 		Column7:                    "",
 		RequiredCompletionsPerWeek: int32(required),
+		Position:                   maxPosition + 1,
 		CreatedAt:                  toPgTimestamptz(createdAt),
 		UpdatedAt:                  toPgTimestamptz(createdAt),
 	}); err != nil {
