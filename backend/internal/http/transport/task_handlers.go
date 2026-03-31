@@ -36,6 +36,7 @@ func (h *Handler) PostTask(c *gin.Context) {
 		writeAppError(c, err, http.StatusBadRequest)
 		return
 	}
+	h.writeTeamETag(c, userID)
 	c.JSON(http.StatusCreated, task)
 }
 
@@ -54,6 +55,7 @@ func (h *Handler) PatchTask(c *gin.Context, taskID string) {
 		writeAppError(c, err, http.StatusBadRequest)
 		return
 	}
+	h.writeTeamETag(c, userID)
 	c.JSON(http.StatusOK, task)
 }
 
@@ -67,6 +69,7 @@ func (h *Handler) DeleteTask(c *gin.Context, taskID string) {
 		writeAppError(c, err, http.StatusBadRequest)
 		return
 	}
+	h.writeTeamETag(c, userID)
 	c.Status(http.StatusNoContent)
 }
 
@@ -104,5 +107,6 @@ func (h *Handler) PostTaskCompletionToggle(c *gin.Context, taskID string) {
 		writeAppError(c, err, http.StatusBadRequest)
 		return
 	}
+	h.writeTeamETag(c, userID)
 	c.JSON(http.StatusOK, res)
 }
