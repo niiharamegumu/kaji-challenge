@@ -60,6 +60,7 @@ vi.mock("./lib/api/generated/client", () => ({
   patchShoppingItem: vi.fn(),
   deleteShoppingItem: vi.fn(),
   postShoppingItemsReorder: vi.fn(),
+  postTasksReorder: vi.fn(),
   postTask: vi.fn(),
   postTaskCompletionToggle: vi.fn(),
   patchTask: vi.fn(),
