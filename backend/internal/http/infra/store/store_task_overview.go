@@ -124,8 +124,24 @@ func (s *Store) GetTaskOverview(ctx context.Context, userID string) (resp api.Ta
 		})
 	}
 
-	sort.Slice(daily, func(i, j int) bool { return daily[i].Task.CreatedAt.Before(daily[j].Task.CreatedAt) })
-	sort.Slice(weekly, func(i, j int) bool { return weekly[i].Task.CreatedAt.Before(weekly[j].Task.CreatedAt) })
+	sort.Slice(daily, func(i, j int) bool {
+		if daily[i].Task.Position != daily[j].Task.Position {
+			return daily[i].Task.Position < daily[j].Task.Position
+		}
+		if !daily[i].Task.CreatedAt.Equal(daily[j].Task.CreatedAt) {
+			return daily[i].Task.CreatedAt.Before(daily[j].Task.CreatedAt)
+		}
+		return daily[i].Task.Id < daily[j].Task.Id
+	})
+	sort.Slice(weekly, func(i, j int) bool {
+		if weekly[i].Task.Position != weekly[j].Task.Position {
+			return weekly[i].Task.Position < weekly[j].Task.Position
+		}
+		if !weekly[i].Task.CreatedAt.Equal(weekly[j].Task.CreatedAt) {
+			return weekly[i].Task.CreatedAt.Before(weekly[j].Task.CreatedAt)
+		}
+		return weekly[i].Task.Id < weekly[j].Task.Id
+	})
 	sort.Slice(weeklyReminderItems, func(i, j int) bool {
 		if weeklyReminderItems[i].occurrence.Date.Time.Equal(weeklyReminderItems[j].occurrence.Date.Time) {
 			return weeklyReminderItems[i].createdAt.Before(weeklyReminderItems[j].createdAt)

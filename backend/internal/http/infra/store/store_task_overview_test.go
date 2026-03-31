@@ -43,6 +43,50 @@ func TestGetTaskOverviewWeeklyRemindersSortsByDateThenCreatedAt(t *testing.T) {
 	}
 }
 
+func TestGetTaskOverviewUsesTaskPositionOrder(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	base := time.Date(2026, 3, 1, 9, 0, 0, 0, s.loc)
+	_, userID := createTeamWithMember(t, s, "overview-task-order@example.com", base)
+	teamID := teamIDForUser(t, s, userID)
+
+	firstDailyID := createTaskWithIDAt(t, s, teamID, api.TaskTypeDaily, 1, 1, base)
+	secondDailyID := createTaskWithIDAt(t, s, teamID, api.TaskTypeDaily, 2, 1, base.Add(time.Minute))
+	firstWeeklyID := createTaskWithIDAt(t, s, teamID, api.TaskTypeWeekly, 3, 2, base.Add(2*time.Minute))
+	secondWeeklyID := createTaskWithIDAt(t, s, teamID, api.TaskTypeWeekly, 4, 2, base.Add(3*time.Minute))
+
+	if _, err := s.ReorderTasks(withLatestIfMatchForUser(t, s, ctx, userID), userID, api.ReorderTasksRequest{
+		TaskIds: []string{secondDailyID, firstDailyID},
+	}); err != nil {
+		t.Fatalf("failed to reorder daily tasks: %v", err)
+	}
+	if _, err := s.ReorderTasks(withLatestIfMatchForUser(t, s, ctx, userID), userID, api.ReorderTasksRequest{
+		TaskIds: []string{secondWeeklyID, firstWeeklyID},
+	}); err != nil {
+		t.Fatalf("failed to reorder weekly tasks: %v", err)
+	}
+
+	overview, err := s.GetTaskOverview(ctx, userID)
+	if err != nil {
+		t.Fatalf("GetTaskOverview failed: %v", err)
+	}
+
+	if len(overview.DailyTasks) != 2 {
+		t.Fatalf("expected 2 daily tasks, got %d", len(overview.DailyTasks))
+	}
+	if overview.DailyTasks[0].Task.Id != secondDailyID || overview.DailyTasks[1].Task.Id != firstDailyID {
+		t.Fatalf("unexpected daily task order: %#v", overview.DailyTasks)
+	}
+
+	if len(overview.WeeklyTasks) != 2 {
+		t.Fatalf("expected 2 weekly tasks, got %d", len(overview.WeeklyTasks))
+	}
+	if overview.WeeklyTasks[0].Task.Id != secondWeeklyID || overview.WeeklyTasks[1].Task.Id != firstWeeklyID {
+		t.Fatalf("unexpected weekly task order: %#v", overview.WeeklyTasks)
+	}
+}
+
 func TestBuildMonthlyTaskStatusByDateDailyOmitAfterDeleteTime(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
@@ -313,6 +357,13 @@ func createTaskAtWithIDAndNotes(t *testing.T, s *Store, teamID string, taskType 
 	if notes != nil {
 		notesValue = pgtype.Text{String: *notes, Valid: true}
 	}
+	maxPosition, err := s.q.GetTaskMaxPositionByTeamAndType(context.Background(), dbsqlc.GetTaskMaxPositionByTeamAndTypeParams{
+		TeamID: teamID,
+		Type:   string(taskType),
+	})
+	if err != nil {
+		t.Fatalf("failed to get max task position: %v", err)
+	}
 	if err := s.q.CreateTask(context.Background(), dbsqlc.CreateTaskParams{
 		ID:                         taskID,
 		TeamID:                     teamID,
@@ -322,6 +373,7 @@ func createTaskAtWithIDAndNotes(t *testing.T, s *Store, teamID string, taskType 
 		PenaltyPoints:              int32(penalty),
 		Column7:                    "",
 		RequiredCompletionsPerWeek: int32(required),
+		Position:                   maxPosition + 1,
 		CreatedAt:                  toPgTimestamptz(createdAt),
 		UpdatedAt:                  toPgTimestamptz(createdAt),
 	}); err != nil {
