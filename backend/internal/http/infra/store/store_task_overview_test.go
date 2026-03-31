@@ -210,6 +210,35 @@ func TestBuildMonthlyTaskStatusByDateIncludesNotes(t *testing.T) {
 	t.Fatalf("task not found in monthly status groups")
 }
 
+func TestBuildMonthlyTaskStatusByDateUsesTaskPositionOrder(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	base := time.Date(2026, 1, 1, 9, 0, 0, 0, s.loc)
+	teamID, userID := createTeamWithMember(t, s, "summary-position-order@example.com", base)
+	firstID := createTaskAtWithIDAndTitle(t, s, teamID, api.TaskTypeDaily, 2, 1, base, "B-task", nil)
+	secondID := createTaskAtWithIDAndTitle(t, s, teamID, api.TaskTypeDaily, 2, 1, base.Add(time.Minute), "A-task", nil)
+
+	if _, err := s.ReorderTasks(withLatestIfMatchForUser(t, s, ctx, userID), userID, api.ReorderTasksRequest{
+		TaskIds: []string{secondID, firstID},
+	}); err != nil {
+		t.Fatalf("failed to reorder tasks: %v", err)
+	}
+
+	groups, err := s.buildMonthlyTaskStatusByDate(ctx, teamID, "2026-01")
+	if err != nil {
+		t.Fatalf("buildMonthlyTaskStatusByDate failed: %v", err)
+	}
+
+	items := itemsOnDate(groups, "2026-01-01")
+	if len(items) != 2 {
+		t.Fatalf("expected 2 items on 2026-01-01, got %d", len(items))
+	}
+	if items[0].TaskId != secondID || items[1].TaskId != firstID {
+		t.Fatalf("unexpected task order on monthly summary: %#v", items)
+	}
+}
+
 func TestBuildMonthlyTaskStatusByDateLeavesNotesNilWhenEmpty(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
@@ -317,7 +346,7 @@ func TestBuildMonthlyTaskStatusByDatePastMonthKeepsMonthEnd(t *testing.T) {
 
 func createTaskAtWithID(t *testing.T, s *Store, teamID string, taskType api.TaskType, penalty, required int, createdAt time.Time) string {
 	t.Helper()
-	return createTaskAtWithIDAndNotes(t, s, teamID, taskType, penalty, required, createdAt, nil)
+	return createTaskAtWithIDAndTitle(t, s, teamID, taskType, penalty, required, createdAt, "monthly status task", nil)
 }
 
 func createReminderAt(
@@ -352,6 +381,11 @@ func createReminderAt(
 
 func createTaskAtWithIDAndNotes(t *testing.T, s *Store, teamID string, taskType api.TaskType, penalty, required int, createdAt time.Time, notes *string) string {
 	t.Helper()
+	return createTaskAtWithIDAndTitle(t, s, teamID, taskType, penalty, required, createdAt, "monthly status task", notes)
+}
+
+func createTaskAtWithIDAndTitle(t *testing.T, s *Store, teamID string, taskType api.TaskType, penalty, required int, createdAt time.Time, title string, notes *string) string {
+	t.Helper()
 	taskID := s.nextID("task")
 	notesValue := pgtype.Text{}
 	if notes != nil {
@@ -367,7 +401,7 @@ func createTaskAtWithIDAndNotes(t *testing.T, s *Store, teamID string, taskType 
 	if err := s.q.CreateTask(context.Background(), dbsqlc.CreateTaskParams{
 		ID:                         taskID,
 		TeamID:                     teamID,
-		Title:                      "monthly status task",
+		Title:                      title,
 		Notes:                      notesValue,
 		Type:                       string(taskType),
 		PenaltyPoints:              int32(penalty),
@@ -380,6 +414,15 @@ func createTaskAtWithIDAndNotes(t *testing.T, s *Store, teamID string, taskType 
 		t.Fatalf("failed to create task: %v", err)
 	}
 	return taskID
+}
+
+func itemsOnDate(groups []api.MonthlyTaskStatusGroup, date string) []api.MonthlyTaskStatusItem {
+	for _, group := range groups {
+		if group.Date.Time.Format("2006-01-02") == date {
+			return group.Items
+		}
+	}
+	return nil
 }
 
 func containsTaskOnDate(groups []api.MonthlyTaskStatusGroup, date, taskID string) bool {

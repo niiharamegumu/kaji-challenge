@@ -299,18 +299,18 @@ func (q *Queries) ListTasksEffectiveForCloseByTeamAndType(ctx context.Context, a
 }
 
 const listTasksForMonthlyStatusByTeam = `-- name: ListTasksForMonthlyStatusByTeam :many
-SELECT id, title, notes, type, penalty_points, required_completions_per_week, created_at, deleted_at
+SELECT id, title, notes, type, penalty_points, required_completions_per_week, position, created_at, deleted_at
 FROM tasks t
 WHERE t.team_id = $1
   AND t.created_at < $3
   AND t.deleted_at IS NULL
 UNION ALL
-SELECT id, title, notes, type, penalty_points, required_completions_per_week, created_at, deleted_at
+SELECT id, title, notes, type, penalty_points, required_completions_per_week, position, created_at, deleted_at
 FROM tasks t
 WHERE t.team_id = $1
   AND t.created_at < $3
   AND t.deleted_at >= $2
-ORDER BY created_at, id
+ORDER BY type, position, created_at, id
 `
 
 type ListTasksForMonthlyStatusByTeamParams struct {
@@ -326,6 +326,7 @@ type ListTasksForMonthlyStatusByTeamRow struct {
 	Type                       string             `json:"type"`
 	PenaltyPoints              int32              `json:"penalty_points"`
 	RequiredCompletionsPerWeek int32              `json:"required_completions_per_week"`
+	Position                   int32              `json:"position"`
 	CreatedAt                  pgtype.Timestamptz `json:"created_at"`
 	DeletedAt                  pgtype.Timestamptz `json:"deleted_at"`
 }
@@ -346,6 +347,7 @@ func (q *Queries) ListTasksForMonthlyStatusByTeam(ctx context.Context, arg ListT
 			&i.Type,
 			&i.PenaltyPoints,
 			&i.RequiredCompletionsPerWeek,
+			&i.Position,
 			&i.CreatedAt,
 			&i.DeletedAt,
 		); err != nil {
