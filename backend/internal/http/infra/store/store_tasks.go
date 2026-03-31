@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -77,7 +78,15 @@ func (s *Store) CreateTask(ctx context.Context, userID string, req api.CreateTas
 		teamID,
 		"task",
 		map[string]string{"taskId": task.ID, "action": "create"},
-		func(_ context.Context, qtx *dbsqlc.Queries) error {
+		func(txCtx context.Context, qtx *dbsqlc.Queries) error {
+			maxPosition, err := qtx.GetTaskMaxPositionByTeamAndType(txCtx, dbsqlc.GetTaskMaxPositionByTeamAndTypeParams{
+				TeamID: teamID,
+				Type:   string(req.Type),
+			})
+			if err != nil {
+				return err
+			}
+			task.Position = int(maxPosition) + 1
 			return qtx.CreateTask(ctx, dbsqlc.CreateTaskParams{
 				ID:                         task.ID,
 				TeamID:                     task.TeamID,
@@ -87,6 +96,7 @@ func (s *Store) CreateTask(ctx context.Context, userID string, req api.CreateTas
 				PenaltyPoints:              penalty32,
 				Column7:                    uuidStringFromPtr(task.AssigneeID),
 				RequiredCompletionsPerWeek: required32,
+				Position:                   int32(task.Position),
 				CreatedAt:                  toPgTimestamptz(task.CreatedAt),
 				UpdatedAt:                  toPgTimestamptz(task.UpdatedAt),
 			})
@@ -201,10 +211,136 @@ func (s *Store) DeleteTask(ctx context.Context, userID, taskID string) error {
 			if task.TeamID != teamID || task.DeletedAt != nil {
 				return errors.New("task not found")
 			}
-			return qtx.DeleteTask(ctx, taskID)
+			if err := qtx.DeleteTask(ctx, taskID); err != nil {
+				return err
+			}
+			position32, err := safeInt32(task.Position, "position")
+			if err != nil {
+				return err
+			}
+			return qtx.CompactTaskPositionsAfter(ctx, dbsqlc.CompactTaskPositionsAfterParams{
+				TeamID:    teamID,
+				Type:      string(task.Type),
+				Position:  position32,
+				UpdatedAt: toPgTimestamptz(s.now()),
+			})
 		},
 	)
 	return err
+}
+
+func (s *Store) ReorderTasks(ctx context.Context, userID string, req api.ReorderTasksRequest) ([]api.Task, error) {
+	teamID, err := s.primaryTeamLocked(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if len(req.TaskIds) == 0 {
+		return nil, errors.New("taskIds is required")
+	}
+	seen := make(map[string]struct{}, len(req.TaskIds))
+	for _, taskID := range req.TaskIds {
+		if strings.TrimSpace(taskID) == "" {
+			return nil, errors.New("taskIds contains empty id")
+		}
+		if _, exists := seen[taskID]; exists {
+			return nil, errors.New("taskIds contains duplicate id")
+		}
+		seen[taskID] = struct{}{}
+	}
+
+	items := make([]api.Task, 0, len(req.TaskIds))
+	if _, err := s.runWithTeamRevisionCAS(
+		ctx,
+		teamID,
+		"task",
+		map[string]string{"action": "reorder"},
+		func(txCtx context.Context, qtx *dbsqlc.Queries) error {
+			rows, err := qtx.ListTasksByTeamID(txCtx, teamID)
+			if err != nil {
+				return err
+			}
+			if len(rows) == 0 {
+				return errors.New("tasks not found")
+			}
+
+			firstRow, err := qtx.GetTaskByID(txCtx, req.TaskIds[0])
+			if err != nil {
+				return errors.New("taskIds must match current tasks in the team and type")
+			}
+			firstTask := taskFromGetRow(firstRow, s.loc)
+			if firstTask.TeamID != teamID || firstTask.DeletedAt != nil {
+				return errors.New("taskIds must match current tasks in the team and type")
+			}
+			reorderType := firstTask.Type
+			for _, taskID := range req.TaskIds {
+				row, err := qtx.GetTaskByID(txCtx, taskID)
+				if err != nil {
+					return errors.New("taskIds must match current tasks in the team and type")
+				}
+				task := taskFromGetRow(row, s.loc)
+				if task.TeamID != teamID || task.DeletedAt != nil || task.Type != reorderType {
+					return errors.New("taskIds must match current tasks in the team and type")
+				}
+			}
+
+			currentIDs := make([]string, 0, len(rows))
+			tasksByID := make(map[string]taskRecord, len(rows))
+			for _, row := range rows {
+				task := taskFromListRow(row, s.loc)
+				if task.Type != reorderType {
+					continue
+				}
+				currentIDs = append(currentIDs, task.ID)
+				tasksByID[task.ID] = task
+			}
+			if len(currentIDs) != len(req.TaskIds) {
+				return errors.New("taskIds must include every task in the selected type")
+			}
+			requestedIDs := append([]string(nil), req.TaskIds...)
+			slices.Sort(currentIDs)
+			slices.Sort(requestedIDs)
+			if !slices.Equal(currentIDs, requestedIDs) {
+				return errors.New("taskIds must match current tasks in the team and type")
+			}
+
+			now := s.now()
+			offsetBase := len(req.TaskIds) + 1
+			for index, taskID := range req.TaskIds {
+				tempPosition, convErr := safeInt32(offsetBase+index, "position")
+				if convErr != nil {
+					return convErr
+				}
+				if err := qtx.UpdateTaskPosition(txCtx, dbsqlc.UpdateTaskPositionParams{
+					ID:        taskID,
+					Position:  tempPosition,
+					UpdatedAt: toPgTimestamptz(now),
+				}); err != nil {
+					return err
+				}
+			}
+			for index, taskID := range req.TaskIds {
+				finalPosition, convErr := safeInt32(index+1, "position")
+				if convErr != nil {
+					return convErr
+				}
+				if err := qtx.UpdateTaskPosition(txCtx, dbsqlc.UpdateTaskPositionParams{
+					ID:        taskID,
+					Position:  finalPosition,
+					UpdatedAt: toPgTimestamptz(now),
+				}); err != nil {
+					return err
+				}
+				task := tasksByID[taskID]
+				task.Position = index + 1
+				task.UpdatedAt = now
+				items = append(items, task.toAPI())
+			}
+			return nil
+		},
+	); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string, target time.Time, action *api.ToggleTaskCompletionRequestAction) (api.TaskCompletionResponse, error) {

@@ -26,6 +26,11 @@ func (r taskRepo) DeleteTask(ctx context.Context, userID, taskID string) error {
 	return mapInfraErr(r.store.DeleteTask(ctx, userID, taskID))
 }
 
+func (r taskRepo) ReorderTasks(ctx context.Context, userID string, req api.ReorderTasksRequest) ([]api.Task, error) {
+	items, err := r.store.ReorderTasks(ctx, userID, req)
+	return items, mapInfraErr(err)
+}
+
 func (r taskRepo) ToggleTaskCompletion(ctx context.Context, userID, taskID string, target time.Time, action *api.ToggleTaskCompletionRequestAction) (api.TaskCompletionResponse, error) {
 	res, err := r.store.ToggleTaskCompletion(ctx, userID, taskID, target, action)
 	return res, mapInfraErr(err)

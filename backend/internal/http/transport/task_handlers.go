@@ -70,6 +70,25 @@ func (h *Handler) DeleteTask(c *gin.Context, taskID string) {
 	c.Status(http.StatusNoContent)
 }
 
+func (h *Handler) PostTasksReorder(c *gin.Context) {
+	userID, ok := mustUserID(c)
+	if !ok {
+		return
+	}
+	injectIfMatchContext(c)
+	req, ok := bindJSON[api.ReorderTasksRequest](c)
+	if !ok {
+		return
+	}
+	items, err := h.services.Task.ReorderTasks(c.Request.Context(), userID, req)
+	if err != nil {
+		writeAppError(c, err, http.StatusBadRequest)
+		return
+	}
+	h.writeTeamETag(c, userID)
+	c.JSON(http.StatusOK, gin.H{"items": items})
+}
+
 func (h *Handler) PostTaskCompletionToggle(c *gin.Context, taskID string) {
 	userID, ok := mustUserID(c)
 	if !ok {
