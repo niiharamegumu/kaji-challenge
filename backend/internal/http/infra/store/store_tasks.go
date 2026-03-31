@@ -87,6 +87,10 @@ func (s *Store) CreateTask(ctx context.Context, userID string, req api.CreateTas
 				return err
 			}
 			task.Position = int(maxPosition) + 1
+			position32, err := safeInt32(task.Position, "position")
+			if err != nil {
+				return err
+			}
 			return qtx.CreateTask(ctx, dbsqlc.CreateTaskParams{
 				ID:                         task.ID,
 				TeamID:                     task.TeamID,
@@ -96,7 +100,7 @@ func (s *Store) CreateTask(ctx context.Context, userID string, req api.CreateTas
 				PenaltyPoints:              penalty32,
 				Column7:                    uuidStringFromPtr(task.AssigneeID),
 				RequiredCompletionsPerWeek: required32,
-				Position:                   int32(task.Position),
+				Position:                   position32,
 				CreatedAt:                  toPgTimestamptz(task.CreatedAt),
 				UpdatedAt:                  toPgTimestamptz(task.UpdatedAt),
 			})
