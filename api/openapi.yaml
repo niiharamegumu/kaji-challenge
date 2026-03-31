@@ -241,6 +241,7 @@ paths:
     post:
       operationId: postTask
       summary: Create task
+      description: Requires the latest team revision via the If-Match header.
       requestBody:
         required: true
         content:
@@ -250,15 +251,59 @@ paths:
       responses:
         '201':
           description: Task created
+          headers:
+            ETag:
+              description: Updated team revision ETag
+              schema:
+                type: string
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Task'
+        '412':
+          description: Team revision mismatch
+        '428':
+          description: Missing If-Match header
+
+  /v1/tasks/reorder:
+    post:
+      operationId: postTasksReorder
+      summary: Reorder tasks
+      description: Requires the latest team revision via the If-Match header.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReorderTasksRequest'
+      responses:
+        '200':
+          description: Tasks reordered
+          headers:
+            ETag:
+              description: Updated team revision ETag
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Task'
+        '412':
+          description: Team revision mismatch
+        '428':
+          description: Missing If-Match header
 
   /v1/tasks/{taskId}:
     patch:
       operationId: patchTask
       summary: Update task
+      description: Requires the latest team revision via the If-Match header.
       parameters:
         - in: path
           name: taskId
@@ -274,13 +319,23 @@ paths:
       responses:
         '200':
           description: Task updated
+          headers:
+            ETag:
+              description: Updated team revision ETag
+              schema:
+                type: string
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Task'
+        '412':
+          description: Team revision mismatch
+        '428':
+          description: Missing If-Match header
     delete:
       operationId: deleteTask
       summary: Delete task
+      description: Requires the latest team revision via the If-Match header.
       parameters:
         - in: path
           name: taskId
@@ -290,11 +345,21 @@ paths:
       responses:
         '204':
           description: Task deleted
+          headers:
+            ETag:
+              description: Updated team revision ETag
+              schema:
+                type: string
+        '412':
+          description: Team revision mismatch
+        '428':
+          description: Missing If-Match header
 
   /v1/tasks/{taskId}/completions/toggle:
     post:
       operationId: postTaskCompletionToggle
       summary: Update task completion in target period
+      description: Requires the latest team revision via the If-Match header.
       parameters:
         - in: path
           name: taskId
@@ -310,10 +375,19 @@ paths:
       responses:
         '200':
           description: Completion toggled
+          headers:
+            ETag:
+              description: Updated team revision ETag
+              schema:
+                type: string
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/TaskCompletionResponse'
+        '412':
+          description: Team revision mismatch
+        '428':
+          description: Missing If-Match header
 
   /v1/reminders:
     get:
@@ -1065,7 +1139,7 @@ components:
     Task:
       type: object
       required:
-        [id, teamId, title, type, penaltyPoints, requiredCompletionsPerWeek, createdAt, updatedAt]
+        [id, teamId, title, type, penaltyPoints, requiredCompletionsPerWeek, position, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -1087,6 +1161,9 @@ components:
           type: integer
           minimum: 1
           maximum: 7
+        position:
+          type: integer
+          minimum: 1
         createdAt:
           type: string
           format: date-time
@@ -1138,6 +1215,16 @@ components:
           type: integer
           minimum: 1
           maximum: 7
+
+    ReorderTasksRequest:
+      type: object
+      required: [taskIds]
+      properties:
+        taskIds:
+          type: array
+          minItems: 1
+          items:
+            type: string
 
     ToggleTaskCompletionRequest:
       type: object

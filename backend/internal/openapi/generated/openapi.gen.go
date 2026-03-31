@@ -242,6 +242,11 @@ type ReorderShoppingListItemsRequest struct {
 	ItemIds []string `json:"itemIds"`
 }
 
+// ReorderTasksRequest defines model for ReorderTasksRequest.
+type ReorderTasksRequest struct {
+	TaskIds []string `json:"taskIds"`
+}
+
 // ShoppingListItem defines model for ShoppingListItem.
 type ShoppingListItem struct {
 	CreatedAt time.Time `json:"createdAt"`
@@ -261,6 +266,7 @@ type Task struct {
 	Id                         string    `json:"id"`
 	Notes                      *string   `json:"notes,omitempty"`
 	PenaltyPoints              int       `json:"penaltyPoints"`
+	Position                   int       `json:"position"`
 	RequiredCompletionsPerWeek int       `json:"requiredCompletionsPerWeek"`
 	TeamId                     string    `json:"teamId"`
 	Title                      string    `json:"title"`
@@ -511,6 +517,9 @@ type PatchShoppingItemJSONRequestBody = UpdateShoppingListItemRequest
 // PostTaskJSONRequestBody defines body for PostTask for application/json ContentType.
 type PostTaskJSONRequestBody = CreateTaskRequest
 
+// PostTasksReorderJSONRequestBody defines body for PostTasksReorder for application/json ContentType.
+type PostTasksReorderJSONRequestBody = ReorderTasksRequest
+
 // PatchTaskJSONRequestBody defines body for PatchTask for application/json ContentType.
 type PatchTaskJSONRequestBody = UpdateTaskRequest
 
@@ -615,6 +624,9 @@ type ServerInterface interface {
 	// Task overview payload
 	// (GET /v1/tasks/overview)
 	GetTaskOverview(c *gin.Context)
+	// Reorder tasks
+	// (POST /v1/tasks/reorder)
+	PostTasksReorder(c *gin.Context)
 	// Delete task
 	// (DELETE /v1/tasks/{taskId})
 	DeleteTask(c *gin.Context, taskId string)
@@ -1367,6 +1379,21 @@ func (siw *ServerInterfaceWrapper) GetTaskOverview(c *gin.Context) {
 	siw.Handler.GetTaskOverview(c)
 }
 
+// PostTasksReorder operation middleware
+func (siw *ServerInterfaceWrapper) PostTasksReorder(c *gin.Context) {
+
+	c.Set(CookieAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.PostTasksReorder(c)
+}
+
 // DeleteTask operation middleware
 func (siw *ServerInterfaceWrapper) DeleteTask(c *gin.Context) {
 
@@ -1591,6 +1618,7 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	router.GET(options.BaseURL+"/v1/tasks", wrapper.ListTasks)
 	router.POST(options.BaseURL+"/v1/tasks", wrapper.PostTask)
 	router.GET(options.BaseURL+"/v1/tasks/overview", wrapper.GetTaskOverview)
+	router.POST(options.BaseURL+"/v1/tasks/reorder", wrapper.PostTasksReorder)
 	router.DELETE(options.BaseURL+"/v1/tasks/:taskId", wrapper.DeleteTask)
 	router.PATCH(options.BaseURL+"/v1/tasks/:taskId", wrapper.PatchTask)
 	router.POST(options.BaseURL+"/v1/tasks/:taskId/completions/toggle", wrapper.PostTaskCompletionToggle)

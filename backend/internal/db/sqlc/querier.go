@@ -16,6 +16,7 @@ type Querier interface {
 	ClearTaskAssigneeByTeamAndUser(ctx context.Context, arg ClearTaskAssigneeByTeamAndUserParams) error
 	CloseMonthlyPenaltySummary(ctx context.Context, arg CloseMonthlyPenaltySummaryParams) error
 	CompactShoppingItemPositionsAfter(ctx context.Context, arg CompactShoppingItemPositionsAfterParams) error
+	CompactTaskPositionsAfter(ctx context.Context, arg CompactTaskPositionsAfterParams) error
 	ConsumeExchangeCode(ctx context.Context, code string) error
 	CreateInviteCode(ctx context.Context, arg CreateInviteCodeParams) error
 	CreatePenaltyRule(ctx context.Context, arg CreatePenaltyRuleParams) error
@@ -56,6 +57,7 @@ type Querier interface {
 	GetShoppingItemMaxPositionByTeamID(ctx context.Context, teamID string) (int32, error)
 	GetTaskByID(ctx context.Context, id string) (GetTaskByIDRow, error)
 	GetTaskCompletionWeeklyEntryCount(ctx context.Context, arg GetTaskCompletionWeeklyEntryCountParams) (int64, error)
+	GetTaskMaxPositionByTeamAndType(ctx context.Context, arg GetTaskMaxPositionByTeamAndTypeParams) (int32, error)
 	GetTeamStateRevision(ctx context.Context, id string) (int64, error)
 	GetUndeletedPenaltyRuleByID(ctx context.Context, id string) (PenaltyRule, error)
 	GetUserAuthIdentityByID(ctx context.Context, id string) (GetUserAuthIdentityByIDRow, error)
@@ -100,6 +102,7 @@ type Querier interface {
 	UpdateShoppingItem(ctx context.Context, arg UpdateShoppingItemParams) error
 	UpdateShoppingItemPosition(ctx context.Context, arg UpdateShoppingItemPositionParams) error
 	UpdateTask(ctx context.Context, arg UpdateTaskParams) error
+	UpdateTaskPosition(ctx context.Context, arg UpdateTaskPositionParams) error
 	UpdateTeamMemberRole(ctx context.Context, arg UpdateTeamMemberRoleParams) error
 	UpdateTeamName(ctx context.Context, arg UpdateTeamNameParams) error
 	UpdateTeamStateRevisionIfMatch(ctx context.Context, arg UpdateTeamStateRevisionIfMatchParams) (int64, error)

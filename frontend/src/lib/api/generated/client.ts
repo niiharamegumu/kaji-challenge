@@ -253,6 +253,8 @@ export interface Task {
    * @maximum 7
    */
   requiredCompletionsPerWeek: number;
+  /** @minimum 1 */
+  position: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -298,6 +300,11 @@ export interface UpdateTaskRequest {
    * @maximum 7
    */
   requiredCompletionsPerWeek?: number;
+}
+
+export interface ReorderTasksRequest {
+  /** @minItems 1 */
+  taskIds: string[];
 }
 
 /**
@@ -494,6 +501,10 @@ type?: TaskType;
 };
 
 export type ListTasks200 = {
+  items: Task[];
+};
+
+export type PostTasksReorder200 = {
   items: Task[];
 };
 
@@ -1086,19 +1097,32 @@ export const listTasks = async (params?: ListTasksParams, options?: RequestInit)
 
 
 /**
+ * Requires the latest team revision via the If-Match header.
  * @summary Create task
  */
 export type postTaskResponse201 = {
   data: Task
   status: 201
 }
+
+export type postTaskResponse412 = {
+  data: void
+  status: 412
+}
+
+export type postTaskResponse428 = {
+  data: void
+  status: 428
+}
     
 export type postTaskResponseSuccess = (postTaskResponse201) & {
   headers: Headers;
 };
-;
+export type postTaskResponseError = (postTaskResponse412 | postTaskResponse428) & {
+  headers: Headers;
+};
 
-export type postTaskResponse = (postTaskResponseSuccess)
+export type postTaskResponse = (postTaskResponseSuccess | postTaskResponseError)
 
 export const getPostTaskUrl = () => {
 
@@ -1123,19 +1147,82 @@ export const postTask = async (createTaskRequest: CreateTaskRequest, options?: R
 
 
 /**
+ * Requires the latest team revision via the If-Match header.
+ * @summary Reorder tasks
+ */
+export type postTasksReorderResponse200 = {
+  data: PostTasksReorder200
+  status: 200
+}
+
+export type postTasksReorderResponse412 = {
+  data: void
+  status: 412
+}
+
+export type postTasksReorderResponse428 = {
+  data: void
+  status: 428
+}
+    
+export type postTasksReorderResponseSuccess = (postTasksReorderResponse200) & {
+  headers: Headers;
+};
+export type postTasksReorderResponseError = (postTasksReorderResponse412 | postTasksReorderResponse428) & {
+  headers: Headers;
+};
+
+export type postTasksReorderResponse = (postTasksReorderResponseSuccess | postTasksReorderResponseError)
+
+export const getPostTasksReorderUrl = () => {
+
+
+  
+
+  return `/v1/tasks/reorder`
+}
+
+export const postTasksReorder = async (reorderTasksRequest: ReorderTasksRequest, options?: RequestInit): Promise<postTasksReorderResponse> => {
+  
+  return customFetch<postTasksReorderResponse>(getPostTasksReorderUrl(),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      reorderTasksRequest,)
+  }
+);}
+
+
+
+/**
+ * Requires the latest team revision via the If-Match header.
  * @summary Update task
  */
 export type patchTaskResponse200 = {
   data: Task
   status: 200
 }
+
+export type patchTaskResponse412 = {
+  data: void
+  status: 412
+}
+
+export type patchTaskResponse428 = {
+  data: void
+  status: 428
+}
     
 export type patchTaskResponseSuccess = (patchTaskResponse200) & {
   headers: Headers;
 };
-;
+export type patchTaskResponseError = (patchTaskResponse412 | patchTaskResponse428) & {
+  headers: Headers;
+};
 
-export type patchTaskResponse = (patchTaskResponseSuccess)
+export type patchTaskResponse = (patchTaskResponseSuccess | patchTaskResponseError)
 
 export const getPatchTaskUrl = (taskId: string,) => {
 
@@ -1161,19 +1248,32 @@ export const patchTask = async (taskId: string,
 
 
 /**
+ * Requires the latest team revision via the If-Match header.
  * @summary Delete task
  */
 export type deleteTaskResponse204 = {
   data: void
   status: 204
 }
+
+export type deleteTaskResponse412 = {
+  data: void
+  status: 412
+}
+
+export type deleteTaskResponse428 = {
+  data: void
+  status: 428
+}
     
 export type deleteTaskResponseSuccess = (deleteTaskResponse204) & {
   headers: Headers;
 };
-;
+export type deleteTaskResponseError = (deleteTaskResponse412 | deleteTaskResponse428) & {
+  headers: Headers;
+};
 
-export type deleteTaskResponse = (deleteTaskResponseSuccess)
+export type deleteTaskResponse = (deleteTaskResponseSuccess | deleteTaskResponseError)
 
 export const getDeleteTaskUrl = (taskId: string,) => {
 
@@ -1197,19 +1297,32 @@ export const deleteTask = async (taskId: string, options?: RequestInit): Promise
 
 
 /**
+ * Requires the latest team revision via the If-Match header.
  * @summary Update task completion in target period
  */
 export type postTaskCompletionToggleResponse200 = {
   data: TaskCompletionResponse
   status: 200
 }
+
+export type postTaskCompletionToggleResponse412 = {
+  data: void
+  status: 412
+}
+
+export type postTaskCompletionToggleResponse428 = {
+  data: void
+  status: 428
+}
     
 export type postTaskCompletionToggleResponseSuccess = (postTaskCompletionToggleResponse200) & {
   headers: Headers;
 };
-;
+export type postTaskCompletionToggleResponseError = (postTaskCompletionToggleResponse412 | postTaskCompletionToggleResponse428) & {
+  headers: Headers;
+};
 
-export type postTaskCompletionToggleResponse = (postTaskCompletionToggleResponseSuccess)
+export type postTaskCompletionToggleResponse = (postTaskCompletionToggleResponseSuccess | postTaskCompletionToggleResponseError)
 
 export const getPostTaskCompletionToggleUrl = (taskId: string,) => {
 

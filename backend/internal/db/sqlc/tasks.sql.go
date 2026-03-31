@@ -29,9 +29,36 @@ func (q *Queries) ClearTaskAssigneeByTeamAndUser(ctx context.Context, arg ClearT
 	return err
 }
 
+const compactTaskPositionsAfter = `-- name: CompactTaskPositionsAfter :exec
+UPDATE tasks
+SET position = position - 1,
+    updated_at = $4
+WHERE team_id = $1
+  AND type = $2
+  AND deleted_at IS NULL
+  AND position > $3
+`
+
+type CompactTaskPositionsAfterParams struct {
+	TeamID    string             `json:"team_id"`
+	Type      string             `json:"type"`
+	Position  int32              `json:"position"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) CompactTaskPositionsAfter(ctx context.Context, arg CompactTaskPositionsAfterParams) error {
+	_, err := q.db.Exec(ctx, compactTaskPositionsAfter,
+		arg.TeamID,
+		arg.Type,
+		arg.Position,
+		arg.UpdatedAt,
+	)
+	return err
+}
+
 const createTask = `-- name: CreateTask :exec
-INSERT INTO tasks (id, team_id, title, notes, type, penalty_points, assignee_user_id, required_completions_per_week, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, '')::uuid, $8, $9, $10)
+INSERT INTO tasks (id, team_id, title, notes, type, penalty_points, assignee_user_id, required_completions_per_week, position, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, '')::uuid, $8, $9, $10, $11)
 `
 
 type CreateTaskParams struct {
@@ -43,6 +70,7 @@ type CreateTaskParams struct {
 	PenaltyPoints              int32              `json:"penalty_points"`
 	Column7                    interface{}        `json:"column_7"`
 	RequiredCompletionsPerWeek int32              `json:"required_completions_per_week"`
+	Position                   int32              `json:"position"`
 	CreatedAt                  pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt                  pgtype.Timestamptz `json:"updated_at"`
 }
@@ -57,6 +85,7 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) error {
 		arg.PenaltyPoints,
 		arg.Column7,
 		arg.RequiredCompletionsPerWeek,
+		arg.Position,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)
@@ -89,7 +118,7 @@ func (q *Queries) GetEarliestTaskCreatedAtByTeam(ctx context.Context, teamID str
 }
 
 const getTaskByID = `-- name: GetTaskByID :one
-SELECT id, team_id, title, notes, type, penalty_points, COALESCE(assignee_user_id::text, '') AS assignee_user_id, required_completions_per_week, created_at, updated_at, deleted_at
+SELECT id, team_id, title, notes, type, penalty_points, COALESCE(assignee_user_id::text, '') AS assignee_user_id, required_completions_per_week, position, created_at, updated_at, deleted_at
 FROM tasks
 WHERE id = $1
 `
@@ -103,6 +132,7 @@ type GetTaskByIDRow struct {
 	PenaltyPoints              int32              `json:"penalty_points"`
 	AssigneeUserID             interface{}        `json:"assignee_user_id"`
 	RequiredCompletionsPerWeek int32              `json:"required_completions_per_week"`
+	Position                   int32              `json:"position"`
 	CreatedAt                  pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt                  pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt                  pgtype.Timestamptz `json:"deleted_at"`
@@ -120,6 +150,7 @@ func (q *Queries) GetTaskByID(ctx context.Context, id string) (GetTaskByIDRow, e
 		&i.PenaltyPoints,
 		&i.AssigneeUserID,
 		&i.RequiredCompletionsPerWeek,
+		&i.Position,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -127,12 +158,32 @@ func (q *Queries) GetTaskByID(ctx context.Context, id string) (GetTaskByIDRow, e
 	return i, err
 }
 
+const getTaskMaxPositionByTeamAndType = `-- name: GetTaskMaxPositionByTeamAndType :one
+SELECT COALESCE(MAX(position), 0)::integer AS position
+FROM tasks
+WHERE team_id = $1
+  AND type = $2
+  AND deleted_at IS NULL
+`
+
+type GetTaskMaxPositionByTeamAndTypeParams struct {
+	TeamID string `json:"team_id"`
+	Type   string `json:"type"`
+}
+
+func (q *Queries) GetTaskMaxPositionByTeamAndType(ctx context.Context, arg GetTaskMaxPositionByTeamAndTypeParams) (int32, error) {
+	row := q.db.QueryRow(ctx, getTaskMaxPositionByTeamAndType, arg.TeamID, arg.Type)
+	var position int32
+	err := row.Scan(&position)
+	return position, err
+}
+
 const listTasksByTeamID = `-- name: ListTasksByTeamID :many
-SELECT id, team_id, title, notes, type, penalty_points, COALESCE(assignee_user_id::text, '') AS assignee_user_id, required_completions_per_week, created_at, updated_at, deleted_at
+SELECT id, team_id, title, notes, type, penalty_points, COALESCE(assignee_user_id::text, '') AS assignee_user_id, required_completions_per_week, position, created_at, updated_at, deleted_at
 FROM tasks
 WHERE team_id = $1
   AND deleted_at IS NULL
-ORDER BY created_at
+ORDER BY type, position, created_at, id
 `
 
 type ListTasksByTeamIDRow struct {
@@ -144,6 +195,7 @@ type ListTasksByTeamIDRow struct {
 	PenaltyPoints              int32              `json:"penalty_points"`
 	AssigneeUserID             interface{}        `json:"assignee_user_id"`
 	RequiredCompletionsPerWeek int32              `json:"required_completions_per_week"`
+	Position                   int32              `json:"position"`
 	CreatedAt                  pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt                  pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt                  pgtype.Timestamptz `json:"deleted_at"`
@@ -167,6 +219,7 @@ func (q *Queries) ListTasksByTeamID(ctx context.Context, teamID string) ([]ListT
 			&i.PenaltyPoints,
 			&i.AssigneeUserID,
 			&i.RequiredCompletionsPerWeek,
+			&i.Position,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
@@ -182,13 +235,13 @@ func (q *Queries) ListTasksByTeamID(ctx context.Context, teamID string) ([]ListT
 }
 
 const listTasksEffectiveForCloseByTeamAndType = `-- name: ListTasksEffectiveForCloseByTeamAndType :many
-SELECT id, team_id, title, notes, type, penalty_points, COALESCE(assignee_user_id::text, '') AS assignee_user_id, required_completions_per_week, created_at, updated_at, deleted_at
+SELECT id, team_id, title, notes, type, penalty_points, COALESCE(assignee_user_id::text, '') AS assignee_user_id, required_completions_per_week, position, created_at, updated_at, deleted_at
 FROM tasks
 WHERE team_id = $1
   AND type = $2
   AND created_at < $3
   AND (deleted_at IS NULL OR deleted_at >= $3)
-ORDER BY created_at
+ORDER BY position, created_at, id
 `
 
 type ListTasksEffectiveForCloseByTeamAndTypeParams struct {
@@ -206,6 +259,7 @@ type ListTasksEffectiveForCloseByTeamAndTypeRow struct {
 	PenaltyPoints              int32              `json:"penalty_points"`
 	AssigneeUserID             interface{}        `json:"assignee_user_id"`
 	RequiredCompletionsPerWeek int32              `json:"required_completions_per_week"`
+	Position                   int32              `json:"position"`
 	CreatedAt                  pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt                  pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt                  pgtype.Timestamptz `json:"deleted_at"`
@@ -229,6 +283,7 @@ func (q *Queries) ListTasksEffectiveForCloseByTeamAndType(ctx context.Context, a
 			&i.PenaltyPoints,
 			&i.AssigneeUserID,
 			&i.RequiredCompletionsPerWeek,
+			&i.Position,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
@@ -305,11 +360,11 @@ func (q *Queries) ListTasksForMonthlyStatusByTeam(ctx context.Context, arg ListT
 }
 
 const listUndeletedTasksByTeamID = `-- name: ListUndeletedTasksByTeamID :many
-SELECT id, team_id, title, notes, type, penalty_points, COALESCE(assignee_user_id::text, '') AS assignee_user_id, required_completions_per_week, created_at, updated_at, deleted_at
+SELECT id, team_id, title, notes, type, penalty_points, COALESCE(assignee_user_id::text, '') AS assignee_user_id, required_completions_per_week, position, created_at, updated_at, deleted_at
 FROM tasks
 WHERE team_id = $1
   AND deleted_at IS NULL
-ORDER BY created_at
+ORDER BY type, position, created_at, id
 `
 
 type ListUndeletedTasksByTeamIDRow struct {
@@ -321,6 +376,7 @@ type ListUndeletedTasksByTeamIDRow struct {
 	PenaltyPoints              int32              `json:"penalty_points"`
 	AssigneeUserID             interface{}        `json:"assignee_user_id"`
 	RequiredCompletionsPerWeek int32              `json:"required_completions_per_week"`
+	Position                   int32              `json:"position"`
 	CreatedAt                  pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt                  pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt                  pgtype.Timestamptz `json:"deleted_at"`
@@ -344,6 +400,7 @@ func (q *Queries) ListUndeletedTasksByTeamID(ctx context.Context, teamID string)
 			&i.PenaltyPoints,
 			&i.AssigneeUserID,
 			&i.RequiredCompletionsPerWeek,
+			&i.Position,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
@@ -389,5 +446,23 @@ func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) error {
 		arg.RequiredCompletionsPerWeek,
 		arg.UpdatedAt,
 	)
+	return err
+}
+
+const updateTaskPosition = `-- name: UpdateTaskPosition :exec
+UPDATE tasks
+SET position = $2,
+    updated_at = $3
+WHERE id = $1
+`
+
+type UpdateTaskPositionParams struct {
+	ID        string             `json:"id"`
+	Position  int32              `json:"position"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) UpdateTaskPosition(ctx context.Context, arg UpdateTaskPositionParams) error {
+	_, err := q.db.Exec(ctx, updateTaskPosition, arg.ID, arg.Position, arg.UpdatedAt)
 	return err
 }
