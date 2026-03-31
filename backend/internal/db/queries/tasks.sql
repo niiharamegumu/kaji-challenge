@@ -1,16 +1,16 @@
 -- name: ListTasksByTeamID :many
-SELECT id, team_id, title, notes, type, penalty_points, COALESCE(assignee_user_id::text, '') AS assignee_user_id, required_completions_per_week, created_at, updated_at, deleted_at
+SELECT id, team_id, title, notes, type, penalty_points, COALESCE(assignee_user_id::text, '') AS assignee_user_id, required_completions_per_week, position, created_at, updated_at, deleted_at
 FROM tasks
 WHERE team_id = $1
   AND deleted_at IS NULL
-ORDER BY created_at;
+ORDER BY type, position, created_at, id;
 
 -- name: ListUndeletedTasksByTeamID :many
-SELECT id, team_id, title, notes, type, penalty_points, COALESCE(assignee_user_id::text, '') AS assignee_user_id, required_completions_per_week, created_at, updated_at, deleted_at
+SELECT id, team_id, title, notes, type, penalty_points, COALESCE(assignee_user_id::text, '') AS assignee_user_id, required_completions_per_week, position, created_at, updated_at, deleted_at
 FROM tasks
 WHERE team_id = $1
   AND deleted_at IS NULL
-ORDER BY created_at;
+ORDER BY type, position, created_at, id;
 
 -- name: GetEarliestTaskCreatedAtByTeam :one
 SELECT MIN(created_at)::timestamptz AS created_at
@@ -18,22 +18,29 @@ FROM tasks
 WHERE team_id = $1;
 
 -- name: ListTasksEffectiveForCloseByTeamAndType :many
-SELECT id, team_id, title, notes, type, penalty_points, COALESCE(assignee_user_id::text, '') AS assignee_user_id, required_completions_per_week, created_at, updated_at, deleted_at
+SELECT id, team_id, title, notes, type, penalty_points, COALESCE(assignee_user_id::text, '') AS assignee_user_id, required_completions_per_week, position, created_at, updated_at, deleted_at
 FROM tasks
 WHERE team_id = $1
   AND type = $2
   AND created_at < $3
   AND (deleted_at IS NULL OR deleted_at >= $3)
-ORDER BY created_at;
+ORDER BY position, created_at, id;
 
 -- name: GetTaskByID :one
-SELECT id, team_id, title, notes, type, penalty_points, COALESCE(assignee_user_id::text, '') AS assignee_user_id, required_completions_per_week, created_at, updated_at, deleted_at
+SELECT id, team_id, title, notes, type, penalty_points, COALESCE(assignee_user_id::text, '') AS assignee_user_id, required_completions_per_week, position, created_at, updated_at, deleted_at
 FROM tasks
 WHERE id = $1;
 
+-- name: GetTaskMaxPositionByTeamAndType :one
+SELECT COALESCE(MAX(position), 0)::integer AS position
+FROM tasks
+WHERE team_id = $1
+  AND type = $2
+  AND deleted_at IS NULL;
+
 -- name: CreateTask :exec
-INSERT INTO tasks (id, team_id, title, notes, type, penalty_points, assignee_user_id, required_completions_per_week, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, '')::uuid, $8, $9, $10);
+INSERT INTO tasks (id, team_id, title, notes, type, penalty_points, assignee_user_id, required_completions_per_week, position, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, '')::uuid, $8, $9, $10, $11);
 
 -- name: UpdateTask :exec
 UPDATE tasks
@@ -51,6 +58,21 @@ SET deleted_at = NOW(),
     updated_at = NOW()
 WHERE id = $1;
 
+-- name: CompactTaskPositionsAfter :exec
+UPDATE tasks
+SET position = position - 1,
+    updated_at = $4
+WHERE team_id = $1
+  AND type = $2
+  AND deleted_at IS NULL
+  AND position > $3;
+
+-- name: UpdateTaskPosition :exec
+UPDATE tasks
+SET position = $2,
+    updated_at = $3
+WHERE id = $1;
+
 -- name: ClearTaskAssigneeByTeamAndUser :exec
 UPDATE tasks
 SET assignee_user_id = NULL
@@ -59,15 +81,15 @@ WHERE team_id = $1
   AND deleted_at IS NULL;
 
 -- name: ListTasksForMonthlyStatusByTeam :many
-SELECT id, title, notes, type, penalty_points, required_completions_per_week, created_at, deleted_at
+SELECT id, title, notes, type, penalty_points, required_completions_per_week, position, created_at, deleted_at
 FROM tasks t
 WHERE t.team_id = $1
   AND t.created_at < $3
   AND t.deleted_at IS NULL
 UNION ALL
-SELECT id, title, notes, type, penalty_points, required_completions_per_week, created_at, deleted_at
+SELECT id, title, notes, type, penalty_points, required_completions_per_week, position, created_at, deleted_at
 FROM tasks t
 WHERE t.team_id = $1
   AND t.created_at < $3
   AND t.deleted_at >= $2
-ORDER BY created_at, id;
+ORDER BY type, position, created_at, id;

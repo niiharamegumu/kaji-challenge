@@ -1,4 +1,5 @@
 import {
+  act,
   cleanup,
   render,
   screen,
@@ -7,6 +8,7 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useSetAtom } from "jotai";
+import type { ReactNode } from "react";
 import { useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -21,10 +23,78 @@ const mockPostTask = vi.fn();
 const mockPostPenaltyRule = vi.fn();
 const mockPatchTask = vi.fn();
 const mockDeleteTask = vi.fn();
+const mockPostTasksReorder = vi.fn();
 const mockListTasks = vi.fn();
 const mockListPenaltyRules = vi.fn();
 const mockPatchPenaltyRule = vi.fn();
 const mockDeletePenaltyRule = vi.fn();
+
+type MockDragEndEvent = {
+  active: { id: string };
+  over: { id: string } | null;
+};
+
+type MockDndContextProps = {
+  children: ReactNode;
+  onDragEnd?: (event: MockDragEndEvent) => void;
+};
+
+type MockChildrenProps = {
+  children: ReactNode;
+};
+
+let latestOnDragEnd: ((event: MockDragEndEvent) => void) | null = null;
+
+vi.mock("@dnd-kit/core", async () => {
+  const React = await vi.importActual<typeof import("react")>("react");
+  return {
+    DndContext: ({ children, onDragEnd }: MockDndContextProps) => {
+      latestOnDragEnd = onDragEnd ?? null;
+      return React.createElement("div", null, children);
+    },
+    KeyboardSensor: class {},
+    PointerSensor: class {},
+    TouchSensor: class {},
+    closestCenter: vi.fn(),
+    useSensor: vi.fn((sensor: unknown, options?: unknown) => ({
+      sensor,
+      options,
+    })),
+    useSensors: vi.fn((...sensors: unknown[]) => sensors),
+  };
+});
+
+vi.mock("@dnd-kit/sortable", async () => {
+  const React = await vi.importActual<typeof import("react")>("react");
+  return {
+    SortableContext: ({ children }: MockChildrenProps) =>
+      React.createElement(React.Fragment, null, children),
+    arrayMove: <T,>(items: T[], oldIndex: number, newIndex: number) => {
+      const nextItems = [...items];
+      const [moved] = nextItems.splice(oldIndex, 1);
+      nextItems.splice(newIndex, 0, moved);
+      return nextItems;
+    },
+    sortableKeyboardCoordinates: vi.fn(),
+    useSortable: vi.fn(() => ({
+      attributes: {},
+      listeners: {},
+      setNodeRef: vi.fn(),
+      transform: null,
+      transition: null,
+      isDragging: false,
+    })),
+    verticalListSortingStrategy: vi.fn(),
+  };
+});
+
+vi.mock("@dnd-kit/utilities", () => ({
+  CSS: {
+    Transform: {
+      toString: () => undefined,
+    },
+  },
+}));
 
 vi.mock("../../../lib/api/generated/client", async () => {
   const actual = await vi.importActual<object>(
@@ -38,6 +108,7 @@ vi.mock("../../../lib/api/generated/client", async () => {
     postTask: (...args: unknown[]) => mockPostTask(...args),
     patchTask: (...args: unknown[]) => mockPatchTask(...args),
     deleteTask: (...args: unknown[]) => mockDeleteTask(...args),
+    postTasksReorder: (...args: unknown[]) => mockPostTasksReorder(...args),
     postPenaltyRule: (...args: unknown[]) => mockPostPenaltyRule(...args),
     patchPenaltyRule: (...args: unknown[]) => mockPatchPenaltyRule(...args),
     deletePenaltyRule: (...args: unknown[]) => mockDeletePenaltyRule(...args),
@@ -61,12 +132,14 @@ describe("AdminTasksPage", () => {
     mockPostPenaltyRule.mockReset();
     mockPatchTask.mockReset();
     mockDeleteTask.mockReset();
+    mockPostTasksReorder.mockReset();
     mockListTasks.mockReset();
     mockListPenaltyRules.mockReset();
     mockPatchPenaltyRule.mockReset();
     mockDeletePenaltyRule.mockReset();
     mockListTasks.mockResolvedValue({ data: { items: [] } });
     mockListPenaltyRules.mockResolvedValue({ data: { items: [] } });
+    mockPostTasksReorder.mockResolvedValue({ data: { items: [] } });
   });
 
   afterEach(() => {
@@ -290,6 +363,96 @@ describe("AdminTasksPage", () => {
     const saveButton = within(card).getByRole("button", { name: "保存" });
     expect(saveButton).toBeDisabled();
     expect(mockPatchTask).not.toHaveBeenCalled();
+  });
+
+  it("reorders daily tasks from drag-and-drop", async () => {
+    mockListTasks.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: "task-1",
+            teamId: "team-1",
+            title: "皿洗い",
+            notes: null,
+            type: "daily",
+            penaltyPoints: 2,
+            assigneeUserId: undefined,
+            requiredCompletionsPerWeek: 1,
+            position: 1,
+            createdAt: "2026-02-01T00:00:00Z",
+            updatedAt: "2026-02-01T00:00:00Z",
+          },
+          {
+            id: "task-2",
+            teamId: "team-1",
+            title: "洗濯",
+            notes: null,
+            type: "daily",
+            penaltyPoints: 1,
+            assigneeUserId: undefined,
+            requiredCompletionsPerWeek: 1,
+            position: 2,
+            createdAt: "2026-02-02T00:00:00Z",
+            updatedAt: "2026-02-02T00:00:00Z",
+          },
+        ],
+      },
+    });
+    mockPostTasksReorder.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: "task-2",
+            teamId: "team-1",
+            title: "洗濯",
+            notes: null,
+            type: "daily",
+            penaltyPoints: 1,
+            assigneeUserId: undefined,
+            requiredCompletionsPerWeek: 1,
+            position: 1,
+            createdAt: "2026-02-02T00:00:00Z",
+            updatedAt: "2026-02-02T00:00:00Z",
+          },
+          {
+            id: "task-1",
+            teamId: "team-1",
+            title: "皿洗い",
+            notes: null,
+            type: "daily",
+            penaltyPoints: 2,
+            assigneeUserId: undefined,
+            requiredCompletionsPerWeek: 1,
+            position: 2,
+            createdAt: "2026-02-01T00:00:00Z",
+            updatedAt: "2026-02-01T00:00:00Z",
+          },
+        ],
+      },
+    });
+
+    renderPage();
+    expect(
+      await screen.findByText(
+        "タスク設定はチーム共通です。並び替えは管理画面でのみ変更できます。",
+      ),
+    ).toBeInTheDocument();
+
+    if (latestOnDragEnd == null) {
+      throw new Error("drag handler was not registered");
+    }
+    act(() => {
+      latestOnDragEnd?.({
+        active: { id: "task-2" },
+        over: { id: "task-1" },
+      });
+    });
+
+    await waitFor(() => {
+      expect(mockPostTasksReorder).toHaveBeenCalledWith({
+        taskIds: ["task-2", "task-1"],
+      });
+    });
   });
 
   it("cancels editing and restores display state", async () => {

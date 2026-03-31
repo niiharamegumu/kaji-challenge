@@ -77,6 +77,7 @@ type taskRecord struct {
 	Penalty    int
 	AssigneeID *string
 	Required   int
+	Position   int
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
 	DeletedAt  *time.Time

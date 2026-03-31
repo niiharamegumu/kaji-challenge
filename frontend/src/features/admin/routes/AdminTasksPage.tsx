@@ -22,7 +22,8 @@ export function AdminTasksPage() {
 
   const [taskForm, setTaskForm] = useAtom(taskFormAtom);
   const [, setStatus] = useAtom(statusMessageAtom);
-  const { createTask, removeTask, updateTask } = useTaskMutations(setStatus);
+  const { createTask, removeTask, updateTask, reorderTasks } =
+    useTaskMutations(setStatus);
 
   const handleCreateTask = async () => {
     let requiredCompletionsPerWeek: number | undefined;
@@ -65,12 +66,16 @@ export function AdminTasksPage() {
         form={taskForm}
         tasks={tasksQuery.data}
         isCreateOpen={isCreateOpen}
+        isReordering={reorderTasks.isPending}
         onCloseCreate={() => setIsCreateOpen(false)}
         onFormChange={(updater) => setTaskForm((prev) => updater(prev))}
         onOpenCreate={() => setIsCreateOpen(true)}
         onCreate={handleCreateTask}
         onDelete={(taskId) => {
           void removeTask.mutateAsync(taskId);
+        }}
+        onReorder={(payload) => {
+          void reorderTasks.mutateAsync(payload);
         }}
         onUpdate={handleUpdateTask}
       />

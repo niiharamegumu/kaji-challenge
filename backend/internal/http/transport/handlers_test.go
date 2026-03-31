@@ -74,6 +74,9 @@ func (m mockTaskService) PatchTask(context.Context, string, string, api.UpdateTa
 	return api.Task{}, nil
 }
 func (m mockTaskService) DeleteTask(context.Context, string, string) error { return nil }
+func (m mockTaskService) ReorderTasks(context.Context, string, api.ReorderTasksRequest) ([]api.Task, error) {
+	return nil, nil
+}
 func (m mockTaskService) ToggleTaskCompletion(context.Context, string, string, time.Time, *api.ToggleTaskCompletionRequestAction) (api.TaskCompletionResponse, error) {
 	return api.TaskCompletionResponse{}, nil
 }
@@ -212,6 +215,25 @@ func TestPostShoppingItemsReorderInvalidBodyReturns400(t *testing.T) {
 	})
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/shopping-items/reorder", strings.NewReader("{"))
+	req.Header.Set("Content-Type", "application/json")
+	res := httptest.NewRecorder()
+	r.ServeHTTP(res, req)
+
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", res.Code)
+	}
+}
+
+func TestPostTasksReorderInvalidBodyReturns400(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	h := newTestHandler(nil)
+	r := gin.New()
+	r.POST("/v1/tasks/reorder", func(c *gin.Context) {
+		c.Set(AuthUserIDKey, "u1")
+		h.PostTasksReorder(c)
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/tasks/reorder", strings.NewReader("{"))
 	req.Header.Set("Content-Type", "application/json")
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)

@@ -70,7 +70,7 @@ describe("ReminderCalendarPage", () => {
           notes: null,
           kind: "recurring",
           scheduleType: "weekly",
-          startDate: "2026-03-27",
+          startDate: "2026-04-02",
           endDate: null,
           createdAt: "2026-03-20T00:00:00Z",
           updatedAt: "2026-03-20T00:00:00Z",
@@ -80,11 +80,11 @@ describe("ReminderCalendarPage", () => {
     mockUseReminderCalendarQuery.mockReturnValue({
       data: [
         {
-          date: "2026-03-27",
+          date: "2026-04-02",
           items: [
             {
               reminderId: "rem-1",
-              date: "2026-03-27",
+              date: "2026-04-02",
               title: "sample",
               notes: null,
               kind: "recurring",
@@ -110,7 +110,7 @@ describe("ReminderCalendarPage", () => {
     setViewport(390);
 
     render(
-      <MemoryRouter initialEntries={["/calendar?date=2026-03-27"]}>
+      <MemoryRouter initialEntries={["/calendar?date=2026-04-02"]}>
         <ReminderCalendarPage />
       </MemoryRouter>,
     );
@@ -122,7 +122,7 @@ describe("ReminderCalendarPage", () => {
     ).toBeInTheDocument();
     expect(mockFullCalendar.mock.calls[0]?.[0]?.events).toEqual([]);
     expect(
-      screen.getByRole("dialog", { name: "3月27日(金) のリマインダー" }),
+      screen.getByRole("dialog", { name: "4月2日(木) のリマインダー" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "追加" })).toBeInTheDocument();
   });
@@ -138,13 +138,13 @@ describe("ReminderCalendarPage", () => {
     });
 
     render(
-      <MemoryRouter initialEntries={["/calendar?date=2026-03-27"]}>
+      <MemoryRouter initialEntries={["/calendar?date=2026-04-02"]}>
         <ReminderCalendarPage />
       </MemoryRouter>,
     );
 
     const agendaDialogs = screen.getAllByRole("dialog", {
-      name: "3月27日(金) のリマインダー",
+      name: "4月2日(木) のリマインダー",
     });
     const agendaDialog = agendaDialogs[agendaDialogs.length - 1];
 
@@ -162,12 +162,12 @@ describe("ReminderCalendarPage", () => {
       title: "new reminder",
       notes: undefined,
       kind: "one_time",
-      startDate: "2026-03-27",
+      startDate: "2026-04-02",
       scheduleType: undefined,
       endDate: undefined,
     });
     expect(
-      screen.getAllByRole("dialog", { name: "3月27日(金) のリマインダー" })
+      screen.getAllByRole("dialog", { name: "4月2日(木) のリマインダー" })
         .length,
     ).toBeGreaterThan(0);
   });

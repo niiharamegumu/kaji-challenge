@@ -107,6 +107,7 @@ type Task struct {
 	CreatedAt                  pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt                  pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt                  pgtype.Timestamptz `json:"deleted_at"`
+	Position                   int32              `json:"position"`
 }
 
 type TaskCompletionDaily struct {

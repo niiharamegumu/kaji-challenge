@@ -4,6 +4,8 @@ import {
   type CreatePenaltyRuleRequest,
   type CreateTaskRequest,
   type InviteCodeResponse,
+  type ReorderTasksRequest,
+  type Task,
   type UpdatePenaltyRuleRequest,
   type UpdateTaskRequest,
   deletePenaltyRule,
@@ -15,6 +17,7 @@ import {
   patchTeamCurrent,
   postPenaltyRule,
   postTask,
+  postTasksReorder,
   postTeamInvite,
   postTeamJoin,
   postTeamLeave,
@@ -79,6 +82,8 @@ async function handlePreconditionFailure(
 
 export function useTaskMutations(setStatus: StatusSetter) {
   const queryClient = useQueryClient();
+  const hasTasks = (value: unknown): value is { items?: Task[] } =>
+    value != null && typeof value === "object" && "items" in value;
 
   const invalidate = async () => {
     await Promise.all([
@@ -139,7 +144,46 @@ export function useTaskMutations(setStatus: StatusSetter) {
     },
   });
 
-  return { createTask, removeTask, updateTask };
+  const reorderTasks = useMutation({
+    mutationFn: async (payload: ReorderTasksRequest) => {
+      const response = await postTasksReorder(payload);
+      if (!hasTasks(response.data)) {
+        throw new Error("unexpected task reorder response");
+      }
+      return response.data.items ?? [];
+    },
+    onSuccess: (items) => {
+      queryClient.setQueryData<Task[]>(queryKeys.tasks, (current) => {
+        if (current == null) {
+          return items;
+        }
+        const reorderedIds = new Set(items.map((item) => item.id));
+        const untouchedItems = current.filter(
+          (item) => !reorderedIds.has(item.id),
+        );
+        return [...untouchedItems, ...items].sort((left, right) => {
+          if (left.type !== right.type) {
+            return left.type.localeCompare(right.type);
+          }
+          if (left.position !== right.position) {
+            return left.position - right.position;
+          }
+          return left.id.localeCompare(right.id);
+        });
+      });
+      setStatus("並び順を更新しました");
+    },
+    onError: (error) => {
+      void handlePreconditionFailure(error, queryClient, setStatus);
+      if (isPreconditionFailure(error)) {
+        return;
+      }
+      void invalidate();
+      setStatus(`並び順の更新に失敗しました: ${formatError(error)}`);
+    },
+  });
+
+  return { createTask, removeTask, updateTask, reorderTasks };
 }
 
 export function usePenaltyRuleMutations(setStatus: StatusSetter) {

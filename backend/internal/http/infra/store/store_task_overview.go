@@ -124,8 +124,24 @@ func (s *Store) GetTaskOverview(ctx context.Context, userID string) (resp api.Ta
 		})
 	}
 
-	sort.Slice(daily, func(i, j int) bool { return daily[i].Task.CreatedAt.Before(daily[j].Task.CreatedAt) })
-	sort.Slice(weekly, func(i, j int) bool { return weekly[i].Task.CreatedAt.Before(weekly[j].Task.CreatedAt) })
+	sort.Slice(daily, func(i, j int) bool {
+		if daily[i].Task.Position != daily[j].Task.Position {
+			return daily[i].Task.Position < daily[j].Task.Position
+		}
+		if !daily[i].Task.CreatedAt.Equal(daily[j].Task.CreatedAt) {
+			return daily[i].Task.CreatedAt.Before(daily[j].Task.CreatedAt)
+		}
+		return daily[i].Task.Id < daily[j].Task.Id
+	})
+	sort.Slice(weekly, func(i, j int) bool {
+		if weekly[i].Task.Position != weekly[j].Task.Position {
+			return weekly[i].Task.Position < weekly[j].Task.Position
+		}
+		if !weekly[i].Task.CreatedAt.Equal(weekly[j].Task.CreatedAt) {
+			return weekly[i].Task.CreatedAt.Before(weekly[j].Task.CreatedAt)
+		}
+		return weekly[i].Task.Id < weekly[j].Task.Id
+	})
 	sort.Slice(weeklyReminderItems, func(i, j int) bool {
 		if weeklyReminderItems[i].occurrence.Date.Time.Equal(weeklyReminderItems[j].occurrence.Date.Time) {
 			return weeklyReminderItems[i].createdAt.Before(weeklyReminderItems[j].createdAt)
@@ -219,6 +235,7 @@ type monthlyTaskStatusRecord struct {
 	Type      api.TaskType
 	Penalty   int
 	Required  int
+	Position  int
 	CreatedAt time.Time
 	DeletedAt *time.Time
 }
@@ -256,6 +273,7 @@ func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month 
 			Type:      api.TaskType(row.Type),
 			Penalty:   int(row.PenaltyPoints),
 			Required:  int(row.RequiredCompletionsPerWeek),
+			Position:  int(row.Position),
 			CreatedAt: row.CreatedAt.Time.In(s.loc),
 			DeletedAt: ptrFromTimestamptz(row.DeletedAt, s.loc),
 		})
@@ -393,7 +411,15 @@ func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month 
 			if items[i].Type != items[j].Type {
 				return items[i].Type < items[j].Type
 			}
-			return items[i].Title < items[j].Title
+			leftTask := tasksByID(items[i].TaskId, tasks)
+			rightTask := tasksByID(items[j].TaskId, tasks)
+			if leftTask.Position != rightTask.Position {
+				return leftTask.Position < rightTask.Position
+			}
+			if !leftTask.CreatedAt.Equal(rightTask.CreatedAt) {
+				return leftTask.CreatedAt.Before(rightTask.CreatedAt)
+			}
+			return items[i].TaskId < items[j].TaskId
 		})
 		groups = append(groups, api.MonthlyTaskStatusGroup{
 			Date:  toDate(dayStart),
@@ -401,6 +427,15 @@ func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month 
 		})
 	}
 	return groups, nil
+}
+
+func tasksByID(taskID string, tasks []monthlyTaskStatusRecord) monthlyTaskStatusRecord {
+	for _, task := range tasks {
+		if task.ID == taskID {
+			return task
+		}
+	}
+	return monthlyTaskStatusRecord{}
 }
 
 func taskCompletionActorPtr(userIDRaw interface{}, effectiveName string, colorHexRaw interface{}) *api.TaskCompletionActor {
