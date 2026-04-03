@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: dev up down down-reset gen gen-backend gen-frontend lint lint-backend lint-frontend typecheck typecheck-frontend test test-backend test-frontend security security-backend security-frontend check diff-gen db-migrate-up db-migrate-down db-migrate-create seed-monthly-dummy backend-cmd-seeder ops-close backend-cmd-ops-close
+.PHONY: dev up down down-reset gen gen-backend gen-frontend lint lint-backend lint-frontend typecheck typecheck-frontend test test-backend test-frontend security security-backend security-frontend check diff-gen db-migrate-up db-migrate-down db-migrate-create seed-monthly-dummy backend-cmd-seeder ops-close backend-cmd-ops-close ops-notify backend-cmd-ops-notify vapid-keys backend-cmd-vapid-keys
 
 ifneq (,$(wildcard .env))
 include .env
@@ -22,7 +22,7 @@ LINT_FRONTEND = cd frontend && npm run lint:all
 TYPECHECK_FRONTEND = cd frontend && npm run typecheck
 TEST_BACKEND = cd backend && TEST_DATABASE_URL=$${TEST_DATABASE_URL:-postgres://kaji:kaji@localhost:5432/postgres?sslmode=disable} go test ./...
 TEST_FRONTEND = cd frontend && npm run test -- --run
-SECURITY_BACKEND = cd backend && go run github.com/securego/gosec/v2/cmd/gosec@v2.22.8 -exclude-dir=internal/db/sqlc ./... && go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 -format json ./... | go run ./cmd/govulncheck-critical -critical-file ./security/critical_goids.txt
+SECURITY_BACKEND = cd backend && go run github.com/securego/gosec/v2/cmd/gosec@v2.22.8 -exclude-dir=internal/db/sqlc -exclude-dir=internal/openapi/generated ./... && go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 -format json ./... | go run ./cmd/govulncheck-critical -critical-file ./security/critical_goids.txt
 SECURITY_FRONTEND = cd frontend && npm audit --omit=dev --audit-level=high
 else
 GEN_BACKEND = $(BACKEND_RUN) go -C /app/backend generate ./...
@@ -32,7 +32,7 @@ LINT_FRONTEND = $(FRONTEND_RUN) npm run lint:all
 TYPECHECK_FRONTEND = $(FRONTEND_RUN) npm run typecheck
 TEST_BACKEND = $(BACKEND_RUN) sh -c "TEST_DATABASE_URL=$${TEST_DATABASE_URL:-postgres://kaji:kaji@postgres:5432/postgres?sslmode=disable} go -C /app/backend test ./..."
 TEST_FRONTEND = $(FRONTEND_RUN) npm run test -- --run
-SECURITY_BACKEND = $(BACKEND_RUN) sh -c "cd /app/backend && go run github.com/securego/gosec/v2/cmd/gosec@v2.22.8 -exclude-dir=internal/db/sqlc ./... && go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 -format json ./... | go run ./cmd/govulncheck-critical -critical-file ./security/critical_goids.txt"
+SECURITY_BACKEND = $(BACKEND_RUN) sh -c "cd /app/backend && go run github.com/securego/gosec/v2/cmd/gosec@v2.22.8 -exclude-dir=internal/db/sqlc -exclude-dir=internal/openapi/generated ./... && go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 -format json ./... | go run ./cmd/govulncheck-critical -critical-file ./security/critical_goids.txt"
 SECURITY_FRONTEND = $(FRONTEND_RUN) npm audit --omit=dev --audit-level=high
 endif
 
@@ -127,3 +127,14 @@ backend-cmd-ops-close:
 	else \
 		$(BACKEND_RUN) go -C /app/backend run ./cmd/ops close --scope "$(scope)" --all-teams=true; \
 	fi
+
+ops-notify: backend-cmd-ops-notify
+
+backend-cmd-ops-notify:
+	@test -n "$(slot)" || (echo "usage: make ops-notify slot=daily_2100|weekly_prev_sat_1900|weekly_due_sun_1000" && exit 1)
+	$(BACKEND_RUN) go -C /app/backend run ./cmd/ops notify --slot "$(slot)"
+
+vapid-keys: backend-cmd-vapid-keys
+
+backend-cmd-vapid-keys:
+	$(BACKEND_RUN) go -C /app/backend run ./cmd/vapid --subject "$(subject)"

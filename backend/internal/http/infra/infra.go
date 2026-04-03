@@ -11,6 +11,7 @@ import (
 )
 
 type Store = store.Store
+type NotifyRunResult = store.NotifyRunResult
 
 func NewStore() *Store {
 	return store.NewStore()
@@ -18,6 +19,10 @@ func NewStore() *Store {
 
 func NewServices(s *Store) *ports.Services {
 	return repositories.NewServices(s)
+}
+
+func ParseNotifySlot(raw string) (string, error) {
+	return store.ParseNotifySlot(raw)
 }
 
 func RejectMockParamsInStrictModeForTest(ctx context.Context, loc *time.Location) error {

@@ -4,6 +4,7 @@ import "github.com/megu/kaji-challenge/backend/internal/http/application/ports"
 
 type authUsecase struct{ repo ports.AuthRepository }
 type teamUsecase struct{ repo ports.TeamRepository }
+type pushUsecase struct{ repo ports.PushRepository }
 type taskUsecase struct{ repo ports.TaskRepository }
 type penaltyUsecase struct{ repo ports.PenaltyRepository }
 type shoppingListUsecase struct{ repo ports.ShoppingListRepository }
@@ -15,6 +16,7 @@ func NewServices(deps ports.Dependencies) *ports.Services {
 	return &ports.Services{
 		Auth:         authUsecase{repo: deps.AuthRepo},
 		Team:         teamUsecase{repo: deps.TeamRepo},
+		Push:         pushUsecase{repo: deps.PushRepo},
 		Task:         taskUsecase{repo: deps.TaskRepo},
 		Penalty:      penaltyUsecase{repo: deps.PenaltyRepo},
 		ShoppingList: shoppingListUsecase{repo: deps.ShoppingListRepo},

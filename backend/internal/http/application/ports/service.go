@@ -10,6 +10,7 @@ import (
 type Services struct {
 	Auth         AuthService
 	Team         TeamService
+	Push         PushService
 	Task         TaskService
 	Penalty      PenaltyService
 	ShoppingList ShoppingListService
@@ -41,6 +42,12 @@ type TeamService interface {
 	GetTeamCurrentMembers(ctx context.Context, userID string) (api.TeamMembersResponse, error)
 	JoinTeam(ctx context.Context, userID, code string) (api.JoinTeamResponse, error)
 	PostTeamLeave(ctx context.Context, userID string) (api.JoinTeamResponse, error)
+}
+
+type PushService interface {
+	UpsertPushSubscription(ctx context.Context, userID string, req api.UpsertPushSubscriptionRequest) (api.PushSubscription, error)
+	DeletePushSubscription(ctx context.Context, userID, subscriptionID string) error
+	ListPushSubscriptions(ctx context.Context, userID string) (api.ListPushSubscriptionsResponse, error)
 }
 
 type TaskService interface {

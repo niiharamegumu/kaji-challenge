@@ -78,12 +78,33 @@ jobs:
               --command "/app/ops" \
               --args "close,--scope,${scope},--all-teams"
           done
+          for item in \
+            "daily_2100:kaji-backend-notify-daily-2100" \
+            "weekly_prev_sat_1900:kaji-backend-notify-weekly-prev-sat-1900" \
+            "weekly_due_sun_1000:kaji-backend-notify-weekly-due-sun-1000"; do
+            IFS=":" read -r SLOT JOB_NAME <<< "${item}"
+            gcloud run jobs update "${JOB_NAME}" \
+              --region "$REGION" \
+              --image "$IMAGE_SHA" \
+              --command "/app/ops" \
+              --args "notify,--slot,${SLOT}"
+          done
 
       - name: Verify Cloud Run Jobs image
         run: |
           set -euo pipefail
           for scope in day week month; do
             JOB_NAME="kaji-backend-close-${scope}"
+            IMAGE=$(gcloud run jobs describe "${JOB_NAME}" \
+              --region "$REGION" \
+              --format='value(template.template.containers[0].image)')
+            echo "${JOB_NAME}: ${IMAGE}"
+          done
+          for item in \
+            "daily_2100:kaji-backend-notify-daily-2100" \
+            "weekly_prev_sat_1900:kaji-backend-notify-weekly-prev-sat-1900" \
+            "weekly_due_sun_1000:kaji-backend-notify-weekly-due-sun-1000"; do
+            IFS=":" read -r _ JOB_NAME <<< "${item}"
             IMAGE=$(gcloud run jobs describe "${JOB_NAME}" \
               --region "$REGION" \
               --format='value(template.template.containers[0].image)')

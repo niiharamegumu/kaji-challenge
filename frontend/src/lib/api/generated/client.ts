@@ -141,6 +141,46 @@ export interface UpdateColorResponse {
   colorHex: string | null;
 }
 
+export type PushPlatform = typeof PushPlatform[keyof typeof PushPlatform];
+
+
+export const PushPlatform = {
+  ios_safari_pwa: 'ios_safari_pwa',
+} as const;
+
+export interface PushSubscription {
+  id: string;
+  teamId: string;
+  userId: string;
+  endpoint: string;
+  /** @nullable */
+  userAgent?: string | null;
+  platform: PushPlatform;
+  isActive: boolean;
+  lastSeenAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PushSubscriptionKeys {
+  /** @minLength 1 */
+  p256dh: string;
+  /** @minLength 1 */
+  auth: string;
+}
+
+export interface UpsertPushSubscriptionRequest {
+  endpoint: string;
+  keys: PushSubscriptionKeys;
+  userAgent?: string;
+  platform: PushPlatform;
+}
+
+export interface ListPushSubscriptionsResponse {
+  items: PushSubscription[];
+  vapidPublicKey: string;
+}
+
 export type TaskType = typeof TaskType[keyof typeof TaskType];
 
 
@@ -829,6 +869,115 @@ export const patchMeColor = async (updateColorRequest: UpdateColorRequest, optio
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(
       updateColorRequest,)
+  }
+);}
+
+
+
+/**
+ * @summary Upsert current device push subscription
+ */
+export type postPushSubscriptionResponse200 = {
+  data: PushSubscription
+  status: 200
+}
+    
+export type postPushSubscriptionResponseSuccess = (postPushSubscriptionResponse200) & {
+  headers: Headers;
+};
+;
+
+export type postPushSubscriptionResponse = (postPushSubscriptionResponseSuccess)
+
+export const getPostPushSubscriptionUrl = () => {
+
+
+  
+
+  return `/v1/push/subscriptions`
+}
+
+export const postPushSubscription = async (upsertPushSubscriptionRequest: UpsertPushSubscriptionRequest, options?: RequestInit): Promise<postPushSubscriptionResponse> => {
+  
+  return customFetch<postPushSubscriptionResponse>(getPostPushSubscriptionUrl(),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      upsertPushSubscriptionRequest,)
+  }
+);}
+
+
+
+/**
+ * @summary Deactivate a current user's push subscription
+ */
+export type deletePushSubscriptionResponse204 = {
+  data: void
+  status: 204
+}
+    
+export type deletePushSubscriptionResponseSuccess = (deletePushSubscriptionResponse204) & {
+  headers: Headers;
+};
+;
+
+export type deletePushSubscriptionResponse = (deletePushSubscriptionResponseSuccess)
+
+export const getDeletePushSubscriptionUrl = (subscriptionId: string,) => {
+
+
+  
+
+  return `/v1/push/subscriptions/${subscriptionId}`
+}
+
+export const deletePushSubscription = async (subscriptionId: string, options?: RequestInit): Promise<deletePushSubscriptionResponse> => {
+  
+  return customFetch<deletePushSubscriptionResponse>(getDeletePushSubscriptionUrl(subscriptionId),
+  {      
+    ...options,
+    method: 'DELETE'
+    
+    
+  }
+);}
+
+
+
+/**
+ * @summary List current user's push subscriptions
+ */
+export type getPushSubscriptionsMeResponse200 = {
+  data: ListPushSubscriptionsResponse
+  status: 200
+}
+    
+export type getPushSubscriptionsMeResponseSuccess = (getPushSubscriptionsMeResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getPushSubscriptionsMeResponse = (getPushSubscriptionsMeResponseSuccess)
+
+export const getGetPushSubscriptionsMeUrl = () => {
+
+
+  
+
+  return `/v1/push/subscriptions/me`
+}
+
+export const getPushSubscriptionsMe = async ( options?: RequestInit): Promise<getPushSubscriptionsMeResponse> => {
+  
+  return customFetch<getPushSubscriptionsMeResponse>(getGetPushSubscriptionsMeUrl(),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
   }
 );}
 

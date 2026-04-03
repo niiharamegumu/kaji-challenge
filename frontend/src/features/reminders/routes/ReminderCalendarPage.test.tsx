@@ -1,5 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -60,6 +59,8 @@ function setViewport(width: number) {
 
 describe("ReminderCalendarPage", () => {
   beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-01T03:00:00+09:00"));
     mockFullCalendar.mockClear();
     mockUseReminderDefinitionsQuery.mockReturnValue({
       data: [
@@ -103,8 +104,14 @@ describe("ReminderCalendarPage", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.clearAllMocks();
   });
+
+  function latestCalendarProps() {
+    const calls = mockFullCalendar.mock.calls;
+    return calls[calls.length - 1]?.[0] as Record<string, unknown> | undefined;
+  }
 
   it("shows mobile-specific description and does not pass events to FullCalendar on mobile", () => {
     setViewport(390);
@@ -120,7 +127,7 @@ describe("ReminderCalendarPage", () => {
         "未来の予定だけを表示します。日付変更は編集から行えます。",
       ),
     ).toBeInTheDocument();
-    expect(mockFullCalendar.mock.calls[0]?.[0]?.events).toEqual([]);
+    expect(latestCalendarProps()?.events).toEqual([]);
     expect(
       screen.getByRole("dialog", { name: "4月2日(木) のリマインダー" }),
     ).toBeInTheDocument();
@@ -129,7 +136,6 @@ describe("ReminderCalendarPage", () => {
 
   it("keeps the mobile agenda sheet open after creating a reminder", async () => {
     setViewport(390);
-    const user = userEvent.setup();
     const createReminder = vi.fn().mockResolvedValue(undefined);
     mockUseReminderMutations.mockReturnValue({
       createReminder: { mutateAsync: createReminder },
@@ -150,13 +156,15 @@ describe("ReminderCalendarPage", () => {
 
     expect(agendaDialog).toBeDefined();
 
-    await user.click(
+    fireEvent.click(
       within(agendaDialog as HTMLElement).getByRole("button", {
         name: "追加",
       }),
     );
-    await user.type(screen.getByLabelText("タイトル"), "new reminder");
-    await user.click(screen.getByRole("button", { name: "追加する" }));
+    fireEvent.change(screen.getByLabelText("タイトル"), {
+      target: { value: "new reminder" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "追加する" }));
 
     expect(createReminder).toHaveBeenCalledWith({
       title: "new reminder",
@@ -186,14 +194,8 @@ describe("ReminderCalendarPage", () => {
         "未来の予定だけを表示します。ドラッグで日付を変更できます。",
       ),
     ).toBeInTheDocument();
-    expect(Array.isArray(mockFullCalendar.mock.calls[0]?.[0]?.events)).toBe(
-      true,
-    );
-    expect(
-      (mockFullCalendar.mock.calls[0]?.[0]?.events as unknown[]).length,
-    ).toBe(1);
-    expect(mockFullCalendar.mock.calls[0]?.[0]?.eventDrop).toBeTypeOf(
-      "function",
-    );
+    expect(Array.isArray(latestCalendarProps()?.events)).toBe(true);
+    expect((latestCalendarProps()?.events as unknown[]).length).toBe(1);
+    expect(latestCalendarProps()?.eventDrop).toBeTypeOf("function");
   });
 });

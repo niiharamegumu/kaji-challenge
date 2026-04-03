@@ -1,3 +1,2 @@
 model = "gpt-5.4"
 model_reasoning_summary = "detailed"
-model_reasoning_effort = "medium"

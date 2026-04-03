@@ -1,5 +1,6 @@
 export const queryKeys = {
   me: ["me"] as const,
+  pushSubscriptions: ["push-subscriptions"] as const,
   teamMembers: ["team-members"] as const,
   currentInvite: ["current-invite"] as const,
   home: ["home"] as const,
