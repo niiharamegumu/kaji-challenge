@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import type { TeamMember } from "../../../lib/api/generated/client";
+import { PushNotificationsSection } from "../../push/components/PushNotificationsSection";
 import { COPY_FEEDBACK_TIMEOUT_MS } from "../constants/invite";
 import type { InviteState } from "../state/ui";
 import {
@@ -187,6 +188,7 @@ export function InviteManager({
             onSaveNickname={onSaveNickname}
             onSaveColor={onSaveColor}
           />
+          <PushNotificationsSection />
         </div>
       </article>
     </section>

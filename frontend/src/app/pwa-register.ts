@@ -2,6 +2,7 @@ import { notifyPWARefresh } from "./pwa";
 
 const SW_URL = "/sw.js";
 const REFRESH_EVENT = "controllerchange";
+let swRegistrationPromise: Promise<ServiceWorkerRegistration> | null = null;
 
 const applyWaitingWorkerUpdate = async (
   registration: ServiceWorkerRegistration,
@@ -77,9 +78,25 @@ export const initializePWA = () => {
   }
 
   window.addEventListener("load", () => {
-    void (async () => {
+    swRegistrationPromise = (async () => {
       const registration = await navigator.serviceWorker.register(SW_URL);
       bindRegistrationListeners(registration);
+      return registration;
     })();
+    void swRegistrationPromise;
   });
+};
+
+export const waitForPWARegistration = async () => {
+  if (!("serviceWorker" in navigator)) {
+    return null;
+  }
+  if (swRegistrationPromise != null) {
+    return swRegistrationPromise;
+  }
+  try {
+    return await navigator.serviceWorker.ready;
+  } catch {
+    return null;
+  }
 };
