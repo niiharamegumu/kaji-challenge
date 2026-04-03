@@ -34,7 +34,9 @@ const activateWaitingWorker = async (
 const bindRegistrationListeners = (registration: ServiceWorkerRegistration) => {
   const notifyIfWaiting = () => {
     if (registration.waiting) {
-      notifyPWARefresh(() => applyWaitingWorkerUpdate(registration));
+      notifyPWARefresh(() =>
+        activateWaitingWorker(registration, { reload: true }),
+      );
     }
   };
 
