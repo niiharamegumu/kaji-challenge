@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: dev up down down-reset gen gen-backend gen-frontend lint lint-backend lint-frontend typecheck typecheck-frontend test test-backend test-frontend security security-backend security-frontend check diff-gen db-migrate-up db-migrate-down db-migrate-create seed-monthly-dummy backend-cmd-seeder ops-close backend-cmd-ops-close
+.PHONY: dev up down down-reset gen gen-backend gen-frontend lint lint-backend lint-frontend typecheck typecheck-frontend test test-backend test-frontend security security-backend security-frontend check diff-gen db-migrate-up db-migrate-down db-migrate-create seed-monthly-dummy backend-cmd-seeder ops-close backend-cmd-ops-close ops-notify backend-cmd-ops-notify
 
 ifneq (,$(wildcard .env))
 include .env
@@ -127,3 +127,9 @@ backend-cmd-ops-close:
 	else \
 		$(BACKEND_RUN) go -C /app/backend run ./cmd/ops close --scope "$(scope)" --all-teams=true; \
 	fi
+
+ops-notify: backend-cmd-ops-notify
+
+backend-cmd-ops-notify:
+	@test -n "$(slot)" || (echo "usage: make ops-notify slot=daily_2100|weekly_prev_sat_1900|weekly_due_sun_1000" && exit 1)
+	$(BACKEND_RUN) go -C /app/backend run ./cmd/ops notify --slot "$(slot)"
