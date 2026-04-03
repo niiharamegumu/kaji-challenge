@@ -2,6 +2,8 @@ package push
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -30,6 +32,10 @@ type Subscription struct {
 type Result struct {
 	StatusCode int
 	Expired    bool
+	APNSID     string
+	Location   string
+	RetryAfter string
+	Body       string
 }
 
 type Sender interface {
@@ -42,6 +48,12 @@ type WebPushSender struct {
 	privateKey string
 	subject    string
 }
+
+const (
+	webPushTTLSeconds     = 3600
+	webPushBodyLogMaxSize = 1024
+	webPushUrgency        = webpush.UrgencyHigh
+)
 
 func NewWebPushSenderFromEnv() (*WebPushSender, error) {
 	publicKey := strings.TrimSpace(os.Getenv("VAPID_PUBLIC_KEY"))
@@ -88,22 +100,18 @@ func (s *WebPushSender) Send(ctx context.Context, sub Subscription, payload Payl
 			P256dh: sub.P256DH,
 			Auth:   sub.Auth,
 		},
-	}, &webpush.Options{
-		Subscriber:      s.subject,
-		VAPIDPublicKey:  s.publicKey,
-		VAPIDPrivateKey: s.privateKey,
-		TTL:             60,
-	})
+	}, s.optionsForPayload(payload))
 	if err != nil {
 		return Result{}, err
 	}
 	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, resp.Body)
 
-	result := Result{
-		StatusCode: resp.StatusCode,
-		Expired:    resp.StatusCode == http.StatusGone || resp.StatusCode == http.StatusNotFound,
+	bodyBytes, readErr := io.ReadAll(io.LimitReader(resp.Body, webPushBodyLogMaxSize))
+	if readErr != nil {
+		return Result{}, fmt.Errorf("failed to read web push response body: %w", readErr)
 	}
+
+	result := resultFromResponse(resp, bodyBytes)
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		return result, nil
 	}
@@ -111,4 +119,31 @@ func (s *WebPushSender) Send(ctx context.Context, sub Subscription, payload Payl
 		return result, nil
 	}
 	return result, fmt.Errorf("web push failed: status=%d", resp.StatusCode)
+}
+
+func (s *WebPushSender) optionsForPayload(payload Payload) *webpush.Options {
+	return &webpush.Options{
+		Subscriber:      s.subject,
+		Topic:           topicForPayload(payload),
+		TTL:             webPushTTLSeconds,
+		Urgency:         webPushUrgency,
+		VAPIDPublicKey:  s.publicKey,
+		VAPIDPrivateKey: s.privateKey,
+	}
+}
+
+func topicForPayload(payload Payload) string {
+	sum := sha256.Sum256([]byte(payload.Tag))
+	return base64.RawURLEncoding.EncodeToString(sum[:16])
+}
+
+func resultFromResponse(resp *http.Response, body []byte) Result {
+	return Result{
+		StatusCode: resp.StatusCode,
+		Expired:    resp.StatusCode == http.StatusGone || resp.StatusCode == http.StatusNotFound,
+		APNSID:     strings.TrimSpace(resp.Header.Get("apns-id")),
+		Location:   strings.TrimSpace(resp.Header.Get("location")),
+		RetryAfter: strings.TrimSpace(resp.Header.Get("retry-after")),
+		Body:       strings.TrimSpace(string(body)),
+	}
 }

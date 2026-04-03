@@ -2,7 +2,6 @@ self.SW_VERSION = "2026-04-04-sw-inspector-debug";
 
 self.addEventListener("install", () => {
   console.log("[sw] install", { version: self.SW_VERSION });
-  self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
@@ -15,6 +14,9 @@ self.addEventListener("message", (event) => {
     version: self.SW_VERSION,
     type: event.data?.type ?? null,
   });
+  void broadcastDebugLog("info", "message", {
+    type: event.data?.type ?? null,
+  });
   if (event.data?.type === "SKIP_WAITING") {
     self.skipWaiting();
   }
@@ -25,6 +27,22 @@ self.addEventListener("message", (event) => {
     });
   }
 });
+
+async function broadcastDebugLog(level, eventName, details) {
+  const clients = await self.clients.matchAll({
+    type: "window",
+    includeUncontrolled: true,
+  });
+  for (const client of clients) {
+    client.postMessage({
+      type: "SW_DEBUG_LOG",
+      level,
+      eventName,
+      version: self.SW_VERSION,
+      details,
+    });
+  }
+}
 
 async function readPushPayload(event) {
   let rawText = "";
@@ -56,6 +74,9 @@ async function handlePush(event) {
     version: self.SW_VERSION,
     hasEventData: event.data != null,
   });
+  await broadcastDebugLog("info", "push event listener invoked", {
+    hasEventData: event.data != null,
+  });
 
   const { payload, rawText } = await readPushPayload(event);
   const debugReceivedAt = new Date().toISOString();
@@ -66,6 +87,10 @@ async function handlePush(event) {
   });
   console.log("[sw] push payload parsed", {
     version: self.SW_VERSION,
+    rawTextLength: rawText.length,
+    payloadKeys: Object.keys(payload),
+  });
+  await broadcastDebugLog("info", "push payload parsed", {
     rawTextLength: rawText.length,
     payloadKeys: Object.keys(payload),
   });
@@ -94,6 +119,12 @@ async function handlePush(event) {
     tag,
     url,
   });
+  await broadcastDebugLog("info", "showNotification start", {
+    title,
+    body,
+    tag,
+    url,
+  });
 
   try {
     await self.registration.showNotification(title, {
@@ -116,9 +147,22 @@ async function handlePush(event) {
       version: self.SW_VERSION,
       tag,
     });
+    await broadcastDebugLog("info", "showNotification success", {
+      tag,
+    });
   } catch (error) {
     console.error("[sw] showNotification failed", {
       version: self.SW_VERSION,
+      error:
+        error instanceof Error
+          ? {
+              name: error.name,
+              message: error.message,
+              stack: error.stack ?? null,
+            }
+          : String(error),
+    });
+    await broadcastDebugLog("error", "showNotification failed", {
       error:
         error instanceof Error
           ? {
@@ -139,6 +183,9 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   console.log("[sw] notificationclick", {
     version: self.SW_VERSION,
+    data: event.notification.data ?? null,
+  });
+  void broadcastDebugLog("info", "notificationclick", {
     data: event.notification.data ?? null,
   });
   event.notification.close();

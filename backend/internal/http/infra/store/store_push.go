@@ -312,9 +312,13 @@ func logPushDispatchAttempt(dispatch preparedPushDispatch, endpoint string, resu
 	}
 	endpointHash := sha256.Sum256([]byte(endpoint))
 	hashText := hex.EncodeToString(endpointHash[:8])
+	bodySuffix := ""
+	if result.Body != "" {
+		bodySuffix = fmt.Sprintf(" body=%q", result.Body)
+	}
 	if err != nil {
 		log.Printf(
-			"push dispatch delivery result: team_id=%s slot=%s slot_date=%s host=%s endpoint_hash=%s status=%d expired=%t title=%q tag=%q url=%q err=%v",
+			"push dispatch delivery failed: team_id=%s slot=%s slot_date=%s host=%s endpoint_hash=%s status=%d expired=%t apns_id=%q location=%q retry_after=%q title=%q tag=%q url=%q err=%v%s",
 			dispatch.teamID,
 			dispatch.slotKind,
 			dispatch.slotDate.Format("2006-01-02"),
@@ -322,15 +326,39 @@ func logPushDispatchAttempt(dispatch preparedPushDispatch, endpoint string, resu
 			hashText,
 			result.StatusCode,
 			result.Expired,
+			result.APNSID,
+			result.Location,
+			result.RetryAfter,
 			dispatch.payload.Title,
 			dispatch.payload.Tag,
 			dispatch.payload.Url,
 			err,
+			bodySuffix,
+		)
+		return
+	}
+	if result.Expired {
+		log.Printf(
+			"push dispatch delivery expired: team_id=%s slot=%s slot_date=%s host=%s endpoint_hash=%s status=%d expired=%t apns_id=%q location=%q retry_after=%q title=%q tag=%q url=%q%s",
+			dispatch.teamID,
+			dispatch.slotKind,
+			dispatch.slotDate.Format("2006-01-02"),
+			host,
+			hashText,
+			result.StatusCode,
+			result.Expired,
+			result.APNSID,
+			result.Location,
+			result.RetryAfter,
+			dispatch.payload.Title,
+			dispatch.payload.Tag,
+			dispatch.payload.Url,
+			bodySuffix,
 		)
 		return
 	}
 	log.Printf(
-		"push dispatch delivery result: team_id=%s slot=%s slot_date=%s host=%s endpoint_hash=%s status=%d expired=%t title=%q tag=%q url=%q",
+		"push dispatch delivery accepted: team_id=%s slot=%s slot_date=%s host=%s endpoint_hash=%s status=%d expired=%t apns_id=%q location=%q retry_after=%q title=%q tag=%q url=%q%s",
 		dispatch.teamID,
 		dispatch.slotKind,
 		dispatch.slotDate.Format("2006-01-02"),
@@ -338,9 +366,13 @@ func logPushDispatchAttempt(dispatch preparedPushDispatch, endpoint string, resu
 		hashText,
 		result.StatusCode,
 		result.Expired,
+		result.APNSID,
+		result.Location,
+		result.RetryAfter,
 		dispatch.payload.Title,
 		dispatch.payload.Tag,
 		dispatch.payload.Url,
+		bodySuffix,
 	)
 }
 
