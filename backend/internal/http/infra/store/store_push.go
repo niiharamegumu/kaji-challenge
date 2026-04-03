@@ -314,7 +314,7 @@ func logPushDispatchAttempt(dispatch preparedPushDispatch, endpoint string, resu
 	hashText := hex.EncodeToString(endpointHash[:8])
 	if err != nil {
 		log.Printf(
-			"push dispatch delivery result: team_id=%s slot=%s slot_date=%s host=%s endpoint_hash=%s status=%d expired=%t err=%v",
+			"push dispatch delivery result: team_id=%s slot=%s slot_date=%s host=%s endpoint_hash=%s status=%d expired=%t title=%q tag=%q url=%q err=%v",
 			dispatch.teamID,
 			dispatch.slotKind,
 			dispatch.slotDate.Format("2006-01-02"),
@@ -322,12 +322,15 @@ func logPushDispatchAttempt(dispatch preparedPushDispatch, endpoint string, resu
 			hashText,
 			result.StatusCode,
 			result.Expired,
+			dispatch.payload.Title,
+			dispatch.payload.Tag,
+			dispatch.payload.Url,
 			err,
 		)
 		return
 	}
 	log.Printf(
-		"push dispatch delivery result: team_id=%s slot=%s slot_date=%s host=%s endpoint_hash=%s status=%d expired=%t",
+		"push dispatch delivery result: team_id=%s slot=%s slot_date=%s host=%s endpoint_hash=%s status=%d expired=%t title=%q tag=%q url=%q",
 		dispatch.teamID,
 		dispatch.slotKind,
 		dispatch.slotDate.Format("2006-01-02"),
@@ -335,6 +338,9 @@ func logPushDispatchAttempt(dispatch preparedPushDispatch, endpoint string, resu
 		hashText,
 		result.StatusCode,
 		result.Expired,
+		dispatch.payload.Title,
+		dispatch.payload.Tag,
+		dispatch.payload.Url,
 	)
 }
 
