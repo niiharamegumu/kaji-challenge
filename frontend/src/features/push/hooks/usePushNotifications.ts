@@ -237,7 +237,6 @@ export function usePushNotifications(setStatus: StatusSetter) {
       await registration.showNotification("家事チャレンジ", {
         body: "ローカル通知テストです。表示できれば OS 側の通知機能は正常です。",
         tag,
-        renotify: true,
         data: {
           teamId: "",
           slotKind: "local_test",
