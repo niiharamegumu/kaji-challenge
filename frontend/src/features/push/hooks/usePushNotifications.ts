@@ -160,6 +160,11 @@ export function usePushNotifications(setStatus: StatusSetter) {
   ]);
 
   const sendLocalTestNotification = useCallback(async () => {
+    console.log("[push-debug] local test clicked", {
+      isSupported: isPushSupported(),
+      isStandalone: isStandalonePWA(),
+      permission: Notification.permission,
+    });
     if (!isPushSupported()) {
       setStatus("この端末では Web Push を利用できません。");
       return;
@@ -176,20 +181,33 @@ export function usePushNotifications(setStatus: StatusSetter) {
     }
     const registration = await getPWARegistration();
     if (registration == null) {
+      console.error("[push-debug] local test registration missing");
       setStatus("Service Worker の準備がまだ完了していません。");
       return;
     }
-    await registration.showNotification("家事チャレンジ", {
-      body: "ローカル通知テストです。表示できれば OS 側の通知機能は正常です。",
-      tag: "kaji-challenge-local-test",
-      data: {
-        teamId: "",
-        slotKind: "local_test",
-        url: "/",
-      },
-      icon: "/icons/pwa-192x192.png",
-      badge: "/icons/pwa-64x64.png",
+    console.log("[push-debug] local test registration ready", {
+      scope: registration.scope,
+      hasActive: registration.active != null,
+      hasWaiting: registration.waiting != null,
+      hasInstalling: registration.installing != null,
     });
+    try {
+      await registration.showNotification("家事チャレンジ", {
+        body: "ローカル通知テストです。表示できれば OS 側の通知機能は正常です。",
+        tag: "kaji-challenge-local-test",
+        data: {
+          teamId: "",
+          slotKind: "local_test",
+          url: "/",
+        },
+        icon: "/icons/pwa-192x192.png",
+        badge: "/icons/pwa-64x64.png",
+      });
+      console.log("[push-debug] local test showNotification success");
+    } catch (error) {
+      console.error("[push-debug] local test showNotification failed", error);
+      throw error;
+    }
     setStatus("ローカル通知テストを送信しました。");
   }, [setStatus]);
 
