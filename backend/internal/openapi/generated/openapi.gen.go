@@ -19,6 +19,7 @@ const (
 
 // Defines values for PushPlatform.
 const (
+	// #nosec G101 -- fixed enum value generated from OpenAPI, not a credential
 	IosSafariPwa PushPlatform = "ios_safari_pwa"
 )
 

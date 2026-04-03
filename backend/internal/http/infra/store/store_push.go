@@ -476,7 +476,7 @@ func stringPtrOrNil(value string) *string {
 	return &trimmed
 }
 
-const notifyPlatformIOSSafariPWA = "ios_safari_pwa"
+var notifyPlatformIOSSafariPWA = string(api.IosSafariPwa)
 
 func acquirePushDispatchLock(ctx context.Context, tx pgx.Tx, teamID string, slot notifySlot, slotDate time.Time) error {
 	_, err := tx.Exec(
