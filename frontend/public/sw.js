@@ -1,4 +1,4 @@
-self.SW_VERSION = "2026-04-03-sw-inspector-debug";
+self.SW_VERSION = "2026-04-04-sw-inspector-debug";
 
 self.addEventListener("install", () => {
   console.log("[sw] install", { version: self.SW_VERSION });
@@ -18,40 +18,73 @@ self.addEventListener("message", (event) => {
   if (event.data?.type === "SKIP_WAITING") {
     self.skipWaiting();
   }
+  if (event.data?.type === "GET_SW_VERSION") {
+    event.source?.postMessage({
+      type: "SW_VERSION",
+      version: self.SW_VERSION,
+    });
+  }
 });
 
+async function readPushPayload(event) {
+  let rawText = "";
+  if (event.data != null && typeof event.data.text === "function") {
+    try {
+      rawText = event.data.text();
+    } catch {
+      rawText = "";
+    }
+  }
+
+  let payload = {};
+  if (rawText !== "") {
+    try {
+      const parsed = JSON.parse(rawText);
+      if (parsed != null && typeof parsed === "object") {
+        payload = parsed;
+      }
+    } catch {
+      payload = {};
+    }
+  }
+
+  return { payload, rawText };
+}
+
 async function handlePush(event) {
-  console.log("[sw] push received", {
+  console.log("[sw] push event listener invoked", {
     version: self.SW_VERSION,
     hasEventData: event.data != null,
   });
 
-  let payload = {};
-  let rawText = "";
-  if (event.data != null) {
-    try {
-      rawText = event.data.text();
-      payload = rawText === "" ? {} : JSON.parse(rawText);
-    } catch {
-      try {
-        payload = event.data.json();
-      } catch {
-        payload = {};
-      }
-    }
-  }
-
+  const { payload, rawText } = await readPushPayload(event);
+  const debugReceivedAt = new Date().toISOString();
+  console.log("[sw] push received", {
+    version: self.SW_VERSION,
+    hasEventData: event.data != null,
+    debugReceivedAt,
+  });
   console.log("[sw] push payload parsed", {
     version: self.SW_VERSION,
     rawTextLength: rawText.length,
     payloadKeys: Object.keys(payload),
   });
 
-  const title = payload.title ?? "家事チャレンジ (remote push)";
+  const title =
+    typeof payload.title === "string" && payload.title.trim() !== ""
+      ? payload.title
+      : "家事チャレンジ (remote push)";
   const body =
-    payload.body ??
-    (rawText === "" ? "Remote push を受信しました。" : rawText.slice(0, 140));
-  const tag = `${payload.tag ?? "kaji-challenge"}:${Date.now()}`;
+    typeof payload.body === "string" && payload.body.trim() !== ""
+      ? payload.body
+      : rawText.trim() !== ""
+        ? `Remote push payload: ${rawText.slice(0, 120)}`
+        : "Remote push を受信しました。";
+  const tagBase =
+    typeof payload.tag === "string" && payload.tag.trim() !== ""
+      ? payload.tag
+      : "kaji-challenge-remote";
+  const tag = `${tagBase}:${debugReceivedAt}`;
   const url = payload.url ?? "/";
 
   console.log("[sw] showNotification start", {
@@ -71,8 +104,9 @@ async function handlePush(event) {
         teamId: payload.teamId ?? "",
         slotKind: payload.slotKind ?? "",
         url,
-        debugVersion: self.SW_VERSION,
         debugRawText: rawText,
+        debugReceivedAt,
+        debugVersion: self.SW_VERSION,
       },
       icon: "/icons/pwa-192x192.png",
       badge: "/icons/pwa-64x64.png",
@@ -85,18 +119,20 @@ async function handlePush(event) {
   } catch (error) {
     console.error("[sw] showNotification failed", {
       version: self.SW_VERSION,
-      tag,
-      error,
+      error:
+        error instanceof Error
+          ? {
+              name: error.name,
+              message: error.message,
+              stack: error.stack ?? null,
+            }
+          : String(error),
     });
     throw error;
   }
 }
 
 self.addEventListener("push", (event) => {
-  console.log("[sw] push event listener invoked", {
-    version: self.SW_VERSION,
-    hasEventData: event.data != null,
-  });
   event.waitUntil(handlePush(event));
 });
 
@@ -106,10 +142,15 @@ self.addEventListener("notificationclick", (event) => {
     data: event.notification.data ?? null,
   });
   event.notification.close();
-  const targetUrl = new URL(
-    event.notification.data?.url ?? "/",
-    self.location.origin,
-  ).toString();
+  let targetUrl = self.location.origin;
+  try {
+    targetUrl = new URL(
+      event.notification.data?.url ?? "/",
+      self.location.origin,
+    ).toString();
+  } catch {
+    targetUrl = self.location.origin;
+  }
 
   event.waitUntil(
     self.clients

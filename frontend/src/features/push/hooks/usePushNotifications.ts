@@ -1,7 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { waitForPWARegistration } from "../../../app/pwa-register";
+import {
+  ensureLatestPWARegistration,
+  waitForPWARegistration,
+} from "../../../app/pwa-register";
 import {
   PushPlatform,
   deletePushSubscription,
@@ -106,7 +109,7 @@ export function usePushNotifications(setStatus: StatusSetter) {
       return;
     }
 
-    const registration = await waitForPWARegistration();
+    const registration = await ensureLatestPWARegistration();
     if (registration == null) {
       setStatus("Service Worker の準備がまだ完了していません。");
       return;
