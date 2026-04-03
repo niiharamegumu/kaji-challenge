@@ -33,6 +33,7 @@
 - `make diff-gen`: 生成差分チェック
 - `make seed-monthly-dummy month=YYYY-MM email=user@example.com`: ダミータスク/完了記録を投入（集計は行わない）
 - `make ops-close scope=day|week|month [team_id=<uuid>]`: close処理をCLI実行（既定は全チーム対象）
+- `make vapid-keys [subject=mailto:you@example.com]`: Web Push 用 VAPID 鍵を再生成して表示する
 
 backend の Critical 判定は `backend/security/critical_goids.txt` の GO-ID allowlist で管理します。
 
@@ -91,6 +92,12 @@ JST固定の想定時刻:
 
 `ops notify` は active な Push購読を持つ team のみ対象にし、`push_dispatch_state` の最新 fingerprint で同一スロットの二重送信を防ぎます。
 404 / 410 を返した subscription は自動で `is_active=false` に更新されます。
+
+VAPID鍵の再生成:
+
+- `make vapid-keys` を実行すると `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` を stdout に出力します
+- `subject` を省略した場合は `VAPID_SUBJECT` 環境変数、さらに未設定なら `mailto:your-email@example.com` を使います
+- `VAPID_PRIVATE_KEY` は backend の secret にだけ入れてください
 
 ## Frontend (Cloudflare Workers)
 
