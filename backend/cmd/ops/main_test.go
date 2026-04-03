@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/megu/kaji-challenge/backend/internal/http/infra"
+	pushsvc "github.com/megu/kaji-challenge/backend/internal/push"
 	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 )
 
@@ -22,6 +24,12 @@ type fakeCloseRunner struct {
 	monthErrByTeam map[string]error
 
 	closedTeams []string
+}
+
+type fakeNotifyRunner struct {
+	calledSlots []string
+	result      infra.NotifyRunResult
+	errBySlot   map[string]error
 }
 
 func (f *fakeCloseRunner) ListClosableTeamIDs(context.Context) ([]string, error) {
@@ -55,6 +63,14 @@ func (f *fakeCloseRunner) CloseMonthForTeam(_ context.Context, teamID string) (a
 	return okResp(), nil
 }
 
+func (f *fakeNotifyRunner) NotifySlot(_ context.Context, slot string, _ pushsvc.Sender) (infra.NotifyRunResult, error) {
+	f.calledSlots = append(f.calledSlots, slot)
+	if err := f.errBySlot[slot]; err != nil {
+		return infra.NotifyRunResult{}, err
+	}
+	return f.result, nil
+}
+
 func okResp() api.CloseResponse {
 	return api.CloseResponse{
 		Month:    "2026-02",
@@ -67,7 +83,7 @@ func TestRunRejectsInvalidScope(t *testing.T) {
 	var out bytes.Buffer
 	logger := log.New(&out, "", 0)
 
-	code := run([]string{"close", "--scope=bad", "--all-teams"}, logger, runner)
+	code := run([]string{"close", "--scope=bad", "--all-teams"}, logger, runner, &fakeNotifyRunner{})
 	if code != 1 {
 		t.Fatalf("expected exit code 1, got %d", code)
 	}
@@ -84,7 +100,7 @@ func TestRunAllTeamsSuccess(t *testing.T) {
 	var out bytes.Buffer
 	logger := log.New(&out, "", 0)
 
-	code := run([]string{"close", "--scope=day", "--all-teams"}, logger, runner)
+	code := run([]string{"close", "--scope=day", "--all-teams"}, logger, runner, &fakeNotifyRunner{})
 	if code != 0 {
 		t.Fatalf("expected exit code 0, got %d", code)
 	}
@@ -104,7 +120,7 @@ func TestRunAllTeamsContinuesOnFailure(t *testing.T) {
 	var out bytes.Buffer
 	logger := log.New(&out, "", 0)
 
-	code := run([]string{"close", "--scope=week", "--all-teams"}, logger, runner)
+	code := run([]string{"close", "--scope=week", "--all-teams"}, logger, runner, &fakeNotifyRunner{})
 	if code != 1 {
 		t.Fatalf("expected exit code 1, got %d", code)
 	}
@@ -123,7 +139,7 @@ func TestRunTeamIDOnly(t *testing.T) {
 	var out bytes.Buffer
 	logger := log.New(&out, "", 0)
 
-	code := run([]string{"close", "--scope=month", "--team-id=team-9", "--all-teams=false"}, logger, runner)
+	code := run([]string{"close", "--scope=month", "--team-id=team-9", "--all-teams=false"}, logger, runner, &fakeNotifyRunner{})
 	if code != 0 {
 		t.Fatalf("expected exit code 0, got %d", code)
 	}
@@ -137,7 +153,7 @@ func TestRunRejectsMissingSubcommand(t *testing.T) {
 	var out bytes.Buffer
 	logger := log.New(&out, "", 0)
 
-	code := run([]string{}, logger, runner)
+	code := run([]string{}, logger, runner, &fakeNotifyRunner{})
 	if code != 1 {
 		t.Fatalf("expected exit code 1, got %d", code)
 	}
@@ -151,11 +167,24 @@ func TestRunRejectsUnsupportedSubcommand(t *testing.T) {
 	var out bytes.Buffer
 	logger := log.New(&out, "", 0)
 
-	code := run([]string{"sync"}, logger, runner)
+	code := run([]string{"sync"}, logger, runner, &fakeNotifyRunner{})
 	if code != 1 {
 		t.Fatalf("expected exit code 1, got %d", code)
 	}
 	if !strings.Contains(out.String(), "unsupported subcommand") {
 		t.Fatalf("expected unsupported subcommand log, got: %s", out.String())
+	}
+}
+
+func TestRunNotifyRejectsInvalidSlot(t *testing.T) {
+	var out bytes.Buffer
+	logger := log.New(&out, "", 0)
+
+	code := run([]string{"notify", "--slot=bad"}, logger, &fakeCloseRunner{}, &fakeNotifyRunner{})
+	if code != 1 {
+		t.Fatalf("expected exit code 1, got %d", code)
+	}
+	if !strings.Contains(out.String(), "invalid --slot") {
+		t.Fatalf("expected invalid slot log, got: %s", out.String())
 	}
 }

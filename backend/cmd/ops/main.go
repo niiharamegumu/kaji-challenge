@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/megu/kaji-challenge/backend/internal/http/infra"
+	pushsvc "github.com/megu/kaji-challenge/backend/internal/push"
 	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 )
 
@@ -19,22 +20,28 @@ type closeRunner interface {
 	CloseMonthForTeam(ctx context.Context, teamID string) (api.CloseResponse, error)
 }
 
+type notifyRunner interface {
+	NotifySlot(ctx context.Context, slot string, sender pushsvc.Sender) (infra.NotifyRunResult, error)
+}
+
 func main() {
 	logger := log.New(os.Stdout, "", log.LstdFlags)
 	store := infra.NewStore()
-	os.Exit(run(os.Args[1:], logger, store))
+	os.Exit(run(os.Args[1:], logger, store, store))
 }
 
-func run(args []string, logger *log.Logger, runner closeRunner) int {
+func run(args []string, logger *log.Logger, closer closeRunner, notifier notifyRunner) int {
 	if len(args) == 0 {
-		logger.Printf("missing subcommand (expected: close)")
+		logger.Printf("missing subcommand (expected: close|notify)")
 		return 1
 	}
 	switch args[0] {
 	case "close":
-		return runClose(args[1:], logger, runner)
+		return runClose(args[1:], logger, closer)
+	case "notify":
+		return runNotify(args[1:], logger, notifier)
 	default:
-		logger.Printf("unsupported subcommand %q (expected: close)", args[0])
+		logger.Printf("unsupported subcommand %q (expected: close|notify)", args[0])
 		return 1
 	}
 }
@@ -119,4 +126,43 @@ func runScope(ctx context.Context, runner closeRunner, scope, teamID string) (ap
 	default:
 		return api.CloseResponse{}, fmt.Errorf("unsupported scope: %s", scope)
 	}
+}
+
+func runNotify(args []string, logger *log.Logger, runner notifyRunner) int {
+	fs := flag.NewFlagSet("ops notify", flag.ContinueOnError)
+	fs.SetOutput(logger.Writer())
+
+	slot := fs.String("slot", "", "notify slot: daily_2100|weekly_prev_sat_1900|weekly_due_sun_1000")
+
+	if err := fs.Parse(args); err != nil {
+		logger.Printf("failed to parse notify flags: %v", err)
+		return 1
+	}
+	parsedSlot, err := infra.ParseNotifySlot(*slot)
+	if err != nil {
+		logger.Printf("invalid --slot %q: %v", *slot, err)
+		return 1
+	}
+	sender, err := pushsvc.NewWebPushSenderFromEnv()
+	if err != nil {
+		logger.Printf("failed to initialize web push sender: %v", err)
+		return 1
+	}
+	logger.Printf("ops notify started: slot=%s", parsedSlot)
+	result, err := runner.NotifySlot(context.Background(), parsedSlot, sender)
+	logger.Printf(
+		"ops notify finished: slot=%s processed=%d sent=%d skipped=%d failed=%d",
+		parsedSlot,
+		result.Processed,
+		result.Sent,
+		result.Skipped,
+		result.Failed,
+	)
+	if err != nil || result.Failed > 0 {
+		if err != nil {
+			logger.Printf("ops notify failed: slot=%s err=%v", parsedSlot, err)
+		}
+		return 1
+	}
+	return 0
 }
