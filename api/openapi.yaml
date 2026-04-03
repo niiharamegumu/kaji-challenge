@@ -130,6 +130,50 @@ paths:
               schema:
                 $ref: '#/components/schemas/UpdateColorResponse'
 
+  /v1/push/subscriptions:
+    post:
+      operationId: postPushSubscription
+      summary: Upsert current device push subscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpsertPushSubscriptionRequest'
+      responses:
+        '200':
+          description: Subscription upserted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushSubscription'
+
+  /v1/push/subscriptions/{subscriptionId}:
+    delete:
+      operationId: deletePushSubscription
+      summary: Deactivate a current user's push subscription
+      parameters:
+        - in: path
+          name: subscriptionId
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Subscription deactivated
+
+  /v1/push/subscriptions/me:
+    get:
+      operationId: getPushSubscriptionsMe
+      summary: List current user's push subscriptions
+      responses:
+        '200':
+          description: Push subscriptions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListPushSubscriptionsResponse'
+
   /v1/teams/invites:
     post:
       operationId: postTeamInvite
@@ -995,6 +1039,76 @@ components:
         colorHex:
           type: string
           nullable: true
+
+    PushPlatform:
+      type: string
+      enum: [ios_safari_pwa]
+
+    PushSubscription:
+      type: object
+      required: [id, teamId, userId, endpoint, platform, isActive, lastSeenAt, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        teamId:
+          type: string
+        userId:
+          type: string
+        endpoint:
+          type: string
+          format: uri
+        userAgent:
+          type: string
+          nullable: true
+        platform:
+          $ref: '#/components/schemas/PushPlatform'
+        isActive:
+          type: boolean
+        lastSeenAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    PushSubscriptionKeys:
+      type: object
+      required: [p256dh, auth]
+      properties:
+        p256dh:
+          type: string
+          minLength: 1
+        auth:
+          type: string
+          minLength: 1
+
+    UpsertPushSubscriptionRequest:
+      type: object
+      required: [endpoint, keys, platform]
+      properties:
+        endpoint:
+          type: string
+          format: uri
+        keys:
+          $ref: '#/components/schemas/PushSubscriptionKeys'
+        userAgent:
+          type: string
+        platform:
+          $ref: '#/components/schemas/PushPlatform'
+
+    ListPushSubscriptionsResponse:
+      type: object
+      required: [items, vapidPublicKey]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PushSubscription'
+        vapidPublicKey:
+          type: string
 
     TaskType:
       type: string
