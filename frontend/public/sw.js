@@ -1,14 +1,20 @@
-self.SW_VERSION = "2026-04-03-remote-push-debug";
+self.SW_VERSION = "2026-04-04-sw-inspector-debug";
 
 self.addEventListener("install", () => {
+  console.log("[sw] install", { version: self.SW_VERSION });
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
+  console.log("[sw] activate", { version: self.SW_VERSION });
   event.waitUntil(self.clients.claim());
 });
 
 self.addEventListener("message", (event) => {
+  console.log("[sw] message", {
+    version: self.SW_VERSION,
+    type: event.data?.type ?? null,
+  });
   if (event.data?.type === "SKIP_WAITING") {
     self.skipWaiting();
   }
@@ -46,8 +52,24 @@ async function readPushPayload(event) {
 }
 
 async function handlePush(event) {
+  console.log("[sw] push event listener invoked", {
+    version: self.SW_VERSION,
+    hasEventData: event.data != null,
+  });
+
   const { payload, rawText } = await readPushPayload(event);
   const debugReceivedAt = new Date().toISOString();
+  console.log("[sw] push received", {
+    version: self.SW_VERSION,
+    hasEventData: event.data != null,
+    debugReceivedAt,
+  });
+  console.log("[sw] push payload parsed", {
+    version: self.SW_VERSION,
+    rawTextLength: rawText.length,
+    payloadKeys: Object.keys(payload),
+  });
+
   const title =
     typeof payload.title === "string" && payload.title.trim() !== ""
       ? payload.title
@@ -65,22 +87,49 @@ async function handlePush(event) {
   const tag = `${tagBase}:${debugReceivedAt}`;
   const url = payload.url ?? "/";
 
-  await self.registration.showNotification(title, {
+  console.log("[sw] showNotification start", {
+    version: self.SW_VERSION,
+    title,
     body,
     tag,
-    renotify: true,
-    data: {
-      teamId: payload.teamId ?? "",
-      slotKind: payload.slotKind ?? "",
-      url,
-      debugRawText: rawText,
-      debugReceivedAt,
-      debugVersion: self.SW_VERSION,
-    },
-    icon: "/icons/pwa-192x192.png",
-    badge: "/icons/pwa-64x64.png",
-    timestamp: Date.now(),
+    url,
   });
+
+  try {
+    await self.registration.showNotification(title, {
+      body,
+      tag,
+      renotify: true,
+      data: {
+        teamId: payload.teamId ?? "",
+        slotKind: payload.slotKind ?? "",
+        url,
+        debugRawText: rawText,
+        debugReceivedAt,
+        debugVersion: self.SW_VERSION,
+      },
+      icon: "/icons/pwa-192x192.png",
+      badge: "/icons/pwa-64x64.png",
+      timestamp: Date.now(),
+    });
+    console.log("[sw] showNotification success", {
+      version: self.SW_VERSION,
+      tag,
+    });
+  } catch (error) {
+    console.error("[sw] showNotification failed", {
+      version: self.SW_VERSION,
+      error:
+        error instanceof Error
+          ? {
+              name: error.name,
+              message: error.message,
+              stack: error.stack ?? null,
+            }
+          : String(error),
+    });
+    throw error;
+  }
 }
 
 self.addEventListener("push", (event) => {
@@ -88,6 +137,10 @@ self.addEventListener("push", (event) => {
 });
 
 self.addEventListener("notificationclick", (event) => {
+  console.log("[sw] notificationclick", {
+    version: self.SW_VERSION,
+    data: event.notification.data ?? null,
+  });
   event.notification.close();
   let targetUrl = self.location.origin;
   try {
