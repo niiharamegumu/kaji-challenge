@@ -244,7 +244,6 @@ export function usePushNotifications(setStatus: StatusSetter) {
         },
         icon: "/icons/pwa-192x192.png",
         badge: "/icons/pwa-64x64.png",
-        timestamp: Date.now(),
       });
       console.log("[push-debug] local test showNotification success", { tag });
       if (typeof registration.getNotifications === "function") {
