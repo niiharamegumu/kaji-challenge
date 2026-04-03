@@ -62,6 +62,18 @@ func (m mockTeamService) PostTeamLeave(context.Context, string) (api.JoinTeamRes
 	return api.JoinTeamResponse{}, nil
 }
 
+type mockPushService struct{}
+
+func (m mockPushService) UpsertPushSubscription(context.Context, string, api.UpsertPushSubscriptionRequest) (api.PushSubscription, error) {
+	return api.PushSubscription{}, nil
+}
+func (m mockPushService) DeletePushSubscription(context.Context, string, string) error {
+	return nil
+}
+func (m mockPushService) ListPushSubscriptions(context.Context, string) (api.ListPushSubscriptionsResponse, error) {
+	return api.ListPushSubscriptionsResponse{}, nil
+}
+
 type mockTaskService struct{}
 
 func (m mockTaskService) ListTasks(context.Context, string, *api.TaskType) ([]api.Task, error) {
@@ -137,6 +149,7 @@ func newTestHandler(teamErr error) *Handler {
 	return NewHandler(&ports.Services{
 		Auth:         mockAuthService{},
 		Team:         mockTeamService{err: teamErr},
+		Push:         mockPushService{},
 		Task:         mockTaskService{},
 		Penalty:      mockPenaltyService{},
 		ShoppingList: mockShoppingListService{},

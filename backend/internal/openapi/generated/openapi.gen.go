@@ -17,6 +17,11 @@ const (
 	CookieAuthScopes = "cookieAuth.Scopes"
 )
 
+// Defines values for PushPlatform.
+const (
+	IosSafariPwa PushPlatform = "ios_safari_pwa"
+)
+
 // Defines values for ReminderKind.
 const (
 	OneTime   ReminderKind = "one_time"
@@ -143,6 +148,12 @@ type JoinTeamResponse struct {
 	TeamId string `json:"teamId"`
 }
 
+// ListPushSubscriptionsResponse defines model for ListPushSubscriptionsResponse.
+type ListPushSubscriptionsResponse struct {
+	Items          []PushSubscription `json:"items"`
+	VapidPublicKey string             `json:"vapidPublicKey"`
+}
+
 // MeResponse defines model for MeResponse.
 type MeResponse struct {
 	Memberships []TeamMembership `json:"memberships"`
@@ -189,6 +200,29 @@ type PenaltyRule struct {
 	TeamId      string     `json:"teamId"`
 	Threshold   int        `json:"threshold"`
 	UpdatedAt   time.Time  `json:"updatedAt"`
+}
+
+// PushPlatform defines model for PushPlatform.
+type PushPlatform string
+
+// PushSubscription defines model for PushSubscription.
+type PushSubscription struct {
+	CreatedAt  time.Time    `json:"createdAt"`
+	Endpoint   string       `json:"endpoint"`
+	Id         string       `json:"id"`
+	IsActive   bool         `json:"isActive"`
+	LastSeenAt time.Time    `json:"lastSeenAt"`
+	Platform   PushPlatform `json:"platform"`
+	TeamId     string       `json:"teamId"`
+	UpdatedAt  time.Time    `json:"updatedAt"`
+	UserAgent  *string      `json:"userAgent"`
+	UserId     string       `json:"userId"`
+}
+
+// PushSubscriptionKeys defines model for PushSubscriptionKeys.
+type PushSubscriptionKeys struct {
+	Auth   string `json:"auth"`
+	P256dh string `json:"p256dh"`
 }
 
 // Reminder defines model for Reminder.
@@ -428,6 +462,14 @@ type UpdateTaskRequest struct {
 	Title                      *string `json:"title,omitempty"`
 }
 
+// UpsertPushSubscriptionRequest defines model for UpsertPushSubscriptionRequest.
+type UpsertPushSubscriptionRequest struct {
+	Endpoint  string               `json:"endpoint"`
+	Keys      PushSubscriptionKeys `json:"keys"`
+	Platform  PushPlatform         `json:"platform"`
+	UserAgent *string              `json:"userAgent,omitempty"`
+}
+
 // User defines model for User.
 type User struct {
 	ColorHex    *string   `json:"colorHex"`
@@ -498,6 +540,9 @@ type PostPenaltyRuleJSONRequestBody = CreatePenaltyRuleRequest
 
 // PatchPenaltyRuleJSONRequestBody defines body for PatchPenaltyRule for application/json ContentType.
 type PatchPenaltyRuleJSONRequestBody = UpdatePenaltyRuleRequest
+
+// PostPushSubscriptionJSONRequestBody defines body for PostPushSubscription for application/json ContentType.
+type PostPushSubscriptionJSONRequestBody = UpsertPushSubscriptionRequest
 
 // PostReminderJSONRequestBody defines body for PostReminder for application/json ContentType.
 type PostReminderJSONRequestBody = CreateReminderRequest
@@ -585,6 +630,15 @@ type ServerInterface interface {
 	// Monthly penalty summary
 	// (GET /v1/penalty-summaries/monthly)
 	GetPenaltySummaryMonthly(c *gin.Context, params GetPenaltySummaryMonthlyParams)
+	// Upsert current device push subscription
+	// (POST /v1/push/subscriptions)
+	PostPushSubscription(c *gin.Context)
+	// List current user's push subscriptions
+	// (GET /v1/push/subscriptions/me)
+	GetPushSubscriptionsMe(c *gin.Context)
+	// Deactivate a current user's push subscription
+	// (DELETE /v1/push/subscriptions/{subscriptionId})
+	DeletePushSubscription(c *gin.Context, subscriptionId string)
 	// List future reminder occurrences in current team
 	// (GET /v1/reminders)
 	ListReminders(c *gin.Context, params ListRemindersParams)
@@ -978,6 +1032,62 @@ func (siw *ServerInterfaceWrapper) GetPenaltySummaryMonthly(c *gin.Context) {
 	}
 
 	siw.Handler.GetPenaltySummaryMonthly(c, params)
+}
+
+// PostPushSubscription operation middleware
+func (siw *ServerInterfaceWrapper) PostPushSubscription(c *gin.Context) {
+
+	c.Set(CookieAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.PostPushSubscription(c)
+}
+
+// GetPushSubscriptionsMe operation middleware
+func (siw *ServerInterfaceWrapper) GetPushSubscriptionsMe(c *gin.Context) {
+
+	c.Set(CookieAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.GetPushSubscriptionsMe(c)
+}
+
+// DeletePushSubscription operation middleware
+func (siw *ServerInterfaceWrapper) DeletePushSubscription(c *gin.Context) {
+
+	var err error
+
+	// ------------- Path parameter "subscriptionId" -------------
+	var subscriptionId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "subscriptionId", c.Param("subscriptionId"), &subscriptionId, runtime.BindStyledParameterOptions{Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter subscriptionId: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	c.Set(CookieAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.DeletePushSubscription(c, subscriptionId)
 }
 
 // ListReminders operation middleware
@@ -1605,6 +1715,9 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	router.DELETE(options.BaseURL+"/v1/penalty-rules/:ruleId", wrapper.DeletePenaltyRule)
 	router.PATCH(options.BaseURL+"/v1/penalty-rules/:ruleId", wrapper.PatchPenaltyRule)
 	router.GET(options.BaseURL+"/v1/penalty-summaries/monthly", wrapper.GetPenaltySummaryMonthly)
+	router.POST(options.BaseURL+"/v1/push/subscriptions", wrapper.PostPushSubscription)
+	router.GET(options.BaseURL+"/v1/push/subscriptions/me", wrapper.GetPushSubscriptionsMe)
+	router.DELETE(options.BaseURL+"/v1/push/subscriptions/:subscriptionId", wrapper.DeletePushSubscription)
 	router.GET(options.BaseURL+"/v1/reminders", wrapper.ListReminders)
 	router.POST(options.BaseURL+"/v1/reminders", wrapper.PostReminder)
 	router.GET(options.BaseURL+"/v1/reminders/list", wrapper.ListReminderDefinitions)
