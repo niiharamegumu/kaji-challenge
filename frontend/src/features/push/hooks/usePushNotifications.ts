@@ -82,6 +82,43 @@ export function usePushNotifications(setStatus: StatusSetter) {
     };
   }, []);
 
+  useEffect(() => {
+    if (
+      !("serviceWorker" in navigator) ||
+      typeof navigator.serviceWorker.addEventListener !== "function" ||
+      typeof navigator.serviceWorker.removeEventListener !== "function"
+    ) {
+      return;
+    }
+
+    const handleMessage = (event: MessageEvent) => {
+      const data = event.data;
+      if (data?.type === "SW_DEBUG_LOG") {
+        const logger =
+          data.level === "error"
+            ? console.error
+            : data.level === "warn"
+              ? console.warn
+              : console.log;
+        logger("[push-debug] sw", {
+          eventName: data.eventName ?? null,
+          version: data.version ?? null,
+          details: data.details ?? null,
+        });
+      }
+      if (data?.type === "SW_VERSION") {
+        console.log("[push-debug] sw version", {
+          version: data.version ?? null,
+        });
+      }
+    };
+
+    navigator.serviceWorker.addEventListener("message", handleMessage);
+    return () => {
+      navigator.serviceWorker.removeEventListener("message", handleMessage);
+    };
+  }, []);
+
   const enableCurrentDevice = useCallback(async () => {
     if (!isPushSupported()) {
       setStatus("この端末では Web Push を利用できません。");
@@ -194,10 +231,12 @@ export function usePushNotifications(setStatus: StatusSetter) {
       hasWaiting: registration.waiting != null,
       hasInstalling: registration.installing != null,
     });
+    registration.active?.postMessage({ type: "GET_SW_VERSION" });
     try {
+      const tag = `kaji-challenge-local-test:${Date.now()}`;
       await registration.showNotification("家事チャレンジ", {
         body: "ローカル通知テストです。表示できれば OS 側の通知機能は正常です。",
-        tag: "kaji-challenge-local-test",
+        tag,
         data: {
           teamId: "",
           slotKind: "local_test",
@@ -206,7 +245,18 @@ export function usePushNotifications(setStatus: StatusSetter) {
         icon: "/icons/pwa-192x192.png",
         badge: "/icons/pwa-64x64.png",
       });
-      console.log("[push-debug] local test showNotification success");
+      console.log("[push-debug] local test showNotification success", { tag });
+      if (typeof registration.getNotifications === "function") {
+        const notifications = await registration.getNotifications();
+        console.log("[push-debug] local test notifications snapshot", {
+          count: notifications.length,
+          currentTagPresent: notifications.some(
+            (notification) => notification.tag === tag,
+          ),
+          tags: notifications.map((notification) => notification.tag),
+          titles: notifications.map((notification) => notification.title),
+        });
+      }
     } catch (error) {
       console.error("[push-debug] local test showNotification failed", error);
       throw error;

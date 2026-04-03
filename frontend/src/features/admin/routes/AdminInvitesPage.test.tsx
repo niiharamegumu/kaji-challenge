@@ -27,6 +27,8 @@ const mockPostPushSubscription = vi.fn();
 const mockDeletePushSubscription = vi.fn();
 const mockOutletContext = vi.fn();
 const mockWaitForPWARegistration = vi.fn();
+const mockServiceWorkerAddEventListener = vi.fn();
+const mockServiceWorkerRemoveEventListener = vi.fn();
 
 function createNotificationMock(
   permission: "default" | "granted",
@@ -95,6 +97,8 @@ describe("AdminInvitesPage", () => {
     mockPostPushSubscription.mockReset();
     mockDeletePushSubscription.mockReset();
     mockWaitForPWARegistration.mockReset();
+    mockServiceWorkerAddEventListener.mockReset();
+    mockServiceWorkerRemoveEventListener.mockReset();
 
     mockGetTeamCurrentMembers.mockResolvedValue({ data: { items: [] } });
     mockGetTeamCurrentInvite.mockResolvedValue({ data: null });
@@ -131,7 +135,10 @@ describe("AdminInvitesPage", () => {
     });
     Object.defineProperty(navigator, "serviceWorker", {
       configurable: true,
-      value: {},
+      value: {
+        addEventListener: mockServiceWorkerAddEventListener,
+        removeEventListener: mockServiceWorkerRemoveEventListener,
+      },
     });
   });
 
@@ -249,6 +256,62 @@ describe("AdminInvitesPage", () => {
       expect(screen.getByRole("heading", { name: "設定" })).toBeInTheDocument();
     });
     expect(mockPostPushSubscription).not.toHaveBeenCalled();
+  });
+
+  it("sends local test notification with unique tag and inspects notifications", async () => {
+    const user = userEvent.setup();
+    const showNotification = vi.fn().mockResolvedValue(undefined);
+    const getNotifications = vi.fn().mockResolvedValue([
+      {
+        tag: "kaji-challenge-local-test:123",
+        title: "家事チャレンジ",
+      },
+    ]);
+    const postMessage = vi.fn();
+
+    vi.stubGlobal("Notification", createNotificationMock("granted"));
+    Object.defineProperty(window, "matchMedia", {
+      writable: true,
+      value: vi.fn().mockReturnValue({ matches: true }),
+    });
+    mockWaitForPWARegistration.mockResolvedValue({
+      active: { postMessage },
+      getNotifications,
+      installing: null,
+      pushManager: {
+        getSubscription: vi.fn().mockResolvedValue(null),
+      },
+      scope: "https://kaji.megumu.me/",
+      showNotification,
+      waiting: null,
+    });
+
+    render(
+      <AppProviders>
+        <SuspenseQueryBoundary errorMessage="テスト用エラー">
+          <AdminInvitesPage />
+        </SuspenseQueryBoundary>
+      </AppProviders>,
+    );
+
+    await user.click(
+      await screen.findByRole("button", { name: "ローカル通知テスト" }),
+    );
+
+    await waitFor(() => {
+      expect(showNotification).toHaveBeenCalledTimes(1);
+    });
+    expect(postMessage).toHaveBeenCalledWith({ type: "GET_SW_VERSION" });
+    expect(getNotifications).toHaveBeenCalledTimes(1);
+    expect(showNotification).toHaveBeenCalledWith(
+      "家事チャレンジ",
+      expect.objectContaining({
+        body: "ローカル通知テストです。表示できれば OS 側の通知機能は正常です。",
+        renotify: true,
+        tag: expect.stringMatching(/^kaji-challenge-local-test:\d+$/),
+        timestamp: expect.any(Number),
+      }),
+    );
   });
 
   it("clears nickname by saving an empty value", async () => {
