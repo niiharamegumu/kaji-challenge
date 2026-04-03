@@ -25,6 +25,9 @@ type Store interface {
 	GetTeamCurrentMembers(ctx context.Context, userID string) (api.TeamMembersResponse, error)
 	JoinTeam(ctx context.Context, userID, code string) (api.JoinTeamResponse, error)
 	PostTeamLeave(ctx context.Context, userID string) (api.JoinTeamResponse, error)
+	UpsertPushSubscription(ctx context.Context, userID string, req api.UpsertPushSubscriptionRequest) (api.PushSubscription, error)
+	DeletePushSubscription(ctx context.Context, userID, subscriptionID string) error
+	ListPushSubscriptions(ctx context.Context, userID string) (api.ListPushSubscriptionsResponse, error)
 
 	ListTasks(ctx context.Context, userID string, filter *api.TaskType) ([]api.Task, error)
 	CreateTask(ctx context.Context, userID string, req api.CreateTaskRequest) (api.Task, error)
@@ -60,6 +63,7 @@ type Store interface {
 
 type authRepo struct{ store Store }
 type teamRepo struct{ store Store }
+type pushRepo struct{ store Store }
 type taskRepo struct{ store Store }
 type penaltyRepo struct{ store Store }
 type shoppingListRepo struct{ store Store }
@@ -71,6 +75,7 @@ func NewServices(s Store) *ports.Services {
 	deps := ports.Dependencies{
 		AuthRepo:         authRepo{store: s},
 		TeamRepo:         teamRepo{store: s},
+		PushRepo:         pushRepo{store: s},
 		TaskRepo:         taskRepo{store: s},
 		PenaltyRepo:      penaltyRepo{store: s},
 		ShoppingListRepo: shoppingListRepo{store: s},

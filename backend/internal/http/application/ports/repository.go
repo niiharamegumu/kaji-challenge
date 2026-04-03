@@ -27,6 +27,12 @@ type TeamRepository interface {
 	PostTeamLeave(ctx context.Context, userID string) (api.JoinTeamResponse, error)
 }
 
+type PushRepository interface {
+	UpsertPushSubscription(ctx context.Context, userID string, req api.UpsertPushSubscriptionRequest) (api.PushSubscription, error)
+	DeletePushSubscription(ctx context.Context, userID, subscriptionID string) error
+	ListPushSubscriptions(ctx context.Context, userID string) (api.ListPushSubscriptionsResponse, error)
+}
+
 type TaskRepository interface {
 	ListTasks(ctx context.Context, userID string, filter *api.TaskType) ([]api.Task, error)
 	CreateTask(ctx context.Context, userID string, req api.CreateTaskRequest) (api.Task, error)
@@ -73,6 +79,7 @@ type AdminRepository interface {
 type Dependencies struct {
 	AuthRepo         AuthRepository
 	TeamRepo         TeamRepository
+	PushRepo         PushRepository
 	TaskRepo         TaskRepository
 	PenaltyRepo      PenaltyRepository
 	ShoppingListRepo ShoppingListRepository
