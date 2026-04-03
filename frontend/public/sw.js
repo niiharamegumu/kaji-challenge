@@ -13,7 +13,18 @@ self.addEventListener("message", (event) => {
 });
 
 self.addEventListener("push", (event) => {
-  const payload = event.data?.json?.() ?? {};
+  let payload = {};
+  if (event.data != null) {
+    try {
+      payload = event.data.json();
+    } catch {
+      try {
+        payload = JSON.parse(event.data.text());
+      } catch {
+        payload = {};
+      }
+    }
+  }
   const title = payload.title ?? "家事チャレンジ";
   const body = payload.body ?? "";
   const tag = payload.tag ?? "kaji-challenge";

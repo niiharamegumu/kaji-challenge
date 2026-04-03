@@ -27,6 +27,10 @@ async function getCurrentBrowserSubscription() {
   return registration.pushManager.getSubscription();
 }
 
+async function getPWARegistration() {
+  return waitForPWARegistration();
+}
+
 export function usePushNotifications(setStatus: StatusSetter) {
   const queryClient = useQueryClient();
   const [deviceEndpoint, setDeviceEndpoint] = useState<string | null>(null);
@@ -194,6 +198,40 @@ export function usePushNotifications(setStatus: StatusSetter) {
     subscriptionsQuery.data?.items,
   ]);
 
+  const sendLocalTestNotification = useCallback(async () => {
+    if (!isPushSupported()) {
+      setStatus("この端末では Web Push を利用できません。");
+      return;
+    }
+    if (!isStandalonePWA()) {
+      setStatus(
+        "iPhone の Safari でホーム画面に追加した PWA から確認してください。",
+      );
+      return;
+    }
+    if (Notification.permission !== "granted") {
+      setStatus("通知許可がまだ有効ではありません。");
+      return;
+    }
+    const registration = await getPWARegistration();
+    if (registration == null) {
+      setStatus("Service Worker の準備がまだ完了していません。");
+      return;
+    }
+    await registration.showNotification("家事チャレンジ", {
+      body: "ローカル通知テストです。表示できれば OS 側の通知機能は正常です。",
+      tag: "kaji-challenge-local-test",
+      data: {
+        teamId: "",
+        slotKind: "local_test",
+        url: "/",
+      },
+      icon: "/icons/pwa-192x192.png",
+      badge: "/icons/pwa-64x64.png",
+    });
+    setStatus("ローカル通知テストを送信しました。");
+  }, [setStatus]);
+
   const activeCount = useMemo(
     () =>
       subscriptionsQuery.data?.items.filter((item) => item.isActive).length ??
@@ -235,6 +273,13 @@ export function usePushNotifications(setStatus: StatusSetter) {
         await disableCurrentDevice();
       } catch (error) {
         setStatus(`通知解除に失敗しました: ${formatError(error)}`);
+      }
+    },
+    sendLocalTestNotification: async () => {
+      try {
+        await sendLocalTestNotification();
+      } catch (error) {
+        setStatus(`ローカル通知テストに失敗しました: ${formatError(error)}`);
       }
     },
   };

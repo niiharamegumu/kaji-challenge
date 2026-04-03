@@ -6,13 +6,15 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
+	"net/url"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	dbsqlc "github.com/megu/kaji-challenge/backend/internal/db/sqlc"
-	pushsvc "github.com/megu/kaji-challenge/backend/internal/push"
 	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
+	pushsvc "github.com/megu/kaji-challenge/backend/internal/push"
 )
 
 type notifySlot string
@@ -37,12 +39,12 @@ type pendingPushTask struct {
 }
 
 type preparedPushDispatch struct {
-	teamID         string
-	slotKind       notifySlot
-	slotDate       time.Time
-	fingerprint    string
-	payload        pushsvc.Payload
-	subscriptions  []dbsqlc.ListActivePushSubscriptionsByTeamIDRow
+	teamID        string
+	slotKind      notifySlot
+	slotDate      time.Time
+	fingerprint   string
+	payload       pushsvc.Payload
+	subscriptions []dbsqlc.ListActivePushSubscriptionsByTeamIDRow
 }
 
 func ParseNotifySlot(raw string) (string, error) {
@@ -269,6 +271,7 @@ func (s *Store) executePushDispatch(ctx context.Context, dispatch preparedPushDi
 			P256DH:   sub.P256dh,
 			Auth:     sub.Auth,
 		}, dispatch.payload)
+		logPushDispatchAttempt(dispatch, sub.Endpoint, result, err)
 		if result.Expired {
 			expiredCount++
 			if _, deactivateErr := q.DeactivatePushSubscriptionByEndpoint(ctx, dbsqlc.DeactivatePushSubscriptionByEndpointParams{
@@ -299,6 +302,40 @@ func (s *Store) executePushDispatch(ctx context.Context, dispatch preparedPushDi
 		return false, err
 	}
 	return true, deliveryErr
+}
+
+func logPushDispatchAttempt(dispatch preparedPushDispatch, endpoint string, result pushsvc.Result, err error) {
+	u, parseErr := url.Parse(endpoint)
+	host := ""
+	if parseErr == nil {
+		host = u.Host
+	}
+	endpointHash := sha256.Sum256([]byte(endpoint))
+	hashText := hex.EncodeToString(endpointHash[:8])
+	if err != nil {
+		log.Printf(
+			"push dispatch delivery result: team_id=%s slot=%s slot_date=%s host=%s endpoint_hash=%s status=%d expired=%t err=%v",
+			dispatch.teamID,
+			dispatch.slotKind,
+			dispatch.slotDate.Format("2006-01-02"),
+			host,
+			hashText,
+			result.StatusCode,
+			result.Expired,
+			err,
+		)
+		return
+	}
+	log.Printf(
+		"push dispatch delivery result: team_id=%s slot=%s slot_date=%s host=%s endpoint_hash=%s status=%d expired=%t",
+		dispatch.teamID,
+		dispatch.slotKind,
+		dispatch.slotDate.Format("2006-01-02"),
+		host,
+		hashText,
+		result.StatusCode,
+		result.Expired,
+	)
 }
 
 func (s *Store) listPendingTasksForSlot(ctx context.Context, teamID string, slot notifySlot, now, slotDate time.Time) ([]pendingPushTask, error) {
