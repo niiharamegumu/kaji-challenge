@@ -93,7 +93,7 @@ func TestCloseWeekAndMonthForTeam(t *testing.T) {
 		t.Fatalf("team/user close month mismatch: team=%s user=%s", monthResTeam.Month, monthResUser.Month)
 	}
 
-	row := getCurrentMonthSummary(t, s, teamID)
+	row := getMonthSummary(t, s, teamID, monthResTeam.Month)
 	if row.WeeklyPenaltyTotal != 5 {
 		t.Fatalf("expected weekly penalty total=5, got %d", row.WeeklyPenaltyTotal)
 	}
