@@ -14,6 +14,7 @@ export function PushNotificationsSection() {
     isLoading,
     isStandalone,
     isSupported,
+    sendLocalTestNotification,
   } = usePushNotifications(setStatus);
 
   return (
@@ -76,6 +77,16 @@ export function PushNotificationsSection() {
           {isLoading && isCurrentDeviceEnabled
             ? "解除中..."
             : "この端末の通知をオフにする"}
+        </button>
+        <button
+          type="button"
+          className="flex min-h-11 items-center justify-center rounded-lg border border-stone-300 px-4 py-2 text-sm text-stone-700 transition-colors duration-200 hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
+          onClick={() => {
+            void sendLocalTestNotification();
+          }}
+          disabled={isLoading || !isSupported || !isStandalone}
+        >
+          ローカル通知テスト
         </button>
       </div>
 
