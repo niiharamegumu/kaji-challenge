@@ -64,6 +64,30 @@ type PenaltyRule struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
+type PushDispatchState struct {
+	TeamID      string             `json:"team_id"`
+	SlotKind    string             `json:"slot_kind"`
+	SlotDate    pgtype.Date        `json:"slot_date"`
+	Fingerprint string             `json:"fingerprint"`
+	SentAt      pgtype.Timestamptz `json:"sent_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type PushSubscription struct {
+	ID         string             `json:"id"`
+	TeamID     string             `json:"team_id"`
+	UserID     string             `json:"user_id"`
+	Endpoint   string             `json:"endpoint"`
+	P256dh     string             `json:"p256dh"`
+	Auth       string             `json:"auth"`
+	UserAgent  pgtype.Text        `json:"user_agent"`
+	Platform   string             `json:"platform"`
+	IsActive   bool               `json:"is_active"`
+	LastSeenAt pgtype.Timestamptz `json:"last_seen_at"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Reminder struct {
 	ID           string             `json:"id"`
 	TeamID       string             `json:"team_id"`
