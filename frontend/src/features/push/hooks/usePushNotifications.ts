@@ -79,45 +79,6 @@ export function usePushNotifications(setStatus: StatusSetter) {
     };
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      if (
-        !isPushSupported() ||
-        !isStandalonePWA() ||
-        Notification.permission !== "granted" ||
-        subscriptionsQuery.data == null
-      ) {
-        return;
-      }
-      const subscription = await getCurrentBrowserSubscription();
-      if (cancelled) {
-        return;
-      }
-      const serialized = serializePushSubscription(subscription);
-      setDeviceEndpoint(serialized?.endpoint ?? null);
-      if (serialized == null) {
-        return;
-      }
-      const alreadyRegistered = subscriptionsQuery.data.items.some(
-        (item) => item.endpoint === serialized.endpoint && item.isActive,
-      );
-      if (alreadyRegistered) {
-        return;
-      }
-      await upsertMutation.mutateAsync({
-        ...serialized,
-        platform: PushPlatform.ios_safari_pwa,
-        userAgent: navigator.userAgent,
-      });
-    })().catch(() => {
-      // Skip noisy toasts during passive sync.
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [subscriptionsQuery.data, upsertMutation]);
-
   const enableCurrentDevice = useCallback(async () => {
     if (!isPushSupported()) {
       setStatus("この端末では Web Push を利用できません。");

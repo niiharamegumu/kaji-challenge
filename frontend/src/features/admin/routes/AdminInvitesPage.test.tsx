@@ -175,7 +175,7 @@ describe("AdminInvitesPage", () => {
     expect(mockGetTeamCurrentInvite).toHaveBeenCalledTimes(1);
   });
 
-  it("syncs an already-granted browser subscription to backend", async () => {
+  it("does not sync browser subscription automatically on render", async () => {
     const encoder = new TextEncoder();
     vi.stubGlobal("Notification", createNotificationMock("granted"));
     Object.defineProperty(window, "matchMedia", {
@@ -208,16 +208,9 @@ describe("AdminInvitesPage", () => {
     );
 
     await waitFor(() => {
-      expect(mockPostPushSubscription).toHaveBeenCalledWith({
-        endpoint: "https://example.com/push/sub-1",
-        keys: {
-          p256dh: "aGVsbG8=",
-          auth: "d29ybGQ=",
-        },
-        platform: "ios_safari_pwa",
-        userAgent: navigator.userAgent,
-      });
+      expect(screen.getByRole("heading", { name: "設定" })).toBeInTheDocument();
     });
+    expect(mockPostPushSubscription).not.toHaveBeenCalled();
   });
 
   it("does not sync browser subscription outside standalone pwa", async () => {
