@@ -35,7 +35,8 @@ export const customFetch = async <T>(
   const method = (options?.method ?? "GET").toUpperCase();
   const isMutating =
     method !== "GET" && method !== "HEAD" && method !== "OPTIONS";
-  const requiresTeamPrecondition = isMutating && !url.startsWith("/v1/auth/");
+  const requiresTeamPrecondition =
+    isMutating && !url.startsWith("/v1/auth/") && !url.startsWith("/v1/push/");
   const headers: Record<string, string> = {
     ...(options?.headers as Record<string, string> | undefined),
   };
