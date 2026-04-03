@@ -4,8 +4,9 @@ const SW_URL = "/sw.js";
 const REFRESH_EVENT = "controllerchange";
 let swRegistrationPromise: Promise<ServiceWorkerRegistration> | null = null;
 
-const applyWaitingWorkerUpdate = async (
+const activateWaitingWorker = async (
   registration: ServiceWorkerRegistration,
+  options?: { reload?: boolean },
 ) => {
   const waiting = registration.waiting;
   if (!waiting) {
@@ -25,7 +26,9 @@ const applyWaitingWorkerUpdate = async (
     waiting.postMessage({ type: "SKIP_WAITING" });
   });
 
-  window.location.reload();
+  if (options?.reload ?? true) {
+    window.location.reload();
+  }
 };
 
 const bindRegistrationListeners = (registration: ServiceWorkerRegistration) => {
@@ -55,7 +58,9 @@ const bindRegistrationListeners = (registration: ServiceWorkerRegistration) => {
         installing.state === "installed" &&
         navigator.serviceWorker.controller != null
       ) {
-        notifyPWARefresh(() => applyWaitingWorkerUpdate(registration));
+        notifyPWARefresh(() =>
+          activateWaitingWorker(registration, { reload: true }),
+        );
       }
     });
   });
@@ -99,4 +104,25 @@ export const waitForPWARegistration = async () => {
   } catch {
     return null;
   }
+};
+
+export const ensureLatestPWARegistration = async () => {
+  const registration = await waitForPWARegistration();
+  if (registration == null) {
+    return null;
+  }
+  try {
+    await registration.update();
+  } catch {
+    // Offline or transient network failures are expected here.
+  }
+  if (registration.waiting) {
+    await activateWaitingWorker(registration, { reload: false });
+    try {
+      return await navigator.serviceWorker.ready;
+    } catch {
+      return registration;
+    }
+  }
+  return registration;
 };
