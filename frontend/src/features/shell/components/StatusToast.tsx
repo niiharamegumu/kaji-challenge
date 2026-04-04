@@ -29,7 +29,9 @@ export function StatusToast({
   }, [onAction]);
 
   useEffect(() => {
-    if (!message || isHovered || isPressing || hasAction) {
+    // The toast lifetime is keyed to the visible message itself.
+    // Optional actions can appear or disappear without restarting the timer.
+    if (!message || isHovered || isPressing) {
       return;
     }
 
@@ -40,7 +42,7 @@ export function StatusToast({
     return () => {
       window.clearTimeout(timer);
     };
-  }, [hasAction, isHovered, isPressing, message]);
+  }, [isHovered, isPressing, message]);
 
   if (!message) {
     return null;
