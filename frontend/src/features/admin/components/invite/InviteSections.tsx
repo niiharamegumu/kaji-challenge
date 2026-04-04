@@ -257,9 +257,9 @@ export function AccountSettingsSection({
   onSaveColor,
 }: AccountSettingsSectionProps) {
   return (
-    <section className="space-y-2">
-      <h3 className="text-sm font-semibold text-stone-900">ニックネーム</h3>
+    <section className="space-y-6">
       <div>
+        <h3 className="text-sm font-semibold text-stone-900">ニックネーム</h3>
         <label className="sr-only" htmlFor="nickname">
           ニックネーム
         </label>
@@ -285,7 +285,7 @@ export function AccountSettingsSection({
           <p className="mt-1 text-xs text-rose-600">{nicknameError}</p>
         )}
       </div>
-      <div className="border-t border-stone-200 pt-3">
+      <div>
         <h3 className="text-sm font-semibold text-stone-900">表示カラー</h3>
         <label className="sr-only" htmlFor="color-hex">
           表示カラー

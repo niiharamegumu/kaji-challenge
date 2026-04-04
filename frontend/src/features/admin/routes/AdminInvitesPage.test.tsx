@@ -258,16 +258,9 @@ describe("AdminInvitesPage", () => {
     expect(mockPostPushSubscription).not.toHaveBeenCalled();
   });
 
-  it("sends local test notification with unique tag and inspects notifications", async () => {
+  it("sends notification test with a unique tag", async () => {
     const user = userEvent.setup();
     const showNotification = vi.fn().mockResolvedValue(undefined);
-    const getNotifications = vi.fn().mockResolvedValue([
-      {
-        tag: "kaji-challenge-local-test:123",
-        title: "家事チャレンジ",
-      },
-    ]);
-    const postMessage = vi.fn();
 
     vi.stubGlobal("Notification", createNotificationMock("granted"));
     Object.defineProperty(window, "matchMedia", {
@@ -275,8 +268,7 @@ describe("AdminInvitesPage", () => {
       value: vi.fn().mockReturnValue({ matches: true }),
     });
     mockWaitForPWARegistration.mockResolvedValue({
-      active: { postMessage },
-      getNotifications,
+      active: null,
       installing: null,
       pushManager: {
         getSubscription: vi.fn().mockResolvedValue(null),
@@ -295,18 +287,16 @@ describe("AdminInvitesPage", () => {
     );
 
     await user.click(
-      await screen.findByRole("button", { name: "ローカル通知テスト" }),
+      await screen.findByRole("button", { name: "プッシュ通知をテスト" }),
     );
 
     await waitFor(() => {
       expect(showNotification).toHaveBeenCalledTimes(1);
     });
-    expect(postMessage).toHaveBeenCalledWith({ type: "GET_SW_VERSION" });
-    expect(getNotifications).toHaveBeenCalledTimes(1);
     expect(showNotification).toHaveBeenCalledWith(
       "家事チャレンジ",
       expect.objectContaining({
-        body: "ローカル通知テストです。表示できれば OS 側の通知機能は正常です。",
+        body: "プッシュ通知テストです。表示できれば OS 側の通知機能は正常です。",
         badge: "/icons/pwa-64x64.png",
         data: {
           slotKind: "local_test",
@@ -314,7 +304,9 @@ describe("AdminInvitesPage", () => {
           url: "/",
         },
         icon: "/icons/pwa-192x192.png",
+        renotify: true,
         tag: expect.stringMatching(/^kaji-challenge-local-test:\d+$/),
+        timestamp: expect.any(Number),
       }),
     );
   });
