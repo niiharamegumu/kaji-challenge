@@ -130,7 +130,7 @@ export function InviteManager({
 
       <article className="rounded-xl border border-stone-200 bg-white/90 p-2.5 shadow-sm md:rounded-2xl md:p-6">
         <h2 className="text-base font-semibold text-stone-900">チーム設定</h2>
-        <div className="mt-3 space-y-3">
+        <div className="mt-3 space-y-6">
           <TeamNameSection
             teamName={teamName}
             teamNameError={teamNameError}
@@ -139,7 +139,7 @@ export function InviteManager({
             onSaveTeamName={onSaveTeamName}
           />
 
-          <div className="border-t border-stone-200 pt-3">
+          <div>
             <TeamMembersSection
               members={members}
               isLeavingTeam={isLeavingTeam}
@@ -147,7 +147,7 @@ export function InviteManager({
             />
           </div>
 
-          <div className="border-t border-stone-200 pt-3">
+          <div>
             <InviteCodeIssueSection
               invite={invite}
               inviteExpired={inviteExpired}
@@ -160,7 +160,7 @@ export function InviteManager({
             />
           </div>
 
-          <div className="border-t border-stone-200 pt-3">
+          <div>
             <JoinTeamSection
               joinCode={joinCode}
               isJoiningTeam={isJoiningTeam}
@@ -175,7 +175,7 @@ export function InviteManager({
         <h2 className="text-base font-semibold text-stone-900">
           アカウント設定
         </h2>
-        <div className="mt-3">
+        <div className="mt-3 space-y-6">
           <AccountSettingsSection
             nickname={nickname}
             colorHex={colorHex}
