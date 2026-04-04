@@ -49,64 +49,130 @@ jobs:
       - name: Configure Docker auth
         run: gcloud auth configure-docker asia-northeast1-docker.pkg.dev --quiet
 
-      - name: Build and push image
+      - name: Set image refs
         run: |
           IMAGE_SHA="asia-northeast1-docker.pkg.dev/${PROJECT_ID}/kaji/kaji-backend:${GITHUB_SHA}"
           IMAGE_LATEST="asia-northeast1-docker.pkg.dev/${PROJECT_ID}/kaji/kaji-backend:latest"
-          docker build -t "$IMAGE_SHA" -t "$IMAGE_LATEST" backend
-          docker push "$IMAGE_SHA"
-          docker push "$IMAGE_LATEST"
           echo "IMAGE_SHA=$IMAGE_SHA" >> $GITHUB_ENV
           echo "IMAGE_LATEST=$IMAGE_LATEST" >> $GITHUB_ENV
 
-      - name: Deploy to Cloud Run
-        run: |
-          gcloud run deploy "$SERVICE" \
-            --image "$IMAGE_SHA" \
-            --region "$REGION" \
-            --platform managed \
-            --allow-unauthenticated
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Update Cloud Run Jobs image
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          push: true
+          tags: |
+            ${{ env.IMAGE_SHA }}
+            ${{ env.IMAGE_LATEST }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Roll out Cloud Run service and jobs
         run: |
           set -euo pipefail
-          for scope in day week month; do
-            JOB_NAME="kaji-backend-close-${scope}"
-            gcloud run jobs update "${JOB_NAME}" \
-              --region "$REGION" \
+          JOB_CONCURRENCY=3
+          jobs_file="$(mktemp)"
+          cleanup() {
+            rm -f "$jobs_file"
+          }
+          trap cleanup EXIT
+
+          cat <<'EOF' > "$jobs_file"
+          close:day:kaji-backend-close-day
+          close:week:kaji-backend-close-week
+          close:month:kaji-backend-close-month
+          notify:daily_2100:kaji-backend-notify-daily-2100
+          notify:weekly_prev_sat_1900:kaji-backend-notify-weekly-prev-sat-1900
+          notify:weekly_due_sun_1000:kaji-backend-notify-weekly-due-sun-1000
+          EOF
+
+          (
+            set -euo pipefail
+            gcloud run deploy "$SERVICE" \
               --image "$IMAGE_SHA" \
-              --command "/app/ops" \
-              --args "close,--scope,${scope},--all-teams"
-          done
-          for item in \
-            "daily_2100:kaji-backend-notify-daily-2100" \
-            "weekly_prev_sat_1900:kaji-backend-notify-weekly-prev-sat-1900" \
-            "weekly_due_sun_1000:kaji-backend-notify-weekly-due-sun-1000"; do
-            IFS=":" read -r SLOT JOB_NAME <<< "${item}"
-            gcloud run jobs update "${JOB_NAME}" \
               --region "$REGION" \
-              --image "$IMAGE_SHA" \
-              --command "/app/ops" \
-              --args "notify,--slot,${SLOT}"
-          done
+              --platform managed \
+              --allow-unauthenticated
+          ) &
+          service_pid=$!
+
+          xargs -a "$jobs_file" -P "$JOB_CONCURRENCY" -I{} bash -c '
+            set -euo pipefail
+            IFS=":" read -r kind arg job_name <<< "$1"
+
+            case "$kind" in
+              close)
+                gcloud run jobs update "$job_name" \
+                  --region "$REGION" \
+                  --image "$IMAGE_SHA" \
+                  --command "/app/ops" \
+                  --args "close,--scope,${arg},--all-teams"
+                ;;
+              notify)
+                gcloud run jobs update "$job_name" \
+                  --region "$REGION" \
+                  --image "$IMAGE_SHA" \
+                  --command "/app/ops" \
+                  --args "notify,--slot,${arg}"
+                ;;
+              *)
+                echo "Unknown rollout kind: $kind" >&2
+                exit 1
+                ;;
+            esac
+          ' _ "{}" &
+          jobs_pid=$!
+
+          service_status=0
+          jobs_status=0
+
+          wait "$service_pid" || service_status=$?
+
+          wait "$jobs_pid" || jobs_status=$?
+
+          if [ "$service_status" -ne 0 ] || [ "$jobs_status" -ne 0 ]; then
+            echo "Rollout failed (service=$service_status jobs=$jobs_status)" >&2
+            exit 1
+          fi
 
       - name: Verify Cloud Run Jobs image
         run: |
           set -euo pipefail
-          for scope in day week month; do
-            JOB_NAME="kaji-backend-close-${scope}"
-            IMAGE=$(gcloud run jobs describe "${JOB_NAME}" \
+          JOB_CONCURRENCY=3
+          jobs_file="$(mktemp)"
+          results_file="$(mktemp)"
+          cleanup() {
+            rm -f "$jobs_file" "$results_file"
+          }
+          trap cleanup EXIT
+
+          cat <<'EOF' > "$jobs_file"
+          kaji-backend-close-day
+          kaji-backend-close-week
+          kaji-backend-close-month
+          kaji-backend-notify-daily-2100
+          kaji-backend-notify-weekly-prev-sat-1900
+          kaji-backend-notify-weekly-due-sun-1000
+          EOF
+
+          xargs -a "$jobs_file" -P "$JOB_CONCURRENCY" -I{} bash -c '
+            set -euo pipefail
+            job_name="$1"
+            image=$(gcloud run jobs describe "$job_name" \
               --region "$REGION" \
-              --format='value(template.template.containers[0].image)')
-            echo "${JOB_NAME}: ${IMAGE}"
-          done
-          for item in \
-            "daily_2100:kaji-backend-notify-daily-2100" \
-            "weekly_prev_sat_1900:kaji-backend-notify-weekly-prev-sat-1900" \
-            "weekly_due_sun_1000:kaji-backend-notify-weekly-due-sun-1000"; do
-            IFS=":" read -r _ JOB_NAME <<< "${item}"
-            IMAGE=$(gcloud run jobs describe "${JOB_NAME}" \
-              --region "$REGION" \
-              --format='value(template.template.containers[0].image)')
-            echo "${JOB_NAME}: ${IMAGE}"
-          done
+              --format="value(template.template.containers[0].image)")
+            printf "%s\t%s\n" "$job_name" "$image"
+          ' _ "{}" | tee "$results_file"
+
+          mismatches=$(
+            awk -F '\t' -v expected="$IMAGE_SHA" '$2 != expected { print $1 ": " $2 }' "$results_file"
+          )
+
+          if [ -n "$mismatches" ]; then
+            echo "Cloud Run Jobs image verification failed:" >&2
+            echo "$mismatches" >&2
+            exit 1
+          fi
