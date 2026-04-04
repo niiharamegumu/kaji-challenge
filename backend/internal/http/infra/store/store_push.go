@@ -420,7 +420,20 @@ func buildPushMessage(slot notifySlot, tasks []pendingPushTask) (string, string)
 	if remaining := len(tasks) - previewLimit; remaining > 0 {
 		parts = append(parts, fmt.Sprintf("ほか%d件", remaining))
 	}
-	return title, strings.Join(parts, "、")
+	body := taskTypeLabelForSlot(slot)
+	if len(parts) > 0 {
+		body = fmt.Sprintf("%s\n%s", body, strings.Join(parts, "、"))
+	}
+	return title, body
+}
+
+func taskTypeLabelForSlot(slot notifySlot) string {
+	switch slot.taskType() {
+	case api.TaskTypeWeekly:
+		return "週間タスク"
+	default:
+		return "日間タスク"
+	}
 }
 
 func (s notifySlot) targetDate(today time.Time, loc *time.Location) time.Time {
