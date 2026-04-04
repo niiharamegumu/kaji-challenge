@@ -53,7 +53,6 @@ type Querier interface {
 	GetMonthlyPenaltySummary(ctx context.Context, arg GetMonthlyPenaltySummaryParams) (MonthlyPenaltySummary, error)
 	GetOldestOtherTeamMember(ctx context.Context, arg GetOldestOtherTeamMemberParams) (string, error)
 	GetPenaltyRuleByID(ctx context.Context, id string) (PenaltyRule, error)
-	GetPushDispatchState(ctx context.Context, arg GetPushDispatchStateParams) (PushDispatchState, error)
 	GetReminderByID(ctx context.Context, id string) (Reminder, error)
 	GetSessionByToken(ctx context.Context, token string) (Session, error)
 	GetShoppingItemByID(ctx context.Context, id string) (ShoppingItem, error)
@@ -117,7 +116,6 @@ type Querier interface {
 	UpdateUserNickname(ctx context.Context, arg UpdateUserNicknameParams) error
 	UpdateUserOIDCByID(ctx context.Context, arg UpdateUserOIDCByIDParams) error
 	UpsertMonthlyPenaltySummary(ctx context.Context, arg UpsertMonthlyPenaltySummaryParams) error
-	UpsertPushDispatchState(ctx context.Context, arg UpsertPushDispatchStateParams) error
 	UpsertPushSubscription(ctx context.Context, arg UpsertPushSubscriptionParams) (UpsertPushSubscriptionRow, error)
 }
 

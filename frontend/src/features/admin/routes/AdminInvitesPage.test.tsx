@@ -307,9 +307,14 @@ describe("AdminInvitesPage", () => {
       "家事チャレンジ",
       expect.objectContaining({
         body: "ローカル通知テストです。表示できれば OS 側の通知機能は正常です。",
-        renotify: true,
+        badge: "/icons/pwa-64x64.png",
+        data: {
+          slotKind: "local_test",
+          teamId: "",
+          url: "/",
+        },
+        icon: "/icons/pwa-192x192.png",
         tag: expect.stringMatching(/^kaji-challenge-local-test:\d+$/),
-        timestamp: expect.any(Number),
       }),
     );
   });

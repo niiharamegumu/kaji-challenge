@@ -54,39 +54,6 @@ func (q *Queries) DeactivatePushSubscriptionByIDAndUser(ctx context.Context, arg
 	return result.RowsAffected(), nil
 }
 
-const getPushDispatchState = `-- name: GetPushDispatchState :one
-SELECT team_id,
-       slot_kind,
-       slot_date,
-       fingerprint,
-       sent_at,
-       updated_at
-FROM push_dispatch_state
-WHERE team_id = $1
-  AND slot_kind = $2
-  AND slot_date = $3
-`
-
-type GetPushDispatchStateParams struct {
-	TeamID   string      `json:"team_id"`
-	SlotKind string      `json:"slot_kind"`
-	SlotDate pgtype.Date `json:"slot_date"`
-}
-
-func (q *Queries) GetPushDispatchState(ctx context.Context, arg GetPushDispatchStateParams) (PushDispatchState, error) {
-	row := q.db.QueryRow(ctx, getPushDispatchState, arg.TeamID, arg.SlotKind, arg.SlotDate)
-	var i PushDispatchState
-	err := row.Scan(
-		&i.TeamID,
-		&i.SlotKind,
-		&i.SlotDate,
-		&i.Fingerprint,
-		&i.SentAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
 const listActivePushSubscriptionsByTeamID = `-- name: ListActivePushSubscriptionsByTeamID :many
 SELECT id,
        team_id,
@@ -247,43 +214,6 @@ func (q *Queries) ListTeamIDsForPush(ctx context.Context) ([]string, error) {
 	return items, nil
 }
 
-const upsertPushDispatchState = `-- name: UpsertPushDispatchState :exec
-INSERT INTO push_dispatch_state (
-  team_id,
-  slot_kind,
-  slot_date,
-  fingerprint,
-  sent_at,
-  updated_at
-)
-VALUES ($1, $2, $3, $4, $5, $6)
-ON CONFLICT (team_id, slot_kind, slot_date) DO UPDATE
-SET fingerprint = EXCLUDED.fingerprint,
-    sent_at = EXCLUDED.sent_at,
-    updated_at = EXCLUDED.updated_at
-`
-
-type UpsertPushDispatchStateParams struct {
-	TeamID      string             `json:"team_id"`
-	SlotKind    string             `json:"slot_kind"`
-	SlotDate    pgtype.Date        `json:"slot_date"`
-	Fingerprint string             `json:"fingerprint"`
-	SentAt      pgtype.Timestamptz `json:"sent_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-}
-
-func (q *Queries) UpsertPushDispatchState(ctx context.Context, arg UpsertPushDispatchStateParams) error {
-	_, err := q.db.Exec(ctx, upsertPushDispatchState,
-		arg.TeamID,
-		arg.SlotKind,
-		arg.SlotDate,
-		arg.Fingerprint,
-		arg.SentAt,
-		arg.UpdatedAt,
-	)
-	return err
-}
-
 const upsertPushSubscription = `-- name: UpsertPushSubscription :one
 INSERT INTO push_subscriptions (
   id,
@@ -300,9 +230,8 @@ INSERT INTO push_subscriptions (
   updated_at
 )
 VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, ''), $8, TRUE, $9, $10, $11)
-ON CONFLICT (endpoint) DO UPDATE
-SET team_id = EXCLUDED.team_id,
-    user_id = EXCLUDED.user_id,
+ON CONFLICT (team_id, user_id) DO UPDATE
+SET endpoint = EXCLUDED.endpoint,
     p256dh = EXCLUDED.p256dh,
     auth = EXCLUDED.auth,
     user_agent = EXCLUDED.user_agent,

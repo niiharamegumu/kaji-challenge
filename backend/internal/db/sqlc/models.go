@@ -64,15 +64,6 @@ type PenaltyRule struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
-type PushDispatchState struct {
-	TeamID      string             `json:"team_id"`
-	SlotKind    string             `json:"slot_kind"`
-	SlotDate    pgtype.Date        `json:"slot_date"`
-	Fingerprint string             `json:"fingerprint"`
-	SentAt      pgtype.Timestamptz `json:"sent_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-}
-
 type PushSubscription struct {
 	ID         string             `json:"id"`
 	TeamID     string             `json:"team_id"`

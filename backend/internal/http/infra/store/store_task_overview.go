@@ -22,7 +22,7 @@ func (s *Store) GetTaskOverview(ctx context.Context, userID string) (resp api.Ta
 		s.logSQLPerformance("get_task_overview", startedAt, queryCount, fmt.Sprintf("team_id=%s task_count=%d error=%t", teamID, taskCount, err != nil))
 	}()
 
-	now := time.Now().In(s.loc)
+	now := s.now()
 	today := dateOnly(now, s.loc)
 	weekStart := startOfWeek(today, s.loc)
 	weekEnd := weekStart.AddDate(0, 0, 6)

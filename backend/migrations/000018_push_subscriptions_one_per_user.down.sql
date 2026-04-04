@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS idx_push_subscriptions_team_user_unique;

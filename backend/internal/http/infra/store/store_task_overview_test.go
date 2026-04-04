@@ -14,7 +14,8 @@ func TestGetTaskOverviewWeeklyRemindersSortsByDateThenCreatedAt(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 
-	now := time.Now().In(s.loc)
+	now := time.Date(2026, 4, 2, 9, 0, 0, 0, s.loc)
+	s.now = func() time.Time { return now }
 	today := dateOnly(now, s.loc)
 	teamID, userID := createTeamWithMember(t, s, "overview-reminders-sort@example.com", today.Add(9*time.Hour))
 
