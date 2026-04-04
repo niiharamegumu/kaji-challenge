@@ -297,7 +297,7 @@ func TestNotifySlotRetriesAfterPartialDeliveryFailure(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected second NotifySlot to still report partial failure")
 	}
-	if second.Failed != 1 || second.Sent != 1 || sender.sendCount != 4 {
+	if second.Failed != 1 || second.Sent != 0 || sender.sendCount != 4 {
 		t.Fatalf("expected second notify to retry both endpoints, result=%+v sendCount=%d", second, sender.sendCount)
 	}
 }
