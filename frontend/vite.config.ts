@@ -12,6 +12,9 @@ export default defineConfig({
     }),
     tailwindcss(),
     VitePWA({
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "sw.ts",
       registerType: "prompt",
       injectRegister: false,
       includeAssets: [
@@ -20,24 +23,6 @@ export default defineConfig({
         "icons/apple-touch-icon-180x180.png",
       ],
       manifest: false,
-      workbox: {
-        navigateFallback: "/index.html",
-        navigateFallbackDenylist: [/^\/api\//],
-        runtimeCaching: [
-          {
-            urlPattern:
-              /^https?:\/\/[^/]+\/(?:assets|icons)\/.*\.(?:js|mjs|css|woff2?|ico|png|svg|webp)$/i,
-            handler: "StaleWhileRevalidate",
-            options: {
-              cacheName: "static-assets-v1",
-              expiration: {
-                maxEntries: 128,
-                maxAgeSeconds: 60 * 60 * 24 * 7,
-              },
-            },
-          },
-        ],
-      },
       devOptions: {
         enabled: false,
       },
