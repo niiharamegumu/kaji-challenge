@@ -163,7 +163,7 @@ jobs:
             job_name="$1"
             image=$(gcloud run jobs describe "$job_name" \
               --region "$REGION" \
-              --format="value(template.template.containers[0].image)")
+              --format export | awk '"'"'$1 == "image:" { print $2; exit }'"'"')
             printf "%s\t%s\n" "$job_name" "$image"
           ' _ "{}" | tee "$results_file"
 
