@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	dbsqlc "github.com/megu/kaji-challenge/backend/internal/db/sqlc"
 	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 	pushsvc "github.com/megu/kaji-challenge/backend/internal/push"
@@ -42,7 +41,6 @@ type preparedPushDispatch struct {
 	teamID        string
 	slotKind      notifySlot
 	slotDate      time.Time
-	fingerprint   string
 	payload       pushsvc.Payload
 	subscriptions []dbsqlc.ListActivePushSubscriptionsByTeamIDRow
 }
@@ -180,35 +178,14 @@ func (s *Store) NotifySlot(ctx context.Context, rawSlot string, sender pushsvc.S
 
 func (s *Store) notifySlotForTeam(ctx context.Context, teamID string, slot notifySlot, now time.Time, sender pushsvc.Sender) (bool, bool, error) {
 	slotDate := slot.targetDate(dateOnly(now, s.loc), s.loc)
-	tx, err := s.db.Begin(ctx)
-	if err != nil {
-		return false, false, err
-	}
-	defer func() {
-		_ = tx.Rollback(ctx)
-	}()
-
-	if err := acquirePushDispatchLock(ctx, tx, teamID, slot, slotDate); err != nil {
-		return false, false, err
-	}
-
-	qtx := s.q.WithTx(tx)
-	txCtx := withTxQueries(ctx, qtx)
-	dispatch, skip, err := s.preparePushDispatchAt(txCtx, teamID, slot, now, slotDate)
+	dispatch, skip, err := s.preparePushDispatchAt(ctx, teamID, slot, now, slotDate)
 	if err != nil {
 		return false, false, err
 	}
 	if skip {
 		return false, true, nil
 	}
-
-	persisted, err := s.executePushDispatch(txCtx, dispatch, sender, now)
-	if err != nil && !persisted {
-		return false, false, err
-	}
-	if commitErr := tx.Commit(ctx); commitErr != nil {
-		return false, false, commitErr
-	}
+	err = s.executePushDispatch(ctx, dispatch, sender, now)
 	if err != nil {
 		return false, false, err
 	}
@@ -223,18 +200,6 @@ func (s *Store) preparePushDispatchAt(ctx context.Context, teamID string, slot n
 	if len(tasks) == 0 {
 		return preparedPushDispatch{}, true, nil
 	}
-	fingerprint := fingerprintForPendingTasks(slot, slotDate, tasks)
-	state, err := s.queries(ctx).GetPushDispatchState(ctx, dbsqlc.GetPushDispatchStateParams{
-		TeamID:   teamID,
-		SlotKind: string(slot),
-		SlotDate: toPgDate(slotDate),
-	})
-	if err == nil && state.Fingerprint == fingerprint {
-		return preparedPushDispatch{}, true, nil
-	}
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return preparedPushDispatch{}, false, err
-	}
 	subscriptions, err := s.queries(ctx).ListActivePushSubscriptionsByTeamID(ctx, teamID)
 	if err != nil {
 		return preparedPushDispatch{}, false, err
@@ -247,7 +212,6 @@ func (s *Store) preparePushDispatchAt(ctx context.Context, teamID string, slot n
 		teamID:      teamID,
 		slotKind:    slot,
 		slotDate:    slotDate,
-		fingerprint: fingerprint,
 		payload: pushsvc.Payload{
 			Title:    title,
 			Body:     body,
@@ -260,7 +224,7 @@ func (s *Store) preparePushDispatchAt(ctx context.Context, teamID string, slot n
 	}, false, nil
 }
 
-func (s *Store) executePushDispatch(ctx context.Context, dispatch preparedPushDispatch, sender pushsvc.Sender, sentAt time.Time) (bool, error) {
+func (s *Store) executePushDispatch(ctx context.Context, dispatch preparedPushDispatch, sender pushsvc.Sender, sentAt time.Time) error {
 	q := s.queries(ctx)
 	var deliveryErr error
 	successCount := 0
@@ -278,7 +242,7 @@ func (s *Store) executePushDispatch(ctx context.Context, dispatch preparedPushDi
 				Endpoint:  sub.Endpoint,
 				UpdatedAt: toPgTimestamptz(sentAt),
 			}); deactivateErr != nil {
-				return false, deactivateErr
+				return deactivateErr
 			}
 			continue
 		}
@@ -289,19 +253,9 @@ func (s *Store) executePushDispatch(ctx context.Context, dispatch preparedPushDi
 		successCount++
 	}
 	if deliveryErr != nil && successCount == 0 && expiredCount == 0 {
-		return false, deliveryErr
+		return deliveryErr
 	}
-	if err := q.UpsertPushDispatchState(ctx, dbsqlc.UpsertPushDispatchStateParams{
-		TeamID:      dispatch.teamID,
-		SlotKind:    string(dispatch.slotKind),
-		SlotDate:    toPgDate(dispatch.slotDate),
-		Fingerprint: dispatch.fingerprint,
-		SentAt:      toPgTimestamptz(sentAt),
-		UpdatedAt:   toPgTimestamptz(sentAt),
-	}); err != nil {
-		return false, err
-	}
-	return true, deliveryErr
+	return deliveryErr
 }
 
 func logPushDispatchAttempt(dispatch preparedPushDispatch, endpoint string, result pushsvc.Result, err error) {
@@ -469,23 +423,6 @@ func buildPushMessage(slot notifySlot, tasks []pendingPushTask) (string, string)
 	return title, strings.Join(parts, "、")
 }
 
-func fingerprintForPendingTasks(slot notifySlot, slotDate time.Time, tasks []pendingPushTask) string {
-	var b strings.Builder
-	b.WriteString(string(slot))
-	b.WriteString("|")
-	b.WriteString(slotDate.Format("2006-01-02"))
-	for _, task := range tasks {
-		b.WriteString("|")
-		b.WriteString(task.ID)
-		b.WriteString(":")
-		b.WriteString(task.Title)
-		b.WriteString(":")
-		b.WriteString(fmt.Sprintf("%d", task.Remaining))
-	}
-	sum := sha256.Sum256([]byte(b.String()))
-	return hex.EncodeToString(sum[:])
-}
-
 func (s notifySlot) targetDate(today time.Time, loc *time.Location) time.Time {
 	switch s {
 	case notifySlotDaily2100:
@@ -552,13 +489,3 @@ func stringPtrOrNil(value string) *string {
 }
 
 var notifyPlatformIOSSafariPWA = string(api.IosSafariPwa)
-
-func acquirePushDispatchLock(ctx context.Context, tx pgx.Tx, teamID string, slot notifySlot, slotDate time.Time) error {
-	_, err := tx.Exec(
-		ctx,
-		"SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))",
-		teamID,
-		fmt.Sprintf("%s:%s", slot, slotDate.Format("2006-01-02")),
-	)
-	return err
-}

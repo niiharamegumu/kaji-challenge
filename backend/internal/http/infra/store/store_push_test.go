@@ -85,7 +85,7 @@ func TestPushSubscriptionLifecycle(t *testing.T) {
 	}
 }
 
-func TestNotifySlotSkipsWhenFingerprintUnchanged(t *testing.T) {
+func TestNotifySlotSendsAgainWhenReExecuted(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 	now := time.Date(2026, 4, 3, 21, 0, 0, 0, s.loc)
@@ -124,8 +124,60 @@ func TestNotifySlotSkipsWhenFingerprintUnchanged(t *testing.T) {
 	if err != nil {
 		t.Fatalf("second NotifySlot failed: %v", err)
 	}
-	if second.Skipped != 1 || sender.sendCount != 1 {
-		t.Fatalf("expected duplicate notify to be skipped, result=%+v sendCount=%d", second, sender.sendCount)
+	if second.Sent != 1 || second.Skipped != 0 || sender.sendCount != 2 {
+		t.Fatalf("expected duplicate notify to send again, result=%+v sendCount=%d", second, sender.sendCount)
+	}
+}
+
+func TestPushSubscriptionKeepsOnlyLatestEndpointPerUser(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	teamID, userID := createTeamWithMember(t, s, "push-latest-only@example.com", time.Date(2026, 4, 1, 9, 0, 0, 0, s.loc))
+
+	first, err := s.UpsertPushSubscription(ctx, userID, api.UpsertPushSubscriptionRequest{
+		Endpoint: "https://example.com/push/old",
+		Keys: api.PushSubscriptionKeys{
+			P256dh: "key-old",
+			Auth:   "auth-old",
+		},
+		Platform: api.PushPlatform(notifyPlatformIOSSafariPWA),
+	})
+	if err != nil {
+		t.Fatalf("first UpsertPushSubscription failed: %v", err)
+	}
+
+	second, err := s.UpsertPushSubscription(ctx, userID, api.UpsertPushSubscriptionRequest{
+		Endpoint: "https://example.com/push/new",
+		Keys: api.PushSubscriptionKeys{
+			P256dh: "key-new",
+			Auth:   "auth-new",
+		},
+		Platform: api.PushPlatform(notifyPlatformIOSSafariPWA),
+	})
+	if err != nil {
+		t.Fatalf("second UpsertPushSubscription failed: %v", err)
+	}
+	if first.Id != second.Id {
+		t.Fatalf("expected subscription id to be reused, got first=%s second=%s", first.Id, second.Id)
+	}
+
+	list, err := s.ListPushSubscriptions(ctx, userID)
+	if err != nil {
+		t.Fatalf("ListPushSubscriptions failed: %v", err)
+	}
+	if len(list.Items) != 1 {
+		t.Fatalf("expected exactly one subscription row, got %#v", list.Items)
+	}
+	if list.Items[0].Endpoint != "https://example.com/push/new" || !list.Items[0].IsActive {
+		t.Fatalf("expected latest endpoint to remain active, got %#v", list.Items[0])
+	}
+
+	active, err := s.queries(ctx).ListActivePushSubscriptionsByTeamID(ctx, teamID)
+	if err != nil {
+		t.Fatalf("ListActivePushSubscriptionsByTeamID failed: %v", err)
+	}
+	if len(active) != 1 || active[0].Endpoint != "https://example.com/push/new" {
+		t.Fatalf("expected one active latest endpoint, got %#v", active)
 	}
 }
 
@@ -172,7 +224,7 @@ func TestNotifySlotDeactivatesExpiredEndpoint(t *testing.T) {
 	}
 }
 
-func TestNotifySlotSkipsResendAfterPartialDeliveryFailure(t *testing.T) {
+func TestNotifySlotRetriesAfterPartialDeliveryFailure(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 	now := time.Date(2026, 4, 3, 21, 0, 0, 0, s.loc)
@@ -216,11 +268,73 @@ func TestNotifySlotSkipsResendAfterPartialDeliveryFailure(t *testing.T) {
 	}
 
 	second, err := s.NotifySlot(ctx, string(notifySlotDaily2100), sender)
+	if err == nil {
+		t.Fatalf("expected second NotifySlot to still report partial failure")
+	}
+	if second.Failed != 1 || second.Sent != 1 || sender.sendCount != 4 {
+		t.Fatalf("expected second notify to retry both endpoints, result=%+v sendCount=%d", second, sender.sendCount)
+	}
+}
+
+func TestNotifySlotUsesLatestSubscriptionAfterRefresh(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	now := time.Date(2026, 4, 3, 21, 0, 0, 0, s.loc)
+	s.now = func() time.Time { return now }
+
+	teamID, userID := createTeamWithMember(t, s, "push-refresh@example.com", now.Add(-24*time.Hour))
+	createTaskWithIDAt(t, s, teamID, api.TaskTypeDaily, 3, 1, now.Add(-24*time.Hour))
+
+	_, err := s.UpsertPushSubscription(ctx, userID, api.UpsertPushSubscriptionRequest{
+		Endpoint: "https://example.com/push/original",
+		Keys: api.PushSubscriptionKeys{
+			P256dh: "key-original",
+			Auth:   "auth-original",
+		},
+		Platform: api.PushPlatform(notifyPlatformIOSSafariPWA),
+	})
+	if err != nil {
+		t.Fatalf("UpsertPushSubscription original failed: %v", err)
+	}
+
+	sender := &fakePushSender{
+		results: map[string]pushsvc.Result{
+			"https://example.com/push/original": {StatusCode: 201},
+			"https://example.com/push/refreshed": {StatusCode: 201},
+		},
+		errors: map[string]error{},
+	}
+
+	first, err := s.NotifySlot(ctx, string(notifySlotDaily2100), sender)
+	if err != nil {
+		t.Fatalf("first NotifySlot failed: %v", err)
+	}
+	if first.Sent != 1 || sender.sendCount != 1 {
+		t.Fatalf("expected first notify to send once, result=%+v sendCount=%d", first, sender.sendCount)
+	}
+
+	s.now = func() time.Time { return now.Add(time.Minute) }
+	_, err = s.UpsertPushSubscription(ctx, userID, api.UpsertPushSubscriptionRequest{
+		Endpoint: "https://example.com/push/refreshed",
+		Keys: api.PushSubscriptionKeys{
+			P256dh: "key-refreshed",
+			Auth:   "auth-refreshed",
+		},
+		Platform: api.PushPlatform(notifyPlatformIOSSafariPWA),
+	})
+	if err != nil {
+		t.Fatalf("UpsertPushSubscription refreshed failed: %v", err)
+	}
+
+	second, err := s.NotifySlot(ctx, string(notifySlotDaily2100), sender)
 	if err != nil {
 		t.Fatalf("second NotifySlot failed: %v", err)
 	}
-	if second.Skipped != 1 || sender.sendCount != 2 {
-		t.Fatalf("expected second notify to be skipped, result=%+v sendCount=%d", second, sender.sendCount)
+	if second.Sent != 1 || second.Skipped != 0 || sender.sendCount != 2 {
+		t.Fatalf("expected notify after refresh to resend, result=%+v sendCount=%d", second, sender.sendCount)
+	}
+	if last := sender.payloads[len(sender.payloads)-1]; last.Title == "" {
+		t.Fatalf("expected payload on resend, got empty title")
 	}
 }
 
