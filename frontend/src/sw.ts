@@ -1,4 +1,43 @@
+/// <reference lib="webworker" />
+
+import { ExpirationPlugin } from "workbox-expiration";
+import {
+  cleanupOutdatedCaches,
+  createHandlerBoundToURL,
+  precacheAndRoute,
+} from "workbox-precaching";
+import { NavigationRoute, registerRoute } from "workbox-routing";
+import { StaleWhileRevalidate } from "workbox-strategies";
+
+declare let self: ServiceWorkerGlobalScope & {
+  __WB_MANIFEST: Array<unknown>;
+  SW_VERSION: string;
+};
+
 self.SW_VERSION = "2026-04-04-sw-inspector-debug";
+
+precacheAndRoute(self.__WB_MANIFEST);
+cleanupOutdatedCaches();
+
+registerRoute(
+  new NavigationRoute(createHandlerBoundToURL("/index.html"), {
+    denylist: [/^\/api\//],
+  }),
+);
+
+registerRoute(
+  /^https?:\/\/[^/]+\/(?:assets|icons)\/.*\.(?:js|mjs|css|woff2?|ico|png|svg|webp)$/i,
+  new StaleWhileRevalidate({
+    cacheName: "static-assets-v1",
+    plugins: [
+      new ExpirationPlugin({
+        maxEntries: 128,
+        maxAgeSeconds: 60 * 60 * 24 * 7,
+      }),
+    ],
+  }),
+  "GET",
+);
 
 self.addEventListener("install", () => {
   console.log("[sw] install", { version: self.SW_VERSION });
@@ -28,7 +67,11 @@ self.addEventListener("message", (event) => {
   }
 });
 
-async function broadcastDebugLog(level, eventName, details) {
+async function broadcastDebugLog(
+  level: "info" | "warn" | "error",
+  eventName: string,
+  details: Record<string, unknown>,
+) {
   const clients = await self.clients.matchAll({
     type: "window",
     includeUncontrolled: true,
@@ -44,7 +87,7 @@ async function broadcastDebugLog(level, eventName, details) {
   }
 }
 
-async function readPushPayload(event) {
+async function readPushPayload(event: PushEvent) {
   let rawText = "";
   if (event.data != null && typeof event.data.text === "function") {
     try {
@@ -54,12 +97,12 @@ async function readPushPayload(event) {
     }
   }
 
-  let payload = {};
+  let payload: Record<string, unknown> = {};
   if (rawText !== "") {
     try {
       const parsed = JSON.parse(rawText);
       if (parsed != null && typeof parsed === "object") {
-        payload = parsed;
+        payload = parsed as Record<string, unknown>;
       }
     } catch {
       payload = {};
@@ -69,7 +112,7 @@ async function readPushPayload(event) {
   return { payload, rawText };
 }
 
-async function handlePush(event) {
+async function handlePush(event: PushEvent) {
   console.log("[sw] push event listener invoked", {
     version: self.SW_VERSION,
     hasEventData: event.data != null,
@@ -110,7 +153,10 @@ async function handlePush(event) {
       ? payload.tag
       : "kaji-challenge-remote";
   const tag = `${tagBase}:${debugReceivedAt}`;
-  const url = payload.url ?? "/";
+  const url =
+    typeof payload.url === "string" && payload.url.trim() !== ""
+      ? payload.url
+      : "/";
 
   console.log("[sw] showNotification start", {
     version: self.SW_VERSION,
@@ -127,13 +173,16 @@ async function handlePush(event) {
   });
 
   try {
-    await self.registration.showNotification(title, {
+    const notificationOptions: NotificationOptions & {
+      renotify?: boolean;
+      timestamp?: number;
+    } = {
       body,
       tag,
       renotify: true,
       data: {
-        teamId: payload.teamId ?? "",
-        slotKind: payload.slotKind ?? "",
+        teamId: typeof payload.teamId === "string" ? payload.teamId : "",
+        slotKind: typeof payload.slotKind === "string" ? payload.slotKind : "",
         url,
         debugRawText: rawText,
         debugReceivedAt,
@@ -142,7 +191,8 @@ async function handlePush(event) {
       icon: "/icons/pwa-192x192.png",
       badge: "/icons/pwa-64x64.png",
       timestamp: Date.now(),
-    });
+    };
+    await self.registration.showNotification(title, notificationOptions);
     console.log("[sw] showNotification success", {
       version: self.SW_VERSION,
       tag,
@@ -192,7 +242,9 @@ self.addEventListener("notificationclick", (event) => {
   let targetUrl = self.location.origin;
   try {
     targetUrl = new URL(
-      event.notification.data?.url ?? "/",
+      typeof event.notification.data?.url === "string"
+        ? event.notification.data.url
+        : "/",
       self.location.origin,
     ).toString();
   } catch {
