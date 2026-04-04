@@ -82,43 +82,6 @@ export function usePushNotifications(setStatus: StatusSetter) {
     };
   }, []);
 
-  useEffect(() => {
-    if (
-      !("serviceWorker" in navigator) ||
-      typeof navigator.serviceWorker.addEventListener !== "function" ||
-      typeof navigator.serviceWorker.removeEventListener !== "function"
-    ) {
-      return;
-    }
-
-    const handleMessage = (event: MessageEvent) => {
-      const data = event.data;
-      if (data?.type === "SW_DEBUG_LOG") {
-        const logger =
-          data.level === "error"
-            ? console.error
-            : data.level === "warn"
-              ? console.warn
-              : console.log;
-        logger("[push-debug] sw", {
-          eventName: data.eventName ?? null,
-          version: data.version ?? null,
-          details: data.details ?? null,
-        });
-      }
-      if (data?.type === "SW_VERSION") {
-        console.log("[push-debug] sw version", {
-          version: data.version ?? null,
-        });
-      }
-    };
-
-    navigator.serviceWorker.addEventListener("message", handleMessage);
-    return () => {
-      navigator.serviceWorker.removeEventListener("message", handleMessage);
-    };
-  }, []);
-
   const enableCurrentDevice = useCallback(async () => {
     if (!isPushSupported()) {
       setStatus("この端末では Web Push を利用できません。");
@@ -132,7 +95,7 @@ export function usePushNotifications(setStatus: StatusSetter) {
     }
     const vapidPublicKey = subscriptionsQuery.data?.vapidPublicKey.trim() ?? "";
     if (vapidPublicKey === "") {
-      setStatus("通知設定がまだ有効化されていません。");
+      setStatus("プッシュ通知設定がまだ有効化されていません。");
       return;
     }
 
@@ -171,7 +134,7 @@ export function usePushNotifications(setStatus: StatusSetter) {
       userAgent: navigator.userAgent,
     });
     setDeviceEndpoint(serialized.endpoint);
-    setStatus("この端末の通知をオンにしました。");
+    setStatus("この端末のプッシュ通知をオンにしました。");
   }, [setStatus, subscriptionsQuery.data, upsertMutation]);
 
   const disableCurrentDevice = useCallback(async () => {
@@ -191,7 +154,7 @@ export function usePushNotifications(setStatus: StatusSetter) {
       await subscription.unsubscribe();
     }
     setDeviceEndpoint(null);
-    setStatus("この端末の通知をオフにしました。");
+    setStatus("この端末のプッシュ通知をオフにしました。");
   }, [
     deleteMutation,
     deviceEndpoint,
@@ -200,11 +163,6 @@ export function usePushNotifications(setStatus: StatusSetter) {
   ]);
 
   const sendLocalTestNotification = useCallback(async () => {
-    console.log("[push-debug] local test clicked", {
-      isSupported: isPushSupported(),
-      isStandalone: isStandalonePWA(),
-      permission: Notification.permission,
-    });
     if (!isPushSupported()) {
       setStatus("この端末では Web Push を利用できません。");
       return;
@@ -216,52 +174,33 @@ export function usePushNotifications(setStatus: StatusSetter) {
       return;
     }
     if (Notification.permission !== "granted") {
-      setStatus("通知許可がまだ有効ではありません。");
+      setStatus("プッシュ通知の許可がまだ有効ではありません。");
       return;
     }
     const registration = await getPWARegistration();
     if (registration == null) {
-      console.error("[push-debug] local test registration missing");
       setStatus("Service Worker の準備がまだ完了していません。");
       return;
     }
-    console.log("[push-debug] local test registration ready", {
-      scope: registration.scope,
-      hasActive: registration.active != null,
-      hasWaiting: registration.waiting != null,
-      hasInstalling: registration.installing != null,
-    });
-    registration.active?.postMessage({ type: "GET_SW_VERSION" });
-    try {
-      const tag = `kaji-challenge-local-test:${Date.now()}`;
-      await registration.showNotification("家事チャレンジ", {
-        body: "ローカル通知テストです。表示できれば OS 側の通知機能は正常です。",
-        tag,
-        data: {
-          teamId: "",
-          slotKind: "local_test",
-          url: "/",
-        },
-        icon: "/icons/pwa-192x192.png",
-        badge: "/icons/pwa-64x64.png",
-      });
-      console.log("[push-debug] local test showNotification success", { tag });
-      if (typeof registration.getNotifications === "function") {
-        const notifications = await registration.getNotifications();
-        console.log("[push-debug] local test notifications snapshot", {
-          count: notifications.length,
-          currentTagPresent: notifications.some(
-            (notification) => notification.tag === tag,
-          ),
-          tags: notifications.map((notification) => notification.tag),
-          titles: notifications.map((notification) => notification.title),
-        });
-      }
-    } catch (error) {
-      console.error("[push-debug] local test showNotification failed", error);
-      throw error;
-    }
-    setStatus("ローカル通知テストを送信しました。");
+    const tag = `kaji-challenge-local-test:${Date.now()}`;
+    const notificationOptions: NotificationOptions & {
+      renotify?: boolean;
+      timestamp?: number;
+    } = {
+      body: "プッシュ通知テストです。表示できれば OS 側の通知機能は正常です。",
+      tag,
+      renotify: true,
+      data: {
+        teamId: "",
+        slotKind: "local_test",
+        url: "/",
+      },
+      icon: "/icons/pwa-192x192.png",
+      badge: "/icons/pwa-64x64.png",
+      timestamp: Date.now(),
+    };
+    await registration.showNotification("家事チャレンジ", notificationOptions);
+    setStatus("プッシュ通知テストを送信しました。");
   }, [setStatus]);
 
   const activeCount = useMemo(
@@ -297,21 +236,21 @@ export function usePushNotifications(setStatus: StatusSetter) {
       try {
         await enableCurrentDevice();
       } catch (error) {
-        setStatus(`通知有効化に失敗しました: ${formatError(error)}`);
+        setStatus(`プッシュ通知の有効化に失敗しました: ${formatError(error)}`);
       }
     },
     disableCurrentDevice: async () => {
       try {
         await disableCurrentDevice();
       } catch (error) {
-        setStatus(`通知解除に失敗しました: ${formatError(error)}`);
+        setStatus(`プッシュ通知の解除に失敗しました: ${formatError(error)}`);
       }
     },
     sendLocalTestNotification: async () => {
       try {
         await sendLocalTestNotification();
       } catch (error) {
-        setStatus(`ローカル通知テストに失敗しました: ${formatError(error)}`);
+        setStatus(`プッシュ通知テストに失敗しました: ${formatError(error)}`);
       }
     },
   };
