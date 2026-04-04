@@ -1,0 +1,9 @@
+tmp/
+**/*_test.go
+.air.toml
+.golangci.yml
+Dockerfile.dev
+cmd/govulncheck-critical/
+cmd/seeder/
+cmd/vapid/
+security/
