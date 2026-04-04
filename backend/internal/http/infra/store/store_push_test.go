@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	dbsqlc "github.com/megu/kaji-challenge/backend/internal/db/sqlc"
 	pushsvc "github.com/megu/kaji-challenge/backend/internal/push"
 	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 )
@@ -230,24 +231,49 @@ func TestNotifySlotRetriesAfterPartialDeliveryFailure(t *testing.T) {
 	now := time.Date(2026, 4, 3, 21, 0, 0, 0, s.loc)
 	s.now = func() time.Time { return now }
 
-	teamID, userID := createTeamWithMember(t, s, "push-partial@example.com", now.Add(-24*time.Hour))
+	teamID, userID := createTeamWithMember(t, s, "push-partial-a@example.com", now.Add(-24*time.Hour))
 	createTaskWithIDAt(t, s, teamID, api.TaskTypeDaily, 3, 1, now.Add(-24*time.Hour))
 
-	for _, endpoint := range []string{
-		"https://example.com/push/success",
-		"https://example.com/push/fail",
-	} {
-		_, err := s.UpsertPushSubscription(ctx, userID, api.UpsertPushSubscriptionRequest{
-			Endpoint: endpoint,
-			Keys: api.PushSubscriptionKeys{
-				P256dh: "key-" + endpoint,
-				Auth:   "auth-" + endpoint,
-			},
-			Platform: api.PushPlatform(notifyPlatformIOSSafariPWA),
-		})
-		if err != nil {
-			t.Fatalf("UpsertPushSubscription failed: %v", err)
-		}
+	successUserID := userID
+	failUserID := s.nextID("user")
+	if err := s.q.CreateUser(ctx, dbsqlc.CreateUserParams{
+		ID:          failUserID,
+		Email:       "push-partial-b@example.com",
+		DisplayName: "Tester B",
+		CreatedAt:   toPgTimestamptz(now.Add(-24 * time.Hour)),
+	}); err != nil {
+		t.Fatalf("failed to create second user: %v", err)
+	}
+	if err := s.q.AddTeamMember(ctx, dbsqlc.AddTeamMemberParams{
+		TeamID:    teamID,
+		UserID:    failUserID,
+		Role:      string(api.TeamMembershipRoleMember),
+		CreatedAt: toPgTimestamptz(now.Add(-24 * time.Hour)),
+	}); err != nil {
+		t.Fatalf("failed to add second team member: %v", err)
+	}
+
+	_, err := s.UpsertPushSubscription(ctx, successUserID, api.UpsertPushSubscriptionRequest{
+		Endpoint: "https://example.com/push/success",
+		Keys: api.PushSubscriptionKeys{
+			P256dh: "key-success",
+			Auth:   "auth-success",
+		},
+		Platform: api.PushPlatform(notifyPlatformIOSSafariPWA),
+	})
+	if err != nil {
+		t.Fatalf("UpsertPushSubscription success failed: %v", err)
+	}
+	_, err = s.UpsertPushSubscription(ctx, failUserID, api.UpsertPushSubscriptionRequest{
+		Endpoint: "https://example.com/push/fail",
+		Keys: api.PushSubscriptionKeys{
+			P256dh: "key-fail",
+			Auth:   "auth-fail",
+		},
+		Platform: api.PushPlatform(notifyPlatformIOSSafariPWA),
+	})
+	if err != nil {
+		t.Fatalf("UpsertPushSubscription fail failed: %v", err)
 	}
 
 	sender := &fakePushSender{
