@@ -35,6 +35,7 @@ import {
   ReminderKind as ReminderKindConst,
   ReminderScheduleType as ReminderScheduleTypeConst,
 } from "../../../lib/api/generated/client";
+import { FooterQuickAction } from "../../../shared/components/FooterQuickAction";
 import { FormSheet } from "../../../shared/components/FormSheet";
 import { ConfirmModal } from "../../admin/components/ConfirmModal";
 import { statusMessageAtom } from "../../shell/state/status";
@@ -134,8 +135,6 @@ function ReminderSheet({
     return null;
   }
 
-  const isRecurring = form.kind === ReminderKindConst.recurring;
-
   return (
     <FormSheet
       isOpen={isOpen}
@@ -157,98 +156,106 @@ function ReminderSheet({
         ) : null
       }
     >
-      <div className="grid gap-3">
+      <ReminderFormFields form={form} onChange={onChange} />
+    </FormSheet>
+  );
+}
+
+function ReminderFormFields({
+  form,
+  onChange,
+}: {
+  form: ReminderFormState;
+  onChange: (next: ReminderFormState) => void;
+}) {
+  const isRecurring = form.kind === ReminderKindConst.recurring;
+
+  return (
+    <div className="grid gap-3">
+      <label className="grid gap-1.5">
+        <span className="text-sm font-medium text-stone-700">タイトル</span>
+        <input
+          className="h-11 rounded-xl border border-stone-300 bg-white px-3 text-sm"
+          value={form.title}
+          onChange={(event) => onChange({ ...form, title: event.target.value })}
+        />
+      </label>
+      <label className="grid gap-1.5">
+        <span className="text-sm font-medium text-stone-700">メモ</span>
+        <textarea
+          className="min-h-24 rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm"
+          value={form.notes}
+          onChange={(event) => onChange({ ...form, notes: event.target.value })}
+        />
+      </label>
+      <div className="grid grid-cols-2 gap-3">
         <label className="grid gap-1.5">
-          <span className="text-sm font-medium text-stone-700">タイトル</span>
-          <input
+          <span className="text-sm font-medium text-stone-700">種別</span>
+          <select
             className="h-11 rounded-xl border border-stone-300 bg-white px-3 text-sm"
-            value={form.title}
+            value={form.kind}
             onChange={(event) =>
-              onChange({ ...form, title: event.target.value })
+              onChange({
+                ...form,
+                kind: event.target.value as ReminderKind,
+                endDate:
+                  event.target.value === ReminderKindConst.one_time
+                    ? ""
+                    : form.endDate,
+              })
             }
-          />
+          >
+            <option value={ReminderKindConst.one_time}>1回だけ</option>
+            <option value={ReminderKindConst.recurring}>定期</option>
+          </select>
         </label>
-        <label className="grid gap-1.5">
-          <span className="text-sm font-medium text-stone-700">メモ</span>
-          <textarea
-            className="min-h-24 rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm"
-            value={form.notes}
-            onChange={(event) =>
-              onChange({ ...form, notes: event.target.value })
-            }
-          />
-        </label>
-        <div className="grid grid-cols-2 gap-3">
+        {isRecurring ? (
           <label className="grid gap-1.5">
-            <span className="text-sm font-medium text-stone-700">種別</span>
+            <span className="text-sm font-medium text-stone-700">くり返し</span>
             <select
               className="h-11 rounded-xl border border-stone-300 bg-white px-3 text-sm"
-              value={form.kind}
+              value={form.scheduleType}
               onChange={(event) =>
                 onChange({
                   ...form,
-                  kind: event.target.value as ReminderKind,
-                  endDate:
-                    event.target.value === ReminderKindConst.one_time
-                      ? ""
-                      : form.endDate,
+                  scheduleType: event.target.value as ReminderScheduleType,
                 })
               }
             >
-              <option value={ReminderKindConst.one_time}>1回だけ</option>
-              <option value={ReminderKindConst.recurring}>定期</option>
+              <option value={ReminderScheduleTypeConst.daily}>毎日</option>
+              <option value={ReminderScheduleTypeConst.weekly}>毎週</option>
+              <option value={ReminderScheduleTypeConst.monthly}>毎月</option>
             </select>
           </label>
-          {isRecurring ? (
-            <label className="grid gap-1.5">
-              <span className="text-sm font-medium text-stone-700">
-                くり返し
-              </span>
-              <select
-                className="h-11 rounded-xl border border-stone-300 bg-white px-3 text-sm"
-                value={form.scheduleType}
-                onChange={(event) =>
-                  onChange({
-                    ...form,
-                    scheduleType: event.target.value as ReminderScheduleType,
-                  })
-                }
-              >
-                <option value={ReminderScheduleTypeConst.daily}>毎日</option>
-                <option value={ReminderScheduleTypeConst.weekly}>毎週</option>
-                <option value={ReminderScheduleTypeConst.monthly}>毎月</option>
-              </select>
-            </label>
-          ) : null}
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <label className={`grid gap-1.5 ${!isRecurring ? "col-span-2" : ""}`}>
-            <span className="text-sm font-medium text-stone-700">開始日</span>
+        ) : null}
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <label className={`grid gap-1.5 ${!isRecurring ? "col-span-2" : ""}`}>
+          <span className="text-sm font-medium text-stone-700">開始日</span>
+          <input
+            type="date"
+            className="h-11 rounded-xl border border-stone-300 bg-white px-3 text-sm"
+            value={form.startDate}
+            onChange={(event) =>
+              onChange({ ...form, startDate: event.target.value })
+            }
+          />
+        </label>
+        {isRecurring ? (
+          <label className="grid gap-1.5">
+            <span className="text-sm font-medium text-stone-700">終了日</span>
             <input
               type="date"
               className="h-11 rounded-xl border border-stone-300 bg-white px-3 text-sm"
-              value={form.startDate}
+              value={form.endDate}
               onChange={(event) =>
-                onChange({ ...form, startDate: event.target.value })
+                onChange({ ...form, endDate: event.target.value })
               }
             />
           </label>
-          {isRecurring ? (
-            <label className="grid gap-1.5">
-              <span className="text-sm font-medium text-stone-700">終了日</span>
-              <input
-                type="date"
-                className="h-11 rounded-xl border border-stone-300 bg-white px-3 text-sm"
-                value={form.endDate}
-                onChange={(event) =>
-                  onChange({ ...form, endDate: event.target.value })
-                }
-              />
-            </label>
-          ) : null}
-        </div>
+        ) : null}
       </div>
-    </FormSheet>
+    </div>
   );
 }
 
@@ -335,20 +342,16 @@ function ReminderAgendaList({
 function MobileAgendaSheet({
   isOpen,
   dateLabel,
-  canCreate,
   selectedOccurrences,
   reminderMap,
   onClose,
-  onCreate,
   onEdit,
 }: {
   isOpen: boolean;
   dateLabel: string;
-  canCreate: boolean;
   selectedOccurrences: ReminderOccurrence[];
   reminderMap: Map<string, Reminder>;
   onClose: () => void;
-  onCreate: () => void;
   onEdit: (reminder: Reminder, dateKey: string) => void;
 }) {
   if (!isOpen || typeof document === "undefined") {
@@ -380,16 +383,6 @@ function MobileAgendaSheet({
             <h3 className="text-base font-semibold text-stone-900">
               {dateLabel}
             </h3>
-            {canCreate ? (
-              <button
-                type="button"
-                className="inline-flex h-9 w-9 items-center justify-center text-stone-900 transition-colors hover:text-stone-700"
-                aria-label="追加"
-                onClick={onCreate}
-              >
-                <Plus size={16} aria-hidden="true" strokeWidth={2.25} />
-              </button>
-            ) : null}
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -463,6 +456,9 @@ export function ReminderCalendarPage() {
 
   const selectedOccurrences = occurrencesByDate.get(selectedDate) ?? [];
   const canCreateOnSelectedDate = selectedDate >= todayDateKey();
+  const quickActionDate = canCreateOnSelectedDate
+    ? selectedDate
+    : todayDateKey();
 
   const events = useMemo(
     () =>
@@ -498,6 +494,10 @@ export function ReminderCalendarPage() {
     setEditingReminderId(null);
     setForm(buildInitialFormState(dateKey));
     setSheetMode("create");
+  };
+
+  const openQuickActionCreateSheet = () => {
+    openCreateSheet(quickActionDate);
   };
 
   const openEditSheet = (reminder: Reminder, dateKey: string) => {
@@ -919,21 +919,17 @@ export function ReminderCalendarPage() {
       <MobileAgendaSheet
         isOpen={isMobile && mobileAgendaOpen}
         dateLabel={formatDateLabel(selectedDate)}
-        canCreate={canCreateOnSelectedDate}
         selectedOccurrences={selectedOccurrences}
         reminderMap={reminderMap}
         onClose={() => setMobileAgendaOpen(false)}
-        onCreate={() => openCreateSheet(selectedDate)}
         onEdit={openEditSheet}
       />
 
       <ReminderSheet
-        isOpen={sheetMode != null}
+        isOpen={sheetMode === "edit"}
         form={form}
-        title={
-          sheetMode === "edit" ? "リマインダーを編集" : "リマインダーを追加"
-        }
-        submitLabel={sheetMode === "edit" ? "更新する" : "追加する"}
+        title="リマインダーを編集"
+        submitLabel="更新する"
         onChange={setForm}
         onClose={() => setSheetMode(null)}
         onDelete={
@@ -943,6 +939,18 @@ export function ReminderCalendarPage() {
         }
         onSubmit={handleSubmit}
       />
+
+      <FooterQuickAction
+        isOpen={sheetMode === "create"}
+        title="リマインダーを追加"
+        submitLabel="追加する"
+        submitDisabled={form.title.trim() === "" || form.startDate === ""}
+        onOpen={openQuickActionCreateSheet}
+        onClose={() => setSheetMode(null)}
+        onSubmit={handleSubmit}
+      >
+        <ReminderFormFields form={form} onChange={setForm} />
+      </FooterQuickAction>
 
       <ConfirmModal
         isOpen={pendingDeleteId != null}
