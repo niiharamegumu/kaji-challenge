@@ -1,13 +1,18 @@
 import { useAtom } from "jotai";
+import { Plus } from "lucide-react";
 import { useState } from "react";
 
 import type {
   CreateShoppingListItemRequest,
   UpdateShoppingListItemRequest,
 } from "../../../lib/api/generated/client";
+import { FooterQuickAction } from "../../../shared/components/FooterQuickAction";
 import { statusMessageAtom } from "../../shell/state/status";
 import { ShoppingListManager } from "../components/ShoppingListManager";
-import type { ShoppingItemFormState } from "../components/ShoppingListManager";
+import {
+  ShoppingItemForm,
+  type ShoppingItemFormState,
+} from "../components/ShoppingListManager";
 import {
   useShoppingItemMutations,
   useShoppingItemsQuery,
@@ -57,8 +62,9 @@ export function ShoppingListPage() {
       <ShoppingListManager
         form={form}
         items={shoppingItemsQuery.data}
-        isCreateOpen={isCreateOpen}
+        isCreateOpen={false}
         isReordering={reorderItems.isPending}
+        showCreateButton={false}
         onCloseCreate={() => setIsCreateOpen(false)}
         onFormChange={(updater) => {
           setForm((prev) => updater(prev));
@@ -73,6 +79,27 @@ export function ShoppingListPage() {
         }}
         onUpdate={handleUpdate}
       />
+      <FooterQuickAction
+        isOpen={isCreateOpen}
+        title="買い物項目を追加"
+        submitLabel="追加する"
+        submitIcon={<Plus size={16} aria-hidden="true" />}
+        submitDisabled={form.name.trim().length === 0}
+        onOpen={() => setIsCreateOpen(true)}
+        onClose={() => setIsCreateOpen(false)}
+        onSubmit={() => {
+          void handleCreate().then(() => {
+            setIsCreateOpen(false);
+          });
+        }}
+      >
+        <ShoppingItemForm
+          form={form}
+          onFormChange={(updater) => {
+            setForm((prev) => updater(prev));
+          }}
+        />
+      </FooterQuickAction>
     </section>
   );
 }

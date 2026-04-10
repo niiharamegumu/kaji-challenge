@@ -1,4 +1,5 @@
 import { useAtom } from "jotai";
+import { Plus } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -6,8 +7,9 @@ import {
   TaskType as TaskTypeConst,
   type UpdateTaskRequest,
 } from "../../../lib/api/generated/client";
+import { FooterQuickAction } from "../../../shared/components/FooterQuickAction";
 import { statusMessageAtom } from "../../shell/state/status";
-import { TaskManager } from "../components/TaskManager";
+import { TaskCreateForm, TaskManager } from "../components/TaskManager";
 import {
   WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MAX,
   WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MIN,
@@ -65,8 +67,9 @@ export function AdminTasksPage() {
       <TaskManager
         form={taskForm}
         tasks={tasksQuery.data}
-        isCreateOpen={isCreateOpen}
+        isCreateOpen={false}
         isReordering={reorderTasks.isPending}
+        showCreateButton={false}
         onCloseCreate={() => setIsCreateOpen(false)}
         onFormChange={(updater) => setTaskForm((prev) => updater(prev))}
         onOpenCreate={() => setIsCreateOpen(true)}
@@ -79,6 +82,33 @@ export function AdminTasksPage() {
         }}
         onUpdate={handleUpdateTask}
       />
+      <FooterQuickAction
+        isOpen={isCreateOpen}
+        title="タスクを追加"
+        submitLabel="追加する"
+        submitIcon={<Plus size={16} aria-hidden="true" />}
+        submitDisabled={
+          taskForm.title.trim().length === 0 ||
+          (taskForm.type === TaskTypeConst.weekly &&
+            (!Number.isInteger(Number(taskForm.requiredCompletionsPerWeek)) ||
+              Number(taskForm.requiredCompletionsPerWeek) <
+                WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MIN ||
+              Number(taskForm.requiredCompletionsPerWeek) >
+                WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MAX))
+        }
+        onOpen={() => setIsCreateOpen(true)}
+        onClose={() => setIsCreateOpen(false)}
+        onSubmit={() => {
+          void handleCreateTask().then(() => {
+            setIsCreateOpen(false);
+          });
+        }}
+      >
+        <TaskCreateForm
+          form={taskForm}
+          onFormChange={(updater) => setTaskForm((prev) => updater(prev))}
+        />
+      </FooterQuickAction>
     </section>
   );
 }

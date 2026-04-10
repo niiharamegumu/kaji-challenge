@@ -45,6 +45,7 @@ type Props = {
   items: ShoppingListItem[];
   isCreateOpen: boolean;
   isReordering: boolean;
+  showCreateButton?: boolean;
   onCloseCreate: () => void;
   onFormChange: (
     updater: (prev: ShoppingItemFormState) => ShoppingItemFormState,
@@ -331,7 +332,7 @@ function SortableShoppingItem({
   );
 }
 
-function ShoppingItemForm({
+export function ShoppingItemForm({
   form,
   onFormChange,
 }: {
@@ -579,6 +580,7 @@ export function ShoppingListManager({
   items,
   isCreateOpen,
   isReordering,
+  showCreateButton = true,
   onCloseCreate,
   onFormChange,
   onOpenCreate,
@@ -594,14 +596,16 @@ export function ShoppingListManager({
       <article className="animate-enter rounded-xl border border-stone-200 bg-white/90 p-3 shadow-sm md:rounded-2xl md:p-6">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-stone-900">買い物リスト</h2>
-          <button
-            type="button"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-stone-900 text-white transition-colors hover:bg-stone-800"
-            onClick={onOpenCreate}
-            aria-label="追加"
-          >
-            <Plus size={16} aria-hidden="true" />
-          </button>
+          {showCreateButton ? (
+            <button
+              type="button"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-stone-900 text-white transition-colors hover:bg-stone-800"
+              onClick={onOpenCreate}
+              aria-label="追加"
+            >
+              <Plus size={16} aria-hidden="true" />
+            </button>
+          ) : null}
         </div>
         <div className="mt-4 border-t border-stone-200 pt-4">
           <ShoppingListItemsSection
