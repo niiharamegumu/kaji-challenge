@@ -376,6 +376,12 @@ export function FloatingNav({
       onRouteIntent(item.intentPath);
     }
 
+    // Keep desktop mouse interactions on the normal click path.
+    // Drag-follow is reserved for touch/pen so Safari/mobile behavior stays intact.
+    if (event.pointerType === "mouse") {
+      return;
+    }
+
     dragStateRef.current = {
       dragging: false,
       lastIndex: index,
