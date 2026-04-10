@@ -19,7 +19,7 @@ func (s *Store) CloseDayForUser(ctx context.Context, userID string) (api.CloseRe
 	if err != nil {
 		return api.CloseResponse{}, err
 	}
-	now := time.Now().In(s.loc)
+	now := s.now()
 	if _, err := s.runWithTeamRevisionCAS(
 		ctx,
 		teamID,
@@ -46,7 +46,7 @@ func (s *Store) CloseWeekForUser(ctx context.Context, userID string) (api.CloseR
 	if err != nil {
 		return api.CloseResponse{}, err
 	}
-	now := time.Now().In(s.loc)
+	now := s.now()
 	if _, err := s.runWithTeamRevisionCAS(
 		ctx,
 		teamID,
@@ -73,7 +73,7 @@ func (s *Store) CloseMonthForUser(ctx context.Context, userID string) (api.Close
 	if err != nil {
 		return api.CloseResponse{}, err
 	}
-	now := time.Now().In(s.loc)
+	now := s.now()
 	processed := 0
 	closedMonth := monthKeyFromTime(now, s.loc)
 	if _, err := s.runWithTeamRevisionCAS(
@@ -99,7 +99,7 @@ func (s *Store) CloseMonthForUser(ctx context.Context, userID string) (api.Close
 }
 
 func (s *Store) CloseDayForTeam(ctx context.Context, teamID string) (api.CloseResponse, error) {
-	now := time.Now().In(s.loc)
+	now := s.now()
 	_, err := s.catchUpDayLocked(ctx, now, teamID)
 	if err != nil {
 		return api.CloseResponse{}, err
@@ -108,7 +108,7 @@ func (s *Store) CloseDayForTeam(ctx context.Context, teamID string) (api.CloseRe
 }
 
 func (s *Store) CloseWeekForTeam(ctx context.Context, teamID string) (api.CloseResponse, error) {
-	now := time.Now().In(s.loc)
+	now := s.now()
 	_, err := s.catchUpWeekLocked(ctx, now, teamID)
 	if err != nil {
 		return api.CloseResponse{}, err
@@ -117,7 +117,7 @@ func (s *Store) CloseWeekForTeam(ctx context.Context, teamID string) (api.CloseR
 }
 
 func (s *Store) CloseMonthForTeam(ctx context.Context, teamID string) (api.CloseResponse, error) {
-	now := time.Now().In(s.loc)
+	now := s.now()
 	_, closedMonth, err := s.catchUpMonthLocked(ctx, now, teamID)
 	if err != nil {
 		return api.CloseResponse{}, err

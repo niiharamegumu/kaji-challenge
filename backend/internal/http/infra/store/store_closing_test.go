@@ -63,7 +63,8 @@ func TestCloseWeekAndMonthForTeam(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 
-	now := time.Now().In(s.loc)
+	now := time.Date(2026, 1, 3, 9, 0, 0, 0, s.loc)
+	s.now = func() time.Time { return now }
 	thisWeekStart := startOfWeek(dateOnly(now, s.loc), s.loc)
 	base := thisWeekStart.AddDate(0, 0, -6)
 	teamID, userID := createTeamWithMember(t, s, "weekly@example.com", base)
