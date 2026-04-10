@@ -50,7 +50,7 @@ export function StatusToast({
 
   return (
     <output
-      className="fixed bottom-[calc(env(safe-area-inset-bottom)+6rem)] left-1/2 z-50 w-[min(80vw,22rem)] -translate-x-1/2 md:top-4 md:right-4 md:bottom-auto md:left-auto md:w-[22rem] md:translate-x-0"
+      className="fixed z-50 w-[min(80vw,22rem)] top-2 right-2 bottom-auto left-auto w-[22rem] translate-x-0"
       aria-live="polite"
       data-testid="status-message"
       onMouseEnter={() => setIsHovered(true)}
