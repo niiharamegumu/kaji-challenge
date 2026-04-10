@@ -242,7 +242,7 @@ export function RootLayout() {
   }
 
   return (
-    <main className="ios-safe-main min-h-screen bg-[color:var(--color-washi-50)] px-2 py-2.5 pb-28 text-stone-800 md:p-8 md:pb-20">
+    <main className="ios-safe-main min-h-screen bg-[color:var(--color-washi-50)] px-2 py-2.5 pb-36 text-stone-800 md:p-8">
       <StatusToast
         message={status}
         onDismiss={() => {

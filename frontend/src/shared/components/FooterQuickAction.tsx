@@ -42,9 +42,8 @@ export function FooterQuickAction({
       {isOpen ? (
         <dialog
           open
-          className="fixed left-1/2 z-[70] w-[min(92vw,30rem)] -translate-x-1/2 overflow-hidden rounded-[1.8rem] border border-white/40 bg-[linear-gradient(180deg,rgba(255,255,255,0.56),rgba(246,241,232,0.36))] p-4 shadow-[0_24px_48px_-30px_rgba(68,56,36,0.42),inset_0_1px_0_rgba(255,255,255,0.62)]"
+          className="fixed bottom-[90px] left-1/2 z-[70] w-[min(92vw,30rem)] -translate-x-1/2 overflow-hidden rounded-[1.8rem] border border-white/40 bg-[linear-gradient(180deg,rgba(255,255,255,0.56),rgba(246,241,232,0.36))] p-4 shadow-[0_24px_48px_-30px_rgba(68,56,36,0.42),inset_0_1px_0_rgba(255,255,255,0.62)]"
           style={{
-            bottom: "calc(env(safe-area-inset-bottom) + 90px)",
             backdropFilter: "blur(26px) saturate(180%)",
             WebkitBackdropFilter: "blur(26px) saturate(180%)",
           }}
@@ -81,10 +80,9 @@ export function FooterQuickAction({
 
       <button
         type="button"
-        className="fixed z-[45] inline-flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-white/34 bg-[linear-gradient(180deg,rgba(244,242,238,0.54),rgba(224,220,214,0.24))] text-stone-900 shadow-[0_14px_24px_-18px_rgba(68,56,36,0.38),0_8px_20px_-16px_rgba(34,29,21,0.18),inset_0_1px_0_rgba(255,255,255,0.72),inset_0_0_0_1px_rgba(158,150,138,0.12)] transition-transform duration-200 hover:scale-[1.02] focus-visible:outline-none"
+        className="fixed z-[45] bottom-[88px] inline-flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-white/34 bg-[linear-gradient(180deg,rgba(244,242,238,0.54),rgba(224,220,214,0.24))] text-stone-900 shadow-[0_14px_24px_-18px_rgba(68,56,36,0.38),0_8px_20px_-16px_rgba(34,29,21,0.18),inset_0_1px_0_rgba(255,255,255,0.72),inset_0_0_0_1px_rgba(158,150,138,0.12)] transition-transform duration-200 hover:scale-[1.02] focus-visible:outline-none"
         style={{
           right: "max(calc((100vw - min(94vw, 30rem)) / 2 + 8px), 12px)",
-          bottom: "calc(env(safe-area-inset-bottom) + 88px)",
           backdropFilter:
             "blur(26px) saturate(220%) brightness(0.94) contrast(1.08)",
           WebkitBackdropFilter:

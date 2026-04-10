@@ -38,7 +38,7 @@ export function FormSheet({
       />
       <dialog
         open
-        className="fixed bottom-0 left-0 z-[70] w-screen rounded-t-3xl border border-stone-200 bg-white px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-4 shadow-2xl md:bottom-4 md:left-1/2 md:w-[min(42rem,calc(100%-1rem))] md:-translate-x-1/2 md:rounded-3xl"
+        className="fixed bottom-0 left-0 z-[70] w-screen rounded-t-3xl border border-stone-200 bg-white px-4 pb-[1rem)] pt-4 shadow-2xl md:bottom-4 md:left-1/2 md:w-[min(42rem,calc(100%-1rem))] md:-translate-x-1/2 md:rounded-3xl"
         aria-modal="true"
         aria-label={title}
       >

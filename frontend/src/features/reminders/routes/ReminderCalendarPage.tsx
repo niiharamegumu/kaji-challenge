@@ -365,7 +365,7 @@ function MobileAgendaSheet({
       />
       <dialog
         open
-        className="fixed bottom-0 left-1/2 z-[70] w-[min(42rem,calc(100%-0.5rem))] -translate-x-1/2 rounded-t-3xl border border-stone-200 bg-white px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-4 shadow-2xl"
+        className="fixed bottom-0 left-1/2 z-[70] w-[min(42rem,calc(100%-0.5rem))] -translate-x-1/2 rounded-t-3xl border border-stone-200 bg-white px-4 pb-[1rem)] pt-4 shadow-2xl"
         aria-modal="true"
         aria-label={`${dateLabel} のリマインダー`}
       >
