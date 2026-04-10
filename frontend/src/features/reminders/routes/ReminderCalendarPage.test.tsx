@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import type { ReactElement } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -104,6 +110,7 @@ describe("ReminderCalendarPage", () => {
   });
 
   afterEach(() => {
+    cleanup();
     vi.useRealTimers();
     vi.clearAllMocks();
   });
@@ -132,6 +139,11 @@ describe("ReminderCalendarPage", () => {
       screen.getByRole("dialog", { name: "4月2日(木) のリマインダー" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "追加" })).toBeInTheDocument();
+    expect(
+      within(
+        screen.getByRole("dialog", { name: "4月2日(木) のリマインダー" }),
+      ).queryByRole("button", { name: "追加" }),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps the mobile agenda sheet open after creating a reminder", async () => {
@@ -149,18 +161,7 @@ describe("ReminderCalendarPage", () => {
       </MemoryRouter>,
     );
 
-    const agendaDialogs = screen.getAllByRole("dialog", {
-      name: "4月2日(木) のリマインダー",
-    });
-    const agendaDialog = agendaDialogs[agendaDialogs.length - 1];
-
-    expect(agendaDialog).toBeDefined();
-
-    fireEvent.click(
-      within(agendaDialog as HTMLElement).getByRole("button", {
-        name: "追加",
-      }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "追加" }));
     fireEvent.change(screen.getByLabelText("タイトル"), {
       target: { value: "new reminder" },
     });
@@ -178,6 +179,22 @@ describe("ReminderCalendarPage", () => {
       screen.getAllByRole("dialog", { name: "4月2日(木) のリマインダー" })
         .length,
     ).toBeGreaterThan(0);
+  });
+
+  it("opens the create sheet from the footer quick action on desktop", () => {
+    setViewport(1280);
+
+    render(
+      <MemoryRouter initialEntries={["/calendar?date=2026-04-02"]}>
+        <ReminderCalendarPage />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "追加" }));
+
+    expect(
+      screen.getByRole("dialog", { name: "リマインダーを追加" }),
+    ).toBeInTheDocument();
   });
 
   it("shows desktop drag-and-drop description and passes events to FullCalendar on desktop", () => {
