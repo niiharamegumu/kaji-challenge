@@ -729,25 +729,36 @@ export function FloatingNav({
             type="button"
             className={`relative z-[55] flex h-[62px] w-[62px] shrink-0 flex-col items-center justify-center gap-1 overflow-hidden rounded-full border text-center transition-all duration-200 motion-reduce:transition-none focus-visible:outline-none ${
               isMoreSelected
-                ? "border-white/24 text-stone-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.54),inset_0_-14px_18px_rgba(255,255,255,0.06),0_24px_34px_-24px_rgba(255,255,255,0.68),0_18px_34px_-24px_rgba(100,85,62,0.22)]"
+                ? "border-white/34 text-stone-950 shadow-[0_18px_34px_-24px_rgba(68,56,36,0.42),0_8px_22px_-18px_rgba(34,29,21,0.2),inset_0_1px_0_rgba(255,255,255,0.62),inset_0_0_0_1px_rgba(158,150,138,0.12)]"
                 : "border-white/34 text-stone-700 shadow-[0_18px_34px_-24px_rgba(68,56,36,0.42),0_8px_22px_-18px_rgba(34,29,21,0.2),inset_0_1px_0_rgba(255,255,255,0.62),inset_0_0_0_1px_rgba(158,150,138,0.12)]"
             }`}
             style={{
-              background: isMoreSelected
-                ? "linear-gradient(180deg, rgba(255,255,255,0.2), rgba(255,255,255,0.04))"
-                : "linear-gradient(180deg, rgba(244,242,238,0.52), rgba(225,221,214,0.22))",
-              backdropFilter: isMoreSelected
-                ? "blur(26px) saturate(280%) brightness(1.12) contrast(1.04)"
-                : "blur(30px) saturate(220%) brightness(0.94) contrast(1.08)",
-              WebkitBackdropFilter: isMoreSelected
-                ? "blur(26px) saturate(280%) brightness(1.12) contrast(1.04)"
-                : "blur(30px) saturate(220%) brightness(0.94) contrast(1.08)",
+              background:
+                "linear-gradient(180deg, rgba(244,242,238,0.52), rgba(225,221,214,0.22))",
+              backdropFilter:
+                "blur(30px) saturate(220%) brightness(0.94) contrast(1.08)",
+              WebkitBackdropFilter:
+                "blur(30px) saturate(220%) brightness(0.94) contrast(1.08)",
             }}
             onClick={handleMoreClick}
             aria-expanded={menuOpen}
             aria-haspopup="menu"
             aria-label="その他"
           >
+            {isMoreSelected ? (
+              <span
+                className="pointer-events-none absolute inset-[4px] rounded-[1.6rem] border border-white/34"
+                style={{
+                  background:
+                    "linear-gradient(180deg, rgba(228,228,232,0.72), rgba(208,208,214,0.5))",
+                  backdropFilter: "blur(14px) saturate(160%) brightness(1.02)",
+                  WebkitBackdropFilter:
+                    "blur(14px) saturate(160%) brightness(1.02)",
+                  boxShadow:
+                    "inset 0 1px 0 rgba(255,255,255,0.52), inset 0 -8px 14px rgba(255,255,255,0.08), 0 10px 18px -18px rgba(85,80,74,0.2)",
+                }}
+              />
+            ) : null}
             <span
               className="pointer-events-none absolute inset-0 opacity-90"
               style={{
@@ -755,9 +766,17 @@ export function FloatingNav({
                   "radial-gradient(120% 90% at 50% -20%, rgba(255,255,255,0.34), rgba(255,255,255,0) 48%), radial-gradient(120% 100% at 50% 120%, rgba(176,184,204,0.14), rgba(255,255,255,0) 52%), linear-gradient(90deg, rgba(214,224,255,0.08), rgba(255,255,255,0) 18%, rgba(255,255,255,0) 82%, rgba(255,215,190,0.08))",
               }}
             />
+            {isMoreSelected ? (
+              <>
+                <span className="pointer-events-none absolute inset-x-4 top-2 h-2.5 rounded-full bg-white/8 blur-md" />
+                <span className="pointer-events-none absolute inset-x-3 bottom-2 h-4 rounded-full bg-white/6 blur-md" />
+              </>
+            ) : null}
             <span className="pointer-events-none absolute inset-x-3 top-1 h-6 rounded-full bg-white/18 blur-lg" />
-            <Ellipsis size={20} strokeWidth={2.1} aria-hidden="true" />
-            <span className="text-[10.5px] leading-none">その他</span>
+            <span className="relative z-10 flex flex-col items-center gap-1">
+              <Ellipsis size={20} strokeWidth={2.1} aria-hidden="true" />
+              <span className="text-[10.5px] leading-none">その他</span>
+            </span>
           </button>
         </div>
       </div>
