@@ -32,7 +32,7 @@ type Props = {
 };
 
 type PrimaryNavItem = {
-  id: "home" | "summary" | "shopping" | "more";
+  id: "home" | "shopping" | "calendar" | "summary";
   label: string;
   icon: LucideIcon;
   path?: string;
@@ -67,13 +67,6 @@ const primaryItems: PrimaryNavItem[] = [
     intentPath: "/",
   },
   {
-    id: "summary",
-    label: "サマリー",
-    icon: ChartColumn,
-    path: "/admin/summary",
-    intentPath: "/admin/summary",
-  },
-  {
     id: "shopping",
     label: "買い物",
     icon: ShoppingCart,
@@ -81,9 +74,18 @@ const primaryItems: PrimaryNavItem[] = [
     intentPath: "/shopping-list",
   },
   {
-    id: "more",
-    label: "その他",
-    icon: Ellipsis,
+    id: "calendar",
+    label: "カレンダー",
+    icon: CalendarDays,
+    path: "/calendar",
+    intentPath: "/calendar",
+  },
+  {
+    id: "summary",
+    label: "サマリー",
+    icon: ChartColumn,
+    path: "/admin/summary",
+    intentPath: "/admin/summary",
   },
 ];
 
@@ -93,13 +95,16 @@ function getPrimaryIndex(pathname: string) {
   if (pathname === "/") {
     return 0;
   }
-  if (pathname.startsWith("/admin/summary")) {
+  if (pathname.startsWith("/shopping-list")) {
     return 1;
   }
-  if (pathname.startsWith("/shopping-list")) {
+  if (pathname.startsWith("/calendar")) {
     return 2;
   }
-  return 3;
+  if (pathname.startsWith("/admin/summary")) {
+    return 3;
+  }
+  return null;
 }
 
 export function FloatingNav({
@@ -122,12 +127,13 @@ export function FloatingNav({
   const [focusIndex, setFocusIndex] = useState<number | null>(null);
   const [settledIndex, setSettledIndex] = useState<number | null>(null);
   const [indicator, setIndicator] = useState({ width: 0, x: 0 });
-  const activeIndex = menuOpen ? 3 : getPrimaryIndex(pathname);
+  const activeIndex = getPrimaryIndex(pathname);
   const indicatorIndex =
     dragIndex ?? hoverIndex ?? focusIndex ?? settledIndex ?? activeIndex;
   const hasInteractiveHoverOrFocus = hoverIndex != null || focusIndex != null;
   const isInteractiveGlass =
     dragIndex != null || (!menuOpen && hasInteractiveHoverOrFocus);
+  const isMoreSelected = menuOpen || activeIndex == null;
   const indicatorX = isInteractiveGlass ? indicator.x - 3 : indicator.x;
   const indicatorWidth = isInteractiveGlass
     ? indicator.width + 6
@@ -142,13 +148,6 @@ export function FloatingNav({
       icon: Shield,
       path: "/admin/tasks",
       intentPath: "/admin/tasks",
-    },
-    {
-      id: "calendar",
-      label: "カレンダー",
-      icon: CalendarDays,
-      path: "/calendar",
-      intentPath: "/calendar",
     },
     {
       id: "penalties",
@@ -206,6 +205,11 @@ export function FloatingNav({
 
   useEffect(() => {
     const updateIndicator = () => {
+      if (indicatorIndex == null) {
+        setIndicator({ width: 0, x: 0 });
+        return;
+      }
+
       const navRect = navRef.current?.getBoundingClientRect();
       const itemRect =
         itemRefs.current[indicatorIndex]?.getBoundingClientRect();
@@ -309,14 +313,6 @@ export function FloatingNav({
   const commitPrimarySelection = (index: number) => {
     const item = primaryItems[index];
     if (item == null) {
-      return;
-    }
-
-    if (item.id === "more") {
-      setSettledIndex(3);
-      setHoverIndex(null);
-      setFocusIndex(null);
-      setMenuOpen(true);
       return;
     }
 
@@ -446,22 +442,19 @@ export function FloatingNav({
       return;
     }
 
-    if (item.id === "more") {
-      setHoverIndex(null);
-      setFocusIndex(null);
-      setMenuOpen((prev) => {
-        const nextOpen = !prev;
-        setSettledIndex(nextOpen ? 3 : null);
-        return nextOpen;
-      });
-      return;
-    }
-
     setSettledIndex(index);
     setMenuOpen(false);
     if (item.path != null && pathname !== item.path) {
       navigate(item.path);
     }
+  };
+
+  const handleMoreClick = () => {
+    finishInteraction();
+    setHoverIndex(null);
+    setFocusIndex(null);
+    setSettledIndex(null);
+    setMenuOpen((prev) => !prev);
   };
 
   const handleSecondaryClick = (item: SecondaryNavItem) => {
@@ -498,7 +491,10 @@ export function FloatingNav({
         />
       ) : null}
 
-      <div className="fixed left-1/2 z-50 w-[min(94vw,30rem)] -translate-x-1/2 bottom-4">
+      <div
+        className="fixed bottom-5 left-1/2 z-50 w-[min(96vw,34rem)] -translate-x-1/2"
+        data-testid="floating-nav"
+      >
         <div
           className={`pointer-events-auto absolute inset-x-0 bottom-[calc(100%+10px)] origin-bottom overflow-hidden rounded-[1.8rem] border border-white/40 p-3 shadow-[0_24px_48px_-30px_rgba(68,56,36,0.42),inset_0_1px_0_rgba(255,255,255,0.62)] transition-all duration-200 ease-out motion-reduce:transition-none ${
             menuOpen
@@ -580,149 +576,208 @@ export function FloatingNav({
           </div>
         </div>
 
-        <div
-          ref={navRef}
-          className="relative grid grid-cols-4 gap-0.5 overflow-hidden rounded-[2rem] border border-white/34 p-1 shadow-[0_18px_40px_-26px_rgba(68,56,36,0.44),0_8px_22px_-18px_rgba(34,29,21,0.22),inset_0_1px_0_rgba(255,255,255,0.62),inset_0_0_0_1px_rgba(158,150,138,0.12)]"
-          style={{
-            background:
-              "linear-gradient(180deg, rgba(244,242,238,0.52), rgba(225,221,214,0.22))",
-            backdropFilter:
-              "blur(30px) saturate(220%) brightness(0.94) contrast(1.08)",
-            WebkitBackdropFilter:
-              "blur(30px) saturate(220%) brightness(0.94) contrast(1.08)",
-            touchAction: "pan-y",
-          }}
-          onPointerMove={handleNavPointerMove}
-          onPointerUp={handleNavPointerEnd}
-          onPointerCancel={finishInteraction}
-        >
+        <div className="flex items-end gap-2.5">
           <div
-            className="pointer-events-none absolute inset-0 opacity-90"
+            ref={navRef}
+            data-testid="floating-nav-primary"
+            className="relative min-w-0 flex-1 grid grid-cols-4 gap-0.5 overflow-hidden rounded-[2rem] border border-white/34 p-1 shadow-[0_18px_40px_-26px_rgba(68,56,36,0.44),0_8px_22px_-18px_rgba(34,29,21,0.22),inset_0_1px_0_rgba(255,255,255,0.62),inset_0_0_0_1px_rgba(158,150,138,0.12)]"
             style={{
               background:
-                "radial-gradient(120% 90% at 50% -20%, rgba(255,255,255,0.34), rgba(255,255,255,0) 48%), radial-gradient(120% 100% at 50% 120%, rgba(176,184,204,0.14), rgba(255,255,255,0) 52%), linear-gradient(90deg, rgba(214,224,255,0.08), rgba(255,255,255,0) 14%, rgba(255,255,255,0) 86%, rgba(255,215,190,0.08))",
+                "linear-gradient(180deg, rgba(244,242,238,0.52), rgba(225,221,214,0.22))",
+              backdropFilter:
+                "blur(30px) saturate(220%) brightness(0.94) contrast(1.08)",
+              WebkitBackdropFilter:
+                "blur(30px) saturate(220%) brightness(0.94) contrast(1.08)",
+              touchAction: "pan-y",
             }}
-          />
-          <div className="pointer-events-none absolute inset-y-2 left-0 w-px bg-stone-500/10 blur-[1px]" />
-          <div className="pointer-events-none absolute inset-y-2 right-0 w-px bg-stone-500/8 blur-[1px]" />
-          <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-white/82" />
-          <div className="pointer-events-none absolute inset-x-7 top-1 h-7 rounded-full bg-white/28 blur-xl" />
-          <div
-            className={`pointer-events-none absolute overflow-hidden rounded-[1.6rem] transition-all duration-200 ease-out motion-reduce:transition-none ${
-              isInteractiveGlass
-                ? "top-0 bottom-0 border border-white/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.54),inset_0_-16px_22px_rgba(255,255,255,0.06),0_24px_34px_-24px_rgba(255,255,255,0.78),0_18px_34px_-24px_rgba(100,85,62,0.22)]"
-                : "top-1 bottom-1 border border-white/34 shadow-[inset_0_1px_0_rgba(255,255,255,0.52),inset_0_-8px_14px_rgba(255,255,255,0.08),0_10px_18px_-18px_rgba(85,80,74,0.2)]"
-            }`}
-            style={{
-              background: isInteractiveGlass
-                ? "linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0.02))"
-                : "linear-gradient(180deg, rgba(228,228,232,0.72), rgba(208,208,214,0.5))",
-              backdropFilter: isInteractiveGlass
-                ? "blur(30px) saturate(340%) brightness(1.16) contrast(1.04)"
-                : "blur(14px) saturate(160%) brightness(1.02)",
-              WebkitBackdropFilter: isInteractiveGlass
-                ? "blur(30px) saturate(340%) brightness(1.16) contrast(1.04)"
-                : "blur(14px) saturate(160%) brightness(1.02)",
-              transform: `translateX(${indicatorX}px)`,
-              width: `${indicatorWidth}px`,
-            }}
+            onPointerMove={handleNavPointerMove}
+            onPointerUp={handleNavPointerEnd}
+            onPointerCancel={finishInteraction}
           >
             <div
-              className={`absolute inset-0 ${isInteractiveGlass ? "opacity-100" : "opacity-90"}`}
+              className="pointer-events-none absolute inset-0 opacity-90"
               style={{
-                background: isInteractiveGlass
-                  ? "radial-gradient(145% 92% at 50% -12%, rgba(255,255,255,0.32), rgba(255,255,255,0) 50%), radial-gradient(92% 92% at 18% 20%, rgba(255,255,255,0.14), rgba(255,255,255,0) 42%), radial-gradient(110% 92% at 82% 78%, rgba(255,255,255,0.1), rgba(255,255,255,0) 46%), radial-gradient(120% 90% at 50% 120%, rgba(255,255,255,0.08), rgba(255,255,255,0) 54%)"
-                  : "radial-gradient(120% 80% at 50% -10%, rgba(255,255,255,0.2), rgba(255,255,255,0) 54%), radial-gradient(90% 90% at 50% 70%, rgba(255,255,255,0.08), rgba(255,255,255,0) 55%)",
+                background:
+                  "radial-gradient(120% 90% at 50% -20%, rgba(255,255,255,0.34), rgba(255,255,255,0) 48%), radial-gradient(120% 100% at 50% 120%, rgba(176,184,204,0.14), rgba(255,255,255,0) 52%), linear-gradient(90deg, rgba(214,224,255,0.08), rgba(255,255,255,0) 14%, rgba(255,255,255,0) 86%, rgba(255,215,190,0.08))",
               }}
             />
-            {isInteractiveGlass ? (
-              <>
-                <div
-                  className="absolute inset-0 opacity-55 blur-lg"
-                  style={{
-                    background:
-                      "radial-gradient(55% 22% at 50% 0%, rgba(255,255,255,0.3), rgba(255,255,255,0) 72%), radial-gradient(48% 22% at 50% 100%, rgba(160,210,255,0.18), rgba(255,255,255,0) 70%)",
+            <div className="pointer-events-none absolute inset-y-2 left-0 w-px bg-stone-500/10 blur-[1px]" />
+            <div className="pointer-events-none absolute inset-y-2 right-0 w-px bg-stone-500/8 blur-[1px]" />
+            <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-white/82" />
+            <div className="pointer-events-none absolute inset-x-7 top-1 h-7 rounded-full bg-white/28 blur-xl" />
+            <div
+              className={`pointer-events-none absolute overflow-hidden rounded-[1.6rem] transition-all duration-200 ease-out motion-reduce:transition-none ${
+                indicatorIndex == null ? "opacity-0" : "opacity-100"
+              } ${
+                isInteractiveGlass
+                  ? "top-0 bottom-0 border border-white/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.54),inset_0_-16px_22px_rgba(255,255,255,0.06),0_24px_34px_-24px_rgba(255,255,255,0.78),0_18px_34px_-24px_rgba(100,85,62,0.22)]"
+                  : "top-1 bottom-1 border border-white/34 shadow-[inset_0_1px_0_rgba(255,255,255,0.52),inset_0_-8px_14px_rgba(255,255,255,0.08),0_10px_18px_-18px_rgba(85,80,74,0.2)]"
+              }`}
+              style={{
+                background: isInteractiveGlass
+                  ? "linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0.02))"
+                  : "linear-gradient(180deg, rgba(228,228,232,0.72), rgba(208,208,214,0.5))",
+                backdropFilter: isInteractiveGlass
+                  ? "blur(30px) saturate(340%) brightness(1.16) contrast(1.04)"
+                  : "blur(14px) saturate(160%) brightness(1.02)",
+                WebkitBackdropFilter: isInteractiveGlass
+                  ? "blur(30px) saturate(340%) brightness(1.16) contrast(1.04)"
+                  : "blur(14px) saturate(160%) brightness(1.02)",
+                transform: `translateX(${indicatorX}px)`,
+                width: `${indicatorWidth}px`,
+              }}
+            >
+              <div
+                className={`absolute inset-0 ${isInteractiveGlass ? "opacity-100" : "opacity-90"}`}
+                style={{
+                  background: isInteractiveGlass
+                    ? "radial-gradient(145% 92% at 50% -12%, rgba(255,255,255,0.32), rgba(255,255,255,0) 50%), radial-gradient(92% 92% at 18% 20%, rgba(255,255,255,0.14), rgba(255,255,255,0) 42%), radial-gradient(110% 92% at 82% 78%, rgba(255,255,255,0.1), rgba(255,255,255,0) 46%), radial-gradient(120% 90% at 50% 120%, rgba(255,255,255,0.08), rgba(255,255,255,0) 54%)"
+                    : "radial-gradient(120% 80% at 50% -10%, rgba(255,255,255,0.2), rgba(255,255,255,0) 54%), radial-gradient(90% 90% at 50% 70%, rgba(255,255,255,0.08), rgba(255,255,255,0) 55%)",
+                }}
+              />
+              {isInteractiveGlass ? (
+                <>
+                  <div
+                    className="absolute inset-0 opacity-55 blur-lg"
+                    style={{
+                      background:
+                        "radial-gradient(55% 22% at 50% 0%, rgba(255,255,255,0.3), rgba(255,255,255,0) 72%), radial-gradient(48% 22% at 50% 100%, rgba(160,210,255,0.18), rgba(255,255,255,0) 70%)",
+                    }}
+                  />
+                  <div
+                    className="absolute -top-1 left-[28%] right-[28%] h-3 rounded-full opacity-55 blur-md"
+                    style={{
+                      background:
+                        "linear-gradient(90deg, rgba(255,180,200,0), rgba(255,180,200,0.32), rgba(180,220,255,0.38), rgba(255,240,180,0.28), rgba(255,180,200,0))",
+                    }}
+                  />
+                  <div
+                    className="absolute -bottom-1 left-[30%] right-[30%] h-2.5 rounded-full opacity-35 blur-md"
+                    style={{
+                      background:
+                        "linear-gradient(90deg, rgba(255,255,255,0), rgba(190,230,255,0.24), rgba(255,220,180,0.2), rgba(255,255,255,0))",
+                    }}
+                  />
+                </>
+              ) : null}
+              <div
+                className={`absolute inset-x-3 top-1.5 rounded-full blur-md ${
+                  isInteractiveGlass ? "h-2 bg-white/08" : "h-2.5 bg-white/8"
+                }`}
+              />
+              <div
+                className={`absolute inset-x-2 bottom-1 rounded-full blur-md ${
+                  isInteractiveGlass ? "h-4 bg-white/[0.06]" : "h-4 bg-white/6"
+                }`}
+              />
+              <div
+                className={`absolute left-1.5 top-2 bottom-2 w-px blur-[1px] ${
+                  isInteractiveGlass ? "bg-white/[0.08]" : "bg-white/[0.04]"
+                }`}
+              />
+              <div
+                className={`absolute right-1.5 top-2 bottom-2 w-px blur-[1px] ${
+                  isInteractiveGlass ? "bg-white/[0.06]" : "bg-white/[0.03]"
+                }`}
+              />
+            </div>
+
+            {primaryItems.map((item, index) => {
+              const Icon = item.icon;
+              const isSelected = indicatorIndex === index;
+
+              return (
+                <button
+                  key={item.id}
+                  ref={(node) => {
+                    itemRefs.current[index] = node;
                   }}
-                />
-                <div
-                  className="absolute -top-1 left-[28%] right-[28%] h-3 rounded-full opacity-55 blur-md"
-                  style={{
-                    background:
-                      "linear-gradient(90deg, rgba(255,180,200,0), rgba(255,180,200,0.32), rgba(180,220,255,0.38), rgba(255,240,180,0.28), rgba(255,180,200,0))",
+                  type="button"
+                  className={`relative z-10 flex min-h-[50px] min-w-11 flex-col items-center justify-center gap-0.5 rounded-[1.5rem] px-1 py-1.5 text-center transition-colors duration-200 motion-reduce:transition-none focus-visible:outline-none ${
+                    isSelected ? "text-stone-950" : "text-stone-600"
+                  }`}
+                  onClick={() => handlePrimaryClick(index)}
+                  onPointerDown={(event) =>
+                    handlePrimaryPointerDown(index, event)
+                  }
+                  onPointerEnter={(event) =>
+                    handlePrimaryPointerEnter(index, event)
+                  }
+                  onPointerLeave={handlePrimaryPointerLeave}
+                  onFocus={(event) => {
+                    handlePrimaryFocus(index, event);
                   }}
-                />
-                <div
-                  className="absolute -bottom-1 left-[30%] right-[30%] h-2.5 rounded-full opacity-35 blur-md"
-                  style={{
-                    background:
-                      "linear-gradient(90deg, rgba(255,255,255,0), rgba(190,230,255,0.24), rgba(255,220,180,0.2), rgba(255,255,255,0))",
+                  onBlur={handlePrimaryBlur}
+                  onTouchStart={() => {
+                    if (item.intentPath != null) {
+                      onRouteIntent(item.intentPath);
+                    }
                   }}
-                />
-              </>
-            ) : null}
-            <div
-              className={`absolute inset-x-3 top-1.5 rounded-full blur-md ${
-                isInteractiveGlass ? "h-2 bg-white/08" : "h-2.5 bg-white/8"
-              }`}
-            />
-            <div
-              className={`absolute inset-x-2 bottom-1 rounded-full blur-md ${
-                isInteractiveGlass ? "h-4 bg-white/[0.06]" : "h-4 bg-white/6"
-              }`}
-            />
-            <div
-              className={`absolute left-1.5 top-2 bottom-2 w-px blur-[1px] ${
-                isInteractiveGlass ? "bg-white/[0.08]" : "bg-white/[0.04]"
-              }`}
-            />
-            <div
-              className={`absolute right-1.5 top-2 bottom-2 w-px blur-[1px] ${
-                isInteractiveGlass ? "bg-white/[0.06]" : "bg-white/[0.03]"
-              }`}
-            />
+                  aria-current={activeIndex === index ? "page" : undefined}
+                  aria-label={item.label}
+                >
+                  <Icon size={20} strokeWidth={2.1} aria-hidden="true" />
+                  <span className="text-[10.5px] leading-none">
+                    {item.label}
+                  </span>
+                </button>
+              );
+            })}
           </div>
 
-          {primaryItems.map((item, index) => {
-            const Icon = item.icon;
-            const isSelected = indicatorIndex === index;
-
-            return (
-              <button
-                key={item.id}
-                ref={(node) => {
-                  itemRefs.current[index] = node;
+          <button
+            type="button"
+            className={`relative z-[55] flex h-[62px] w-[62px] shrink-0 flex-col items-center justify-center gap-1 overflow-hidden rounded-full border text-center transition-all duration-200 motion-reduce:transition-none focus-visible:outline-none ${
+              isMoreSelected
+                ? "border-white/34 text-stone-950 shadow-[0_18px_34px_-24px_rgba(68,56,36,0.42),0_8px_22px_-18px_rgba(34,29,21,0.2),inset_0_1px_0_rgba(255,255,255,0.62),inset_0_0_0_1px_rgba(158,150,138,0.12)]"
+                : "border-white/34 text-stone-700 shadow-[0_18px_34px_-24px_rgba(68,56,36,0.42),0_8px_22px_-18px_rgba(34,29,21,0.2),inset_0_1px_0_rgba(255,255,255,0.62),inset_0_0_0_1px_rgba(158,150,138,0.12)]"
+            }`}
+            style={{
+              background:
+                "linear-gradient(180deg, rgba(244,242,238,0.52), rgba(225,221,214,0.22))",
+              backdropFilter:
+                "blur(30px) saturate(220%) brightness(0.94) contrast(1.08)",
+              WebkitBackdropFilter:
+                "blur(30px) saturate(220%) brightness(0.94) contrast(1.08)",
+            }}
+            onClick={handleMoreClick}
+            aria-expanded={menuOpen}
+            aria-haspopup="menu"
+            aria-label="その他"
+          >
+            {isMoreSelected ? (
+              <span
+                className="pointer-events-none absolute inset-[4px] rounded-[1.6rem] border border-white/34"
+                style={{
+                  background:
+                    "linear-gradient(180deg, rgba(228,228,232,0.72), rgba(208,208,214,0.5))",
+                  backdropFilter: "blur(14px) saturate(160%) brightness(1.02)",
+                  WebkitBackdropFilter:
+                    "blur(14px) saturate(160%) brightness(1.02)",
+                  boxShadow:
+                    "inset 0 1px 0 rgba(255,255,255,0.52), inset 0 -8px 14px rgba(255,255,255,0.08), 0 10px 18px -18px rgba(85,80,74,0.2)",
                 }}
-                type="button"
-                className={`relative z-10 flex min-h-[50px] min-w-11 flex-col items-center justify-center gap-0.5 rounded-[1.5rem] px-1 py-1.5 text-center transition-colors duration-200 motion-reduce:transition-none focus-visible:outline-none ${
-                  isSelected ? "text-stone-950" : "text-stone-600"
-                }`}
-                onClick={() => handlePrimaryClick(index)}
-                onPointerDown={(event) =>
-                  handlePrimaryPointerDown(index, event)
-                }
-                onPointerEnter={(event) =>
-                  handlePrimaryPointerEnter(index, event)
-                }
-                onPointerLeave={handlePrimaryPointerLeave}
-                onFocus={(event) => {
-                  handlePrimaryFocus(index, event);
-                }}
-                onBlur={handlePrimaryBlur}
-                onTouchStart={() => {
-                  if (item.intentPath != null) {
-                    onRouteIntent(item.intentPath);
-                  }
-                }}
-                aria-current={activeIndex === index ? "page" : undefined}
-                aria-expanded={item.id === "more" ? menuOpen : undefined}
-                aria-haspopup={item.id === "more" ? "menu" : undefined}
-                aria-label={item.label}
-              >
-                <Icon size={20} strokeWidth={2.1} aria-hidden="true" />
-                <span className="text-[10.5px] leading-none">{item.label}</span>
-              </button>
-            );
-          })}
+              />
+            ) : null}
+            <span
+              className="pointer-events-none absolute inset-0 opacity-90"
+              style={{
+                background:
+                  "radial-gradient(120% 90% at 50% -20%, rgba(255,255,255,0.34), rgba(255,255,255,0) 48%), radial-gradient(120% 100% at 50% 120%, rgba(176,184,204,0.14), rgba(255,255,255,0) 52%), linear-gradient(90deg, rgba(214,224,255,0.08), rgba(255,255,255,0) 18%, rgba(255,255,255,0) 82%, rgba(255,215,190,0.08))",
+              }}
+            />
+            {isMoreSelected ? (
+              <>
+                <span className="pointer-events-none absolute inset-x-4 top-2 h-2.5 rounded-full bg-white/8 blur-md" />
+                <span className="pointer-events-none absolute inset-x-3 bottom-2 h-4 rounded-full bg-white/6 blur-md" />
+              </>
+            ) : null}
+            <span className="pointer-events-none absolute inset-x-3 top-1 h-6 rounded-full bg-white/18 blur-lg" />
+            <span className="relative z-10 flex flex-col items-center gap-1">
+              <Ellipsis size={20} strokeWidth={2.1} aria-hidden="true" />
+              <span className="text-[10.5px] leading-none">その他</span>
+            </span>
+          </button>
         </div>
       </div>
     </>
