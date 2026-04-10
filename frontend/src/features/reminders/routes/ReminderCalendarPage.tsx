@@ -368,11 +368,10 @@ function MobileAgendaSheet({
       />
       <dialog
         open
-        className="fixed bottom-0 left-1/2 z-[70] w-[min(42rem,calc(100%-0.5rem))] -translate-x-1/2 rounded-t-3xl border border-stone-200 bg-white px-4 pb-[1rem)] pt-4 shadow-2xl"
+        className="fixed bottom-2 left-1/2 z-[70] flex max-h-[calc(100dvh-1rem-env(safe-area-inset-top))] w-[min(42rem,calc(100%-1rem))] -translate-x-1/2 flex-col rounded-[1.75rem] border border-stone-200 bg-white px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-4 shadow-2xl"
         aria-modal="true"
         aria-label={`${dateLabel} のリマインダー`}
       >
-        <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-stone-200" />
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <CalendarDays
@@ -394,7 +393,7 @@ function MobileAgendaSheet({
             </button>
           </div>
         </div>
-        <div className="mt-3">
+        <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
           <ReminderAgendaList
             selectedOccurrences={selectedOccurrences}
             reminderMap={reminderMap}
@@ -459,7 +458,6 @@ export function ReminderCalendarPage() {
   const quickActionDate = canCreateOnSelectedDate
     ? selectedDate
     : todayDateKey();
-
   const events = useMemo(
     () =>
       calendarDays.flatMap((day) =>
