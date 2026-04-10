@@ -63,7 +63,20 @@ type ReminderFormState = {
 
 const calendarButtonClass =
   "flex h-10 w-10 items-center justify-center rounded-full border border-stone-300 bg-white text-stone-700 transition-colors hover:bg-stone-100";
-const mobileDotIds = ["one", "two", "three"] as const;
+const mobileDotIds = [
+  "one",
+  "two",
+  "three",
+  "four",
+  "five",
+  "six",
+  "seven",
+  "eight",
+  "nine",
+  "ten",
+  "eleven",
+  "twelve",
+] as const;
 
 function kindLabel(
   kind: ReminderKind,
@@ -279,6 +292,28 @@ function useIsMobile(breakpoint = 768) {
   return isMobile;
 }
 
+function useViewportHeight() {
+  const [viewportHeight, setViewportHeight] = useState(() =>
+    typeof window !== "undefined" ? window.innerHeight : 0,
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const handleResize = () => {
+      setViewportHeight(window.innerHeight);
+    };
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  return viewportHeight;
+}
+
 function ReminderAgendaList({
   selectedOccurrences,
   reminderMap,
@@ -416,6 +451,7 @@ export function ReminderCalendarPage() {
   const initialDateParam = searchParams.get("date");
   const initialSelectedDate = normalizeDateKey(initialDateParam);
   const isMobile = useIsMobile();
+  const viewportHeight = useViewportHeight();
   const [selectedDate, setSelectedDate] = useState(initialSelectedDate);
   const [mobileAgendaOpen, setMobileAgendaOpen] = useState(
     () => isMobile && initialDateParam != null,
@@ -458,6 +494,26 @@ export function ReminderCalendarPage() {
   const quickActionDate = canCreateOnSelectedDate
     ? selectedDate
     : todayDateKey();
+  const mobileCalendarHeight = isMobile
+    ? Math.max(360, Math.min(viewportHeight - 300, 520))
+    : undefined;
+  const mobileMarkerLimit =
+    mobileCalendarHeight == null || mobileCalendarHeight < 410
+      ? 4
+      : mobileCalendarHeight < 470
+        ? 6
+        : mobileCalendarHeight < 520
+          ? 9
+          : 12;
+  const mobileDayHeight =
+    mobileCalendarHeight == null
+      ? "3.7rem"
+      : mobileCalendarHeight >= 470
+        ? "4.75rem"
+        : mobileCalendarHeight >= 410
+          ? "4.2rem"
+          : "3.7rem";
+
   const events = useMemo(
     () =>
       calendarDays.flatMap((day) =>
@@ -522,7 +578,10 @@ export function ReminderCalendarPage() {
     const isSelected = dateKey === selectedDate;
     const occurrenceCount = occurrenceCountByDate.get(dateKey) ?? 0;
     const dayNumber = String(arg.date.getDate());
-    const mobileDots = mobileDotIds.slice(0, Math.min(occurrenceCount, 3));
+    const mobileDots = mobileDotIds.slice(
+      0,
+      Math.min(occurrenceCount, mobileMarkerLimit),
+    );
     const canCreate = dateKey >= todayDateKey();
 
     return (
@@ -604,7 +663,15 @@ export function ReminderCalendarPage() {
         ) : null}
         {isMobile && occurrenceCount > 0 ? (
           <span
-            className="inline-flex items-center justify-center gap-1"
+            className={`grid place-items-center gap-x-1 gap-y-0.5 ${
+              mobileMarkerLimit >= 12
+                ? "grid-cols-3"
+                : mobileMarkerLimit >= 9
+                  ? "grid-cols-3"
+                  : mobileMarkerLimit >= 6
+                    ? "grid-cols-3"
+                    : "grid-cols-2"
+            }`}
             aria-label={`リマインダー${occurrenceCount}件`}
           >
             {mobileDots.map((dotId) => (
@@ -775,7 +842,7 @@ export function ReminderCalendarPage() {
             font-size: 0.95rem;
           }
           .reminder-calendar .fc .fc-daygrid-day-frame {
-            min-height: 3.55rem;
+            min-height: var(--mobile-reminder-day-height, 3.55rem);
             padding: 0.2rem 0.15rem 0.15rem;
           }
           .reminder-calendar .fc .fc-daygrid-day-top {
@@ -837,7 +904,16 @@ export function ReminderCalendarPage() {
           </button>
         </div>
 
-        <div className="reminder-calendar relative mt-3 overflow-hidden rounded-2xl border border-stone-200 bg-[color:var(--color-washi-50)]">
+        <div
+          className="reminder-calendar relative mt-3 overflow-hidden rounded-2xl border border-stone-200 bg-[color:var(--color-washi-50)]"
+          style={
+            isMobile
+              ? {
+                  ["--mobile-reminder-day-height" as string]: mobileDayHeight,
+                }
+              : undefined
+          }
+        >
           <FullCalendar
             ref={calendarRef}
             locale={jaLocale}
@@ -848,7 +924,11 @@ export function ReminderCalendarPage() {
             events={isMobile ? [] : events}
             editable
             dayMaxEventRows={3}
-            height="auto"
+            height={
+              isMobile && mobileCalendarHeight != null
+                ? mobileCalendarHeight
+                : "auto"
+            }
             longPressDelay={250}
             eventDurationEditable={false}
             dateClick={handleDateClick}
