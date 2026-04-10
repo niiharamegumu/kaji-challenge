@@ -206,22 +206,30 @@ describe("App", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    const navOpenButton = await screen.findByRole("button", {
-      name: "ナビゲーションを開く",
-    });
-    await user.click(navOpenButton);
-
     await waitFor(() => {
-      expect(screen.getByRole("link", { name: "ホーム" })).toBeInTheDocument();
-      expect(screen.getByRole("link", { name: "タスク" })).toBeInTheDocument();
-      expect(screen.getByRole("link", { name: "買い物" })).toBeInTheDocument();
       expect(
-        screen.getByRole("link", { name: "カレンダー" }),
+        screen.getByRole("button", { name: "ホーム" }),
       ).toBeInTheDocument();
       expect(
-        screen.getByRole("link", { name: "サマリー" }),
+        screen.getByRole("button", { name: "サマリー" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "買い物" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "その他" }),
       ).toBeInTheDocument();
     });
+
+    await user.click(screen.getByRole("button", { name: "その他" }));
+
+    expect(screen.getByRole("button", { name: "タスク" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "カレンダー" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "ログアウト" }),
+    ).toBeInTheDocument();
   });
 
   it("shows the home shell while task overview is still loading", async () => {
@@ -278,7 +286,9 @@ describe("App", () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByRole("link", { name: "ホーム" })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "ホーム" }),
+      ).toBeInTheDocument();
     });
     expect(mockGetMe).not.toHaveBeenCalled();
   });
@@ -442,18 +452,18 @@ describe("App", () => {
 
     render(<App />);
 
-    const navOpenButton = await screen.findByRole("button", {
-      name: "ナビゲーションを開く",
+    const summaryButton = await screen.findByRole("button", {
+      name: "サマリー",
     });
-    await user.click(navOpenButton);
+    const shoppingButton = screen.getByRole("button", { name: "買い物" });
+    const moreButton = screen.getByRole("button", { name: "その他" });
 
-    const taskLink = screen.getByRole("link", { name: "タスク" });
-    const summaryLink = screen.getByRole("link", { name: "サマリー" });
-    const shoppingLink = screen.getByRole("link", { name: "買い物" });
+    fireEvent.focus(summaryButton);
+    fireEvent.touchStart(shoppingButton);
+    await user.click(moreButton);
 
-    fireEvent.mouseEnter(taskLink);
-    fireEvent.focus(summaryLink);
-    fireEvent.touchStart(shoppingLink);
+    const taskButton = screen.getByRole("button", { name: "タスク" });
+    fireEvent.mouseEnter(taskButton);
 
     expect(mockPreloadAdminTasksPageChunk).toHaveBeenCalledTimes(1);
     expect(mockPreloadAdminSummaryPageChunk).toHaveBeenCalledTimes(1);
