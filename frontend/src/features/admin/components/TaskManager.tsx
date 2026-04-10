@@ -47,6 +47,7 @@ type Props = {
   tasks: Task[];
   isCreateOpen: boolean;
   isReordering: boolean;
+  showCreateButton?: boolean;
   onCloseCreate: () => void;
   onFormChange: (updater: (prev: TaskFormState) => TaskFormState) => void;
   onOpenCreate: () => void;
@@ -75,7 +76,7 @@ type TaskItemsSectionProps = {
   onUpdate: (taskId: string, payload: UpdateTaskRequest) => Promise<void>;
 };
 
-function TaskCreateForm({
+export function TaskCreateForm({
   form,
   onFormChange,
 }: {
@@ -517,6 +518,7 @@ export function TaskManager({
   tasks,
   isCreateOpen,
   isReordering,
+  showCreateButton = true,
   onCloseCreate,
   onFormChange,
   onOpenCreate,
@@ -543,14 +545,16 @@ export function TaskManager({
       <article className="animate-enter rounded-xl border border-stone-200 bg-white/90 p-3 shadow-sm md:rounded-2xl md:p-6">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-stone-900">タスク管理</h2>
-          <button
-            type="button"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-stone-900 text-white transition-colors hover:bg-stone-800"
-            onClick={onOpenCreate}
-            aria-label="追加"
-          >
-            <Plus size={16} aria-hidden="true" />
-          </button>
+          {showCreateButton ? (
+            <button
+              type="button"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-stone-900 text-white transition-colors hover:bg-stone-800"
+              onClick={onOpenCreate}
+              aria-label="追加"
+            >
+              <Plus size={16} aria-hidden="true" />
+            </button>
+          ) : null}
         </div>
         <p className="mt-4 border-t border-stone-200 pt-4 text-xs text-stone-500">
           タスク設定はチーム共通です。並び替えは管理画面でのみ変更できます。
