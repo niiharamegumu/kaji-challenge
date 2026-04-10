@@ -14,6 +14,7 @@ type Props = {
   form: RuleFormState;
   rules: PenaltyRule[];
   isCreateOpen: boolean;
+  showCreateButton?: boolean;
   onCloseCreate: () => void;
   onFormChange: (updater: (prev: RuleFormState) => RuleFormState) => void;
   onOpenCreate: () => void;
@@ -30,7 +31,7 @@ type PendingDeleteRule = {
   name: string;
 };
 
-function PenaltyRuleCreateForm({
+export function PenaltyRuleCreateForm({
   form,
   onFormChange,
 }: {
@@ -75,6 +76,7 @@ export function PenaltyRuleManager({
   form,
   rules,
   isCreateOpen,
+  showCreateButton = true,
   onCloseCreate,
   onFormChange,
   onOpenCreate,
@@ -115,14 +117,16 @@ export function PenaltyRuleManager({
     <article className="animate-enter rounded-xl border border-stone-200 bg-white/90 p-2.5 shadow-sm md:rounded-2xl md:p-6">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-lg font-semibold">ペナルティ管理</h2>
-        <button
-          type="button"
-          className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-stone-900 text-white transition-colors hover:bg-stone-800"
-          onClick={onOpenCreate}
-          aria-label="追加"
-        >
-          <Plus size={16} aria-hidden="true" />
-        </button>
+        {showCreateButton ? (
+          <button
+            type="button"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-stone-900 text-white transition-colors hover:bg-stone-800"
+            onClick={onOpenCreate}
+            aria-label="追加"
+          >
+            <Plus size={16} aria-hidden="true" />
+          </button>
+        ) : null}
       </div>
 
       <div className="mt-4 border-t border-stone-200 pt-3">
