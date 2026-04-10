@@ -458,7 +458,7 @@ describe("App", () => {
     const shoppingButton = screen.getByRole("button", { name: "買い物" });
     const moreButton = screen.getByRole("button", { name: "その他" });
 
-    fireEvent.focus(summaryButton);
+    fireEvent.pointerEnter(summaryButton, { pointerType: "mouse" });
     fireEvent.touchStart(shoppingButton);
     await user.click(moreButton);
 
