@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -206,27 +207,33 @@ describe("App", () => {
     const user = userEvent.setup();
     render(<App />);
 
+    const primaryNav = within(
+      await screen.findByTestId("floating-nav-primary"),
+    );
+    const floatingNav = within(await screen.findByTestId("floating-nav"));
+
     await waitFor(() => {
       expect(
-        screen.getByRole("button", { name: "ホーム" }),
+        primaryNav.getByRole("button", { name: "ホーム" }),
       ).toBeInTheDocument();
       expect(
-        screen.getByRole("button", { name: "サマリー" }),
+        primaryNav.getByRole("button", { name: "買い物" }),
       ).toBeInTheDocument();
       expect(
-        screen.getByRole("button", { name: "買い物" }),
+        primaryNav.getByRole("button", { name: "カレンダー" }),
       ).toBeInTheDocument();
       expect(
-        screen.getByRole("button", { name: "その他" }),
+        primaryNav.getByRole("button", { name: "サマリー" }),
+      ).toBeInTheDocument();
+      expect(
+        floatingNav.getByRole("button", { name: "その他" }),
       ).toBeInTheDocument();
     });
 
-    await user.click(screen.getByRole("button", { name: "その他" }));
+    await user.click(floatingNav.getByRole("button", { name: "その他" }));
 
     expect(screen.getByRole("button", { name: "タスク" })).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "カレンダー" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "設定" })).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "ログアウト" }),
     ).toBeInTheDocument();
@@ -452,20 +459,29 @@ describe("App", () => {
 
     render(<App />);
 
-    const summaryButton = await screen.findByRole("button", {
-      name: "サマリー",
+    const primaryNav = within(
+      await screen.findByTestId("floating-nav-primary"),
+    );
+    const floatingNav = within(await screen.findByTestId("floating-nav"));
+    const shoppingButton = primaryNav.getByRole("button", {
+      name: "買い物",
     });
-    const shoppingButton = screen.getByRole("button", { name: "買い物" });
-    const moreButton = screen.getByRole("button", { name: "その他" });
+    const calendarButton = primaryNav.getByRole("button", {
+      name: "カレンダー",
+    });
+    const summaryButton = primaryNav.getByRole("button", { name: "サマリー" });
+    const moreButton = floatingNav.getByRole("button", { name: "その他" });
 
-    fireEvent.pointerEnter(summaryButton, { pointerType: "mouse" });
     fireEvent.touchStart(shoppingButton);
+    fireEvent.pointerEnter(calendarButton, { pointerType: "mouse" });
+    fireEvent.pointerEnter(summaryButton, { pointerType: "mouse" });
     await user.click(moreButton);
 
     const taskButton = screen.getByRole("button", { name: "タスク" });
     fireEvent.mouseEnter(taskButton);
 
     expect(mockPreloadAdminTasksPageChunk).toHaveBeenCalledTimes(1);
+    expect(mockPreloadReminderCalendarPageChunk).toHaveBeenCalledTimes(1);
     expect(mockPreloadAdminSummaryPageChunk).toHaveBeenCalledTimes(1);
     expect(mockPreloadShoppingListPageChunk).toHaveBeenCalledTimes(1);
   });
