@@ -500,7 +500,7 @@ export function FloatingNav({
 
       <div
         className="fixed left-1/2 z-50 w-[min(94vw,30rem)] -translate-x-1/2"
-        style={{ bottom: "calc(env(safe-area-inset-bottom) + 20px)" }}
+        style={{ bottom: "calc(env(safe-area-inset-bottom) + 10px)" }}
       >
         <div
           className={`pointer-events-auto absolute inset-x-0 bottom-[calc(100%+10px)] origin-bottom overflow-hidden rounded-[1.8rem] border border-white/40 p-3 shadow-[0_24px_48px_-30px_rgba(68,56,36,0.42),inset_0_1px_0_rgba(255,255,255,0.62)] transition-all duration-200 ease-out motion-reduce:transition-none ${
