@@ -37,6 +37,7 @@ import {
 } from "../../../lib/api/generated/client";
 import { FooterQuickAction } from "../../../shared/components/FooterQuickAction";
 import { FormSheet } from "../../../shared/components/FormSheet";
+import { PAGE_SECTION_CHROMELESS_CLASS_NAME } from "../../../shared/styles/pageSection";
 import { ConfirmModal } from "../../admin/components/ConfirmModal";
 import { statusMessageAtom } from "../../shell/state/status";
 import {
@@ -862,10 +863,14 @@ export function ReminderCalendarPage() {
           border-spacing: 0;
           border-radius: 1rem;
           overflow: hidden;
+          background: white;
         }
         .reminder-calendar .fc-theme-standard td,
         .reminder-calendar .fc-theme-standard th {
           border-color: rgb(231 229 228);
+        }
+        .reminder-calendar .fc .fc-daygrid-day {
+          background: white;
         }
         .reminder-calendar .fc-theme-standard tr > :last-child {
           border-right: 0;
@@ -930,7 +935,9 @@ export function ReminderCalendarPage() {
           }
         }
       `}</style>
-      <article className="animate-enter rounded-xl border border-stone-200 bg-white/90 p-2.5 shadow-sm md:rounded-2xl md:p-4">
+      <article
+        className={`animate-enter rounded-xl p-2.5 md:rounded-2xl md:p-4 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
+      >
         <div className="flex items-center justify-between gap-2">
           <div>
             <h2 className="text-lg font-semibold">リマインダーカレンダー</h2>
@@ -972,7 +979,7 @@ export function ReminderCalendarPage() {
         </div>
 
         <div
-          className="reminder-calendar relative mt-3 overflow-hidden rounded-2xl border border-stone-200 bg-[color:var(--color-washi-50)]"
+          className="reminder-calendar relative mt-3 overflow-hidden rounded-2xl border border-stone-200 bg-white"
           style={
             isMobile
               ? {

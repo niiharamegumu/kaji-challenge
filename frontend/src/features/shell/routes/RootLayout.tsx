@@ -251,7 +251,7 @@ export function RootLayout() {
       />
 
       <div className="mx-auto max-w-6xl">
-        <header className="rounded-xl border border-stone-200 bg-white/90 p-2.5 shadow-sm backdrop-blur md:rounded-2xl md:p-4">
+        <header className="p-2.5 md:p-4">
           <div className="flex items-center justify-between gap-2 md:gap-3">
             <div className="min-w-0 flex-1 overflow-x-auto">
               <h1 className="whitespace-nowrap text-xl font-semibold tracking-normal md:text-2xl md:font-bold md:tracking-wide">

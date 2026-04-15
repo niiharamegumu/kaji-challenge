@@ -35,6 +35,7 @@ import {
   type UpdateTaskRequest,
 } from "../../../lib/api/generated/client";
 import { FormSheet } from "../../../shared/components/FormSheet";
+import { PAGE_SECTION_CHROMELESS_CLASS_NAME } from "../../../shared/styles/pageSection";
 import {
   WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MAX,
   WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MIN,
@@ -66,6 +67,9 @@ type PendingDeleteTask = {
   id: string;
   title: string;
 };
+
+const MOBILE_SORT_DELAY_MS = 220;
+const MOBILE_SORT_TOLERANCE_PX = 8;
 
 type TaskItemsSectionProps = {
   tasks: Task[];
@@ -222,7 +226,7 @@ function SortableTaskItem({
     <li
       ref={setNodeRef}
       style={style}
-      className={`relative rounded-xl border border-stone-200 bg-white p-3 shadow-sm ${isDragging ? "opacity-70" : ""}`}
+      className={`relative rounded-xl border border-stone-200 bg-white p-3 shadow-sm ${isDragging ? "opacity-70 select-none" : ""}`}
     >
       {isEditing ? (
         <div className="grid gap-2">
@@ -326,7 +330,7 @@ function SortableTaskItem({
       {!isEditing ? (
         <button
           type="button"
-          className="absolute top-1/2 right-3 flex h-8 w-8 -translate-y-1/2 cursor-grab items-center justify-center rounded-md text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700 active:cursor-grabbing focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-400"
+          className="absolute top-1/2 right-3 flex h-8 w-8 -translate-y-1/2 cursor-grab touch-none select-none items-center justify-center rounded-md text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700 active:cursor-grabbing focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-400"
           onPointerDown={(event) => event.stopPropagation()}
           {...dragProps}
         >
@@ -362,7 +366,10 @@ function TaskItemsSection({
       activationConstraint: { distance: 8 },
     }),
     useSensor(TouchSensor, {
-      activationConstraint: { delay: 120, tolerance: 6 },
+      activationConstraint: {
+        delay: MOBILE_SORT_DELAY_MS,
+        tolerance: MOBILE_SORT_TOLERANCE_PX,
+      },
     }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
@@ -432,7 +439,9 @@ function TaskItemsSection({
 
   return (
     <>
-      <section className="mt-4 rounded-xl border border-stone-200 bg-white/90 p-3 shadow-sm md:rounded-2xl md:p-6">
+      <section
+        className={`mt-4 rounded-xl p-3 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
+      >
         <div className="flex items-center justify-between gap-3">
           <div>
             <h3 className="text-base font-semibold text-stone-900">
@@ -542,7 +551,9 @@ export function TaskManager({
 
   return (
     <>
-      <article className="animate-enter rounded-xl border border-stone-200 bg-white/90 p-3 shadow-sm md:rounded-2xl md:p-6">
+      <article
+        className={`animate-enter rounded-xl p-3 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
+      >
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-stone-900">タスク管理</h2>
           {showCreateButton ? (

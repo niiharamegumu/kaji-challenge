@@ -6,6 +6,7 @@ import type {
   UpdateShoppingListItemRequest,
 } from "../../../lib/api/generated/client";
 import { ShoppingListItemsSection } from "../../shopping-list/components/ShoppingListManager";
+import { HOME_PANEL_CLASS_NAME } from "./panelStyles";
 
 type Props = {
   items: ShoppingListItem[];
@@ -26,7 +27,7 @@ export function HomeShoppingListPanel({
   onUpdate,
 }: Props) {
   return (
-    <article className="animate-enter rounded-xl border border-stone-200 bg-white/90 p-2.5 shadow-sm md:rounded-2xl md:p-4">
+    <article className={HOME_PANEL_CLASS_NAME}>
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-lg font-semibold">買い物リスト</h2>
         <Link

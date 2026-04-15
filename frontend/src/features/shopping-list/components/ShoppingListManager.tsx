@@ -32,6 +32,7 @@ import type {
   UpdateShoppingListItemRequest,
 } from "../../../lib/api/generated/client";
 import { FormSheet } from "../../../shared/components/FormSheet";
+import { PAGE_SECTION_CHROMELESS_CLASS_NAME } from "../../../shared/styles/pageSection";
 import { ConfirmModal } from "../../admin/components/ConfirmModal";
 
 export type ShoppingItemFormState = {
@@ -90,15 +91,8 @@ type PendingCompleteItem = {
   name: string;
 };
 
-const jstDateFormatter = new Intl.DateTimeFormat("ja-JP", {
-  timeZone: "Asia/Tokyo",
-  month: "short",
-  day: "numeric",
-});
-
-function formatCreatedAt(value: string) {
-  return jstDateFormatter.format(new Date(value));
-}
+const MOBILE_SORT_DELAY_MS = 220;
+const MOBILE_SORT_TOLERANCE_PX = 8;
 
 const urlPattern = /https?:\/\/[^\s]+/g;
 const trailingPunctuationPattern = /[).,!?:;]+$/;
@@ -208,7 +202,7 @@ function SortableShoppingItem({
     <li
       ref={setNodeRef}
       style={style}
-      className={`relative rounded-xl border border-stone-200 bg-white p-3 shadow-sm ${isDragging ? "opacity-70" : ""}`}
+      className={`relative rounded-xl border border-stone-200 bg-white p-3 shadow-sm ${isDragging ? "opacity-70 select-none" : ""}`}
     >
       {isEditing ? (
         <div className="grid gap-2">
@@ -291,37 +285,36 @@ function SortableShoppingItem({
                   {renderNotesWithLinks(item.notes)}
                 </div>
               ) : null}
-              <div className="mt-2 text-[11px] text-stone-500">
-                追加日 {formatCreatedAt(item.createdAt)}
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    className="flex h-9 cursor-pointer items-center gap-1 rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 text-xs text-stone-700 transition-colors hover:bg-stone-100"
+                    onClick={() => onStartEdit(item)}
+                    aria-label="編集"
+                    onPointerDown={(event) => event.stopPropagation()}
+                  >
+                    <Pencil size={14} aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    className="flex h-9 cursor-pointer items-center gap-1 rounded-lg border border-[color:var(--color-matcha-300)] bg-[color:var(--color-matcha-50)] px-2.5 py-1.5 text-xs text-[color:var(--color-matcha-700)] transition-colors hover:bg-[color:var(--color-matcha-100)]"
+                    onClick={onComplete}
+                    onPointerDown={(event) => event.stopPropagation()}
+                  >
+                    <ShoppingBasket size={14} aria-hidden="true" />
+                    <span>購入済みにする</span>
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              className="flex h-9 cursor-pointer items-center gap-1 rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 text-xs text-stone-700 transition-colors hover:bg-stone-100"
-              onClick={() => onStartEdit(item)}
-              aria-label="編集"
-              onPointerDown={(event) => event.stopPropagation()}
-            >
-              <Pencil size={14} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              className="flex h-9 cursor-pointer items-center gap-1 rounded-lg border border-[color:var(--color-matcha-300)] bg-[color:var(--color-matcha-50)] px-2.5 py-1.5 text-xs text-[color:var(--color-matcha-700)] transition-colors hover:bg-[color:var(--color-matcha-100)]"
-              onClick={onComplete}
-              onPointerDown={(event) => event.stopPropagation()}
-            >
-              <ShoppingBasket size={14} aria-hidden="true" />
-              <span>購入済みにする</span>
-            </button>
           </div>
         </>
       )}
       {!isEditing ? (
         <button
           type="button"
-          className="absolute top-1/2 right-3 flex h-8 w-8 -translate-y-1/2 cursor-grab items-center justify-center rounded-md text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700 active:cursor-grabbing focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-400"
+          className="absolute top-1/2 right-3 flex h-8 w-8 -translate-y-1/2 cursor-grab touch-none select-none items-center justify-center rounded-md text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700 active:cursor-grabbing focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-400"
           onPointerDown={(event) => event.stopPropagation()}
           {...dragProps}
         >
@@ -408,7 +401,7 @@ export function ShoppingListItemsSection({
   description,
   headerContent,
   showSectionChrome = true,
-  articleClassName = "mt-3 rounded-xl border border-stone-200 bg-white/90 p-3 shadow-sm md:mt-4 md:rounded-2xl md:p-6",
+  articleClassName = `mt-3 rounded-xl p-3 md:mt-4 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`,
   listClassName = "mt-4",
   emptyClassName = "mt-4 rounded-xl border border-dashed border-stone-300 bg-stone-50/80 px-4 py-8 text-center text-sm text-stone-600",
   emptyMessage = "買い物項目はまだありません。必要なものを追加してください。",
@@ -431,7 +424,10 @@ export function ShoppingListItemsSection({
       activationConstraint: { distance: 8 },
     }),
     useSensor(TouchSensor, {
-      activationConstraint: { delay: 120, tolerance: 6 },
+      activationConstraint: {
+        delay: MOBILE_SORT_DELAY_MS,
+        tolerance: MOBILE_SORT_TOLERANCE_PX,
+      },
     }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
@@ -593,7 +589,9 @@ export function ShoppingListManager({
 
   return (
     <>
-      <article className="animate-enter rounded-xl border border-stone-200 bg-white/90 p-3 shadow-sm md:rounded-2xl md:p-6">
+      <article
+        className={`animate-enter rounded-xl p-3 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
+      >
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-stone-900">買い物リスト</h2>
           {showCreateButton ? (
