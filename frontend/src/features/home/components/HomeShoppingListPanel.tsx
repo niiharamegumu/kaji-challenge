@@ -28,7 +28,7 @@ export function HomeShoppingListPanel({
 }: Props) {
   return (
     <article className={HOME_PANEL_CLASS_NAME}>
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center justify-between gap-2 px-2 md:px-0">
         <h2 className="text-lg font-semibold">買い物リスト</h2>
         <Link
           to="/shopping-list"
@@ -48,7 +48,7 @@ export function HomeShoppingListPanel({
         articleClassName="mt-2"
         listClassName=""
         emptyMessage="買い物項目はまだありません。必要なものを追加してください。"
-        emptyClassName="rounded-xl border border-dashed border-stone-300 bg-stone-50/80 px-4 py-8 text-center text-sm text-stone-600"
+        emptyClassName="mx-2 rounded-xl border border-dashed border-stone-300 bg-stone-50/80 px-4 py-8 text-center text-sm text-stone-600 md:mx-0"
       />
     </article>
   );

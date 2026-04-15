@@ -401,9 +401,9 @@ export function ShoppingListItemsSection({
   description,
   headerContent,
   showSectionChrome = true,
-  articleClassName = `mt-3 rounded-xl p-3 md:mt-4 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`,
+  articleClassName = `mt-3 rounded-xl px-0 py-3 md:mt-4 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`,
   listClassName = "mt-4",
-  emptyClassName = "mt-4 rounded-xl border border-dashed border-stone-300 bg-stone-50/80 px-4 py-8 text-center text-sm text-stone-600",
+  emptyClassName = "mx-2 mt-4 rounded-xl border border-dashed border-stone-300 bg-stone-50/80 px-4 py-8 text-center text-sm text-stone-600 md:mx-0",
   emptyMessage = "買い物項目はまだありません。必要なものを追加してください。",
 }: ShoppingListItemsSectionProps) {
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
@@ -489,7 +489,7 @@ export function ShoppingListItemsSection({
     <>
       <article className={articleClassName}>
         {showSectionChrome ? (
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center justify-between gap-3 px-2 md:px-0">
             <div>
               <h3 className="text-base font-semibold text-stone-900">
                 {title}
@@ -508,7 +508,7 @@ export function ShoppingListItemsSection({
             </div>
           </div>
         ) : isReordering ? (
-          <div className="text-right text-xs text-stone-500">
+          <div className="px-2 text-right text-xs text-stone-500 md:px-0">
             並び順を保存中...
           </div>
         ) : null}
@@ -590,9 +590,9 @@ export function ShoppingListManager({
   return (
     <>
       <article
-        className={`animate-enter rounded-xl p-3 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
+        className={`animate-enter rounded-xl px-0 py-3 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
       >
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center justify-between gap-3 px-2 md:px-0">
           <h2 className="text-lg font-semibold text-stone-900">買い物リスト</h2>
           {showCreateButton ? (
             <button
@@ -620,7 +620,7 @@ export function ShoppingListManager({
             }
           />
         </div>
-        <p className="mt-4 text-xs text-stone-500">
+        <p className="mt-4 px-2 text-xs text-stone-500 md:px-0">
           今必要なものだけをチームで共有します。購入済みにすると一覧から消えます。
         </p>
       </article>

@@ -27,8 +27,8 @@ export function HomePageSkeleton() {
       <section className="grid gap-2 md:grid-cols-2 md:gap-4">
         {["daily", "weekly"].map((panel) => (
           <article key={panel} className={HOME_PANEL_SKELETON_CLASS_NAME}>
-            <div className="h-6 w-28 rounded bg-stone-200" />
-            <div className="mt-3 space-y-2">
+            <div className="mx-2 h-6 w-28 rounded bg-stone-200 md:mx-0" />
+            <div className="mx-2 mt-3 space-y-2 md:mx-0">
               {[0, 1, 2].map((row) => (
                 <div
                   key={`${panel}-${row}`}
@@ -47,8 +47,8 @@ export function HomePageSkeleton() {
       <section className="grid gap-2 md:grid-cols-2 md:gap-4">
         {["reminders", "shopping"].map((panel) => (
           <article key={panel} className={HOME_PANEL_SKELETON_CLASS_NAME}>
-            <div className="h-6 w-28 rounded bg-stone-200" />
-            <div className="mt-3 space-y-2">
+            <div className="mx-2 h-6 w-28 rounded bg-stone-200 md:mx-0" />
+            <div className="mx-2 mt-3 space-y-2 md:mx-0">
               {[0, 1, 2].map((row) => (
                 <div
                   key={`${panel}-${row}`}

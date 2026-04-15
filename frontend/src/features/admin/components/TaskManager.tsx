@@ -440,9 +440,9 @@ function TaskItemsSection({
   return (
     <>
       <section
-        className={`mt-4 rounded-xl p-3 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
+        className={`mt-4 rounded-xl px-0 py-3 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
       >
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center justify-between gap-3 px-2 md:px-0">
           <div>
             <h3 className="text-base font-semibold text-stone-900">
               {sectionTitle}
@@ -464,7 +464,7 @@ function TaskItemsSection({
         </div>
 
         {optimisticTasks.length === 0 ? (
-          <div className="mt-4 rounded-xl border border-dashed border-stone-300 bg-stone-50/80 px-4 py-8 text-center text-sm text-stone-600">
+          <div className="mx-2 mt-4 rounded-xl border border-dashed border-stone-300 bg-stone-50/80 px-4 py-8 text-center text-sm text-stone-600 md:mx-0">
             {emptyMessage}
           </div>
         ) : (
@@ -552,9 +552,9 @@ export function TaskManager({
   return (
     <>
       <article
-        className={`animate-enter rounded-xl p-3 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
+        className={`animate-enter rounded-xl px-0 py-3 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
       >
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center justify-between gap-3 px-2 md:px-0">
           <h2 className="text-lg font-semibold text-stone-900">タスク管理</h2>
           {showCreateButton ? (
             <button
@@ -567,7 +567,7 @@ export function TaskManager({
             </button>
           ) : null}
         </div>
-        <p className="mt-4 border-t border-stone-200 pt-4 text-xs text-stone-500">
+        <p className="mt-4 border-t border-stone-200 px-2 pt-4 text-xs text-stone-500 md:px-0">
           タスク設定はチーム共通です。並び替えは管理画面でのみ変更できます。
         </p>
       </article>

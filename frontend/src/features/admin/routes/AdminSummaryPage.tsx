@@ -232,9 +232,9 @@ export function AdminSummaryPage() {
   return (
     <section className="mt-2 w-full pb-1 md:mt-4">
       <article
-        className={`animate-enter rounded-xl p-2.5 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
+        className={`animate-enter rounded-xl px-0 py-2.5 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
       >
-        <div className="flex items-start justify-between gap-2 max-[360px]:flex-wrap max-[360px]:items-end">
+        <div className="flex items-start justify-between gap-2 px-2 max-[360px]:flex-wrap max-[360px]:items-end md:px-0">
           <div className="shrink-0">
             <h2 className="text-lg font-semibold">月次サマリー</h2>
             {status !== "" ? (
@@ -374,10 +374,12 @@ export function AdminSummaryPage() {
         </div>
 
         <div className="mt-4 border-t border-stone-200 pt-3">
-          <h3 className="text-base font-semibold">発生しているペナルティ</h3>
+          <h3 className="px-2 text-base font-semibold md:px-0">
+            発生しているペナルティ
+          </h3>
 
           {triggeredPenalties.length === 0 ? (
-            <p className="mt-3 text-sm text-stone-500">
+            <p className="mt-3 px-2 text-sm text-stone-500 md:px-0">
               発動ペナルティはありません。
             </p>
           ) : (
@@ -415,10 +417,10 @@ export function AdminSummaryPage() {
         </div>
 
         <div className="mt-4 border-t border-stone-200 pt-3">
-          <h3 className="text-base font-semibold">日次サマリー</h3>
+          <h3 className="px-2 text-base font-semibold md:px-0">日次サマリー</h3>
 
           {monthlyTaskStatusGroups.length === 0 ? (
-            <p className="mt-3 text-sm text-stone-500">
+            <p className="mt-3 px-2 text-sm text-stone-500 md:px-0">
               対象月のタスク履歴はありません。
             </p>
           ) : (
@@ -431,9 +433,9 @@ export function AdminSummaryPage() {
                 const isCrossMonthWeek = date.getDay() !== 1;
 
                 return (
-                  <section key={group.date} className="px-1">
+                  <section key={group.date}>
                     <h4
-                      className={`flex items-center gap-2 text-sm font-semibold ${
+                      className={`flex items-center gap-2 px-2 text-sm font-semibold md:px-0 ${
                         group.date < currentDateKey
                           ? "text-stone-400"
                           : "text-stone-800"

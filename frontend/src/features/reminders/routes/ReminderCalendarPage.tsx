@@ -936,15 +936,15 @@ export function ReminderCalendarPage() {
         }
       `}</style>
       <article
-        className={`animate-enter rounded-xl p-2.5 md:rounded-2xl md:p-4 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
+        className={`animate-enter rounded-xl px-0 py-2.5 md:rounded-2xl md:p-4 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
       >
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center justify-between gap-2 px-2 md:px-0">
           <div>
             <h2 className="text-lg font-semibold">リマインダーカレンダー</h2>
           </div>
         </div>
 
-        <div className="mt-4 flex items-center justify-between gap-3">
+        <div className="mt-4 flex items-center justify-between gap-3 px-2 md:px-0">
           <div className="flex min-w-0 items-center gap-2">
             <button
               type="button"
