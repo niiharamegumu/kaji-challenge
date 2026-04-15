@@ -23,6 +23,7 @@ import {
 } from "../../../lib/api/generated/client";
 import { CompletionSlots } from "../../../shared/components/CompletionSlots";
 import { queryKeys } from "../../../shared/query/queryKeys";
+import { PAGE_SECTION_CHROMELESS_CLASS_NAME } from "../../../shared/styles/pageSection";
 import {
   dateStringInJST,
   formatError,
@@ -230,7 +231,9 @@ export function AdminSummaryPage() {
 
   return (
     <section className="mt-2 w-full pb-1 md:mt-4">
-      <article className="animate-enter rounded-xl border border-stone-200 bg-white/90 p-2.5 shadow-sm md:rounded-2xl md:p-6">
+      <article
+        className={`animate-enter rounded-xl p-2.5 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
+      >
         <div className="flex items-start justify-between gap-2 max-[360px]:flex-wrap max-[360px]:items-end">
           <div className="shrink-0">
             <h2 className="text-lg font-semibold">月次サマリー</h2>

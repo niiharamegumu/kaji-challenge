@@ -35,6 +35,7 @@ import {
   type UpdateTaskRequest,
 } from "../../../lib/api/generated/client";
 import { FormSheet } from "../../../shared/components/FormSheet";
+import { PAGE_SECTION_CHROMELESS_CLASS_NAME } from "../../../shared/styles/pageSection";
 import {
   WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MAX,
   WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MIN,
@@ -362,7 +363,10 @@ function TaskItemsSection({
       activationConstraint: { distance: 8 },
     }),
     useSensor(TouchSensor, {
-      activationConstraint: { delay: 120, tolerance: 6 },
+      activationConstraint: {
+        delay: MOBILE_SORT_DELAY_MS,
+        tolerance: MOBILE_SORT_TOLERANCE_PX,
+      },
     }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
@@ -432,7 +436,9 @@ function TaskItemsSection({
 
   return (
     <>
-      <section className="mt-4 rounded-xl border border-stone-200 bg-white/90 p-3 shadow-sm md:rounded-2xl md:p-6">
+      <section
+        className={`mt-4 rounded-xl p-3 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
+      >
         <div className="flex items-center justify-between gap-3">
           <div>
             <h3 className="text-base font-semibold text-stone-900">

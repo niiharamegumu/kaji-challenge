@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import type { TeamMember } from "../../../lib/api/generated/client";
+import { PAGE_SECTION_CHROMELESS_CLASS_NAME } from "../../../shared/styles/pageSection";
 import { PushNotificationsSection } from "../../push/components/PushNotificationsSection";
 import { COPY_FEEDBACK_TIMEOUT_MS } from "../constants/invite";
 import type { InviteState } from "../state/ui";
@@ -128,7 +129,9 @@ export function InviteManager({
         </p>
       </header>
 
-      <article className="rounded-xl border border-stone-200 bg-white/90 p-2.5 shadow-sm md:rounded-2xl md:p-6">
+      <article
+        className={`rounded-xl p-2.5 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
+      >
         <h2 className="text-base font-semibold text-stone-900">チーム設定</h2>
         <div className="mt-3 space-y-6">
           <TeamNameSection
@@ -171,7 +174,9 @@ export function InviteManager({
         </div>
       </article>
 
-      <article className="rounded-xl border border-stone-200 bg-white/90 p-2.5 shadow-sm md:rounded-2xl md:p-6">
+      <article
+        className={`rounded-xl p-2.5 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
+      >
         <h2 className="text-base font-semibold text-stone-900">
           アカウント設定
         </h2>

@@ -7,6 +7,7 @@ import type {
   UpdatePenaltyRuleRequest,
 } from "../../../lib/api/generated/client";
 import { FormSheet } from "../../../shared/components/FormSheet";
+import { PAGE_SECTION_CHROMELESS_CLASS_NAME } from "../../../shared/styles/pageSection";
 import type { RuleFormState } from "../state/forms";
 import { DeleteConfirmModal } from "./DeleteConfirmModal";
 
@@ -114,7 +115,9 @@ export function PenaltyRuleManager({
   };
 
   return (
-    <article className="animate-enter rounded-xl border border-stone-200 bg-white/90 p-2.5 shadow-sm md:rounded-2xl md:p-6">
+    <article
+      className={`animate-enter rounded-xl p-2.5 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
+    >
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-lg font-semibold">ペナルティ管理</h2>
         {showCreateButton ? (

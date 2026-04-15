@@ -32,6 +32,7 @@ import type {
   UpdateShoppingListItemRequest,
 } from "../../../lib/api/generated/client";
 import { FormSheet } from "../../../shared/components/FormSheet";
+import { PAGE_SECTION_CHROMELESS_CLASS_NAME } from "../../../shared/styles/pageSection";
 import { ConfirmModal } from "../../admin/components/ConfirmModal";
 
 export type ShoppingItemFormState = {
@@ -431,7 +432,10 @@ export function ShoppingListItemsSection({
       activationConstraint: { distance: 8 },
     }),
     useSensor(TouchSensor, {
-      activationConstraint: { delay: 120, tolerance: 6 },
+      activationConstraint: {
+        delay: MOBILE_SORT_DELAY_MS,
+        tolerance: MOBILE_SORT_TOLERANCE_PX,
+      },
     }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
@@ -593,7 +597,9 @@ export function ShoppingListManager({
 
   return (
     <>
-      <article className="animate-enter rounded-xl border border-stone-200 bg-white/90 p-3 shadow-sm md:rounded-2xl md:p-6">
+      <article
+        className={`animate-enter rounded-xl p-3 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
+      >
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-stone-900">買い物リスト</h2>
           {showCreateButton ? (

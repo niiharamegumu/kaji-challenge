@@ -11,6 +11,7 @@ import { DailyTasksPanel } from "../components/DailyTasksPanel";
 import { HomeShoppingListPanel } from "../components/HomeShoppingListPanel";
 import { WeeklyRemindersPanel } from "../components/WeeklyRemindersPanel";
 import { WeeklyTasksPanel } from "../components/WeeklyTasksPanel";
+import { HOME_PANEL_SKELETON_CLASS_NAME } from "../components/panelStyles";
 import {
   useHomeQuery,
   useToggleCompletionMutation,
@@ -25,10 +26,7 @@ export function HomePageSkeleton() {
     >
       <section className="grid gap-2 md:grid-cols-2 md:gap-4">
         {["daily", "weekly"].map((panel) => (
-          <article
-            key={panel}
-            className="animate-pulse rounded-xl border border-stone-200 bg-white/90 p-2.5 shadow-sm md:rounded-2xl md:p-4"
-          >
+          <article key={panel} className={HOME_PANEL_SKELETON_CLASS_NAME}>
             <div className="h-6 w-28 rounded bg-stone-200" />
             <div className="mt-3 space-y-2">
               {[0, 1, 2].map((row) => (
@@ -48,10 +46,7 @@ export function HomePageSkeleton() {
 
       <section className="grid gap-2 md:grid-cols-2 md:gap-4">
         {["reminders", "shopping"].map((panel) => (
-          <article
-            key={panel}
-            className="animate-pulse rounded-xl border border-stone-200 bg-white/90 p-2.5 shadow-sm md:rounded-2xl md:p-4"
-          >
+          <article key={panel} className={HOME_PANEL_SKELETON_CLASS_NAME}>
             <div className="h-6 w-28 rounded bg-stone-200" />
             <div className="mt-3 space-y-2">
               {[0, 1, 2].map((row) => (

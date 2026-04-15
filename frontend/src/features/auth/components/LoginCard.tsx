@@ -1,6 +1,7 @@
 import { LogIn } from "lucide-react";
 
 import { useMarkInitialScreenReady } from "../../../app/boot";
+import { PAGE_SECTION_CHROMELESS_CLASS_NAME } from "../../../shared/styles/pageSection";
 
 type Props = {
   status: string;
@@ -12,7 +13,9 @@ export function LoginCard({ status, onLogin }: Props) {
 
   return (
     <main className="ios-safe-main flex min-h-screen items-center justify-center bg-[color:var(--color-washi-50)] px-2 py-4 text-stone-800 md:p-6">
-      <div className="mx-auto max-w-4xl rounded-xl border border-stone-200 bg-white/90 p-3 shadow-sm backdrop-blur animate-enter md:rounded-2xl md:p-8">
+      <div
+        className={`mx-auto max-w-4xl animate-enter p-3 md:p-8 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
+      >
         <section className="mx-auto max-w-2xl">
           <div className="flex items-center justify-center gap-3 md:justify-start">
             <img
