@@ -209,7 +209,7 @@ function SortableShoppingItem({
     <li
       ref={setNodeRef}
       style={style}
-      className={`relative rounded-xl border border-stone-200 bg-white p-3 shadow-sm ${isDragging ? "opacity-70" : ""}`}
+      className={`relative rounded-xl border border-stone-200 bg-white p-3 shadow-sm ${isDragging ? "opacity-70 select-none" : ""}`}
     >
       {isEditing ? (
         <div className="grid gap-2">

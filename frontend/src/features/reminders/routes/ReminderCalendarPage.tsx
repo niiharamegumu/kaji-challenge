@@ -863,10 +863,14 @@ export function ReminderCalendarPage() {
           border-spacing: 0;
           border-radius: 1rem;
           overflow: hidden;
+          background: white;
         }
         .reminder-calendar .fc-theme-standard td,
         .reminder-calendar .fc-theme-standard th {
           border-color: rgb(231 229 228);
+        }
+        .reminder-calendar .fc .fc-daygrid-day {
+          background: white;
         }
         .reminder-calendar .fc-theme-standard tr > :last-child {
           border-right: 0;
@@ -975,7 +979,7 @@ export function ReminderCalendarPage() {
         </div>
 
         <div
-          className="reminder-calendar relative mt-3 overflow-hidden rounded-2xl border border-stone-200 bg-[color:var(--color-washi-50)]"
+          className="reminder-calendar relative mt-3 overflow-hidden rounded-2xl border border-stone-200 bg-white"
           style={
             isMobile
               ? {

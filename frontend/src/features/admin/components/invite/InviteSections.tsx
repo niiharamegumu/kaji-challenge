@@ -8,6 +8,9 @@ import {
 import type { InviteState } from "../../state/ui";
 import { formatDateTime } from "./inviteUtils";
 
+const SETTINGS_PRIMARY_BUTTON_CLASS_NAME =
+  "min-h-11 rounded-lg bg-stone-900 px-4 py-2 text-sm whitespace-nowrap text-white transition-colors duration-200 hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-60";
+
 type TeamNameSectionProps = {
   teamName: string;
   teamNameError: string;
@@ -41,7 +44,7 @@ export function TeamNameSection({
           />
           <button
             type="button"
-            className="min-h-11 rounded-lg border border-stone-400 px-4 py-2 text-sm whitespace-nowrap text-stone-800 transition-colors duration-200 hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
+            className={SETTINGS_PRIMARY_BUTTON_CLASS_NAME}
             onClick={onSaveTeamName}
             disabled={isSavingTeamName || teamNameError.length > 0}
           >
@@ -219,7 +222,7 @@ export function JoinTeamSection({
           />
           <button
             type="button"
-            className="flex min-h-11 items-center justify-center rounded-lg border border-stone-400 px-4 py-2 text-sm whitespace-nowrap text-stone-800 transition-colors duration-200 hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
+            className={`flex items-center justify-center ${SETTINGS_PRIMARY_BUTTON_CLASS_NAME}`}
             onClick={onJoinTeam}
             disabled={isJoiningTeam || joinCode.trim().length === 0}
           >
@@ -274,7 +277,7 @@ export function AccountSettingsSection({
           />
           <button
             type="button"
-            className="flex min-h-11 items-center justify-center rounded-lg border border-stone-400 px-4 py-2 text-sm whitespace-nowrap text-stone-800 transition-colors duration-200 hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
+            className={`flex items-center justify-center ${SETTINGS_PRIMARY_BUTTON_CLASS_NAME}`}
             onClick={onSaveNickname}
             disabled={isSavingNickname || nicknameError.length > 0}
           >
@@ -309,7 +312,7 @@ export function AccountSettingsSection({
           />
           <button
             type="button"
-            className="flex min-h-11 items-center justify-center rounded-lg border border-stone-400 px-4 py-2 text-sm whitespace-nowrap text-stone-800 transition-colors duration-200 hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
+            className={`flex items-center justify-center ${SETTINGS_PRIMARY_BUTTON_CLASS_NAME}`}
             onClick={onSaveColor}
             disabled={isSavingColor || colorHexError.length > 0}
           >
