@@ -10,10 +10,12 @@ type Props = {
 export function DailyTasksPanel({ items, onToggle }: Props) {
   return (
     <article className={HOME_PANEL_CLASS_NAME}>
-      <h2 className="text-lg font-semibold">毎日タスク</h2>
+      <h2 className="px-2 text-lg font-semibold md:px-0">毎日タスク</h2>
       <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
         {items.length === 0 ? (
-          <p className="text-sm text-stone-500">毎日タスクはありません。</p>
+          <p className="px-2 text-sm text-stone-500 md:px-0">
+            毎日タスクはありません。
+          </p>
         ) : (
           items.map((item) => (
             <button

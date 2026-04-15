@@ -25,7 +25,7 @@ function reminderKindLabel(item: ReminderOccurrence) {
 export function WeeklyRemindersPanel({ items }: Props) {
   return (
     <article className={HOME_PANEL_CLASS_NAME}>
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center justify-between gap-2 px-2 md:px-0">
         <h2 className="text-lg font-semibold">今週のリマインダー</h2>
         <Link
           to="/calendar"
@@ -36,7 +36,7 @@ export function WeeklyRemindersPanel({ items }: Props) {
         </Link>
       </div>
       {items.length === 0 ? (
-        <p className="mt-2 text-sm text-stone-500">
+        <p className="mt-2 px-2 text-sm text-stone-500 md:px-0">
           今週のリマインダーはありません。
         </p>
       ) : (

@@ -14,9 +14,9 @@ export function LoginCard({ status, onLogin }: Props) {
   return (
     <main className="ios-safe-main flex min-h-screen items-center justify-center bg-[color:var(--color-washi-50)] px-2 py-4 text-stone-800 md:p-6">
       <div
-        className={`mx-auto max-w-4xl animate-enter p-3 md:p-8 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
+        className={`mx-auto max-w-4xl animate-enter px-0 py-3 md:p-8 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
       >
-        <section className="mx-auto max-w-2xl">
+        <section className="mx-auto max-w-2xl px-2 md:px-0">
           <div className="flex items-center justify-center gap-3 md:justify-start">
             <img
               src="/icons/pwa-192x192.png"
@@ -36,7 +36,7 @@ export function LoginCard({ status, onLogin }: Props) {
           </p>
         </section>
 
-        <div className="mt-6 flex justify-center md:justify-start">
+        <div className="mt-6 flex justify-center px-2 md:justify-start md:px-0">
           <button
             type="button"
             className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 py-2 text-white transition-colors duration-200 hover:bg-stone-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white md:w-fit md:min-w-72"
@@ -47,7 +47,7 @@ export function LoginCard({ status, onLogin }: Props) {
           </button>
         </div>
         <p
-          className="mt-4 text-sm text-stone-700"
+          className="mt-4 px-2 text-sm text-stone-700 md:px-0"
           data-testid="status-message"
           aria-live="polite"
         >

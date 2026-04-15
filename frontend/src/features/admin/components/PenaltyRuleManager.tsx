@@ -116,9 +116,9 @@ export function PenaltyRuleManager({
 
   return (
     <article
-      className={`animate-enter rounded-xl p-2.5 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
+      className={`animate-enter rounded-xl px-0 py-2.5 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
     >
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-3 px-2 md:px-0">
         <h2 className="text-lg font-semibold">ペナルティ管理</h2>
         {showCreateButton ? (
           <button
@@ -134,7 +134,7 @@ export function PenaltyRuleManager({
 
       <div className="mt-4 border-t border-stone-200 pt-3">
         {sortedRules.length === 0 ? (
-          <p className="text-sm text-stone-500">
+          <p className="px-2 text-sm text-stone-500 md:px-0">
             ペナルティルールはまだありません。
           </p>
         ) : (

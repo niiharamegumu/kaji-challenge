@@ -29,8 +29,8 @@ export function WeeklyTasksPanel({
 
   return (
     <article className={HOME_PANEL_CLASS_NAME}>
-      <h2 className="text-lg font-semibold">週間タスク</h2>
-      <dl className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
+      <h2 className="px-2 text-lg font-semibold md:px-0">週間タスク</h2>
+      <dl className="mt-2 flex flex-wrap items-center gap-1.5 px-2 text-xs md:px-0">
         <div className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-stone-700">
           <dt className="text-[11px] text-stone-500">経過</dt>
           <dd className="font-medium">{elapsedDaysBeforeToday}日</dd>
@@ -45,7 +45,9 @@ export function WeeklyTasksPanel({
         </div>
       </dl>
       {items.length === 0 ? (
-        <p className="mt-2 text-sm text-stone-500">週間タスクはありません。</p>
+        <p className="mt-2 px-2 text-sm text-stone-500 md:px-0">
+          週間タスクはありません。
+        </p>
       ) : (
         <ul className="mt-2 space-y-2">
           {items.map((item) => {
