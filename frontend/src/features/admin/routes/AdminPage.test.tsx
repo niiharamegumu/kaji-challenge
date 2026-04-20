@@ -399,7 +399,9 @@ describe("AdminTasksPage", () => {
         ],
       },
     });
-    let resolveReorder: ((value: unknown) => void) | null = null;
+    let resolveReorder: (value: unknown) => void = () => {
+      throw new Error("reorder resolver was not registered");
+    };
     mockPostTasksReorder.mockImplementation(
       () =>
         new Promise((resolve) => {
@@ -441,10 +443,6 @@ describe("AdminTasksPage", () => {
       expect(within(dailyItems[0]).getByText("洗濯")).toBeInTheDocument();
       expect(within(dailyItems[1]).getByText("皿洗い")).toBeInTheDocument();
     });
-
-    if (resolveReorder == null) {
-      throw new Error("reorder resolver was not registered");
-    }
 
     resolveReorder({
       data: {
