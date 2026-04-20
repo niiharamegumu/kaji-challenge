@@ -25,7 +25,7 @@ import {
   X,
 } from "lucide-react";
 import type { ChangeEvent, ReactNode } from "react";
-import { startTransition, useOptimistic, useState } from "react";
+import { startTransition, useState } from "react";
 
 import type {
   ShoppingListItem,
@@ -33,6 +33,11 @@ import type {
 } from "../../../lib/api/generated/client";
 import { FormSheet } from "../../../shared/components/FormSheet";
 import { PAGE_SECTION_CHROMELESS_CLASS_NAME } from "../../../shared/styles/pageSection";
+import {
+  restrictToVerticalAxis,
+  smoothSortableLayoutChanges,
+  smoothSortableTransition,
+} from "../../../shared/utils/sortableAnimation";
 import { ConfirmModal } from "../../admin/components/ConfirmModal";
 
 export type ShoppingItemFormState = {
@@ -182,11 +187,15 @@ function SortableShoppingItem({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: item.id });
+  } = useSortable({
+    id: item.id,
+    animateLayoutChanges: smoothSortableLayoutChanges,
+    transition: smoothSortableTransition,
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),
-    transition,
+    transition: isDragging ? undefined : transition,
   };
 
   const canSave = editState.name.trim().length > 0;
@@ -414,10 +423,27 @@ export function ShoppingListItemsSection({
   });
   const [pendingCompleteItem, setPendingCompleteItem] =
     useState<PendingCompleteItem | null>(null);
-  const [optimisticItems, setOptimisticItems] = useOptimistic(
-    items,
-    (_currentItems, nextItems: ShoppingListItem[]) => nextItems,
+  const [optimisticItemIds, setOptimisticItemIds] = useState<string[] | null>(
+    null,
   );
+
+  const serverItemIds = items.map((item) => item.id);
+  const shouldUseOptimisticOrder =
+    optimisticItemIds != null &&
+    optimisticItemIds.length === serverItemIds.length &&
+    optimisticItemIds.some((itemId, index) => itemId !== serverItemIds[index]);
+  const optimisticItemIndex =
+    shouldUseOptimisticOrder && optimisticItemIds != null
+      ? new Map(optimisticItemIds.map((itemId, index) => [itemId, index]))
+      : null;
+  const optimisticItems =
+    optimisticItemIndex == null
+      ? items
+      : [...items].sort(
+          (left, right) =>
+            (optimisticItemIndex.get(left.id) ?? Number.MAX_SAFE_INTEGER) -
+            (optimisticItemIndex.get(right.id) ?? Number.MAX_SAFE_INTEGER),
+        );
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -447,7 +473,7 @@ export function ShoppingListItemsSection({
     }
     const nextItems = arrayMove(optimisticItems, oldIndex, newIndex);
     startTransition(() => {
-      setOptimisticItems(nextItems);
+      setOptimisticItemIds(nextItems.map((item) => item.id));
     });
     onReorder(nextItems.map((item) => item.id));
   };
@@ -518,6 +544,7 @@ export function ShoppingListItemsSection({
         ) : (
           <DndContext
             sensors={sensors}
+            modifiers={[restrictToVerticalAxis]}
             collisionDetection={closestCenter}
             onDragEnd={handleDragEnd}
           >

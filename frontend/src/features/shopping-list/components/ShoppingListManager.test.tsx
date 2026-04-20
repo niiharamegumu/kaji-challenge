@@ -1,6 +1,6 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ShoppingListManager } from "./ShoppingListManager";
 
@@ -19,6 +19,10 @@ type MockChildrenProps = {
 };
 
 let latestOnDragEnd: ((event: MockDragEndEvent) => void) | null = null;
+
+afterEach(() => {
+  cleanup();
+});
 
 vi.mock("@dnd-kit/core", async () => {
   const React = await vi.importActual<typeof import("react")>("react");
@@ -50,6 +54,7 @@ vi.mock("@dnd-kit/sortable", async () => {
       nextItems.splice(newIndex, 0, moved);
       return nextItems;
     },
+    defaultAnimateLayoutChanges: vi.fn(() => true),
     sortableKeyboardCoordinates: vi.fn(),
     useSortable: vi.fn(() => ({
       attributes: {},
@@ -120,32 +125,33 @@ describe("ShoppingListManager", () => {
 
   it("reorders items from the drag-and-drop path", () => {
     const onReorder = vi.fn();
+    const items = [
+      {
+        id: "item-1",
+        teamId: "team-1",
+        name: "牛乳",
+        quantity: null,
+        notes: null,
+        position: 1,
+        createdAt: "2026-03-01T00:00:00Z",
+        updatedAt: "2026-03-01T00:00:00Z",
+      },
+      {
+        id: "item-2",
+        teamId: "team-1",
+        name: "卵",
+        quantity: null,
+        notes: null,
+        position: 2,
+        createdAt: "2026-03-01T00:00:00Z",
+        updatedAt: "2026-03-01T00:00:00Z",
+      },
+    ];
 
-    render(
+    const { rerender } = render(
       <ShoppingListManager
         form={{ name: "", quantity: "", notes: "" }}
-        items={[
-          {
-            id: "item-1",
-            teamId: "team-1",
-            name: "牛乳",
-            quantity: null,
-            notes: null,
-            position: 1,
-            createdAt: "2026-03-01T00:00:00Z",
-            updatedAt: "2026-03-01T00:00:00Z",
-          },
-          {
-            id: "item-2",
-            teamId: "team-1",
-            name: "卵",
-            quantity: null,
-            notes: null,
-            position: 2,
-            createdAt: "2026-03-01T00:00:00Z",
-            updatedAt: "2026-03-01T00:00:00Z",
-          },
-        ]}
+        items={items}
         isCreateOpen={false}
         isReordering={false}
         onCloseCreate={() => undefined}
@@ -170,5 +176,32 @@ describe("ShoppingListManager", () => {
     });
 
     expect(onReorder).toHaveBeenCalledWith(["item-2", "item-1"]);
+
+    rerender(
+      <ShoppingListManager
+        form={{ name: "", quantity: "", notes: "" }}
+        items={items}
+        isCreateOpen={false}
+        isReordering
+        onCloseCreate={() => undefined}
+        onFormChange={() => undefined}
+        onOpenCreate={() => undefined}
+        onCreate={async () => undefined}
+        onDelete={() => undefined}
+        onReorder={onReorder}
+        onUpdate={async () => undefined}
+      />,
+    );
+
+    const currentShoppingSection = screen
+      .getByRole("heading", { name: "現在の買い物" })
+      .closest("article");
+    if (currentShoppingSection == null) {
+      throw new Error("current shopping section not found");
+    }
+    const list = within(currentShoppingSection).getByRole("list");
+    const reorderedItems = within(list).getAllByRole("listitem");
+    expect(within(reorderedItems[0]).getByText("卵")).toBeInTheDocument();
+    expect(within(reorderedItems[1]).getByText("牛乳")).toBeInTheDocument();
   });
 });
