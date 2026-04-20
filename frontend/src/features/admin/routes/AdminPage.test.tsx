@@ -442,7 +442,11 @@ describe("AdminTasksPage", () => {
       expect(within(dailyItems[1]).getByText("皿洗い")).toBeInTheDocument();
     });
 
-    resolveReorder?.({
+    if (resolveReorder == null) {
+      throw new Error("reorder resolver was not registered");
+    }
+
+    resolveReorder({
       data: {
         items: [
           {
