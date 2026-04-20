@@ -75,6 +75,7 @@ vi.mock("@dnd-kit/sortable", async () => {
       nextItems.splice(newIndex, 0, moved);
       return nextItems;
     },
+    defaultAnimateLayoutChanges: vi.fn(() => true),
     sortableKeyboardCoordinates: vi.fn(),
     useSortable: vi.fn(() => ({
       attributes: {},
@@ -398,7 +399,52 @@ describe("AdminTasksPage", () => {
         ],
       },
     });
-    mockPostTasksReorder.mockResolvedValue({
+    let resolveReorder: (value: unknown) => void = () => {
+      throw new Error("reorder resolver was not registered");
+    };
+    mockPostTasksReorder.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveReorder = resolve;
+        }),
+    );
+
+    renderPage();
+    expect(
+      await screen.findByText(
+        "タスク設定はチーム共通です。並び替えは管理画面でのみ変更できます。",
+      ),
+    ).toBeInTheDocument();
+
+    if (latestOnDragEnd == null) {
+      throw new Error("drag handler was not registered");
+    }
+    act(() => {
+      latestOnDragEnd?.({
+        active: { id: "task-2" },
+        over: { id: "task-1" },
+      });
+    });
+
+    await waitFor(() => {
+      expect(mockPostTasksReorder).toHaveBeenCalledWith({
+        taskIds: ["task-2", "task-1"],
+      });
+    });
+
+    await waitFor(() => {
+      const dailySection = screen
+        .getByRole("heading", { name: "毎日" })
+        .closest("section");
+      if (dailySection == null) {
+        throw new Error("daily section not found");
+      }
+      const dailyItems = within(dailySection).getAllByRole("listitem");
+      expect(within(dailyItems[0]).getByText("洗濯")).toBeInTheDocument();
+      expect(within(dailyItems[1]).getByText("皿洗い")).toBeInTheDocument();
+    });
+
+    resolveReorder({
       data: {
         items: [
           {
@@ -429,29 +475,6 @@ describe("AdminTasksPage", () => {
           },
         ],
       },
-    });
-
-    renderPage();
-    expect(
-      await screen.findByText(
-        "タスク設定はチーム共通です。並び替えは管理画面でのみ変更できます。",
-      ),
-    ).toBeInTheDocument();
-
-    if (latestOnDragEnd == null) {
-      throw new Error("drag handler was not registered");
-    }
-    act(() => {
-      latestOnDragEnd?.({
-        active: { id: "task-2" },
-        over: { id: "task-1" },
-      });
-    });
-
-    await waitFor(() => {
-      expect(mockPostTasksReorder).toHaveBeenCalledWith({
-        taskIds: ["task-2", "task-1"],
-      });
     });
   });
 

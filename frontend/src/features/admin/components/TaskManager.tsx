@@ -26,7 +26,7 @@ import {
   X,
 } from "lucide-react";
 import type { ChangeEvent } from "react";
-import { startTransition, useOptimistic, useState } from "react";
+import { startTransition, useState } from "react";
 
 import {
   type ReorderTasksRequest,
@@ -36,6 +36,11 @@ import {
 } from "../../../lib/api/generated/client";
 import { FormSheet } from "../../../shared/components/FormSheet";
 import { PAGE_SECTION_CHROMELESS_CLASS_NAME } from "../../../shared/styles/pageSection";
+import {
+  restrictToVerticalAxis,
+  smoothSortableLayoutChanges,
+  smoothSortableTransition,
+} from "../../../shared/utils/sortableAnimation";
 import {
   WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MAX,
   WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MIN,
@@ -206,11 +211,15 @@ function SortableTaskItem({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: task.id });
+  } = useSortable({
+    id: task.id,
+    animateLayoutChanges: smoothSortableLayoutChanges,
+    transition: smoothSortableTransition,
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),
-    transition,
+    transition: isDragging ? undefined : transition,
   };
   const canSave = editState.title.trim().length > 0;
   const isWeekly = task.type === TaskTypeConst.weekly;
@@ -356,10 +365,27 @@ function TaskItemsSection({
   });
   const [pendingDeleteTask, setPendingDeleteTask] =
     useState<PendingDeleteTask | null>(null);
-  const [optimisticTasks, setOptimisticTasks] = useOptimistic(
-    tasks,
-    (_currentTasks, nextTasks: Task[]) => nextTasks,
+  const [optimisticTaskIds, setOptimisticTaskIds] = useState<string[] | null>(
+    null,
   );
+
+  const serverTaskIds = tasks.map((task) => task.id);
+  const shouldUseOptimisticOrder =
+    optimisticTaskIds != null &&
+    optimisticTaskIds.length === serverTaskIds.length &&
+    optimisticTaskIds.some((taskId, index) => taskId !== serverTaskIds[index]);
+  const optimisticTaskIndex =
+    shouldUseOptimisticOrder && optimisticTaskIds != null
+      ? new Map(optimisticTaskIds.map((taskId, index) => [taskId, index]))
+      : null;
+  const optimisticTasks =
+    optimisticTaskIndex == null
+      ? tasks
+      : [...tasks].sort(
+          (left, right) =>
+            (optimisticTaskIndex.get(left.id) ?? Number.MAX_SAFE_INTEGER) -
+            (optimisticTaskIndex.get(right.id) ?? Number.MAX_SAFE_INTEGER),
+        );
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -399,7 +425,7 @@ function TaskItemsSection({
       }),
     );
     startTransition(() => {
-      setOptimisticTasks(nextTasks);
+      setOptimisticTaskIds(nextTasks.map((task) => task.id));
     });
     onReorder({ taskIds: nextTasks.map((task) => task.id) });
   };
@@ -470,6 +496,7 @@ function TaskItemsSection({
         ) : (
           <DndContext
             sensors={sensors}
+            modifiers={[restrictToVerticalAxis]}
             collisionDetection={closestCenter}
             onDragEnd={handleDragEnd}
           >
