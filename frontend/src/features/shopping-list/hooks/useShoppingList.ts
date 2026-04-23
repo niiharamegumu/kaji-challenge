@@ -16,10 +16,8 @@ import {
   postShoppingItemsReorder,
 } from "../../../lib/api/generated/client";
 import { queryKeys } from "../../../shared/query/queryKeys";
-import {
-  formatError,
-  isPreconditionFailure,
-} from "../../../shared/utils/errors";
+import { formatError } from "../../../shared/utils/errors";
+import { handleTeamStatePreconditionFailure } from "../../shell/lib/teamStateRefresh";
 
 type StatusSetter = (message: string) => void;
 
@@ -42,17 +40,6 @@ export function useShoppingItemMutations(setStatus: StatusSetter) {
     await queryClient.invalidateQueries({ queryKey: queryKeys.shoppingItems });
   };
 
-  const handlePrecondition = async (error: unknown) => {
-    if (!isPreconditionFailure(error)) {
-      return false;
-    }
-    await invalidate();
-    setStatus(
-      "他メンバーの更新を検知しました。最新状態に更新したので、もう一度操作してください。",
-    );
-    return true;
-  };
-
   const createItem = useMutation({
     mutationFn: async (payload: CreateShoppingListItemRequest) =>
       postShoppingItem(payload),
@@ -60,9 +47,10 @@ export function useShoppingItemMutations(setStatus: StatusSetter) {
       setStatus("買い物項目を追加しました");
       await invalidate();
     },
-    onError: (error) => {
-      void handlePrecondition(error);
-      if (isPreconditionFailure(error)) {
+    onError: async (error) => {
+      if (
+        await handleTeamStatePreconditionFailure(error, queryClient, setStatus)
+      ) {
         return;
       }
       setStatus(`買い物項目の追加に失敗しました: ${formatError(error)}`);
@@ -81,9 +69,10 @@ export function useShoppingItemMutations(setStatus: StatusSetter) {
       setStatus("買い物項目を更新しました");
       await invalidate();
     },
-    onError: (error) => {
-      void handlePrecondition(error);
-      if (isPreconditionFailure(error)) {
+    onError: async (error) => {
+      if (
+        await handleTeamStatePreconditionFailure(error, queryClient, setStatus)
+      ) {
         return;
       }
       setStatus(`買い物項目の更新に失敗しました: ${formatError(error)}`);
@@ -96,9 +85,10 @@ export function useShoppingItemMutations(setStatus: StatusSetter) {
       setStatus("買い物項目を削除しました");
       await invalidate();
     },
-    onError: (error) => {
-      void handlePrecondition(error);
-      if (isPreconditionFailure(error)) {
+    onError: async (error) => {
+      if (
+        await handleTeamStatePreconditionFailure(error, queryClient, setStatus)
+      ) {
         return;
       }
       setStatus(`買い物項目の削除に失敗しました: ${formatError(error)}`);
@@ -120,9 +110,10 @@ export function useShoppingItemMutations(setStatus: StatusSetter) {
       );
       setStatus("並び順を更新しました");
     },
-    onError: (error) => {
-      void handlePrecondition(error);
-      if (isPreconditionFailure(error)) {
+    onError: async (error) => {
+      if (
+        await handleTeamStatePreconditionFailure(error, queryClient, setStatus)
+      ) {
         return;
       }
       void invalidate();

@@ -31,6 +31,15 @@ func TestHealth(t *testing.T) {
 	}
 }
 
+func TestEventsStreamRouteDoesNotExist(t *testing.T) {
+	r := newTestRouter(t)
+	token := login(t, r)
+	res := doRequest(t, r, http.MethodGet, "/v1/events/stream", "", token)
+	if res.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", res.Code)
+	}
+}
+
 func TestAuthFlowRoutesExist(t *testing.T) {
 	r := newTestRouter(t)
 	res := doRequest(t, r, http.MethodGet, "/v1/auth/google/start", "", "")

@@ -21,7 +21,6 @@ func NewRouterWithStore(svcs *ports.Services, s *infra.Store) *gin.Engine {
 	r.Use(middleware.CSRFSameOrigin())
 	h := transport.NewHandler(svcs, s)
 	api.RegisterHandlers(r, h)
-	r.GET("/v1/events/stream", h.GetEventsStream)
 	return r
 }
 

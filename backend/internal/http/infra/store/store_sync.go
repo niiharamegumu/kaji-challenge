@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 	dbsqlc "github.com/megu/kaji-challenge/backend/internal/db/sqlc"
@@ -54,19 +53,6 @@ func (s *Store) TeamETagForUser(ctx context.Context, userID string) (string, err
 		return "", err
 	}
 	return etagFromRevision(teamID, revision), nil
-}
-
-func (s *Store) TeamEventStreamForUser(ctx context.Context, userID string) (string, int64, <-chan TeamEvent, func(), error) {
-	teamID, err := s.primaryTeamLocked(ctx, userID)
-	if err != nil {
-		return "", 0, nil, nil, err
-	}
-	revision, err := s.q.GetTeamStateRevision(ctx, teamID)
-	if err != nil {
-		return "", 0, nil, nil, err
-	}
-	_, stream, cancel := s.eventHub.subscribe(teamID)
-	return teamID, revision, stream, cancel, nil
 }
 
 func withTxQueries(ctx context.Context, q *dbsqlc.Queries) context.Context {
@@ -167,16 +153,6 @@ func (s *Store) runWithTeamRevisionCAS(
 		return 0, err
 	}
 
-	// Publish after commit. Event delivery failures must not break writes.
-	if revision > 0 {
-		s.eventHub.publish(TeamEvent{
-			TeamID:    teamID,
-			Entity:    entity,
-			Revision:  revision,
-			ChangedAt: time.Now().In(s.loc),
-			Hints:     hints,
-		})
-	}
 	return revision, nil
 }
 
@@ -199,13 +175,6 @@ func (s *Store) bumpTeamRevisionBestEffort(ctx context.Context, teamID, entity s
 			lastErr = err
 			continue
 		}
-		s.eventHub.publish(TeamEvent{
-			TeamID:    teamID,
-			Entity:    entity,
-			Revision:  revision,
-			ChangedAt: time.Now().In(s.loc),
-			Hints:     hints,
-		})
 		return revision, nil
 	}
 	if lastErr != nil {

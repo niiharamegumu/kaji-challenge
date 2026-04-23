@@ -24,11 +24,8 @@ import {
 import { CompletionSlots } from "../../../shared/components/CompletionSlots";
 import { queryKeys } from "../../../shared/query/queryKeys";
 import { PAGE_SECTION_CHROMELESS_CLASS_NAME } from "../../../shared/styles/pageSection";
-import {
-  dateStringInJST,
-  formatError,
-  isPreconditionFailure,
-} from "../../../shared/utils/errors";
+import { dateStringInJST, formatError } from "../../../shared/utils/errors";
+import { handleTeamStatePreconditionFailure } from "../../shell/lib/teamStateRefresh";
 import { ConfirmModal } from "../components/ConfirmModal";
 
 const monthPattern = /^\d{4}-\d{2}$/;
@@ -166,14 +163,9 @@ export function AdminSummaryPage() {
       ]);
     },
     onError: async (error) => {
-      if (isPreconditionFailure(error)) {
-        await Promise.all([
-          queryClient.invalidateQueries({ queryKey: queryKeys.monthlySummary }),
-          queryClient.invalidateQueries({ queryKey: queryKeys.home }),
-        ]);
-        setStatus(
-          "他メンバーの更新を検知しました。最新状態に更新したので、もう一度操作してください。",
-        );
+      if (
+        await handleTeamStatePreconditionFailure(error, queryClient, setStatus)
+      ) {
         setConfirmTarget(null);
         return;
       }

@@ -23,8 +23,6 @@ type Store struct {
 	db  *pgxpool.Pool
 	q   *dbsqlc.Queries
 
-	eventHub *teamEventHub
-
 	users       map[string]userRecord
 	usersByMail map[string]string
 	memberships map[string][]membership
