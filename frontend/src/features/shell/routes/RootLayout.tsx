@@ -1,6 +1,14 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAtom, useAtomValue } from "jotai";
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef } from "react";
+import {
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { useBootFlow } from "../../../app/boot";
@@ -28,7 +36,7 @@ import { prefetchHomeData } from "../../home/preload";
 import { StatusToast } from "../components/StatusToast";
 import { useAuthGate } from "../hooks/useAuthGate";
 import { useCurrentUserProfile } from "../hooks/useCurrentUserProfile";
-import { useTeamStateStream } from "../hooks/useTeamStateStream";
+import { refreshTeamState as invalidateTeamState } from "../lib/teamStateRefresh";
 import { statusMessageAtom } from "../state/status";
 
 const FloatingNav = lazy(async () => {
@@ -74,6 +82,7 @@ export function RootLayout() {
   const queryClient = useQueryClient();
   const [, setSession] = useAtom(sessionAtom);
   const [status, setStatus] = useAtom(statusMessageAtom);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const loggedIn = useAtomValue(isLoggedInAtom);
   const navigate = useNavigate();
   const location = useLocation();
@@ -106,10 +115,18 @@ export function RootLayout() {
     setStatus,
     refetchMe: meQuery.refetch,
   });
-  const { isRefreshing, refreshTeamState } = useTeamStateStream(
-    queryClient,
-    isAuthenticated,
-  );
+  const refreshTeamState = useCallback(async () => {
+    if (!isAuthenticated) {
+      return;
+    }
+
+    setIsRefreshing(true);
+    try {
+      await invalidateTeamState(queryClient);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [isAuthenticated, queryClient]);
   const outletContext = useMemo<RootLayoutOutletContext>(
     () => ({
       currentUserId,

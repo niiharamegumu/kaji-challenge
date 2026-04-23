@@ -9,11 +9,8 @@ import {
   postTaskCompletionToggle,
 } from "../../../lib/api/generated/client";
 import { queryKeys } from "../../../shared/query/queryKeys";
-import {
-  formatError,
-  isPreconditionFailure,
-  todayString,
-} from "../../../shared/utils/errors";
+import { formatError, todayString } from "../../../shared/utils/errors";
+import { handleTeamStatePreconditionFailure } from "../../shell/lib/teamStateRefresh";
 
 type CompletionAction = "toggle" | "increment" | "decrement";
 
@@ -21,8 +18,6 @@ export function useHomeQuery() {
   return useSuspenseQuery({
     queryKey: queryKeys.home,
     queryFn: async () => (await getTaskOverview()).data,
-    refetchInterval: 30_000,
-    refetchIntervalInBackground: false,
   });
 }
 
@@ -46,15 +41,10 @@ export function useToggleCompletionMutation(
         queryClient.invalidateQueries({ queryKey: queryKeys.monthlySummary }),
       ]);
     },
-    onError: (error) => {
-      if (isPreconditionFailure(error)) {
-        void Promise.all([
-          queryClient.invalidateQueries({ queryKey: queryKeys.home }),
-          queryClient.invalidateQueries({ queryKey: queryKeys.monthlySummary }),
-        ]);
-        setStatus(
-          "他メンバーの更新を検知しました。最新状態に更新したので、もう一度操作してください。",
-        );
+    onError: async (error) => {
+      if (
+        await handleTeamStatePreconditionFailure(error, queryClient, setStatus)
+      ) {
         return;
       }
       setStatus(`更新失敗: ${formatError(error)}`);

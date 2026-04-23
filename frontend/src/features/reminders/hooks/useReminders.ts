@@ -17,10 +17,8 @@ import {
   postReminder,
 } from "../../../lib/api/generated/client";
 import { queryKeys } from "../../../shared/query/queryKeys";
-import {
-  formatError,
-  isPreconditionFailure,
-} from "../../../shared/utils/errors";
+import { formatError } from "../../../shared/utils/errors";
+import { handleTeamStatePreconditionFailure } from "../../shell/lib/teamStateRefresh";
 import { monthEndDateKey, monthStartDateKey } from "../utils/date";
 
 type StatusSetter = (message: string) => void;
@@ -59,26 +57,16 @@ export function useReminderMutations(setStatus: StatusSetter) {
     ]);
   };
 
-  const handlePrecondition = async (error: unknown) => {
-    if (!isPreconditionFailure(error)) {
-      return false;
-    }
-    await invalidate();
-    setStatus(
-      "他メンバーの更新を検知しました。最新状態に更新したので、もう一度操作してください。",
-    );
-    return true;
-  };
-
   const createReminder = useMutation({
     mutationFn: async (payload: CreateReminderRequest) => postReminder(payload),
     onSuccess: async () => {
       setStatus("リマインダーを追加しました");
       await invalidate();
     },
-    onError: (error) => {
-      void handlePrecondition(error);
-      if (isPreconditionFailure(error)) {
+    onError: async (error) => {
+      if (
+        await handleTeamStatePreconditionFailure(error, queryClient, setStatus)
+      ) {
         return;
       }
       setStatus(`リマインダーの追加に失敗しました: ${formatError(error)}`);
@@ -97,9 +85,10 @@ export function useReminderMutations(setStatus: StatusSetter) {
       setStatus("リマインダーを更新しました");
       await invalidate();
     },
-    onError: (error) => {
-      void handlePrecondition(error);
-      if (isPreconditionFailure(error)) {
+    onError: async (error) => {
+      if (
+        await handleTeamStatePreconditionFailure(error, queryClient, setStatus)
+      ) {
         return;
       }
       setStatus(`リマインダーの更新に失敗しました: ${formatError(error)}`);
@@ -112,9 +101,10 @@ export function useReminderMutations(setStatus: StatusSetter) {
       setStatus("リマインダーを削除しました");
       await invalidate();
     },
-    onError: (error) => {
-      void handlePrecondition(error);
-      if (isPreconditionFailure(error)) {
+    onError: async (error) => {
+      if (
+        await handleTeamStatePreconditionFailure(error, queryClient, setStatus)
+      ) {
         return;
       }
       setStatus(`リマインダーの削除に失敗しました: ${formatError(error)}`);

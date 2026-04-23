@@ -23,11 +23,8 @@ import {
   postTeamLeave,
 } from "../../../lib/api/generated/client";
 import { queryKeys } from "../../../shared/query/queryKeys";
-import {
-  extractHttpStatus,
-  formatError,
-  isPreconditionFailure,
-} from "../../../shared/utils/errors";
+import { extractHttpStatus, formatError } from "../../../shared/utils/errors";
+import { handleTeamStatePreconditionFailure } from "../../shell/lib/teamStateRefresh";
 import { INVITE_CODE_EXPIRES_IN_HOURS } from "../constants/invite";
 
 type StatusSetter = (message: string) => void;
@@ -63,23 +60,6 @@ async function invalidateQueryKeys(
   );
 }
 
-async function handlePreconditionFailure(
-  error: unknown,
-  queryClient: ReturnType<typeof useQueryClient>,
-  setStatus: StatusSetter,
-) {
-  if (!isPreconditionFailure(error)) {
-    return;
-  }
-  await Promise.all([
-    invalidateQueryKeys(queryClient, teamMembershipRelatedQueryKeys),
-    queryClient.invalidateQueries({ queryKey: queryKeys.currentInvite }),
-  ]);
-  setStatus(
-    "他メンバーの更新を検知しました。最新状態に更新したので、もう一度操作してください。",
-  );
-}
-
 export function useTaskMutations(setStatus: StatusSetter) {
   const queryClient = useQueryClient();
   const hasTasks = (value: unknown): value is { items?: Task[] } =>
@@ -99,9 +79,10 @@ export function useTaskMutations(setStatus: StatusSetter) {
       setStatus("タスクを作成しました");
       await invalidate();
     },
-    onError: (error) => {
-      void handlePreconditionFailure(error, queryClient, setStatus);
-      if (isPreconditionFailure(error)) {
+    onError: async (error) => {
+      if (
+        await handleTeamStatePreconditionFailure(error, queryClient, setStatus)
+      ) {
         return;
       }
       setStatus(`タスク作成に失敗しました: ${formatError(error)}`);
@@ -114,9 +95,10 @@ export function useTaskMutations(setStatus: StatusSetter) {
       setStatus("タスクを削除しました");
       await invalidate();
     },
-    onError: (error) => {
-      void handlePreconditionFailure(error, queryClient, setStatus);
-      if (isPreconditionFailure(error)) {
+    onError: async (error) => {
+      if (
+        await handleTeamStatePreconditionFailure(error, queryClient, setStatus)
+      ) {
         return;
       }
       setStatus(`タスク削除に失敗しました: ${formatError(error)}`);
@@ -135,9 +117,10 @@ export function useTaskMutations(setStatus: StatusSetter) {
       setStatus("タスクを更新しました");
       await invalidate();
     },
-    onError: (error) => {
-      void handlePreconditionFailure(error, queryClient, setStatus);
-      if (isPreconditionFailure(error)) {
+    onError: async (error) => {
+      if (
+        await handleTeamStatePreconditionFailure(error, queryClient, setStatus)
+      ) {
         return;
       }
       setStatus(`タスク更新に失敗しました: ${formatError(error)}`);
@@ -173,9 +156,10 @@ export function useTaskMutations(setStatus: StatusSetter) {
       });
       setStatus("並び順を更新しました");
     },
-    onError: (error) => {
-      void handlePreconditionFailure(error, queryClient, setStatus);
-      if (isPreconditionFailure(error)) {
+    onError: async (error) => {
+      if (
+        await handleTeamStatePreconditionFailure(error, queryClient, setStatus)
+      ) {
         return;
       }
       void invalidate();
@@ -205,9 +189,10 @@ export function usePenaltyRuleMutations(setStatus: StatusSetter) {
       setStatus("ペナルティルールを作成しました");
       await invalidate();
     },
-    onError: (error) => {
-      void handlePreconditionFailure(error, queryClient, setStatus);
-      if (isPreconditionFailure(error)) {
+    onError: async (error) => {
+      if (
+        await handleTeamStatePreconditionFailure(error, queryClient, setStatus)
+      ) {
         return;
       }
       setStatus(`ルール作成に失敗しました: ${formatError(error)}`);
@@ -220,9 +205,10 @@ export function usePenaltyRuleMutations(setStatus: StatusSetter) {
       setStatus("ルールを削除しました");
       await invalidate();
     },
-    onError: (error) => {
-      void handlePreconditionFailure(error, queryClient, setStatus);
-      if (isPreconditionFailure(error)) {
+    onError: async (error) => {
+      if (
+        await handleTeamStatePreconditionFailure(error, queryClient, setStatus)
+      ) {
         return;
       }
       setStatus(`ルール削除に失敗しました: ${formatError(error)}`);
@@ -244,9 +230,10 @@ export function usePenaltyRuleMutations(setStatus: StatusSetter) {
         queryClient.invalidateQueries({ queryKey: queryKeys.monthlySummary }),
       ]);
     },
-    onError: (error) => {
-      void handlePreconditionFailure(error, queryClient, setStatus);
-      if (isPreconditionFailure(error)) {
+    onError: async (error) => {
+      if (
+        await handleTeamStatePreconditionFailure(error, queryClient, setStatus)
+      ) {
         return;
       }
       setStatus(`ルール更新に失敗しました: ${formatError(error)}`);
@@ -268,9 +255,10 @@ export function useInviteMutations(setStatus: StatusSetter) {
         response.data,
       );
     },
-    onError: (error) => {
-      void handlePreconditionFailure(error, queryClient, setStatus);
-      if (isPreconditionFailure(error)) {
+    onError: async (error) => {
+      if (
+        await handleTeamStatePreconditionFailure(error, queryClient, setStatus)
+      ) {
         return;
       }
       setStatus(`招待コード発行に失敗しました: ${formatError(error)}`);
@@ -288,9 +276,10 @@ export function useInviteMutations(setStatus: StatusSetter) {
         }),
       ]);
     },
-    onError: (error) => {
-      if (isPreconditionFailure(error)) {
-        void handlePreconditionFailure(error, queryClient, setStatus);
+    onError: async (error) => {
+      if (
+        await handleTeamStatePreconditionFailure(error, queryClient, setStatus)
+      ) {
         return;
       }
       if (extractHttpStatus(error) === 409) {
@@ -312,9 +301,10 @@ export function useInviteMutations(setStatus: StatusSetter) {
         }),
       ]);
     },
-    onError: (error) => {
-      void handlePreconditionFailure(error, queryClient, setStatus);
-      if (isPreconditionFailure(error)) {
+    onError: async (error) => {
+      if (
+        await handleTeamStatePreconditionFailure(error, queryClient, setStatus)
+      ) {
         return;
       }
       setStatus(`チーム離脱に失敗しました: ${formatError(error)}`);
@@ -337,9 +327,10 @@ export function useProfileMutations(setStatus: StatusSetter) {
       setStatus(message);
       await invalidateQueryKeys(queryClient, nicknameRelatedQueryKeys);
     },
-    onError: (error) => {
-      void handlePreconditionFailure(error, queryClient, setStatus);
-      if (isPreconditionFailure(error)) {
+    onError: async (error) => {
+      if (
+        await handleTeamStatePreconditionFailure(error, queryClient, setStatus)
+      ) {
         return;
       }
       setStatus(`ニックネーム更新に失敗しました: ${formatError(error)}`);
@@ -356,9 +347,10 @@ export function useProfileMutations(setStatus: StatusSetter) {
       setStatus(message);
       await invalidateQueryKeys(queryClient, colorRelatedQueryKeys);
     },
-    onError: (error) => {
-      void handlePreconditionFailure(error, queryClient, setStatus);
-      if (isPreconditionFailure(error)) {
+    onError: async (error) => {
+      if (
+        await handleTeamStatePreconditionFailure(error, queryClient, setStatus)
+      ) {
         return;
       }
       setStatus(`表示カラー更新に失敗しました: ${formatError(error)}`);
@@ -371,9 +363,10 @@ export function useProfileMutations(setStatus: StatusSetter) {
       setStatus("チーム名を更新しました");
       await invalidateQueryKeys(queryClient, teamNameRelatedQueryKeys);
     },
-    onError: (error) => {
-      void handlePreconditionFailure(error, queryClient, setStatus);
-      if (isPreconditionFailure(error)) {
+    onError: async (error) => {
+      if (
+        await handleTeamStatePreconditionFailure(error, queryClient, setStatus)
+      ) {
         return;
       }
       setStatus(`チーム名更新に失敗しました: ${formatError(error)}`);

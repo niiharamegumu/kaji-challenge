@@ -1,21 +1,17 @@
-import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { queryKeys } from "../../../shared/query/queryKeys";
-import { useTeamStateStream } from "./useTeamStateStream";
+import {
+  handleTeamStatePreconditionFailure,
+  preconditionFailureStatusMessage,
+  refreshTeamState,
+} from "./teamStateRefresh";
 
-describe("useTeamStateStream", () => {
+describe("teamStateRefresh", () => {
   it("refreshTeamState invalidates all protected queries", async () => {
     const invalidateQueries = vi.fn().mockResolvedValue(undefined);
-    const queryClient = {
-      invalidateQueries,
-    } as unknown as Parameters<typeof useTeamStateStream>[0];
 
-    const { result } = renderHook(() => useTeamStateStream(queryClient, false));
-
-    await act(async () => {
-      await result.current.refreshTeamState();
-    });
+    await refreshTeamState({ invalidateQueries });
 
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.me });
     expect(invalidateQueries).toHaveBeenCalledWith({
@@ -45,5 +41,19 @@ describe("useTeamStateStream", () => {
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.monthlySummary,
     });
+  });
+
+  it("refreshes and sets status when precondition fails", async () => {
+    const invalidateQueries = vi.fn().mockResolvedValue(undefined);
+    const setStatus = vi.fn();
+
+    const handled = await handleTeamStatePreconditionFailure(
+      { name: "ApiRequestError", message: "stale", status: 412 },
+      { invalidateQueries },
+      setStatus,
+    );
+
+    expect(handled).toBe(true);
+    expect(setStatus).toHaveBeenCalledWith(preconditionFailureStatusMessage);
   });
 });
