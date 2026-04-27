@@ -17,10 +17,7 @@ func nextSortKeyFromMax(maxSortKey int32) (int32, error) {
 
 func sortKeyForIndex(index int) (int32, error) {
 	value := int64(index+1) * int64(sortKeyStep)
-	if value > math.MaxInt32 {
-		return 0, errors.New("sort key overflow")
-	}
-	return int32(value), nil
+	return safeInt64ToInt32(value, "sort key")
 }
 
 func findMovedItemID(currentIDs, requestedIDs []string) string {

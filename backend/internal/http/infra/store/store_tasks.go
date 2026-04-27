@@ -303,7 +303,11 @@ func (s *Store) ReorderTasks(ctx context.Context, userID string, req api.Reorder
 			movedTaskID := findMovedItemID(currentIDs, req.TaskIds)
 			currentSortKeys := make(map[string]int32, len(currentIDs))
 			for taskID, task := range tasksByID {
-				currentSortKeys[taskID] = int32(task.SortKey)
+				v, err := safeInt32(task.SortKey, "sort key")
+				if err != nil {
+					return err
+				}
+				currentSortKeys[taskID] = v
 			}
 
 			if movedTaskID != "" {
