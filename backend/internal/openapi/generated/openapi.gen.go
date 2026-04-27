@@ -287,8 +287,8 @@ type ShoppingListItem struct {
 	Id        string    `json:"id"`
 	Name      string    `json:"name"`
 	Notes     *string   `json:"notes"`
-	Position  int       `json:"position"`
 	Quantity  *string   `json:"quantity"`
+	SortKey   int       `json:"sortKey"`
 	TeamId    string    `json:"teamId"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }
@@ -300,8 +300,8 @@ type Task struct {
 	Id                         string    `json:"id"`
 	Notes                      *string   `json:"notes,omitempty"`
 	PenaltyPoints              int       `json:"penaltyPoints"`
-	Position                   int       `json:"position"`
 	RequiredCompletionsPerWeek int       `json:"requiredCompletionsPerWeek"`
+	SortKey                    int       `json:"sortKey"`
 	TeamId                     string    `json:"teamId"`
 	Title                      string    `json:"title"`
 	Type                       TaskType  `json:"type"`

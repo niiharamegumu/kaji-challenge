@@ -79,18 +79,18 @@ func (s *Store) CreateTask(ctx context.Context, userID string, req api.CreateTas
 		"task",
 		map[string]string{"taskId": task.ID, "action": "create"},
 		func(txCtx context.Context, qtx *dbsqlc.Queries) error {
-			maxPosition, err := qtx.GetTaskMaxPositionByTeamAndType(txCtx, dbsqlc.GetTaskMaxPositionByTeamAndTypeParams{
+			maxSortKey, err := qtx.GetTaskMaxSortKeyByTeamAndType(txCtx, dbsqlc.GetTaskMaxSortKeyByTeamAndTypeParams{
 				TeamID: teamID,
 				Type:   string(req.Type),
 			})
 			if err != nil {
 				return err
 			}
-			task.Position = int(maxPosition) + 1
-			position32, err := safeInt32(task.Position, "position")
+			sortKey32, err := nextSortKeyFromMax(maxSortKey)
 			if err != nil {
 				return err
 			}
+			task.SortKey = int(sortKey32)
 			return qtx.CreateTask(ctx, dbsqlc.CreateTaskParams{
 				ID:                         task.ID,
 				TeamID:                     task.TeamID,
@@ -100,7 +100,7 @@ func (s *Store) CreateTask(ctx context.Context, userID string, req api.CreateTas
 				PenaltyPoints:              penalty32,
 				Column7:                    uuidStringFromPtr(task.AssigneeID),
 				RequiredCompletionsPerWeek: required32,
-				Position:                   position32,
+				SortKey:                    sortKey32,
 				CreatedAt:                  toPgTimestamptz(task.CreatedAt),
 				UpdatedAt:                  toPgTimestamptz(task.UpdatedAt),
 			})
@@ -218,16 +218,7 @@ func (s *Store) DeleteTask(ctx context.Context, userID, taskID string) error {
 			if err := qtx.DeleteTask(ctx, taskID); err != nil {
 				return err
 			}
-			position32, err := safeInt32(task.Position, "position")
-			if err != nil {
-				return err
-			}
-			return qtx.CompactTaskPositionsAfter(ctx, dbsqlc.CompactTaskPositionsAfterParams{
-				TeamID:    teamID,
-				Type:      string(task.Type),
-				Position:  position32,
-				UpdatedAt: toPgTimestamptz(s.now()),
-			})
+			return nil
 		},
 	)
 	return err
@@ -301,49 +292,82 @@ func (s *Store) ReorderTasks(ctx context.Context, userID string, req api.Reorder
 				return errors.New("taskIds must include every task in the selected type")
 			}
 			requestedIDs := append([]string(nil), req.TaskIds...)
-			slices.Sort(currentIDs)
+			currentIDsSorted := append([]string(nil), currentIDs...)
+			slices.Sort(currentIDsSorted)
 			slices.Sort(requestedIDs)
-			if !slices.Equal(currentIDs, requestedIDs) {
+			if !slices.Equal(currentIDsSorted, requestedIDs) {
 				return errors.New("taskIds must match current tasks in the team and type")
 			}
 
-			maxPosition, err := qtx.GetTaskMaxPositionByTeamAndType(txCtx, dbsqlc.GetTaskMaxPositionByTeamAndTypeParams{
-				TeamID: teamID,
-				Type:   string(reorderType),
-			})
-			if err != nil {
-				return err
-			}
 			now := s.now()
-			offsetBase := int(maxPosition) + 1
-			for index, taskID := range req.TaskIds {
-				tempPosition, convErr := safeInt32(offsetBase+index, "position")
-				if convErr != nil {
-					return convErr
-				}
-				if err := qtx.UpdateTaskPosition(txCtx, dbsqlc.UpdateTaskPositionParams{
-					ID:        taskID,
-					Position:  tempPosition,
-					UpdatedAt: toPgTimestamptz(now),
-				}); err != nil {
+			movedTaskID := findMovedItemID(currentIDs, req.TaskIds)
+			currentSortKeys := make(map[string]int32, len(currentIDs))
+			for taskID, task := range tasksByID {
+				v, err := safeInt32(task.SortKey, "sort key")
+				if err != nil {
 					return err
+				}
+				currentSortKeys[taskID] = v
+			}
+
+			if movedTaskID != "" {
+				nextSortKey, ok, err := computeMovedItemSortKey(req.TaskIds, currentSortKeys, movedTaskID)
+				if err != nil {
+					return err
+				}
+				if ok {
+					if err := qtx.UpdateTaskSortKey(txCtx, dbsqlc.UpdateTaskSortKeyParams{
+						ID:        movedTaskID,
+						SortKey:   nextSortKey,
+						UpdatedAt: toPgTimestamptz(now),
+					}); err != nil {
+						return err
+					}
+					task := tasksByID[movedTaskID]
+					task.SortKey = int(nextSortKey)
+					task.UpdatedAt = now
+					tasksByID[movedTaskID] = task
+				} else {
+					for index, taskID := range req.TaskIds {
+						sortKey, err := sortKeyForIndex(index)
+						if err != nil {
+							return err
+						}
+						if err := qtx.UpdateTaskSortKey(txCtx, dbsqlc.UpdateTaskSortKeyParams{
+							ID:        taskID,
+							SortKey:   sortKey,
+							UpdatedAt: toPgTimestamptz(now),
+						}); err != nil {
+							return err
+						}
+						task := tasksByID[taskID]
+						task.SortKey = int(sortKey)
+						task.UpdatedAt = now
+						tasksByID[taskID] = task
+					}
+				}
+			} else {
+				for index, taskID := range req.TaskIds {
+					sortKey, err := sortKeyForIndex(index)
+					if err != nil {
+						return err
+					}
+					if err := qtx.UpdateTaskSortKey(txCtx, dbsqlc.UpdateTaskSortKeyParams{
+						ID:        taskID,
+						SortKey:   sortKey,
+						UpdatedAt: toPgTimestamptz(now),
+					}); err != nil {
+						return err
+					}
+					task := tasksByID[taskID]
+					task.SortKey = int(sortKey)
+					task.UpdatedAt = now
+					tasksByID[taskID] = task
 				}
 			}
-			for index, taskID := range req.TaskIds {
-				finalPosition, convErr := safeInt32(index+1, "position")
-				if convErr != nil {
-					return convErr
-				}
-				if err := qtx.UpdateTaskPosition(txCtx, dbsqlc.UpdateTaskPositionParams{
-					ID:        taskID,
-					Position:  finalPosition,
-					UpdatedAt: toPgTimestamptz(now),
-				}); err != nil {
-					return err
-				}
+
+			for _, taskID := range req.TaskIds {
 				task := tasksByID[taskID]
-				task.Position = index + 1
-				task.UpdatedAt = now
 				items = append(items, task.toAPI())
 			}
 			return nil

@@ -47,8 +47,8 @@ func TestCreateShoppingItemAppendsToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateShoppingItem failed: %v", err)
 	}
-	if item.Position != 2 {
-		t.Fatalf("expected appended position 2, got %d", item.Position)
+	if item.SortKey != int(sortKeyStep*2) {
+		t.Fatalf("expected appended sort key %d, got %d", sortKeyStep*2, item.SortKey)
 	}
 	if item.Quantity == nil || *item.Quantity != "10個" {
 		t.Fatalf("expected quantity to be preserved, got %#v", item.Quantity)
@@ -81,7 +81,7 @@ func TestPatchShoppingItemUpdatesFields(t *testing.T) {
 	}
 }
 
-func TestDeleteShoppingItemPhysicallyRemovesAndCompactsPositions(t *testing.T) {
+func TestDeleteShoppingItemPhysicallyRemovesAndKeepsExistingSortKeys(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 	base := time.Date(2026, 3, 1, 9, 0, 0, 0, s.loc)
@@ -105,10 +105,10 @@ func TestDeleteShoppingItemPhysicallyRemovesAndCompactsPositions(t *testing.T) {
 	if len(items) != 2 {
 		t.Fatalf("expected 2 remaining items, got %d", len(items))
 	}
-	if items[0].Id != firstID || items[0].Position != 1 {
+	if items[0].Id != firstID || items[0].SortKey != int(sortKeyStep) {
 		t.Fatalf("unexpected first item after delete: %#v", items[0])
 	}
-	if items[1].Id != thirdID || items[1].Position != 2 {
+	if items[1].Id != thirdID || items[1].SortKey != int(sortKeyStep*3) {
 		t.Fatalf("unexpected second item after delete: %#v", items[1])
 	}
 }
@@ -132,7 +132,7 @@ func TestReorderShoppingItemsPersistsRequestedOrder(t *testing.T) {
 	if len(items) != 3 {
 		t.Fatalf("expected 3 reordered items, got %d", len(items))
 	}
-	if items[0].Id != thirdID || items[0].Position != 1 {
+	if items[0].Id != thirdID || items[0].SortKey >= items[1].SortKey {
 		t.Fatalf("unexpected first reordered item: %#v", items[0])
 	}
 	if items[1].Id != firstID || items[2].Id != secondID {
@@ -201,7 +201,7 @@ func TestCreateShoppingItemRequiresLatestETag(t *testing.T) {
 	}
 }
 
-func TestShoppingItemsForeignKeyCascadeAndUniquePosition(t *testing.T) {
+func TestShoppingItemsForeignKeyCascadeAndNonUniqueSortKeys(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 	base := time.Date(2026, 3, 1, 9, 0, 0, 0, s.loc)
@@ -214,11 +214,11 @@ func TestShoppingItemsForeignKeyCascadeAndUniquePosition(t *testing.T) {
 		Name:      "重複順序",
 		Quantity:  textFromPtr(nil),
 		Notes:     textFromPtr(nil),
-		Position:  1,
+		SortKey:   1,
 		CreatedAt: toPgTimestamptz(base.Add(time.Minute)),
 		UpdatedAt: toPgTimestamptz(base.Add(time.Minute)),
-	}); err == nil {
-		t.Fatalf("expected unique(team_id, position) violation")
+	}); err != nil {
+		t.Fatalf("expected duplicate sort key to be allowed, got %v", err)
 	}
 
 	if _, err := s.db.Exec(ctx, `DELETE FROM teams WHERE id = $1`, teamID); err != nil {
@@ -240,9 +240,9 @@ func createShoppingItemAt(t *testing.T, s *Store, userID, name string, quantity,
 
 func createShoppingItemForTeamAt(t *testing.T, s *Store, teamID, name string, quantity, notes *string, createdAt time.Time) string {
 	t.Helper()
-	maxPosition, err := s.q.GetShoppingItemMaxPositionByTeamID(context.Background(), teamID)
+	maxSortKey, err := s.q.GetShoppingItemMaxSortKeyByTeamID(context.Background(), teamID)
 	if err != nil {
-		t.Fatalf("failed to load max position: %v", err)
+		t.Fatalf("failed to load max sort key: %v", err)
 	}
 	itemID := s.nextID("shop")
 	if err := s.q.CreateShoppingItem(context.Background(), dbsqlc.CreateShoppingItemParams{
@@ -251,7 +251,7 @@ func createShoppingItemForTeamAt(t *testing.T, s *Store, teamID, name string, qu
 		Name:      name,
 		Quantity:  textFromPtr(quantity),
 		Notes:     textFromPtr(notes),
-		Position:  maxPosition + 1,
+		SortKey:   maxSortKey + sortKeyStep,
 		CreatedAt: toPgTimestamptz(createdAt),
 		UpdatedAt: toPgTimestamptz(createdAt),
 	}); err != nil {

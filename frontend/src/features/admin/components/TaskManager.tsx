@@ -421,7 +421,7 @@ function TaskItemsSection({
     const nextTasks = arrayMove(optimisticTasks, oldIndex, newIndex).map(
       (task, index) => ({
         ...task,
-        position: index + 1,
+        sortKey: index + 1,
       }),
     );
     startTransition(() => {

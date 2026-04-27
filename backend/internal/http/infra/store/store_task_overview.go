@@ -125,8 +125,8 @@ func (s *Store) GetTaskOverview(ctx context.Context, userID string) (resp api.Ta
 	}
 
 	sort.Slice(daily, func(i, j int) bool {
-		if daily[i].Task.Position != daily[j].Task.Position {
-			return daily[i].Task.Position < daily[j].Task.Position
+		if daily[i].Task.SortKey != daily[j].Task.SortKey {
+			return daily[i].Task.SortKey < daily[j].Task.SortKey
 		}
 		if !daily[i].Task.CreatedAt.Equal(daily[j].Task.CreatedAt) {
 			return daily[i].Task.CreatedAt.Before(daily[j].Task.CreatedAt)
@@ -134,8 +134,8 @@ func (s *Store) GetTaskOverview(ctx context.Context, userID string) (resp api.Ta
 		return daily[i].Task.Id < daily[j].Task.Id
 	})
 	sort.Slice(weekly, func(i, j int) bool {
-		if weekly[i].Task.Position != weekly[j].Task.Position {
-			return weekly[i].Task.Position < weekly[j].Task.Position
+		if weekly[i].Task.SortKey != weekly[j].Task.SortKey {
+			return weekly[i].Task.SortKey < weekly[j].Task.SortKey
 		}
 		if !weekly[i].Task.CreatedAt.Equal(weekly[j].Task.CreatedAt) {
 			return weekly[i].Task.CreatedAt.Before(weekly[j].Task.CreatedAt)
@@ -235,7 +235,7 @@ type monthlyTaskStatusRecord struct {
 	Type      api.TaskType
 	Penalty   int
 	Required  int
-	Position  int
+	SortKey   int
 	CreatedAt time.Time
 	DeletedAt *time.Time
 }
@@ -273,7 +273,7 @@ func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month 
 			Type:      api.TaskType(row.Type),
 			Penalty:   int(row.PenaltyPoints),
 			Required:  int(row.RequiredCompletionsPerWeek),
-			Position:  int(row.Position),
+			SortKey:   int(row.SortKey),
 			CreatedAt: row.CreatedAt.Time.In(s.loc),
 			DeletedAt: ptrFromTimestamptz(row.DeletedAt, s.loc),
 		})
@@ -413,8 +413,8 @@ func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month 
 			}
 			leftTask := tasksByID(items[i].TaskId, tasks)
 			rightTask := tasksByID(items[j].TaskId, tasks)
-			if leftTask.Position != rightTask.Position {
-				return leftTask.Position < rightTask.Position
+			if leftTask.SortKey != rightTask.SortKey {
+				return leftTask.SortKey < rightTask.SortKey
 			}
 			if !leftTask.CreatedAt.Equal(rightTask.CreatedAt) {
 				return leftTask.CreatedAt.Before(rightTask.CreatedAt)

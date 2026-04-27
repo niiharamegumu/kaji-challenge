@@ -1253,7 +1253,7 @@ components:
     Task:
       type: object
       required:
-        [id, teamId, title, type, penaltyPoints, requiredCompletionsPerWeek, position, createdAt, updatedAt]
+        [id, teamId, title, type, penaltyPoints, requiredCompletionsPerWeek, sortKey, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -1275,7 +1275,7 @@ components:
           type: integer
           minimum: 1
           maximum: 7
-        position:
+        sortKey:
           type: integer
           minimum: 1
         createdAt:
@@ -1446,7 +1446,7 @@ components:
 
     ShoppingListItem:
       type: object
-      required: [id, teamId, name, position, createdAt, updatedAt]
+      required: [id, teamId, name, sortKey, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -1460,7 +1460,7 @@ components:
         notes:
           type: string
           nullable: true
-        position:
+        sortKey:
           type: integer
           minimum: 1
         createdAt:

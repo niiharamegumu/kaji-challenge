@@ -15,8 +15,6 @@ type Querier interface {
 	AddTriggeredRuleForMonth(ctx context.Context, arg AddTriggeredRuleForMonthParams) error
 	ClearTaskAssigneeByTeamAndUser(ctx context.Context, arg ClearTaskAssigneeByTeamAndUserParams) error
 	CloseMonthlyPenaltySummary(ctx context.Context, arg CloseMonthlyPenaltySummaryParams) error
-	CompactShoppingItemPositionsAfter(ctx context.Context, arg CompactShoppingItemPositionsAfterParams) error
-	CompactTaskPositionsAfter(ctx context.Context, arg CompactTaskPositionsAfterParams) error
 	ConsumeExchangeCode(ctx context.Context, code string) error
 	CreateInviteCode(ctx context.Context, arg CreateInviteCodeParams) error
 	CreatePenaltyRule(ctx context.Context, arg CreatePenaltyRuleParams) error
@@ -56,10 +54,10 @@ type Querier interface {
 	GetReminderByID(ctx context.Context, id string) (Reminder, error)
 	GetSessionByToken(ctx context.Context, token string) (Session, error)
 	GetShoppingItemByID(ctx context.Context, id string) (ShoppingItem, error)
-	GetShoppingItemMaxPositionByTeamID(ctx context.Context, teamID string) (int32, error)
+	GetShoppingItemMaxSortKeyByTeamID(ctx context.Context, teamID string) (int32, error)
 	GetTaskByID(ctx context.Context, id string) (GetTaskByIDRow, error)
 	GetTaskCompletionWeeklyEntryCount(ctx context.Context, arg GetTaskCompletionWeeklyEntryCountParams) (int64, error)
-	GetTaskMaxPositionByTeamAndType(ctx context.Context, arg GetTaskMaxPositionByTeamAndTypeParams) (int32, error)
+	GetTaskMaxSortKeyByTeamAndType(ctx context.Context, arg GetTaskMaxSortKeyByTeamAndTypeParams) (int32, error)
 	GetTeamStateRevision(ctx context.Context, id string) (int64, error)
 	GetUndeletedPenaltyRuleByID(ctx context.Context, id string) (PenaltyRule, error)
 	GetUserAuthIdentityByID(ctx context.Context, id string) (GetUserAuthIdentityByIDRow, error)
@@ -105,9 +103,9 @@ type Querier interface {
 	UpdatePenaltyRule(ctx context.Context, arg UpdatePenaltyRuleParams) error
 	UpdateReminder(ctx context.Context, arg UpdateReminderParams) error
 	UpdateShoppingItem(ctx context.Context, arg UpdateShoppingItemParams) error
-	UpdateShoppingItemPosition(ctx context.Context, arg UpdateShoppingItemPositionParams) error
+	UpdateShoppingItemSortKey(ctx context.Context, arg UpdateShoppingItemSortKeyParams) error
 	UpdateTask(ctx context.Context, arg UpdateTaskParams) error
-	UpdateTaskPosition(ctx context.Context, arg UpdateTaskPositionParams) error
+	UpdateTaskSortKey(ctx context.Context, arg UpdateTaskSortKeyParams) error
 	UpdateTeamMemberRole(ctx context.Context, arg UpdateTeamMemberRoleParams) error
 	UpdateTeamName(ctx context.Context, arg UpdateTeamNameParams) error
 	UpdateTeamStateRevisionIfMatch(ctx context.Context, arg UpdateTeamStateRevisionIfMatchParams) (int64, error)
