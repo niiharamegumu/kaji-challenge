@@ -11,27 +11,8 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const compactShoppingItemPositionsAfter = `-- name: CompactShoppingItemPositionsAfter :exec
-UPDATE shopping_items
-SET position = position - 1,
-    updated_at = $3
-WHERE team_id = $1
-  AND position > $2
-`
-
-type CompactShoppingItemPositionsAfterParams struct {
-	TeamID    string             `json:"team_id"`
-	Position  int32              `json:"position"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
-}
-
-func (q *Queries) CompactShoppingItemPositionsAfter(ctx context.Context, arg CompactShoppingItemPositionsAfterParams) error {
-	_, err := q.db.Exec(ctx, compactShoppingItemPositionsAfter, arg.TeamID, arg.Position, arg.UpdatedAt)
-	return err
-}
-
 const createShoppingItem = `-- name: CreateShoppingItem :exec
-INSERT INTO shopping_items (id, team_id, name, quantity, notes, position, created_at, updated_at)
+INSERT INTO shopping_items (id, team_id, name, quantity, notes, sort_key, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 `
 
@@ -41,7 +22,7 @@ type CreateShoppingItemParams struct {
 	Name      string             `json:"name"`
 	Quantity  pgtype.Text        `json:"quantity"`
 	Notes     pgtype.Text        `json:"notes"`
-	Position  int32              `json:"position"`
+	SortKey   int32              `json:"sort_key"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
@@ -53,7 +34,7 @@ func (q *Queries) CreateShoppingItem(ctx context.Context, arg CreateShoppingItem
 		arg.Name,
 		arg.Quantity,
 		arg.Notes,
-		arg.Position,
+		arg.SortKey,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)
@@ -74,7 +55,7 @@ func (q *Queries) DeleteShoppingItem(ctx context.Context, id string) (int64, err
 }
 
 const getShoppingItemByID = `-- name: GetShoppingItemByID :one
-SELECT id, team_id, name, quantity, notes, position, created_at, updated_at
+SELECT id, team_id, name, quantity, notes, sort_key, created_at, updated_at
 FROM shopping_items
 WHERE id = $1
 `
@@ -88,31 +69,31 @@ func (q *Queries) GetShoppingItemByID(ctx context.Context, id string) (ShoppingI
 		&i.Name,
 		&i.Quantity,
 		&i.Notes,
-		&i.Position,
+		&i.SortKey,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
 	return i, err
 }
 
-const getShoppingItemMaxPositionByTeamID = `-- name: GetShoppingItemMaxPositionByTeamID :one
-SELECT COALESCE(MAX(position), 0)::integer AS position
+const getShoppingItemMaxSortKeyByTeamID = `-- name: GetShoppingItemMaxSortKeyByTeamID :one
+SELECT COALESCE(MAX(sort_key), 0)::integer AS sort_key
 FROM shopping_items
 WHERE team_id = $1
 `
 
-func (q *Queries) GetShoppingItemMaxPositionByTeamID(ctx context.Context, teamID string) (int32, error) {
-	row := q.db.QueryRow(ctx, getShoppingItemMaxPositionByTeamID, teamID)
-	var position int32
-	err := row.Scan(&position)
-	return position, err
+func (q *Queries) GetShoppingItemMaxSortKeyByTeamID(ctx context.Context, teamID string) (int32, error) {
+	row := q.db.QueryRow(ctx, getShoppingItemMaxSortKeyByTeamID, teamID)
+	var sort_key int32
+	err := row.Scan(&sort_key)
+	return sort_key, err
 }
 
 const listShoppingItemsByTeamID = `-- name: ListShoppingItemsByTeamID :many
-SELECT id, team_id, name, quantity, notes, position, created_at, updated_at
+SELECT id, team_id, name, quantity, notes, sort_key, created_at, updated_at
 FROM shopping_items
 WHERE team_id = $1
-ORDER BY position, created_at, id
+ORDER BY sort_key, created_at, id
 `
 
 func (q *Queries) ListShoppingItemsByTeamID(ctx context.Context, teamID string) ([]ShoppingItem, error) {
@@ -130,7 +111,7 @@ func (q *Queries) ListShoppingItemsByTeamID(ctx context.Context, teamID string) 
 			&i.Name,
 			&i.Quantity,
 			&i.Notes,
-			&i.Position,
+			&i.SortKey,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -172,20 +153,20 @@ func (q *Queries) UpdateShoppingItem(ctx context.Context, arg UpdateShoppingItem
 	return err
 }
 
-const updateShoppingItemPosition = `-- name: UpdateShoppingItemPosition :exec
+const updateShoppingItemSortKey = `-- name: UpdateShoppingItemSortKey :exec
 UPDATE shopping_items
-SET position = $2,
+SET sort_key = $2,
     updated_at = $3
 WHERE id = $1
 `
 
-type UpdateShoppingItemPositionParams struct {
+type UpdateShoppingItemSortKeyParams struct {
 	ID        string             `json:"id"`
-	Position  int32              `json:"position"`
+	SortKey   int32              `json:"sort_key"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
-func (q *Queries) UpdateShoppingItemPosition(ctx context.Context, arg UpdateShoppingItemPositionParams) error {
-	_, err := q.db.Exec(ctx, updateShoppingItemPosition, arg.ID, arg.Position, arg.UpdatedAt)
+func (q *Queries) UpdateShoppingItemSortKey(ctx context.Context, arg UpdateShoppingItemSortKeyParams) error {
+	_, err := q.db.Exec(ctx, updateShoppingItemSortKey, arg.ID, arg.SortKey, arg.UpdatedAt)
 	return err
 }

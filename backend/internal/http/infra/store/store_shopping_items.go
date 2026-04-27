@@ -52,22 +52,22 @@ func (s *Store) CreateShoppingItem(ctx context.Context, userID string, req api.C
 		"shopping_item",
 		map[string]string{"itemId": item.ID, "action": "create"},
 		func(txCtx context.Context, qtx *dbsqlc.Queries) error {
-			maxPosition, err := qtx.GetShoppingItemMaxPositionByTeamID(txCtx, teamID)
+			maxSortKey, err := qtx.GetShoppingItemMaxSortKeyByTeamID(txCtx, teamID)
 			if err != nil {
 				return err
 			}
-			item.Position = int(maxPosition) + 1
-			position32, err := safeInt32(item.Position, "position")
+			sortKey32, err := nextSortKeyFromMax(maxSortKey)
 			if err != nil {
 				return err
 			}
+			item.SortKey = int(sortKey32)
 			return qtx.CreateShoppingItem(txCtx, dbsqlc.CreateShoppingItemParams{
 				ID:        item.ID,
 				TeamID:    item.TeamID,
 				Name:      item.Name,
 				Quantity:  textFromPtr(item.Quantity),
 				Notes:     textFromPtr(item.Notes),
-				Position:  position32,
+				SortKey:   sortKey32,
 				CreatedAt: toPgTimestamptz(item.CreatedAt),
 				UpdatedAt: toPgTimestamptz(item.UpdatedAt),
 			})
@@ -152,15 +152,7 @@ func (s *Store) DeleteShoppingItem(ctx context.Context, userID, itemID string) e
 			if deleted != 1 {
 				return errors.New("shopping item not found")
 			}
-			position32, err := safeInt32(item.Position, "position")
-			if err != nil {
-				return err
-			}
-			return qtx.CompactShoppingItemPositionsAfter(txCtx, dbsqlc.CompactShoppingItemPositionsAfterParams{
-				TeamID:    teamID,
-				Position:  position32,
-				UpdatedAt: toPgTimestamptz(s.now()),
-			})
+			return nil
 		},
 	)
 	return err
@@ -206,43 +198,79 @@ func (s *Store) ReorderShoppingItems(ctx context.Context, userID string, req api
 				currentIDs = append(currentIDs, item.ID)
 				itemsByID[item.ID] = item
 			}
-			slices.Sort(currentIDs)
+			currentIDsSorted := append([]string(nil), currentIDs...)
+			slices.Sort(currentIDsSorted)
 			requestedIDs := append([]string(nil), req.ItemIds...)
 			slices.Sort(requestedIDs)
-			if !slices.Equal(currentIDs, requestedIDs) {
+			if !slices.Equal(currentIDsSorted, requestedIDs) {
 				return errors.New("itemIds must match current shopping items")
 			}
 
 			now := s.now()
-			offsetBase := len(req.ItemIds) + 1
-			for index, itemID := range req.ItemIds {
-				tempPosition, convErr := safeInt32(offsetBase+index, "position")
-				if convErr != nil {
-					return convErr
-				}
-				if err := qtx.UpdateShoppingItemPosition(txCtx, dbsqlc.UpdateShoppingItemPositionParams{
-					ID:        itemID,
-					Position:  tempPosition,
-					UpdatedAt: toPgTimestamptz(now),
-				}); err != nil {
+			movedItemID := findMovedItemID(currentIDs, req.ItemIds)
+			currentSortKeys := make(map[string]int32, len(rows))
+			for _, row := range rows {
+				currentSortKeys[row.ID] = row.SortKey
+			}
+
+			if movedItemID != "" {
+				nextSortKey, ok, err := computeMovedItemSortKey(req.ItemIds, currentSortKeys, movedItemID)
+				if err != nil {
 					return err
+				}
+				if ok {
+					if err := qtx.UpdateShoppingItemSortKey(txCtx, dbsqlc.UpdateShoppingItemSortKeyParams{
+						ID:        movedItemID,
+						SortKey:   nextSortKey,
+						UpdatedAt: toPgTimestamptz(now),
+					}); err != nil {
+						return err
+					}
+					item := itemsByID[movedItemID]
+					item.SortKey = int(nextSortKey)
+					item.UpdatedAt = now
+					itemsByID[movedItemID] = item
+				} else {
+					for index, itemID := range req.ItemIds {
+						sortKey, err := sortKeyForIndex(index)
+						if err != nil {
+							return err
+						}
+						if err := qtx.UpdateShoppingItemSortKey(txCtx, dbsqlc.UpdateShoppingItemSortKeyParams{
+							ID:        itemID,
+							SortKey:   sortKey,
+							UpdatedAt: toPgTimestamptz(now),
+						}); err != nil {
+							return err
+						}
+						item := itemsByID[itemID]
+						item.SortKey = int(sortKey)
+						item.UpdatedAt = now
+						itemsByID[itemID] = item
+					}
+				}
+			} else {
+				for index, itemID := range req.ItemIds {
+					sortKey, err := sortKeyForIndex(index)
+					if err != nil {
+						return err
+					}
+					if err := qtx.UpdateShoppingItemSortKey(txCtx, dbsqlc.UpdateShoppingItemSortKeyParams{
+						ID:        itemID,
+						SortKey:   sortKey,
+						UpdatedAt: toPgTimestamptz(now),
+					}); err != nil {
+						return err
+					}
+					item := itemsByID[itemID]
+					item.SortKey = int(sortKey)
+					item.UpdatedAt = now
+					itemsByID[itemID] = item
 				}
 			}
-			for index, itemID := range req.ItemIds {
-				finalPosition, convErr := safeInt32(index+1, "position")
-				if convErr != nil {
-					return convErr
-				}
-				if err := qtx.UpdateShoppingItemPosition(txCtx, dbsqlc.UpdateShoppingItemPositionParams{
-					ID:        itemID,
-					Position:  finalPosition,
-					UpdatedAt: toPgTimestamptz(now),
-				}); err != nil {
-					return err
-				}
+
+			for _, itemID := range req.ItemIds {
 				item := itemsByID[itemID]
-				item.Position = index + 1
-				item.UpdatedAt = now
 				items = append(items, item.toAPI())
 			}
 			return nil

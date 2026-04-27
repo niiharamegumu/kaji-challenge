@@ -75,7 +75,7 @@ type taskRecord struct {
 	Penalty    int
 	AssigneeID *string
 	Required   int
-	Position   int
+	SortKey    int
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
 	DeletedAt  *time.Time
@@ -98,7 +98,7 @@ type shoppingItemRecord struct {
 	Name      string
 	Quantity  *string
 	Notes     *string
-	Position  int
+	SortKey   int
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }

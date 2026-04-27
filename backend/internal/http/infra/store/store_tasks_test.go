@@ -40,8 +40,8 @@ func TestCreateTaskAppendsWithinType(t *testing.T) {
 		t.Fatalf("CreateTask second daily failed: %v", err)
 	}
 
-	if firstDaily.Position != 1 || firstWeekly.Position != 1 || secondDaily.Position != 2 {
-		t.Fatalf("unexpected positions: daily1=%d weekly1=%d daily2=%d", firstDaily.Position, firstWeekly.Position, secondDaily.Position)
+	if firstDaily.SortKey != int(sortKeyStep) || firstWeekly.SortKey != int(sortKeyStep) || secondDaily.SortKey != int(sortKeyStep*2) {
+		t.Fatalf("unexpected sort keys: daily1=%d weekly1=%d daily2=%d", firstDaily.SortKey, firstWeekly.SortKey, secondDaily.SortKey)
 	}
 }
 
@@ -62,18 +62,18 @@ func TestListTasksOrdersByTypeAndPosition(t *testing.T) {
 	if len(items) != 3 {
 		t.Fatalf("expected 3 tasks, got %d", len(items))
 	}
-	if items[0].Id != firstDailyID || items[0].Position != 1 {
+	if items[0].Id != firstDailyID || items[0].SortKey != int(sortKeyStep) {
 		t.Fatalf("unexpected first task: %#v", items[0])
 	}
-	if items[1].Id != secondDailyID || items[1].Position != 2 {
+	if items[1].Id != secondDailyID || items[1].SortKey != int(sortKeyStep*2) {
 		t.Fatalf("unexpected second task: %#v", items[1])
 	}
-	if items[2].Id != weeklyID || items[2].Position != 1 {
+	if items[2].Id != weeklyID || items[2].SortKey != int(sortKeyStep) {
 		t.Fatalf("unexpected third task: %#v", items[2])
 	}
 }
 
-func TestDeleteTaskCompactsPositionsWithinType(t *testing.T) {
+func TestDeleteTaskKeepsExistingSortKeysWithinType(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 	base := time.Date(2026, 3, 1, 9, 0, 0, 0, s.loc)
@@ -95,10 +95,10 @@ func TestDeleteTaskCompactsPositionsWithinType(t *testing.T) {
 	if len(items) != 2 {
 		t.Fatalf("expected 2 tasks, got %d", len(items))
 	}
-	if items[0].Id != firstDailyID || items[0].Position != 1 {
+	if items[0].Id != firstDailyID || items[0].SortKey != int(sortKeyStep) {
 		t.Fatalf("unexpected first task after delete: %#v", items[0])
 	}
-	if items[1].Id != thirdDailyID || items[1].Position != 2 {
+	if items[1].Id != thirdDailyID || items[1].SortKey != int(sortKeyStep*3) {
 		t.Fatalf("unexpected second task after delete: %#v", items[1])
 	}
 }
@@ -124,7 +124,7 @@ func TestReorderTasksPersistsRequestedOrderWithinType(t *testing.T) {
 	if len(items) != 3 {
 		t.Fatalf("expected 3 reordered tasks, got %d", len(items))
 	}
-	if items[0].Id != thirdID || items[0].Position != 1 {
+	if items[0].Id != thirdID || items[0].SortKey >= items[1].SortKey {
 		t.Fatalf("unexpected first task after reorder: %#v", items[0])
 	}
 	if items[1].Id != firstID || items[2].Id != secondID {
@@ -156,10 +156,10 @@ func TestReorderTasksHandlesNonContiguousPositions(t *testing.T) {
 	if len(items) != 2 {
 		t.Fatalf("expected 2 reordered tasks, got %d", len(items))
 	}
-	if items[0].Id != thirdID || items[0].Position != 1 {
+	if items[0].Id != thirdID || items[0].SortKey >= items[1].SortKey {
 		t.Fatalf("unexpected first task after reorder with gaps: %#v", items[0])
 	}
-	if items[1].Id != firstID || items[1].Position != 2 {
+	if items[1].Id != firstID || items[1].SortKey <= items[0].SortKey {
 		t.Fatalf("unexpected second task after reorder with gaps: %#v", items[1])
 	}
 }

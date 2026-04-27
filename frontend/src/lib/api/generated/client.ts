@@ -294,7 +294,7 @@ export interface Task {
    */
   requiredCompletionsPerWeek: number;
   /** @minimum 1 */
-  position: number;
+  sortKey: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -431,7 +431,7 @@ export interface ShoppingListItem {
   /** @nullable */
   notes?: string | null;
   /** @minimum 1 */
-  position: number;
+  sortKey: number;
   createdAt: string;
   updatedAt: string;
 }

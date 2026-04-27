@@ -17,7 +17,7 @@ function buildWeeklyTask(
       type: "weekly",
       penaltyPoints: 1,
       requiredCompletionsPerWeek: 3,
-      position: 1,
+      sortKey: 1,
       createdAt: "2026-02-01T00:00:00Z",
       updatedAt: "2026-02-01T00:00:00Z",
     },

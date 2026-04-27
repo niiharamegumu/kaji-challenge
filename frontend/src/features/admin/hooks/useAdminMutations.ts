@@ -148,8 +148,11 @@ export function useTaskMutations(setStatus: StatusSetter) {
           if (left.type !== right.type) {
             return left.type.localeCompare(right.type);
           }
-          if (left.position !== right.position) {
-            return left.position - right.position;
+          if (left.sortKey !== right.sortKey) {
+            return left.sortKey - right.sortKey;
+          }
+          if (left.createdAt !== right.createdAt) {
+            return left.createdAt.localeCompare(right.createdAt);
           }
           return left.id.localeCompare(right.id);
         });

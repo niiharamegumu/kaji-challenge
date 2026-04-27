@@ -216,7 +216,7 @@ func TestBuildMonthlyTaskStatusByDateUsesTaskPositionOrder(t *testing.T) {
 	ctx := context.Background()
 
 	base := time.Date(2026, 1, 1, 9, 0, 0, 0, s.loc)
-	teamID, userID := createTeamWithMember(t, s, "summary-position-order@example.com", base)
+	teamID, userID := createTeamWithMember(t, s, "summary-sort-key-order@example.com", base)
 	firstID := createTaskAtWithIDAndTitle(t, s, teamID, api.TaskTypeDaily, 2, 1, base, "B-task", nil)
 	secondID := createTaskAtWithIDAndTitle(t, s, teamID, api.TaskTypeDaily, 2, 1, base.Add(time.Minute), "A-task", nil)
 
@@ -392,12 +392,12 @@ func createTaskAtWithIDAndTitle(t *testing.T, s *Store, teamID string, taskType 
 	if notes != nil {
 		notesValue = pgtype.Text{String: *notes, Valid: true}
 	}
-	maxPosition, err := s.q.GetTaskMaxPositionByTeamAndType(context.Background(), dbsqlc.GetTaskMaxPositionByTeamAndTypeParams{
+	maxSortKey, err := s.q.GetTaskMaxSortKeyByTeamAndType(context.Background(), dbsqlc.GetTaskMaxSortKeyByTeamAndTypeParams{
 		TeamID: teamID,
 		Type:   string(taskType),
 	})
 	if err != nil {
-		t.Fatalf("failed to get max task position: %v", err)
+		t.Fatalf("failed to get max task sort key: %v", err)
 	}
 	if err := s.q.CreateTask(context.Background(), dbsqlc.CreateTaskParams{
 		ID:                         taskID,
@@ -408,7 +408,7 @@ func createTaskAtWithIDAndTitle(t *testing.T, s *Store, teamID string, taskType 
 		PenaltyPoints:              int32(penalty),
 		Column7:                    "",
 		RequiredCompletionsPerWeek: int32(required),
-		Position:                   maxPosition + 1,
+		SortKey:                    maxSortKey + sortKeyStep,
 		CreatedAt:                  toPgTimestamptz(createdAt),
 		UpdatedAt:                  toPgTimestamptz(createdAt),
 	}); err != nil {

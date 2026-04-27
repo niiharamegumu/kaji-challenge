@@ -105,7 +105,7 @@ type ShoppingItem struct {
 	Name      string             `json:"name"`
 	Quantity  pgtype.Text        `json:"quantity"`
 	Notes     pgtype.Text        `json:"notes"`
-	Position  int32              `json:"position"`
+	SortKey   int32              `json:"sort_key"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
@@ -122,7 +122,7 @@ type Task struct {
 	CreatedAt                  pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt                  pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt                  pgtype.Timestamptz `json:"deleted_at"`
-	Position                   int32              `json:"position"`
+	SortKey                    int32              `json:"sort_key"`
 }
 
 type TaskCompletionDaily struct {
