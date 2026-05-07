@@ -86,25 +86,26 @@ export function useTaskMutations(setStatus: StatusSetter) {
         await invalidate();
         return;
       }
+      const createdTask = response.data;
       queryClient.setQueryData<Task[]>(queryKeys.tasks, (current) => {
         const tasks = (current ?? []).filter(
-          (task) => task.id !== response.data.id,
+          (task) => task.id !== createdTask.id,
         );
         const sameTypeIndex = tasks.findIndex(
-          (task) => task.type === response.data.type,
+          (task) => task.type === createdTask.type,
         );
         const insertIndex =
           sameTypeIndex >= 0
             ? sameTypeIndex
             : tasks.findIndex(
-                (task) => task.type.localeCompare(response.data.type) > 0,
+                (task) => task.type.localeCompare(createdTask.type) > 0,
               );
         if (insertIndex < 0) {
-          return [...tasks, response.data];
+          return [...tasks, createdTask];
         }
         return [
           ...tasks.slice(0, insertIndex),
-          response.data,
+          createdTask,
           ...tasks.slice(insertIndex),
         ];
       });

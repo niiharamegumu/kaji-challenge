@@ -55,11 +55,12 @@ export function useShoppingItemMutations(setStatus: StatusSetter) {
         await invalidate();
         return;
       }
+      const createdItem = response.data;
       queryClient.setQueryData<ShoppingListItem[]>(
         queryKeys.shoppingItems,
         (current) => [
-          response.data,
-          ...(current ?? []).filter((item) => item.id !== response.data.id),
+          createdItem,
+          ...(current ?? []).filter((item) => item.id !== createdItem.id),
         ],
       );
     },
