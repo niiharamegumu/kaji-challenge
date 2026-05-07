@@ -639,7 +639,7 @@ type ServerInterface interface {
 	// Deactivate a current user's push subscription
 	// (DELETE /v1/push/subscriptions/{subscriptionId})
 	DeletePushSubscription(c *gin.Context, subscriptionId string)
-	// List future reminder occurrences in current team
+	// List current and future month reminder occurrences in current team
 	// (GET /v1/reminders)
 	ListReminders(c *gin.Context, params ListRemindersParams)
 	// Create reminder
