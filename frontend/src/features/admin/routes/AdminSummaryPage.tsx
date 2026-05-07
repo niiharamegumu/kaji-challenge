@@ -226,15 +226,17 @@ export function AdminSummaryPage() {
       <article
         className={`animate-enter rounded-xl px-0 py-2.5 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
       >
-        <div className="flex items-start justify-between gap-2 px-2 max-[360px]:flex-wrap max-[360px]:items-end md:px-0">
-          <div className="shrink-0">
+        <div className="flex min-w-0 flex-col gap-2 px-2 sm:flex-row sm:items-start sm:justify-between md:px-0">
+          <div className="min-w-0">
             <h2 className="text-lg font-semibold">月次サマリー</h2>
             {status !== "" ? (
-              <p className="mt-1 text-sm text-stone-600">{status}</p>
+              <p className="mt-1 [overflow-wrap:anywhere] text-sm text-stone-600">
+                {status}
+              </p>
             ) : null}
           </div>
-          <div className="ml-auto grid w-auto min-w-0 justify-items-end max-[360px]:w-full">
-            <div className="flex items-center gap-1.5 sm:gap-2">
+          <div className="grid w-full min-w-0 justify-items-stretch sm:ml-auto sm:w-auto sm:justify-items-end">
+            <div className="grid w-full min-w-0 grid-cols-[2.25rem_minmax(0,1fr)_2.25rem] items-center gap-1.5 sm:w-auto sm:grid-cols-[2.75rem_13rem_2.75rem] sm:gap-2">
               <button
                 type="button"
                 className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border border-stone-300 bg-white text-stone-600 transition-colors hover:bg-stone-100 sm:h-11 sm:w-11"
@@ -246,7 +248,7 @@ export function AdminSummaryPage() {
               <div className="relative flex-1" ref={monthPickerRef}>
                 <button
                   type="button"
-                  className="relative flex h-9 w-36 cursor-pointer items-center justify-center rounded-lg border border-stone-300 bg-white px-2 py-1.5 text-sm text-stone-800 sm:h-11 sm:w-52 sm:px-3 sm:py-2"
+                  className="relative flex h-9 w-full cursor-pointer items-center justify-center rounded-lg border border-stone-300 bg-white px-2 py-1.5 text-sm text-stone-800 sm:h-11 sm:px-3 sm:py-2"
                   onClick={() => setMonthPickerOpen((open) => !open)}
                   aria-label="対象月を選択"
                 >
