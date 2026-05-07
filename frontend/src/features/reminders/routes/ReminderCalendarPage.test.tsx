@@ -131,7 +131,7 @@ describe("ReminderCalendarPage", () => {
 
     expect(
       screen.getByText(
-        "未来の予定だけを表示します。日付変更は編集から行えます。",
+        "今月と来月以降の予定を表示します。過去月は表示しません。日付変更は編集から行えます。",
       ),
     ).toBeInTheDocument();
     expect(latestCalendarProps()?.events).toEqual([]);
@@ -201,18 +201,69 @@ describe("ReminderCalendarPage", () => {
     setViewport(1280);
 
     render(
-      <MemoryRouter initialEntries={["/calendar?date=2026-03-27"]}>
+      <MemoryRouter initialEntries={["/calendar?date=2026-04-02"]}>
         <ReminderCalendarPage />
       </MemoryRouter>,
     );
 
     expect(
       screen.getByText(
-        "未来の予定だけを表示します。ドラッグで日付を変更できます。",
+        "今月と来月以降の予定を表示します。過去月は表示しません。ドラッグで日付を変更できます。",
       ),
     ).toBeInTheDocument();
     expect(Array.isArray(latestCalendarProps()?.events)).toBe(true);
     expect((latestCalendarProps()?.events as unknown[]).length).toBe(1);
     expect(latestCalendarProps()?.eventDrop).toBeTypeOf("function");
+  });
+
+  it("normalizes a past-month URL to the current month and hides the previous month button", () => {
+    setViewport(1280);
+
+    render(
+      <MemoryRouter initialEntries={["/calendar?date=2026-03-27"]}>
+        <ReminderCalendarPage />
+      </MemoryRouter>,
+    );
+
+    expect(mockUseReminderCalendarQuery).toHaveBeenLastCalledWith("2026-04");
+    expect(screen.getByText("2026年04月")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "前の月" })).toBeDisabled();
+    expect(latestCalendarProps()?.initialDate).toBe("2026-04-01");
+  });
+
+  it("keeps current-month past reminders visible while rejecting past-date drops", () => {
+    setViewport(1280);
+    vi.setSystemTime(new Date("2026-04-15T03:00:00+09:00"));
+    mockUseReminderCalendarQuery.mockReturnValue({
+      data: [
+        {
+          date: "2026-04-10",
+          items: [
+            {
+              reminderId: "rem-1",
+              date: "2026-04-10",
+              title: "sample",
+              notes: null,
+              kind: "recurring",
+              scheduleType: "weekly",
+            },
+          ],
+        },
+      ],
+      isFetching: false,
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/calendar?date=2026-04-10"]}>
+        <ReminderCalendarPage />
+      </MemoryRouter>,
+    );
+
+    expect((latestCalendarProps()?.events as unknown[]).length).toBe(1);
+    const eventAllow = latestCalendarProps()?.eventAllow as
+      | ((dropInfo: { startStr: string }) => boolean)
+      | undefined;
+    expect(eventAllow?.({ startStr: "2026-04-14" })).toBe(false);
+    expect(eventAllow?.({ startStr: "2026-04-15" })).toBe(true);
   });
 });
