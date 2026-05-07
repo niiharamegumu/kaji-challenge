@@ -52,13 +52,29 @@ func (s *Store) CreateShoppingItem(ctx context.Context, userID string, req api.C
 		"shopping_item",
 		map[string]string{"itemId": item.ID, "action": "create"},
 		func(txCtx context.Context, qtx *dbsqlc.Queries) error {
-			maxSortKey, err := qtx.GetShoppingItemMaxSortKeyByTeamID(txCtx, teamID)
+			rows, err := qtx.ListShoppingItemsByTeamID(txCtx, teamID)
 			if err != nil {
 				return err
 			}
-			sortKey32, err := nextSortKeyFromMax(maxSortKey)
-			if err != nil {
-				return err
+			var firstSortKey int32
+			if len(rows) > 0 {
+				firstSortKey = rows[0].SortKey
+			}
+			sortKey32, hasGap := prependSortKey(firstSortKey)
+			if !hasGap {
+				for index, row := range rows {
+					sortKey, err := sortKeyForIndex(index + 1)
+					if err != nil {
+						return err
+					}
+					if err := qtx.UpdateShoppingItemSortKey(txCtx, dbsqlc.UpdateShoppingItemSortKeyParams{
+						ID:        row.ID,
+						SortKey:   sortKey,
+						UpdatedAt: toPgTimestamptz(now),
+					}); err != nil {
+						return err
+					}
+				}
 			}
 			item.SortKey = int(sortKey32)
 			return qtx.CreateShoppingItem(txCtx, dbsqlc.CreateShoppingItemParams{

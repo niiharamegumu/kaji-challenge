@@ -33,13 +33,13 @@ func TestShoppingItemsFollowTeamScopeAndOrdering(t *testing.T) {
 	}
 }
 
-func TestCreateShoppingItemAppendsToEnd(t *testing.T) {
+func TestCreateShoppingItemPrependsToStart(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 	base := time.Date(2026, 3, 1, 9, 0, 0, 0, s.loc)
 	_, userID := createTeamWithMember(t, s, "shopping-create@example.com", base)
 
-	createShoppingItemAt(t, s, userID, "牛乳", nil, nil, base)
+	firstID := createShoppingItemAt(t, s, userID, "牛乳", nil, nil, base)
 	item, err := s.CreateShoppingItem(withLatestIfMatchForUser(t, s, ctx, userID), userID, api.CreateShoppingListItemRequest{
 		Name:     "卵",
 		Quantity: stringPtr("10個"),
@@ -47,11 +47,18 @@ func TestCreateShoppingItemAppendsToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateShoppingItem failed: %v", err)
 	}
-	if item.SortKey != int(sortKeyStep*2) {
-		t.Fatalf("expected appended sort key %d, got %d", sortKeyStep*2, item.SortKey)
+	if item.SortKey >= int(sortKeyStep) {
+		t.Fatalf("expected prepended sort key below %d, got %d", sortKeyStep, item.SortKey)
 	}
 	if item.Quantity == nil || *item.Quantity != "10個" {
 		t.Fatalf("expected quantity to be preserved, got %#v", item.Quantity)
+	}
+	items, err := s.ListShoppingItems(ctx, userID)
+	if err != nil {
+		t.Fatalf("ListShoppingItems failed: %v", err)
+	}
+	if items[0].Id != item.Id || items[1].Id != firstID {
+		t.Fatalf("unexpected item order after prepend create: %#v", items)
 	}
 }
 
@@ -110,6 +117,40 @@ func TestDeleteShoppingItemPhysicallyRemovesAndKeepsExistingSortKeys(t *testing.
 	}
 	if items[1].Id != thirdID || items[1].SortKey != int(sortKeyStep*3) {
 		t.Fatalf("unexpected second item after delete: %#v", items[1])
+	}
+}
+
+func TestCreateShoppingItemPrependsAfterDeleteAndReorder(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	base := time.Date(2026, 3, 1, 9, 0, 0, 0, s.loc)
+	_, userID := createTeamWithMember(t, s, "shopping-create-after-reorder@example.com", base)
+
+	firstID := createShoppingItemAt(t, s, userID, "牛乳", nil, nil, base)
+	secondID := createShoppingItemAt(t, s, userID, "卵", nil, nil, base.Add(time.Minute))
+	thirdID := createShoppingItemAt(t, s, userID, "パン", nil, nil, base.Add(2*time.Minute))
+
+	if err := s.DeleteShoppingItem(withLatestIfMatchForUser(t, s, ctx, userID), userID, secondID); err != nil {
+		t.Fatalf("DeleteShoppingItem failed: %v", err)
+	}
+	if _, err := s.ReorderShoppingItems(withLatestIfMatchForUser(t, s, ctx, userID), userID, api.ReorderShoppingListItemsRequest{
+		ItemIds: []string{thirdID, firstID},
+	}); err != nil {
+		t.Fatalf("ReorderShoppingItems failed: %v", err)
+	}
+
+	created, err := s.CreateShoppingItem(withLatestIfMatchForUser(t, s, ctx, userID), userID, api.CreateShoppingListItemRequest{
+		Name: "チーズ",
+	})
+	if err != nil {
+		t.Fatalf("CreateShoppingItem failed: %v", err)
+	}
+	items, err := s.ListShoppingItems(ctx, userID)
+	if err != nil {
+		t.Fatalf("ListShoppingItems failed: %v", err)
+	}
+	if items[0].Id != created.Id || items[1].Id != thirdID || items[2].Id != firstID {
+		t.Fatalf("unexpected order after create following delete and reorder: %#v", items)
 	}
 }
 

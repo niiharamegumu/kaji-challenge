@@ -79,19 +79,39 @@ func (s *Store) CreateTask(ctx context.Context, userID string, req api.CreateTas
 		"task",
 		map[string]string{"taskId": task.ID, "action": "create"},
 		func(txCtx context.Context, qtx *dbsqlc.Queries) error {
-			maxSortKey, err := qtx.GetTaskMaxSortKeyByTeamAndType(txCtx, dbsqlc.GetTaskMaxSortKeyByTeamAndTypeParams{
-				TeamID: teamID,
-				Type:   string(req.Type),
-			})
+			rows, err := qtx.ListTasksByTeamID(txCtx, teamID)
 			if err != nil {
 				return err
 			}
-			sortKey32, err := nextSortKeyFromMax(maxSortKey)
-			if err != nil {
-				return err
+			existingIDs := make([]string, 0, len(rows))
+			var firstSortKey int32
+			for _, row := range rows {
+				if row.Type != string(req.Type) {
+					continue
+				}
+				if len(existingIDs) == 0 {
+					firstSortKey = row.SortKey
+				}
+				existingIDs = append(existingIDs, row.ID)
+			}
+			sortKey32, hasGap := prependSortKey(firstSortKey)
+			if !hasGap {
+				for index, existingID := range existingIDs {
+					sortKey, err := sortKeyForIndex(index + 1)
+					if err != nil {
+						return err
+					}
+					if err := qtx.UpdateTaskSortKey(txCtx, dbsqlc.UpdateTaskSortKeyParams{
+						ID:        existingID,
+						SortKey:   sortKey,
+						UpdatedAt: toPgTimestamptz(now),
+					}); err != nil {
+						return err
+					}
+				}
 			}
 			task.SortKey = int(sortKey32)
-			return qtx.CreateTask(ctx, dbsqlc.CreateTaskParams{
+			return qtx.CreateTask(txCtx, dbsqlc.CreateTaskParams{
 				ID:                         task.ID,
 				TeamID:                     task.TeamID,
 				Title:                      task.Title,

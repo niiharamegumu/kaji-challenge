@@ -8,7 +8,7 @@ import (
 	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 )
 
-func TestCreateTaskAppendsWithinType(t *testing.T) {
+func TestCreateTaskPrependsWithinType(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 	base := time.Date(2026, 3, 1, 9, 0, 0, 0, s.loc)
@@ -40,8 +40,15 @@ func TestCreateTaskAppendsWithinType(t *testing.T) {
 		t.Fatalf("CreateTask second daily failed: %v", err)
 	}
 
-	if firstDaily.SortKey != int(sortKeyStep) || firstWeekly.SortKey != int(sortKeyStep) || secondDaily.SortKey != int(sortKeyStep*2) {
+	if firstDaily.SortKey != int(sortKeyStep) || firstWeekly.SortKey != int(sortKeyStep) || secondDaily.SortKey >= firstDaily.SortKey {
 		t.Fatalf("unexpected sort keys: daily1=%d weekly1=%d daily2=%d", firstDaily.SortKey, firstWeekly.SortKey, secondDaily.SortKey)
+	}
+	items, err := s.ListTasks(ctx, userID, nil)
+	if err != nil {
+		t.Fatalf("ListTasks failed: %v", err)
+	}
+	if items[0].Id != secondDaily.Id || items[1].Id != firstDaily.Id || items[2].Id != firstWeekly.Id {
+		t.Fatalf("unexpected task order after prepend create: %#v", items)
 	}
 }
 
@@ -100,6 +107,43 @@ func TestDeleteTaskKeepsExistingSortKeysWithinType(t *testing.T) {
 	}
 	if items[1].Id != thirdDailyID || items[1].SortKey != int(sortKeyStep*3) {
 		t.Fatalf("unexpected second task after delete: %#v", items[1])
+	}
+}
+
+func TestCreateTaskPrependsAfterDeleteAndReorder(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	base := time.Date(2026, 3, 1, 9, 0, 0, 0, s.loc)
+	_, userID := createTeamWithMember(t, s, "task-create-after-reorder@example.com", base)
+	teamID := teamIDForUser(t, s, userID)
+
+	firstID := createTaskWithIDAt(t, s, teamID, api.TaskTypeDaily, 1, 1, base)
+	secondID := createTaskWithIDAt(t, s, teamID, api.TaskTypeDaily, 2, 1, base.Add(time.Minute))
+	thirdID := createTaskWithIDAt(t, s, teamID, api.TaskTypeDaily, 3, 1, base.Add(2*time.Minute))
+
+	if err := s.DeleteTask(withLatestIfMatchForUser(t, s, ctx, userID), userID, secondID); err != nil {
+		t.Fatalf("DeleteTask failed: %v", err)
+	}
+	if _, err := s.ReorderTasks(withLatestIfMatchForUser(t, s, ctx, userID), userID, api.ReorderTasksRequest{
+		TaskIds: []string{thirdID, firstID},
+	}); err != nil {
+		t.Fatalf("ReorderTasks failed: %v", err)
+	}
+
+	created, err := s.CreateTask(withLatestIfMatchForUser(t, s, ctx, userID), userID, api.CreateTaskRequest{
+		Title:         "掃除機",
+		Type:          api.TaskTypeDaily,
+		PenaltyPoints: 1,
+	})
+	if err != nil {
+		t.Fatalf("CreateTask failed: %v", err)
+	}
+	items, err := s.ListTasks(ctx, userID, nil)
+	if err != nil {
+		t.Fatalf("ListTasks failed: %v", err)
+	}
+	if items[0].Id != created.Id || items[1].Id != thirdID || items[2].Id != firstID {
+		t.Fatalf("unexpected order after create following delete and reorder: %#v", items)
 	}
 }
 

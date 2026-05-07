@@ -64,6 +64,11 @@ export function useTaskMutations(setStatus: StatusSetter) {
   const queryClient = useQueryClient();
   const hasTasks = (value: unknown): value is { items?: Task[] } =>
     value != null && typeof value === "object" && "items" in value;
+  const hasTaskId = (value: unknown): value is Task =>
+    value != null &&
+    typeof value === "object" &&
+    "id" in value &&
+    typeof value.id === "string";
 
   const invalidate = async () => {
     await Promise.all([
@@ -75,9 +80,38 @@ export function useTaskMutations(setStatus: StatusSetter) {
 
   const createTask = useMutation({
     mutationFn: async (payload: CreateTaskRequest) => postTask(payload),
-    onSuccess: async () => {
+    onSuccess: async (response) => {
       setStatus("タスクを作成しました");
-      await invalidate();
+      if (!hasTaskId(response.data)) {
+        await invalidate();
+        return;
+      }
+      queryClient.setQueryData<Task[]>(queryKeys.tasks, (current) => {
+        const tasks = (current ?? []).filter(
+          (task) => task.id !== response.data.id,
+        );
+        const sameTypeIndex = tasks.findIndex(
+          (task) => task.type === response.data.type,
+        );
+        const insertIndex =
+          sameTypeIndex >= 0
+            ? sameTypeIndex
+            : tasks.findIndex(
+                (task) => task.type.localeCompare(response.data.type) > 0,
+              );
+        if (insertIndex < 0) {
+          return [...tasks, response.data];
+        }
+        return [
+          ...tasks.slice(0, insertIndex),
+          response.data,
+          ...tasks.slice(insertIndex),
+        ];
+      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.home }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.monthlySummary }),
+      ]);
     },
     onError: async (error) => {
       if (

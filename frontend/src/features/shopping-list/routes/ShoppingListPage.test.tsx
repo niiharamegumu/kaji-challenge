@@ -91,6 +91,52 @@ describe("ShoppingListPage", () => {
     });
   });
 
+  it("shows a created shopping item at the top immediately", async () => {
+    mockListShoppingItems.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: "item-1",
+            teamId: "team-1",
+            name: "牛乳",
+            quantity: "1本",
+            notes: null,
+            sortKey: 100,
+            createdAt: "2026-03-01T00:00:00Z",
+            updatedAt: "2026-03-01T00:00:00Z",
+          },
+        ],
+      },
+    });
+    mockPostShoppingItem.mockResolvedValue({
+      data: {
+        id: "item-2",
+        teamId: "team-1",
+        name: "卵",
+        quantity: null,
+        notes: null,
+        sortKey: 200,
+        createdAt: "2026-03-02T00:00:00Z",
+        updatedAt: "2026-03-02T00:00:00Z",
+      },
+    });
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole("button", { name: "追加" }));
+    const dialog = await screen.findByRole("dialog", {
+      name: "買い物項目を追加",
+    });
+    await user.type(within(dialog).getByLabelText("名前"), "卵");
+    await user.click(within(dialog).getByRole("button", { name: "追加する" }));
+
+    await waitFor(() => {
+      const listItems = screen.getAllByRole("listitem");
+      expect(within(listItems[0]).getByText("卵")).toBeInTheDocument();
+      expect(within(listItems[1]).getByText("牛乳")).toBeInTheDocument();
+    });
+  });
+
   it("updates an item inline", async () => {
     mockListShoppingItems.mockResolvedValue({
       data: {
