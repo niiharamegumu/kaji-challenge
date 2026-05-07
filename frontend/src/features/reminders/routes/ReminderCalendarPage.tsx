@@ -64,6 +64,8 @@ type ReminderFormState = {
 
 const calendarButtonClass =
   "flex h-10 w-10 items-center justify-center rounded-full border border-stone-300 bg-white text-stone-700 transition-colors hover:bg-stone-100";
+const disabledCalendarButtonClass =
+  "flex h-10 w-10 items-center justify-center rounded-full border border-stone-200 bg-stone-100 text-stone-300";
 const mobileDotIds = [
   "one",
   "two",
@@ -111,8 +113,14 @@ function buildInitialFormState(selectedDate: string): ReminderFormState {
 
 function calendarDescription(isMobile: boolean) {
   return isMobile
-    ? "未来の予定だけを表示します。日付変更は編集から行えます。"
-    : "未来の予定だけを表示します。ドラッグで日付を変更できます。";
+    ? "今月と来月以降の予定を表示します。過去月は表示しません。日付変更は編集から行えます。"
+    : "今月と来月以降の予定を表示します。過去月は表示しません。ドラッグで日付を変更できます。";
+}
+
+function normalizeVisibleDateKey(dateKey: string, todayKey: string) {
+  return monthKeyFromDateKey(dateKey) < monthKeyFromDateKey(todayKey)
+    ? todayKey
+    : dateKey;
 }
 
 function toFormState(reminder: Reminder): ReminderFormState {
@@ -517,7 +525,12 @@ function MobileAgendaSheet({
 export function ReminderCalendarPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const initialDateParam = searchParams.get("date");
-  const initialSelectedDate = normalizeDateKey(initialDateParam);
+  const todayKey = todayDateKey();
+  const currentMonthKey = monthKeyFromDateKey(todayKey);
+  const initialSelectedDate = normalizeVisibleDateKey(
+    normalizeDateKey(initialDateParam),
+    todayKey,
+  );
   const isMobile = useIsMobile();
   const viewportHeight = useViewportHeight();
   const [selectedDate, setSelectedDate] = useState(initialSelectedDate);
@@ -540,6 +553,16 @@ export function ReminderCalendarPage() {
   const { createReminder, updateReminder, removeReminder } =
     useReminderMutations(setStatus);
 
+  useEffect(() => {
+    if (initialDateParam != null && initialDateParam !== initialSelectedDate) {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("date", initialSelectedDate);
+        return next;
+      });
+    }
+  }, [initialDateParam, initialSelectedDate, setSearchParams]);
+
   const reminderMap = useMemo(
     () => new Map(definitionsQuery.data.map((item) => [item.id, item])),
     [definitionsQuery.data],
@@ -558,10 +581,9 @@ export function ReminderCalendarPage() {
   );
 
   const selectedOccurrences = occurrencesByDate.get(selectedDate) ?? [];
-  const canCreateOnSelectedDate = selectedDate >= todayDateKey();
-  const quickActionDate = canCreateOnSelectedDate
-    ? selectedDate
-    : todayDateKey();
+  const canCreateOnSelectedDate = selectedDate >= todayKey;
+  const quickActionDate = canCreateOnSelectedDate ? selectedDate : todayKey;
+  const canShowPreviousMonth = visibleMonth > currentMonthKey;
   const mobileCalendarHeight = isMobile
     ? Math.max(360, Math.min(viewportHeight - 300, 520))
     : undefined;
@@ -603,10 +625,11 @@ export function ReminderCalendarPage() {
   );
 
   const updateSelectedDate = (nextDate: string) => {
-    setSelectedDate(nextDate);
+    const normalizedDate = normalizeVisibleDateKey(nextDate, todayKey);
+    setSelectedDate(normalizedDate);
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
-      next.set("date", nextDate);
+      next.set("date", normalizedDate);
       return next;
     });
   };
@@ -650,7 +673,7 @@ export function ReminderCalendarPage() {
       0,
       Math.min(occurrenceCount, mobileMarkerLimit),
     );
-    const canCreate = dateKey >= todayDateKey();
+    const canCreate = dateKey >= todayKey;
 
     return (
       <div
@@ -772,7 +795,7 @@ export function ReminderCalendarPage() {
       return;
     }
     const nextDate = arg.event.startStr.slice(0, 10);
-    if (nextDate < todayDateKey()) {
+    if (nextDate < todayKey) {
       arg.revert();
       return;
     }
@@ -948,9 +971,14 @@ export function ReminderCalendarPage() {
           <div className="flex min-w-0 items-center gap-2">
             <button
               type="button"
-              className={calendarButtonClass}
+              className={
+                canShowPreviousMonth
+                  ? calendarButtonClass
+                  : disabledCalendarButtonClass
+              }
               onClick={() => calendarRef.current?.getApi().prev()}
               aria-label="前の月"
+              disabled={!canShowPreviousMonth}
             >
               <ChevronLeft size={16} aria-hidden="true" />
             </button>
@@ -971,7 +999,7 @@ export function ReminderCalendarPage() {
             className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 transition-colors hover:bg-stone-100"
             onClick={() => {
               calendarRef.current?.getApi().today();
-              updateSelectedDate(todayDateKey());
+              updateSelectedDate(todayKey);
             }}
           >
             今日
@@ -1009,7 +1037,7 @@ export function ReminderCalendarPage() {
             eventClick={handleEventClick}
             eventDrop={handleEventDrop}
             eventAllow={(dropInfo) =>
-              dropInfo.startStr.slice(0, 10) >= todayDateKey()
+              dropInfo.startStr.slice(0, 10) >= todayKey
             }
             dayCellContent={renderDayCellContent}
             dayCellClassNames={(arg) => {
@@ -1022,6 +1050,14 @@ export function ReminderCalendarPage() {
               const monthKey = arg.view.currentStart
                 .toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" })
                 .slice(0, 7);
+              if (monthKey < currentMonthKey) {
+                arg.view.calendar.gotoDate(todayKey);
+                updateSelectedDate(todayKey);
+                if (visibleMonth !== currentMonthKey) {
+                  setVisibleMonth(currentMonthKey);
+                }
+                return;
+              }
               if (monthKey !== visibleMonth) {
                 setVisibleMonth(monthKey);
               }
