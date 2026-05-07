@@ -31,6 +31,28 @@ func TestListRemindersIncludesPastDatesInCurrentMonth(t *testing.T) {
 	}
 }
 
+func TestListRemindersIncludesWeeklyOccurrenceOnCurrentMonthStart(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	now := time.Date(2026, 5, 7, 9, 0, 0, 0, s.loc)
+	s.now = func() time.Time { return now }
+	teamID, userID := createTeamWithMember(t, s, "reminders-weekly-month-start@example.com", now)
+	weekly := api.ReminderScheduleTypeWeekly
+
+	createReminderAt(t, s, teamID, "weekly", api.Recurring, &weekly, now, dateMustParse("2026-03-27", s.loc), nil)
+
+	days, err := s.ListReminders(ctx, userID, dateMustParse("2026-05-01", s.loc), dateMustParse("2026-05-31", s.loc))
+	if err != nil {
+		t.Fatalf("ListReminders failed: %v", err)
+	}
+	if !containsReminderOnDate(days, "2026-05-01", "weekly") {
+		t.Fatalf("expected current-month past weekly reminder on 2026-05-01: %#v", days)
+	}
+	if !containsReminderOnDate(days, "2026-05-08", "weekly") {
+		t.Fatalf("expected weekly reminder on 2026-05-08: %#v", days)
+	}
+}
+
 func TestListRemindersHidesPastMonth(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
