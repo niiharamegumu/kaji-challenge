@@ -46,6 +46,11 @@ func (s *Store) ListReminders(ctx context.Context, userID string, from, to time.
 	if toDateValue.Before(fromDate) {
 		return nil, errors.New("to must be on or after from")
 	}
+	currentMonthStart := monthStartDate(dateOnly(s.now(), s.loc), s.loc)
+	if toDateValue.Before(currentMonthStart) {
+		return []api.ReminderCalendarDay{}, nil
+	}
+	fromDate = maxDate(fromDate, currentMonthStart)
 
 	rows, err := s.q.ListRemindersByTeamID(ctx, teamID)
 	if err != nil {
@@ -55,7 +60,7 @@ func (s *Store) ListReminders(ctx context.Context, userID string, from, to time.
 	days := make(map[string][]api.ReminderOccurrence)
 	for _, row := range rows {
 		record := reminderFromDB(row, s.loc)
-		for _, occurrence := range expandReminderOccurrences(record, fromDate, toDateValue, dateOnly(s.now(), s.loc)) {
+		for _, occurrence := range expandReminderOccurrences(record, fromDate, toDateValue) {
 			dateKey := occurrence.Date.Time.Format("2006-01-02")
 			days[dateKey] = append(days[dateKey], occurrence)
 		}
@@ -232,7 +237,7 @@ func (s *Store) DeleteReminder(ctx context.Context, userID, reminderID string) e
 func (s *Store) cleanupExpiredOneTimeReminders(ctx context.Context, teamID string) error {
 	deletedRows, err := s.queries(ctx).DeleteExpiredOneTimeRemindersByTeam(ctx, dbsqlc.DeleteExpiredOneTimeRemindersByTeamParams{
 		TeamID:    teamID,
-		StartDate: toPgDate(dateOnly(s.now(), s.loc)),
+		StartDate: toPgDate(monthStartDate(dateOnly(s.now(), s.loc), s.loc)),
 	})
 	if err != nil {
 		return err
@@ -246,7 +251,7 @@ func (s *Store) cleanupExpiredOneTimeReminders(ctx context.Context, teamID strin
 func cleanupExpiredOneTimeRemindersTx(ctx context.Context, qtx *dbsqlc.Queries, teamID string, today time.Time) error {
 	_, err := qtx.DeleteExpiredOneTimeRemindersByTeam(ctx, dbsqlc.DeleteExpiredOneTimeRemindersByTeamParams{
 		TeamID:    teamID,
-		StartDate: toPgDate(today),
+		StartDate: toPgDate(monthStartDate(today, today.Location())),
 	})
 	return err
 }
@@ -304,15 +309,15 @@ func validateReminderRecord(record reminderRecord) error {
 	return nil
 }
 
-func expandReminderOccurrences(record reminderRecord, from, to, today time.Time) []api.ReminderOccurrence {
+func expandReminderOccurrences(record reminderRecord, from, to time.Time) []api.ReminderOccurrence {
 	occurrences := []api.ReminderOccurrence{}
-	effectiveFrom := maxDate(today, from, record.StartDate)
+	effectiveFrom := maxDate(from, record.StartDate)
 	if to.Before(effectiveFrom) {
 		return occurrences
 	}
 	switch record.Kind {
 	case api.OneTime:
-		if !record.StartDate.Before(today) && !record.StartDate.Before(from) && !record.StartDate.After(to) {
+		if !record.StartDate.Before(from) && !record.StartDate.After(to) {
 			occurrences = append(occurrences, reminderOccurrenceFromRecord(record, record.StartDate))
 		}
 	case api.Recurring:
@@ -387,6 +392,11 @@ func maxDate(values ...time.Time) time.Time {
 		}
 	}
 	return max
+}
+
+func monthStartDate(value time.Time, loc *time.Location) time.Time {
+	normalized := dateOnly(value, loc)
+	return time.Date(normalized.Year(), normalized.Month(), 1, 0, 0, 0, 0, loc)
 }
 
 func dateMustParse(value string, loc *time.Location) time.Time {

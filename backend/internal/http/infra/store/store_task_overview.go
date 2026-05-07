@@ -98,7 +98,7 @@ func (s *Store) GetTaskOverview(ctx context.Context, userID string) (resp api.Ta
 	}
 	for _, row := range reminderRows {
 		record := reminderFromDB(row, s.loc)
-		for _, occurrence := range expandReminderOccurrences(record, today, weekEnd, today) {
+		for _, occurrence := range expandReminderOccurrences(record, today, weekEnd) {
 			weeklyReminderItems = append(weeklyReminderItems, overviewReminderOccurrence{
 				occurrence: occurrence,
 				createdAt:  record.CreatedAt,
