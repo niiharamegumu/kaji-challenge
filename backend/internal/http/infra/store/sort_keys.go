@@ -8,11 +8,14 @@ import (
 
 const sortKeyStep int32 = 100
 
-func nextSortKeyFromMax(maxSortKey int32) (int32, error) {
-	if maxSortKey > math.MaxInt32-sortKeyStep {
-		return 0, errors.New("sort key overflow")
+func prependSortKey(firstSortKey int32) (int32, bool) {
+	if firstSortKey == 0 {
+		return sortKeyStep, true
 	}
-	return maxSortKey + sortKeyStep, nil
+	if firstSortKey <= 1 {
+		return sortKeyStep, false
+	}
+	return firstSortKey / 2, true
 }
 
 func sortKeyForIndex(index int) (int32, error) {

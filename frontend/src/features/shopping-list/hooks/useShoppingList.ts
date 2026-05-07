@@ -26,6 +26,12 @@ const hasShoppingItems = (
 ): value is { items?: ShoppingListItem[] } =>
   value != null && typeof value === "object" && "items" in value;
 
+const hasShoppingItemId = (value: unknown): value is ShoppingListItem =>
+  value != null &&
+  typeof value === "object" &&
+  "id" in value &&
+  typeof value.id === "string";
+
 export function useShoppingItemsQuery() {
   return useSuspenseQuery({
     queryKey: queryKeys.shoppingItems,
@@ -43,9 +49,20 @@ export function useShoppingItemMutations(setStatus: StatusSetter) {
   const createItem = useMutation({
     mutationFn: async (payload: CreateShoppingListItemRequest) =>
       postShoppingItem(payload),
-    onSuccess: async () => {
+    onSuccess: async (response) => {
       setStatus("買い物項目を追加しました");
-      await invalidate();
+      if (!hasShoppingItemId(response.data)) {
+        await invalidate();
+        return;
+      }
+      const createdItem = response.data;
+      queryClient.setQueryData<ShoppingListItem[]>(
+        queryKeys.shoppingItems,
+        (current) => [
+          createdItem,
+          ...(current ?? []).filter((item) => item.id !== createdItem.id),
+        ],
+      );
     },
     onError: async (error) => {
       if (

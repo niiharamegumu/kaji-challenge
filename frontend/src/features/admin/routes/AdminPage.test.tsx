@@ -183,6 +183,63 @@ describe("AdminTasksPage", () => {
     });
   });
 
+  it("shows a created task at the top of its type immediately", async () => {
+    mockListTasks.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: "task-1",
+            teamId: "team-1",
+            title: "皿洗い",
+            notes: null,
+            type: "daily",
+            penaltyPoints: 2,
+            assigneeUserId: undefined,
+            requiredCompletionsPerWeek: 1,
+            sortKey: 100,
+            createdAt: "2026-02-01T00:00:00Z",
+            updatedAt: "2026-02-01T00:00:00Z",
+          },
+        ],
+      },
+    });
+    mockPostTask.mockResolvedValue({
+      data: {
+        id: "task-2",
+        teamId: "team-1",
+        title: "洗濯",
+        notes: null,
+        type: "daily",
+        penaltyPoints: 1,
+        assigneeUserId: undefined,
+        requiredCompletionsPerWeek: 1,
+        sortKey: 200,
+        createdAt: "2026-02-02T00:00:00Z",
+        updatedAt: "2026-02-02T00:00:00Z",
+      },
+    });
+    const user = userEvent.setup();
+
+    renderPage();
+
+    await user.click(await screen.findByRole("button", { name: "追加" }));
+    const dialog = await screen.findByRole("dialog", { name: "タスクを追加" });
+    await user.type(within(dialog).getByLabelText("タスク名"), "洗濯");
+    await user.click(within(dialog).getByRole("button", { name: "追加する" }));
+
+    await waitFor(() => {
+      const dailySection = screen
+        .getByRole("heading", { name: "毎日" })
+        .closest("section");
+      if (dailySection == null) {
+        throw new Error("daily section not found");
+      }
+      const dailyItems = within(dailySection).getAllByRole("listitem");
+      expect(within(dailyItems[0]).getByText("洗濯")).toBeInTheDocument();
+      expect(within(dailyItems[1]).getByText("皿洗い")).toBeInTheDocument();
+    });
+  });
+
   it("resets task form fields after creating task", async () => {
     mockPostTask.mockResolvedValue({ data: {} });
     const user = userEvent.setup();
