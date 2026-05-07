@@ -1497,7 +1497,7 @@ export const postTaskCompletionToggle = async (taskId: string,
 
 
 /**
- * @summary List future reminder occurrences in current team
+ * @summary List current and future month reminder occurrences in current team
  */
 export type listRemindersResponse200 = {
   data: ReminderCalendarResponse

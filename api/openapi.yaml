@@ -436,7 +436,7 @@ paths:
   /v1/reminders:
     get:
       operationId: listReminders
-      summary: List future reminder occurrences in current team
+      summary: List current and future month reminder occurrences in current team
       parameters:
         - in: query
           name: from
