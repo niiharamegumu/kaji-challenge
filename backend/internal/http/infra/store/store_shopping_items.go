@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	dbsqlc "github.com/megu/kaji-challenge/backend/internal/db/sqlc"
+	domainshopping "github.com/megu/kaji-challenge/backend/internal/domain/shopping"
+	"github.com/megu/kaji-challenge/backend/internal/domain/sortkey"
 	model "github.com/megu/kaji-challenge/backend/internal/http/application/model"
 )
 
@@ -31,9 +33,9 @@ func (s *Store) CreateShoppingItem(ctx context.Context, userID string, req model
 	if err != nil {
 		return model.ShoppingListItem{}, err
 	}
-	name := strings.TrimSpace(req.Name)
-	if name == "" {
-		return model.ShoppingListItem{}, errors.New("name is required")
+	name, err := domainshopping.NormalizeItemName(req.Name)
+	if err != nil {
+		return model.ShoppingListItem{}, err
 	}
 	now := s.now()
 	item := shoppingItemRecord{
@@ -60,10 +62,10 @@ func (s *Store) CreateShoppingItem(ctx context.Context, userID string, req model
 			if len(rows) > 0 {
 				firstSortKey = rows[0].SortKey
 			}
-			sortKey32, hasGap := prependSortKey(firstSortKey)
+			sortKey32, hasGap := sortkey.Prepend(firstSortKey)
 			if !hasGap {
 				for index, row := range rows {
-					sortKey, err := sortKeyForIndex(index + 1)
+					sortKey, err := sortkey.ForIndex(index + 1)
 					if err != nil {
 						return err
 					}
@@ -115,9 +117,9 @@ func (s *Store) PatchShoppingItem(ctx context.Context, userID, itemID string, re
 				return errors.New("shopping item not found")
 			}
 			if req.Name != nil {
-				name := strings.TrimSpace(*req.Name)
-				if name == "" {
-					return errors.New("name cannot be empty")
+				name, err := domainshopping.NormalizePatchItemName(*req.Name)
+				if err != nil {
+					return err
 				}
 				item.Name = name
 			}
@@ -223,14 +225,14 @@ func (s *Store) ReorderShoppingItems(ctx context.Context, userID string, req mod
 			}
 
 			now := s.now()
-			movedItemID := findMovedItemID(currentIDs, req.ItemIds)
+			movedItemID := sortkey.FindMovedID(currentIDs, req.ItemIds)
 			currentSortKeys := make(map[string]int32, len(rows))
 			for _, row := range rows {
 				currentSortKeys[row.ID] = row.SortKey
 			}
 
 			if movedItemID != "" {
-				nextSortKey, ok, err := computeMovedItemSortKey(req.ItemIds, currentSortKeys, movedItemID)
+				nextSortKey, ok, err := sortkey.MovedItemSortKey(req.ItemIds, currentSortKeys, movedItemID)
 				if err != nil {
 					return err
 				}
@@ -248,7 +250,7 @@ func (s *Store) ReorderShoppingItems(ctx context.Context, userID string, req mod
 					itemsByID[movedItemID] = item
 				} else {
 					for index, itemID := range req.ItemIds {
-						sortKey, err := sortKeyForIndex(index)
+						sortKey, err := sortkey.ForIndex(index)
 						if err != nil {
 							return err
 						}
@@ -267,7 +269,7 @@ func (s *Store) ReorderShoppingItems(ctx context.Context, userID string, req mod
 				}
 			} else {
 				for index, itemID := range req.ItemIds {
-					sortKey, err := sortKeyForIndex(index)
+					sortKey, err := sortkey.ForIndex(index)
 					if err != nil {
 						return err
 					}

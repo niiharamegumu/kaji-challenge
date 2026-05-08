@@ -3,13 +3,12 @@ package store
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	dbsqlc "github.com/megu/kaji-challenge/backend/internal/db/sqlc"
+	domainreminder "github.com/megu/kaji-challenge/backend/internal/domain/reminder"
 	model "github.com/megu/kaji-challenge/backend/internal/http/application/model"
 )
 
@@ -49,7 +48,9 @@ func (s *Store) ListReminders(ctx context.Context, userID string, from, to time.
 	if toDateValue.Before(currentMonthStart) {
 		return []model.ReminderCalendarDay{}, nil
 	}
-	fromDate = maxDate(fromDate, currentMonthStart)
+	if currentMonthStart.After(fromDate) {
+		fromDate = currentMonthStart
+	}
 
 	rows, err := s.q.ListRemindersByTeamID(ctx, teamID)
 	if err != nil {
@@ -59,9 +60,10 @@ func (s *Store) ListReminders(ctx context.Context, userID string, from, to time.
 	days := make(map[string][]model.ReminderOccurrence)
 	for _, row := range rows {
 		record := reminderFromDB(row, s.loc)
-		for _, occurrence := range expandReminderOccurrences(record, fromDate, toDateValue) {
-			dateKey := occurrence.Date.Time.Format("2006-01-02")
-			days[dateKey] = append(days[dateKey], occurrence)
+		for _, occurrence := range domainreminder.ExpandOccurrences(toDomainReminder(record), fromDate, toDateValue) {
+			item := reminderOccurrenceFromDomain(occurrence)
+			dateKey := occurrence.Date.Format("2006-01-02")
+			days[dateKey] = append(days[dateKey], item)
 		}
 	}
 
@@ -87,9 +89,9 @@ func (s *Store) CreateReminder(ctx context.Context, userID string, req model.Cre
 		return model.Reminder{}, err
 	}
 
-	title := strings.TrimSpace(req.Title)
-	if title == "" {
-		return model.Reminder{}, errors.New("title is required")
+	title, err := domainreminder.NormalizeTitle(req.Title)
+	if err != nil {
+		return model.Reminder{}, err
 	}
 
 	record, err := buildReminderRecordFromCreate(teamID, title, req, s.loc, s.now())
@@ -153,9 +155,9 @@ func (s *Store) PatchReminder(ctx context.Context, userID, reminderID string, re
 				return errors.New("reminder not found")
 			}
 			if req.Title != nil {
-				title := strings.TrimSpace(*req.Title)
-				if title == "" {
-					return errors.New("title cannot be empty")
+				title, err := domainreminder.NormalizePatchTitle(*req.Title)
+				if err != nil {
+					return err
 				}
 				record.Title = title
 			}
@@ -178,7 +180,7 @@ func (s *Store) PatchReminder(ctx context.Context, userID, reminderID string, re
 				record.ScheduleType = nil
 				record.EndDate = nil
 			}
-			if err := validateReminderRecord(record); err != nil {
+			if err := domainreminder.Validate(toDomainReminder(record)); err != nil {
 				return err
 			}
 			record.UpdatedAt = s.now()
@@ -272,125 +274,51 @@ func buildReminderRecordFromCreate(teamID, title string, req model.CreateReminde
 	if req.EndDate != nil {
 		record.EndDate = dateTimePtr(req.EndDate, loc)
 	}
-	if err := validateReminderRecord(record); err != nil {
+	if err := domainreminder.Validate(toDomainReminder(record)); err != nil {
 		return reminderRecord{}, err
 	}
 	return record, nil
 }
 
-func validateReminderRecord(record reminderRecord) error {
-	if strings.TrimSpace(record.Title) == "" {
-		return errors.New("title is required")
-	}
-	if record.Kind == model.OneTime {
-		if record.ScheduleType != nil {
-			return errors.New("one-time reminder cannot have schedule type")
-		}
-		if record.EndDate != nil {
-			return errors.New("one-time reminder cannot have end date")
-		}
-		return nil
-	}
-	if record.Kind != model.Recurring {
-		return fmt.Errorf("invalid reminder kind: %s", record.Kind)
-	}
-	if record.ScheduleType == nil {
-		return errors.New("recurring reminder requires schedule type")
-	}
-	switch *record.ScheduleType {
-	case model.ReminderScheduleTypeDaily, model.ReminderScheduleTypeWeekly, model.ReminderScheduleTypeMonthly:
-	default:
-		return fmt.Errorf("invalid reminder schedule type: %s", *record.ScheduleType)
-	}
-	if record.EndDate != nil && dateOnly(record.EndDate.In(record.StartDate.Location()), record.StartDate.Location()).Before(record.StartDate) {
-		return errors.New("end date must be on or after start date")
-	}
-	return nil
-}
-
-func expandReminderOccurrences(record reminderRecord, from, to time.Time) []model.ReminderOccurrence {
-	occurrences := []model.ReminderOccurrence{}
-	effectiveFrom := maxDate(from, record.StartDate)
-	if to.Before(effectiveFrom) {
-		return occurrences
-	}
-	switch record.Kind {
-	case model.OneTime:
-		if !record.StartDate.Before(from) && !record.StartDate.After(to) {
-			occurrences = append(occurrences, reminderOccurrenceFromRecord(record, record.StartDate))
-		}
-	case model.Recurring:
-		if record.ScheduleType == nil {
-			return occurrences
-		}
-		limit := to
-		if record.EndDate != nil && record.EndDate.Before(limit) {
-			limit = *record.EndDate
-		}
-		if limit.Before(effectiveFrom) {
-			return occurrences
-		}
-		switch *record.ScheduleType {
-		case model.ReminderScheduleTypeDaily:
-			for current := effectiveFrom; !current.After(limit); current = current.AddDate(0, 0, 1) {
-				occurrences = append(occurrences, reminderOccurrenceFromRecord(record, current))
-			}
-		case model.ReminderScheduleTypeWeekly:
-			first := nextWeeklyOccurrence(effectiveFrom, record.StartDate)
-			for current := first; !current.After(limit); current = current.AddDate(0, 0, 7) {
-				occurrences = append(occurrences, reminderOccurrenceFromRecord(record, current))
-			}
-		case model.ReminderScheduleTypeMonthly:
-			for current := nextMonthlyOccurrence(effectiveFrom, record.StartDate); !current.IsZero() && !current.After(limit); current = nextMonthlyOccurrence(current.AddDate(0, 0, 1), record.StartDate) {
-				occurrences = append(occurrences, reminderOccurrenceFromRecord(record, current))
-			}
-		}
-	}
-	return occurrences
-}
-
-func reminderOccurrenceFromRecord(record reminderRecord, date time.Time) model.ReminderOccurrence {
+func reminderOccurrenceFromDomain(occurrence domainreminder.Occurrence) model.ReminderOccurrence {
 	return model.ReminderOccurrence{
-		ReminderId:   record.ID,
-		Date:         toDate(date),
+		ReminderId:   occurrence.ReminderID,
+		Date:         toDate(occurrence.Date),
+		Title:        occurrence.Title,
+		Notes:        occurrence.Notes,
+		Kind:         model.ReminderKind(occurrence.Kind),
+		ScheduleType: modelReminderScheduleTypePtr(occurrence.ScheduleType),
+	}
+}
+
+func toDomainReminder(record reminderRecord) domainreminder.Reminder {
+	return domainreminder.Reminder{
+		ID:           record.ID,
 		Title:        record.Title,
 		Notes:        record.Notes,
-		Kind:         record.Kind,
-		ScheduleType: record.ScheduleType,
+		Kind:         domainreminder.Kind(record.Kind),
+		ScheduleType: domainReminderScheduleTypePtr(record.ScheduleType),
+		StartDate:    record.StartDate,
+		EndDate:      record.EndDate,
+		CreatedAt:    record.CreatedAt,
+		UpdatedAt:    record.UpdatedAt,
 	}
 }
 
-func nextWeeklyOccurrence(from, startDate time.Time) time.Time {
-	diff := (int(startDate.Weekday()) - int(from.Weekday()) + 7) % 7
-	return from.AddDate(0, 0, diff)
+func domainReminderScheduleTypePtr(value *model.ReminderScheduleType) *domainreminder.ScheduleType {
+	if value == nil {
+		return nil
+	}
+	converted := domainreminder.ScheduleType(*value)
+	return &converted
 }
 
-func nextMonthlyOccurrence(from, startDate time.Time) time.Time {
-	current := dateOnly(from, from.Location())
-	year, month, _ := current.Date()
-	startDay := startDate.Day()
-	for i := 0; i < 240; i++ {
-		daysInMonth := time.Date(year, month+1, 0, 0, 0, 0, 0, current.Location()).Day()
-		if startDay <= daysInMonth {
-			candidate := time.Date(year, month, startDay, 0, 0, 0, 0, current.Location())
-			if !candidate.Before(current) {
-				return candidate
-			}
-		}
-		current = time.Date(year, month, 1, 0, 0, 0, 0, current.Location()).AddDate(0, 1, 0)
-		year, month, _ = current.Date()
+func modelReminderScheduleTypePtr(value *domainreminder.ScheduleType) *model.ReminderScheduleType {
+	if value == nil {
+		return nil
 	}
-	return time.Time{}
-}
-
-func maxDate(values ...time.Time) time.Time {
-	max := values[0]
-	for _, value := range values[1:] {
-		if value.After(max) {
-			max = value
-		}
-	}
-	return max
+	converted := model.ReminderScheduleType(*value)
+	return &converted
 }
 
 func monthStartDate(value time.Time, loc *time.Location) time.Time {

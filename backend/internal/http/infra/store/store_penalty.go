@@ -3,10 +3,10 @@ package store
 import (
 	"context"
 	"errors"
-	"strings"
 	"time"
 
 	dbsqlc "github.com/megu/kaji-challenge/backend/internal/db/sqlc"
+	domainpenalty "github.com/megu/kaji-challenge/backend/internal/domain/penalty"
 	model "github.com/megu/kaji-challenge/backend/internal/http/application/model"
 )
 
@@ -96,7 +96,7 @@ func (s *Store) PatchPenaltyRule(ctx context.Context, userID, ruleID string, req
 				rule.Threshold = *req.Threshold
 			}
 			if req.Name != nil {
-				rule.Name = strings.TrimSpace(*req.Name)
+				rule.Name = domainpenalty.NormalizeRuleName(*req.Name)
 			}
 			if req.Description != nil {
 				rule.Description = req.Description

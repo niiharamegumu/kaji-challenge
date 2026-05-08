@@ -7,6 +7,9 @@ import (
 	"time"
 
 	dbsqlc "github.com/megu/kaji-challenge/backend/internal/db/sqlc"
+	domainpenalty "github.com/megu/kaji-challenge/backend/internal/domain/penalty"
+	domainreminder "github.com/megu/kaji-challenge/backend/internal/domain/reminder"
+	domaintask "github.com/megu/kaji-challenge/backend/internal/domain/task"
 	model "github.com/megu/kaji-challenge/backend/internal/http/application/model"
 )
 
@@ -98,9 +101,9 @@ func (s *Store) GetTaskOverview(ctx context.Context, userID string) (resp model.
 	}
 	for _, row := range reminderRows {
 		record := reminderFromDB(row, s.loc)
-		for _, occurrence := range expandReminderOccurrences(record, today, weekEnd) {
+		for _, occurrence := range domainreminder.ExpandOccurrences(toDomainReminder(record), today, weekEnd) {
 			weeklyReminderItems = append(weeklyReminderItems, overviewReminderOccurrence{
-				occurrence: occurrence,
+				occurrence: reminderOccurrenceFromDomain(occurrence),
 				createdAt:  record.CreatedAt,
 			})
 		}
@@ -206,12 +209,11 @@ func (s *Store) GetMonthlySummary(ctx context.Context, userID string, month *str
 			return model.MonthlyPenaltySummary{}, err
 		}
 		total := int(summary.DailyPenaltyTotal + summary.WeeklyPenaltyTotal)
-		triggered = make([]string, 0, len(effectiveRules))
+		rules := make([]domainpenalty.Rule, 0, len(effectiveRules))
 		for _, rule := range effectiveRules {
-			if total >= int(rule.Threshold) {
-				triggered = append(triggered, rule.ID)
-			}
+			rules = append(rules, domainpenalty.Rule{ID: rule.ID, Threshold: int(rule.Threshold)})
 		}
+		triggered = domainpenalty.TriggeredRuleIDs(total, rules)
 	}
 	taskStatusByDate, err := s.buildMonthlyTaskStatusByDate(ctx, teamID, targetMonth)
 	if err != nil {
@@ -451,11 +453,11 @@ func taskCompletionActorPtr(userIDRaw interface{}, effectiveName string, colorHe
 }
 
 func buildCompletionSlots(required int, actorsBySlot map[int]*model.TaskCompletionActor) []model.TaskCompletionSlot {
-	if required < requiredCompletionsPerWeekMin {
-		required = requiredCompletionsPerWeekMin
+	if required < domaintask.RequiredCompletionsPerWeekMin {
+		required = domaintask.RequiredCompletionsPerWeekMin
 	}
-	if required > requiredCompletionsPerWeekMax {
-		required = requiredCompletionsPerWeekMax
+	if required > domaintask.RequiredCompletionsPerWeekMax {
+		required = domaintask.RequiredCompletionsPerWeekMax
 	}
 	slots := make([]model.TaskCompletionSlot, 0, required)
 	for idx := 1; idx <= required; idx++ {

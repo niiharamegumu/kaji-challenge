@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	dbsqlc "github.com/megu/kaji-challenge/backend/internal/db/sqlc"
+	domainpenalty "github.com/megu/kaji-challenge/backend/internal/domain/penalty"
 	model "github.com/megu/kaji-challenge/backend/internal/http/application/model"
 )
 
@@ -340,12 +341,7 @@ func (s *Store) closeMonthForTargetLocked(ctx context.Context, monthStart time.T
 	}
 	sort.Slice(rules, func(i, j int) bool { return rules[i].Threshold < rules[j].Threshold })
 	total := int(summary.DailyPenaltyTotal + summary.WeeklyPenaltyTotal)
-	triggered := []string{}
-	for _, r := range rules {
-		if total >= r.Threshold {
-			triggered = append(triggered, r.ID)
-		}
-	}
+	triggered := domainpenalty.TriggeredRuleIDs(total, domainPenaltyRules(rules))
 	if err := s.queries(ctx).CloseMonthlyPenaltySummary(ctx, dbsqlc.CloseMonthlyPenaltySummaryParams{
 		TeamID:     teamID,
 		MonthStart: toPgDate(monthStart),
@@ -368,6 +364,17 @@ func (s *Store) closeMonthForTargetLocked(ctx context.Context, monthStart time.T
 		}
 	}
 	return true, month, nil
+}
+
+func domainPenaltyRules(rules []ruleRecord) []domainpenalty.Rule {
+	items := make([]domainpenalty.Rule, 0, len(rules))
+	for _, rule := range rules {
+		items = append(items, domainpenalty.Rule{
+			ID:        rule.ID,
+			Threshold: rule.Threshold,
+		})
+	}
+	return items
 }
 
 func (s *Store) catchUpDayLocked(ctx context.Context, now time.Time, teamID string) (int, error) {

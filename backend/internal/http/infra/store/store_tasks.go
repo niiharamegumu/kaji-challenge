@@ -3,12 +3,13 @@ package store
 import (
 	"context"
 	"errors"
-	"fmt"
 	"slices"
 	"strings"
 	"time"
 
 	dbsqlc "github.com/megu/kaji-challenge/backend/internal/db/sqlc"
+	"github.com/megu/kaji-challenge/backend/internal/domain/sortkey"
+	domaintask "github.com/megu/kaji-challenge/backend/internal/domain/task"
 	model "github.com/megu/kaji-challenge/backend/internal/http/application/model"
 )
 
@@ -37,16 +38,16 @@ func (s *Store) CreateTask(ctx context.Context, userID string, req model.CreateT
 	if err != nil {
 		return model.Task{}, err
 	}
-	title := strings.TrimSpace(req.Title)
-	if title == "" {
-		return model.Task{}, errors.New("title is required")
+	title, err := domaintask.NormalizeTitle(req.Title)
+	if err != nil {
+		return model.Task{}, err
 	}
 
 	required := 1
 	if req.Type == model.TaskTypeWeekly && req.RequiredCompletionsPerWeek != nil {
 		required = *req.RequiredCompletionsPerWeek
 	}
-	required, err = normalizeRequiredCompletionsPerWeek(req.Type, required)
+	required, err = domaintask.NormalizeRequiredCompletionsPerWeek(domainTaskType(req.Type), required)
 	if err != nil {
 		return model.Task{}, err
 	}
@@ -94,10 +95,10 @@ func (s *Store) CreateTask(ctx context.Context, userID string, req model.CreateT
 				}
 				existingIDs = append(existingIDs, row.ID)
 			}
-			sortKey32, hasGap := prependSortKey(firstSortKey)
+			sortKey32, hasGap := sortkey.Prepend(firstSortKey)
 			if !hasGap {
 				for index, existingID := range existingIDs {
-					sortKey, err := sortKeyForIndex(index + 1)
+					sortKey, err := sortkey.ForIndex(index + 1)
 					if err != nil {
 						return err
 					}
@@ -152,9 +153,9 @@ func (s *Store) PatchTask(ctx context.Context, userID, taskID string, req model.
 				return errors.New("task not found")
 			}
 			if req.Title != nil {
-				title := strings.TrimSpace(*req.Title)
-				if title == "" {
-					return errors.New("title cannot be empty")
+				title, err := domaintask.NormalizePatchTitle(*req.Title)
+				if err != nil {
+					return err
 				}
 				task.Title = title
 			}
@@ -168,8 +169,8 @@ func (s *Store) PatchTask(ctx context.Context, userID, taskID string, req model.
 				task.AssigneeID = req.AssigneeUserId
 			}
 			if req.RequiredCompletionsPerWeek != nil && task.Type == model.TaskTypeWeekly {
-				required, err := normalizeRequiredCompletionsPerWeek(
-					task.Type,
+				required, err := domaintask.NormalizeRequiredCompletionsPerWeek(
+					domainTaskType(task.Type),
 					*req.RequiredCompletionsPerWeek,
 				)
 				if err != nil {
@@ -200,20 +201,6 @@ func (s *Store) PatchTask(ctx context.Context, userID, taskID string, req model.
 		return model.Task{}, err
 	}
 	return task.toAPI(), nil
-}
-
-func normalizeRequiredCompletionsPerWeek(taskType model.TaskType, required int) (int, error) {
-	if taskType == model.TaskTypeDaily {
-		return requiredCompletionsPerWeekMin, nil
-	}
-	if required < requiredCompletionsPerWeekMin || required > requiredCompletionsPerWeekMax {
-		return 0, fmt.Errorf(
-			"required completions per week must be between %d and %d",
-			requiredCompletionsPerWeekMin,
-			requiredCompletionsPerWeekMax,
-		)
-	}
-	return required, nil
 }
 
 func (s *Store) DeleteTask(ctx context.Context, userID, taskID string) error {
@@ -320,7 +307,7 @@ func (s *Store) ReorderTasks(ctx context.Context, userID string, req model.Reord
 			}
 
 			now := s.now()
-			movedTaskID := findMovedItemID(currentIDs, req.TaskIds)
+			movedTaskID := sortkey.FindMovedID(currentIDs, req.TaskIds)
 			currentSortKeys := make(map[string]int32, len(currentIDs))
 			for taskID, task := range tasksByID {
 				v, err := safeInt32(task.SortKey, "sort key")
@@ -331,7 +318,7 @@ func (s *Store) ReorderTasks(ctx context.Context, userID string, req model.Reord
 			}
 
 			if movedTaskID != "" {
-				nextSortKey, ok, err := computeMovedItemSortKey(req.TaskIds, currentSortKeys, movedTaskID)
+				nextSortKey, ok, err := sortkey.MovedItemSortKey(req.TaskIds, currentSortKeys, movedTaskID)
 				if err != nil {
 					return err
 				}
@@ -349,7 +336,7 @@ func (s *Store) ReorderTasks(ctx context.Context, userID string, req model.Reord
 					tasksByID[movedTaskID] = task
 				} else {
 					for index, taskID := range req.TaskIds {
-						sortKey, err := sortKeyForIndex(index)
+						sortKey, err := sortkey.ForIndex(index)
 						if err != nil {
 							return err
 						}
@@ -368,7 +355,7 @@ func (s *Store) ReorderTasks(ctx context.Context, userID string, req model.Reord
 				}
 			} else {
 				for index, taskID := range req.TaskIds {
-					sortKey, err := sortKeyForIndex(index)
+					sortKey, err := sortkey.ForIndex(index)
 					if err != nil {
 						return err
 					}
@@ -403,13 +390,8 @@ func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string,
 	if err != nil {
 		return model.TaskCompletionResponse{}, err
 	}
-	mode := model.Toggle
-	if action != nil {
-		mode = *action
-		if mode == "" {
-			mode = model.Toggle
-		}
-	}
+	domainAction := domaintask.NormalizeCompletionAction(domainCompletionActionPtr(action))
+	mode := modelCompletionAction(domainAction)
 	actionName := string(mode)
 	res := model.TaskCompletionResponse{}
 	if _, err := s.runWithTeamRevisionCAS(
@@ -432,38 +414,27 @@ func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string,
 			if task.Type == model.TaskTypeWeekly {
 				weekStart := startOfWeek(today, s.loc)
 				weekEnd := weekStart.AddDate(0, 0, 6)
-				if targetDate.Before(weekStart) || targetDate.After(weekEnd) {
-					return errors.New("weekly completion can only be toggled within current week")
+				if err := domaintask.ValidateWeeklyTarget(targetDate, today, weekStart, weekEnd); err != nil {
+					return err
 				}
 			}
 
 			targetPg := toPgDate(targetDate)
 			if task.Type == model.TaskTypeDaily {
-				isToday := sameDate(targetDate, today)
 				targetMonth := monthKeyFromTime(targetDate, s.loc)
 				currentMonth := monthKeyFromTime(today, s.loc)
-				if isToday {
-					if mode != model.Toggle {
-						return errors.New("daily tasks only support toggle action for today")
-					}
-				} else {
-					if targetDate.After(today) {
-						return errors.New("daily completion cannot be changed for future dates")
-					}
-					if targetMonth != currentMonth {
-						return errors.New("daily completion can only be completed for past days in current month")
-					}
+				monthClosed := false
+				if !sameDate(targetDate, today) && !targetDate.After(today) && targetMonth == currentMonth {
 					summary, err := s.ensureMonthSummaryLocked(txCtx, teamID, targetMonth)
 					if err != nil {
 						return err
 					}
-					if summary.IsClosed {
-						return errors.New("daily completion cannot be changed for closed month")
-					}
-					if mode != model.Complete {
-						return errors.New("past daily completion only supports complete action")
-					}
+					monthClosed = summary.IsClosed
 				}
+				if err := domaintask.ValidateDailyAction(targetDate, today, targetMonth, currentMonth, monthClosed, domainAction); err != nil {
+					return err
+				}
+				isToday := sameDate(targetDate, today)
 				exists, err := q.HasTaskCompletionDaily(txCtx, dbsqlc.HasTaskCompletionDailyParams{
 					TaskID:     taskID,
 					TargetDate: targetPg,
@@ -519,12 +490,12 @@ func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string,
 			if err != nil {
 				return err
 			}
-			nextCount := currentCount
+			nextCount, shouldMutate, err := domaintask.NextWeeklyCompletionCount(currentCount, task.Required, domainAction)
+			if err != nil {
+				return err
+			}
 			if task.Required <= 1 {
-				if mode != model.Toggle {
-					return errors.New("weekly tasks with required completions of 1 only support toggle action")
-				}
-				if currentCount > 0 {
+				if shouldMutate && currentCount > 0 {
 					deletedRows, err := q.DeleteLatestTaskCompletionWeeklyEntry(txCtx, dbsqlc.DeleteLatestTaskCompletionWeeklyEntryParams{
 						TaskID:    taskID,
 						WeekStart: weekStartPg,
@@ -532,10 +503,10 @@ func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string,
 					if err != nil {
 						return err
 					}
-					if deletedRows > 0 {
-						nextCount = currentCount - 1
+					if deletedRows == 0 {
+						nextCount = currentCount
 					}
-				} else {
+				} else if shouldMutate {
 					if err := q.InsertTaskCompletionWeeklyEntry(txCtx, dbsqlc.InsertTaskCompletionWeeklyEntryParams{
 						ID:                s.nextID("twce"),
 						TaskID:            taskID,
@@ -544,38 +515,32 @@ func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string,
 					}); err != nil {
 						return err
 					}
-					nextCount = 1
 				}
 			} else {
 				switch mode {
 				case model.Toggle, model.Increment:
-					if currentCount >= int64(task.Required) {
-						nextCount = currentCount
-						break
+					if shouldMutate {
+						if err := q.InsertTaskCompletionWeeklyEntry(txCtx, dbsqlc.InsertTaskCompletionWeeklyEntryParams{
+							ID:                s.nextID("twce"),
+							TaskID:            taskID,
+							WeekStart:         weekStartPg,
+							CompletedByUserID: userID,
+						}); err != nil {
+							return err
+						}
 					}
-					if err := q.InsertTaskCompletionWeeklyEntry(txCtx, dbsqlc.InsertTaskCompletionWeeklyEntryParams{
-						ID:                s.nextID("twce"),
-						TaskID:            taskID,
-						WeekStart:         weekStartPg,
-						CompletedByUserID: userID,
-					}); err != nil {
-						return err
-					}
-					nextCount = currentCount + 1
 				case model.Decrement:
-					if currentCount <= 0 {
-						nextCount = 0
-						break
-					}
-					deletedRows, err := q.DeleteLatestTaskCompletionWeeklyEntry(txCtx, dbsqlc.DeleteLatestTaskCompletionWeeklyEntryParams{
-						TaskID:    taskID,
-						WeekStart: weekStartPg,
-					})
-					if err != nil {
-						return err
-					}
-					if deletedRows > 0 {
-						nextCount = currentCount - 1
+					if shouldMutate {
+						deletedRows, err := q.DeleteLatestTaskCompletionWeeklyEntry(txCtx, dbsqlc.DeleteLatestTaskCompletionWeeklyEntryParams{
+							TaskID:    taskID,
+							WeekStart: weekStartPg,
+						})
+						if err != nil {
+							return err
+						}
+						if deletedRows == 0 {
+							nextCount = currentCount
+						}
 					}
 				default:
 					return errors.New("invalid completion action")
@@ -594,4 +559,20 @@ func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string,
 		return model.TaskCompletionResponse{}, err
 	}
 	return res, nil
+}
+
+func domainTaskType(value model.TaskType) domaintask.Type {
+	return domaintask.Type(value)
+}
+
+func domainCompletionActionPtr(value *model.ToggleTaskCompletionRequestAction) *domaintask.CompletionAction {
+	if value == nil {
+		return nil
+	}
+	action := domaintask.CompletionAction(*value)
+	return &action
+}
+
+func modelCompletionAction(value domaintask.CompletionAction) model.ToggleTaskCompletionRequestAction {
+	return model.ToggleTaskCompletionRequestAction(value)
 }

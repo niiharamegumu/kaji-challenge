@@ -3,13 +3,12 @@ package store
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 	dbsqlc "github.com/megu/kaji-challenge/backend/internal/db/sqlc"
+	domainteam "github.com/megu/kaji-challenge/backend/internal/domain/team"
 	model "github.com/megu/kaji-challenge/backend/internal/http/application/model"
 )
 
@@ -56,7 +55,7 @@ func (s *Store) getOrCreateUserLocked(ctx context.Context, issuer, subject, emai
 	}
 	if err := s.q.CreateTeam(ctx, dbsqlc.CreateTeamParams{
 		ID:        teamID,
-		Name:      defaultOwnTeamName(user.Name),
+		Name:      domainteam.DefaultOwnTeamName(user.Name),
 		CreatedAt: toPgTimestamptz(now),
 	}); err != nil {
 		return "", userRecord{}, err
@@ -136,7 +135,7 @@ func (s *Store) PatchMeNickname(ctx context.Context, userID string, req model.Up
 	if err != nil {
 		return model.UpdateNicknameResponse{}, err
 	}
-	nickname, err := normalizeNickname(req.Nickname)
+	nickname, err := domainteam.NormalizeNickname(req.Nickname)
 	if err != nil {
 		return model.UpdateNicknameResponse{}, err
 	}
@@ -156,7 +155,7 @@ func (s *Store) PatchMeNickname(ctx context.Context, userID string, req model.Up
 			}
 			res = model.UpdateNicknameResponse{
 				Nickname:      nickname,
-				EffectiveName: effectiveName(row.DisplayName, row.Nickname),
+				EffectiveName: domainteam.EffectiveName(row.DisplayName, row.Nickname),
 			}
 			return nil
 		},
@@ -171,7 +170,7 @@ func (s *Store) PatchMeColor(ctx context.Context, userID string, req model.Updat
 	if err != nil {
 		return model.UpdateColorResponse{}, err
 	}
-	colorHex, err := normalizeColorHex(req.ColorHex)
+	colorHex, err := domainteam.NormalizeColorHex(req.ColorHex)
 	if err != nil {
 		return model.UpdateColorResponse{}, err
 	}
@@ -275,7 +274,7 @@ func (s *Store) PatchTeamCurrent(ctx context.Context, userID string, req model.U
 	if err != nil {
 		return model.TeamInfoResponse{}, err
 	}
-	teamName, err := normalizeTeamName(req.Name)
+	teamName, err := domainteam.NormalizeName(req.Name)
 	if err != nil {
 		return model.TeamInfoResponse{}, err
 	}
@@ -308,7 +307,7 @@ func (s *Store) GetTeamCurrentMembers(ctx context.Context, userID string) (model
 		if row.Role == string(model.TeamMembershipRoleOwner) {
 			role = model.TeamMemberRoleOwner
 		}
-		effective := effectiveName(row.DisplayName, row.Nickname)
+		effective := domainteam.EffectiveName(row.DisplayName, row.Nickname)
 		var nickname *string
 		if strings.TrimSpace(row.Nickname) != "" {
 			n := row.Nickname
@@ -434,7 +433,7 @@ func (s *Store) PostTeamLeave(ctx context.Context, userID string) (model.JoinTea
 
 	if err := qtx.CreateTeam(ctx, dbsqlc.CreateTeamParams{
 		ID:        newTeamID,
-		Name:      defaultOwnTeamName(effectiveName(user.DisplayName, user.Nickname)),
+		Name:      domainteam.DefaultOwnTeamName(domainteam.EffectiveName(user.DisplayName, user.Nickname)),
 		CreatedAt: toPgTimestamptz(now),
 	}); err != nil {
 		return model.JoinTeamResponse{}, err
@@ -500,72 +499,4 @@ func (s *Store) primaryMembershipLocked(ctx context.Context, userID string) (dbs
 		return dbsqlc.ListMembershipsByUserIDRow{}, errors.New("user has no team membership")
 	}
 	return list[0], nil
-}
-
-func normalizeNickname(raw string) (string, error) {
-	nickname := strings.TrimSpace(raw)
-	if nickname == "" {
-		return "", nil
-	}
-	if count := utf8.RuneCountInString(nickname); count > 30 {
-		return "", fmt.Errorf("nickname must be %d characters or fewer", 30)
-	}
-	return nickname, nil
-}
-
-func normalizeTeamName(raw string) (string, error) {
-	name := strings.TrimSpace(raw)
-	if name == "" {
-		return "", errors.New("team name is required")
-	}
-	if count := utf8.RuneCountInString(name); count < 1 || count > 50 {
-		return "", fmt.Errorf("team name must be between %d and %d characters", 1, 50)
-	}
-	return name, nil
-}
-
-func normalizeColorHex(raw *string) (string, error) {
-	if raw == nil {
-		return "", nil
-	}
-	color := strings.ToUpper(strings.TrimSpace(*raw))
-	if color == "" {
-		return "", errors.New("colorHex must be null or #RRGGBB")
-	}
-	if len(color) != 7 || color[0] != '#' {
-		return "", errors.New("colorHex must match #RRGGBB")
-	}
-	for _, r := range color[1:] {
-		isDigit := r >= '0' && r <= '9'
-		isUpperHex := r >= 'A' && r <= 'F'
-		if !isDigit && !isUpperHex {
-			return "", errors.New("colorHex must match #RRGGBB")
-		}
-	}
-	return color, nil
-}
-
-func effectiveName(displayName, nickname string) string {
-	trimmedNickname := strings.TrimSpace(nickname)
-	if trimmedNickname != "" {
-		return trimmedNickname
-	}
-	trimmedDisplayName := strings.TrimSpace(displayName)
-	if trimmedDisplayName != "" {
-		return trimmedDisplayName
-	}
-	return "User"
-}
-
-func defaultOwnTeamName(base string) string {
-	name := strings.TrimSpace(base)
-	if name == "" {
-		name = "My Team"
-	}
-	name = name + " Team"
-	if utf8.RuneCountInString(name) > 50 {
-		runes := []rune(name)
-		name = string(runes[:50])
-	}
-	return name
 }
