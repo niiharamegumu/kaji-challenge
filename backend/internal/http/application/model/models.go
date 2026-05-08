@@ -27,7 +27,7 @@ func (d *Date) UnmarshalJSON(data []byte) error {
 }
 
 const (
-	IosSafariPwa PushPlatform = "ios_safari_pwa"
+	PushPlatformIOSSafariWebApp PushPlatform = "ios_safari_pwa"
 )
 
 const (

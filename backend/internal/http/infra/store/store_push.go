@@ -501,4 +501,4 @@ func stringPtrOrNil(value string) *string {
 	return &trimmed
 }
 
-var notifyPlatformIOSSafariPWA = string(model.IosSafariPwa)
+var notifyPlatformIOSSafariPWA = string(model.PushPlatformIOSSafariWebApp)
