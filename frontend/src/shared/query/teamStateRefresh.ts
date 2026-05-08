@@ -1,7 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 
-import { queryKeys } from "../../../shared/query/queryKeys";
-import { isPreconditionFailure } from "../../../shared/utils/errors";
+import { isPreconditionFailure } from "../utils/errors";
+import { queryKeys } from "./queryKeys";
 
 type QueryInvalidator = Pick<QueryClient, "invalidateQueries">;
 

@@ -2,8 +2,8 @@ import { useSetAtom } from "jotai";
 import { useActionState, useState, useTransition } from "react";
 import { useOutletContext } from "react-router-dom";
 
-import type { RootLayoutOutletContext } from "../../shell/routes/RootLayout";
-import { statusMessageAtom } from "../../shell/state/status";
+import type { RootLayoutOutletContext } from "../../../shared/router/rootLayoutContext";
+import { statusMessageAtom } from "../../../shared/state/status";
 import { InviteManager } from "../components/InviteManager";
 import {
   useInviteMutations,

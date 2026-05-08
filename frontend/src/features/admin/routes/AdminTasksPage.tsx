@@ -2,20 +2,13 @@ import { useAtom } from "jotai";
 import { Plus } from "lucide-react";
 import { useState } from "react";
 
-import {
-  type CreateTaskRequest,
-  TaskType as TaskTypeConst,
-  type UpdateTaskRequest,
-} from "../../../lib/api/generated/client";
+import type { UpdateTaskRequest } from "../../../lib/api/generated/client";
 import { FooterQuickAction } from "../../../shared/components/FooterQuickAction";
-import { statusMessageAtom } from "../../shell/state/status";
+import { statusMessageAtom } from "../../../shared/state/status";
 import { TaskCreateForm, TaskManager } from "../components/TaskManager";
-import {
-  WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MAX,
-  WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MIN,
-} from "../constants/tasks";
 import { useTaskMutations } from "../hooks/useAdminMutations";
 import { useTasksQuery } from "../hooks/useAdminQueries";
+import { buildCreateTaskRequest, canSubmitTaskForm } from "../model/tasks";
 import { initialTaskFormState, taskFormAtom } from "../state/forms";
 
 export function AdminTasksPage() {
@@ -28,29 +21,11 @@ export function AdminTasksPage() {
     useTaskMutations(setStatus);
 
   const handleCreateTask = async () => {
-    let requiredCompletionsPerWeek: number | undefined;
-    if (taskForm.type === TaskTypeConst.weekly) {
-      const parsed = Number(taskForm.requiredCompletionsPerWeek);
-      if (
-        !Number.isInteger(parsed) ||
-        parsed < WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MIN ||
-        parsed > WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MAX
-      ) {
-        setStatus(
-          `週間必要回数は${WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MIN}〜${WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MAX}の整数で入力してください`,
-        );
-        return;
-      }
-      requiredCompletionsPerWeek = parsed;
+    const payload = buildCreateTaskRequest(taskForm);
+    if ("error" in payload) {
+      setStatus(payload.error);
+      return;
     }
-
-    const payload: CreateTaskRequest = {
-      title: taskForm.title,
-      notes: taskForm.notes === "" ? undefined : taskForm.notes,
-      type: taskForm.type,
-      penaltyPoints: Number(taskForm.penaltyPoints),
-      requiredCompletionsPerWeek,
-    };
     await createTask.mutateAsync(payload);
     setTaskForm(initialTaskFormState);
   };
@@ -87,15 +62,7 @@ export function AdminTasksPage() {
         title="タスクを追加"
         submitLabel="追加する"
         submitIcon={<Plus size={16} aria-hidden="true" />}
-        submitDisabled={
-          taskForm.title.trim().length === 0 ||
-          (taskForm.type === TaskTypeConst.weekly &&
-            (!Number.isInteger(Number(taskForm.requiredCompletionsPerWeek)) ||
-              Number(taskForm.requiredCompletionsPerWeek) <
-                WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MIN ||
-              Number(taskForm.requiredCompletionsPerWeek) >
-                WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MAX))
-        }
+        submitDisabled={!canSubmitTaskForm(taskForm)}
         onOpen={() => setIsCreateOpen(true)}
         onClose={() => setIsCreateOpen(false)}
         onSubmit={() => {

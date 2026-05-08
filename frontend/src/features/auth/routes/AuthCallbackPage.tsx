@@ -1,9 +1,9 @@
 import { type LoaderFunctionArgs, redirect } from "react-router-dom";
 
 import { useMarkInitialScreenReady } from "../../../app/boot";
-import { postAuthSessionsExchange } from "../../../lib/api/generated/client";
 import { BootScreen } from "../../../shared/components/BootScreen";
 import { formatError } from "../../../shared/utils/errors";
+import { exchangeSession } from "../api/authApi";
 import { writeFlashStatus } from "../state/flash";
 
 export async function authCallbackLoader({ request }: LoaderFunctionArgs) {
@@ -21,7 +21,7 @@ export async function authCallbackLoader({ request }: LoaderFunctionArgs) {
   }
 
   try {
-    await postAuthSessionsExchange({ exchangeCode });
+    await exchangeSession(exchangeCode);
     writeFlashStatus("ログインしました", "login_success");
   } catch (error) {
     writeFlashStatus(`ログインに失敗しました: ${formatError(error)}`);

@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: dev up down down-reset gen gen-backend gen-frontend lint lint-backend lint-frontend typecheck typecheck-frontend test test-backend test-frontend security security-backend security-frontend check diff-gen db-migrate-up db-migrate-down db-migrate-create seed-monthly-dummy backend-cmd-seeder ops-close backend-cmd-ops-close ops-notify backend-cmd-ops-notify vapid-keys backend-cmd-vapid-keys
+.PHONY: dev up down down-reset gen gen-backend gen-frontend lint lint-backend lint-frontend architecture-check typecheck typecheck-frontend test test-backend test-frontend security security-backend security-frontend check diff-gen db-migrate-up db-migrate-down db-migrate-create seed-monthly-dummy backend-cmd-seeder ops-close backend-cmd-ops-close ops-notify backend-cmd-ops-notify vapid-keys backend-cmd-vapid-keys
 
 ifneq (,$(wildcard .env))
 include .env
@@ -68,6 +68,9 @@ lint-backend:
 lint-frontend:
 	$(LINT_FRONTEND)
 
+architecture-check:
+	node scripts/check-architecture.mjs
+
 typecheck:
 	$(MAKE) typecheck-frontend
 
@@ -94,7 +97,7 @@ security-backend:
 security-frontend:
 	$(SECURITY_FRONTEND)
 
-check: gen lint typecheck test
+check: gen lint architecture-check typecheck test
 
 diff-gen: gen
 	git diff --exit-code

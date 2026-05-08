@@ -1,0 +1,2 @@
+# Existing frontend architecture debt. This file should stay empty unless a
+# temporary exception is intentionally accepted.

@@ -1,0 +1,13 @@
+# Existing architecture debt. The check fails on new violations and on stale
+# entries, so this list must shrink as Clean Architecture / Feature-Based
+# Architecture migration progresses.
+backend/internal/http/application/ports/repository.go imports github.com/megu/kaji-challenge/backend/internal/openapi/generated
+backend/internal/http/application/ports/service.go imports github.com/megu/kaji-challenge/backend/internal/openapi/generated
+backend/internal/http/application/usecases/usecases_auth.go imports github.com/megu/kaji-challenge/backend/internal/openapi/generated
+backend/internal/http/application/usecases/usecases_penalty.go imports github.com/megu/kaji-challenge/backend/internal/openapi/generated
+backend/internal/http/application/usecases/usecases_push.go imports github.com/megu/kaji-challenge/backend/internal/openapi/generated
+backend/internal/http/application/usecases/usecases_reminder.go imports github.com/megu/kaji-challenge/backend/internal/openapi/generated
+backend/internal/http/application/usecases/usecases_shopping_list.go imports github.com/megu/kaji-challenge/backend/internal/openapi/generated
+backend/internal/http/application/usecases/usecases_task.go imports github.com/megu/kaji-challenge/backend/internal/openapi/generated
+backend/internal/http/application/usecases/usecases_task_overview_admin.go imports github.com/megu/kaji-challenge/backend/internal/openapi/generated
+backend/internal/http/application/usecases/usecases_team.go imports github.com/megu/kaji-challenge/backend/internal/openapi/generated

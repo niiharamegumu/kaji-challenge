@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { queryKeys } from "../../../shared/query/queryKeys";
+import { queryKeys } from "./queryKeys";
 import {
   handleTeamStatePreconditionFailure,
   preconditionFailureStatusMessage,

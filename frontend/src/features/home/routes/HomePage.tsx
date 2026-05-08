@@ -2,11 +2,11 @@ import { useAtom } from "jotai";
 import { ChevronRight } from "lucide-react";
 import { Link } from "react-router-dom";
 
-import { statusMessageAtom } from "../../shell/state/status";
+import { statusMessageAtom } from "../../../shared/state/status";
 import {
   useShoppingItemMutations,
   useShoppingItemsQuery,
-} from "../../shopping-list/hooks/useShoppingList";
+} from "../../shopping-list";
 import { DailyTasksPanel } from "../components/DailyTasksPanel";
 import { HomeShoppingListPanel } from "../components/HomeShoppingListPanel";
 import { WeeklyRemindersPanel } from "../components/WeeklyRemindersPanel";

@@ -28,11 +28,10 @@ import {
 import type { ChangeEvent } from "react";
 import { startTransition, useState } from "react";
 
-import {
-  type ReorderTasksRequest,
-  type Task,
-  TaskType as TaskTypeConst,
-  type UpdateTaskRequest,
+import type {
+  ReorderTasksRequest,
+  Task,
+  UpdateTaskRequest,
 } from "../../../lib/api/generated/client";
 import { FormSheet } from "../../../shared/components/FormSheet";
 import { PAGE_SECTION_CHROMELESS_CLASS_NAME } from "../../../shared/styles/pageSection";
@@ -45,6 +44,7 @@ import {
   WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MAX,
   WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MIN,
 } from "../constants/tasks";
+import { TaskTypeConst, canSubmitTaskForm } from "../model/tasks";
 import type { TaskFormState } from "../state/forms";
 import { DeleteConfirmModal } from "./DeleteConfirmModal";
 
@@ -567,14 +567,7 @@ export function TaskManager({
   const weeklyTasks = tasks.filter(
     (task) => task.type === TaskTypeConst.weekly,
   );
-  const canCreate =
-    form.title.trim().length > 0 &&
-    (form.type !== TaskTypeConst.weekly ||
-      (Number.isInteger(Number(form.requiredCompletionsPerWeek)) &&
-        Number(form.requiredCompletionsPerWeek) >=
-          WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MIN &&
-        Number(form.requiredCompletionsPerWeek) <=
-          WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MAX));
+  const canCreate = canSubmitTaskForm(form);
 
   return (
     <>

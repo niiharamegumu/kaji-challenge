@@ -17,8 +17,8 @@ import {
   postReminder,
 } from "../../../lib/api/generated/client";
 import { queryKeys } from "../../../shared/query/queryKeys";
+import { handleTeamStatePreconditionFailure } from "../../../shared/query/teamStateRefresh";
 import { formatError } from "../../../shared/utils/errors";
-import { handleTeamStatePreconditionFailure } from "../../shell/lib/teamStateRefresh";
 import { monthEndDateKey, monthStartDateKey } from "../utils/date";
 
 type StatusSetter = (message: string) => void;

@@ -11,7 +11,26 @@ import {
 } from "react";
 import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 
-import { useBootFlow } from "../../../app/boot";
+import {
+  LoginCard,
+  consumeFlashStatus,
+  useExchangeCodeFallback,
+  useLoginAction,
+  useLogoutAction,
+  useMeQuery,
+} from "../../features/auth";
+import { prefetchHomeData } from "../../features/home/preload";
+import { listCurrentTeamMembers } from "../../features/shell/api/teamMembersApi";
+import { StatusToast } from "../../features/shell/components/StatusToast";
+import { useAuthGate } from "../../features/shell/hooks/useAuthGate";
+import { useCurrentUserProfile } from "../../features/shell/hooks/useCurrentUserProfile";
+import { BootScreen } from "../../shared/components/BootScreen";
+import { queryKeys } from "../../shared/query/queryKeys";
+import { refreshTeamState as invalidateTeamState } from "../../shared/query/teamStateRefresh";
+import type { RootLayoutOutletContext } from "../../shared/router/rootLayoutContext";
+import { statusMessageAtom } from "../../shared/state/status";
+import { isLoggedInAtom, sessionAtom } from "../../state/session";
+import { useBootFlow } from "../boot";
 import {
   preloadAdminInvitesPageChunk,
   preloadAdminPenaltiesPageChunk,
@@ -19,28 +38,10 @@ import {
   preloadAdminTasksPageChunk,
   preloadReminderCalendarPageChunk,
   preloadShoppingListPageChunk,
-} from "../../../app/route-chunks";
-import { getTeamCurrentMembers } from "../../../lib/api/generated/client";
-import { BootScreen } from "../../../shared/components/BootScreen";
-import { queryKeys } from "../../../shared/query/queryKeys";
-import { isLoggedInAtom, sessionAtom } from "../../../state/session";
-import { LoginCard } from "../../auth/components/LoginCard";
-import {
-  useLoginAction,
-  useLogoutAction,
-  useMeQuery,
-} from "../../auth/hooks/useAuthActions";
-import { useExchangeCodeFallback } from "../../auth/hooks/useExchangeCodeFallback";
-import { consumeFlashStatus } from "../../auth/state/flash";
-import { prefetchHomeData } from "../../home/preload";
-import { StatusToast } from "../components/StatusToast";
-import { useAuthGate } from "../hooks/useAuthGate";
-import { useCurrentUserProfile } from "../hooks/useCurrentUserProfile";
-import { refreshTeamState as invalidateTeamState } from "../lib/teamStateRefresh";
-import { statusMessageAtom } from "../state/status";
+} from "../route-chunks";
 
 const FloatingNav = lazy(async () => {
-  const module = await import("../components/FloatingNav");
+  const module = await import("../../features/shell/components/FloatingNav");
   return { default: module.FloatingNav };
 });
 
@@ -69,13 +70,6 @@ function scheduleIdleWork(work: () => void) {
   return () => globalThis.clearTimeout(timeoutId);
 }
 
-export type RootLayoutOutletContext = {
-  currentUserId: string | null;
-  currentTeamName: string;
-  displayName: string;
-  colorHex: string | null;
-};
-
 export function RootLayout() {
   const { isInitialBootPending, markAuthResolved } = useBootFlow();
   const homeDataPrefetchedRef = useRef(false);
@@ -90,7 +84,7 @@ export function RootLayout() {
   const meQuery = useMeQuery(true);
   const cachedMembersQuery = useQuery({
     queryKey: queryKeys.teamMembers,
-    queryFn: async () => (await getTeamCurrentMembers()).data.items,
+    queryFn: listCurrentTeamMembers,
     enabled: false,
   });
   const login = useLoginAction(setStatus);

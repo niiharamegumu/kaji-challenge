@@ -31,6 +31,7 @@ import type {
   ShoppingListItem,
   UpdateShoppingListItemRequest,
 } from "../../../lib/api/generated/client";
+import { ConfirmModal } from "../../../shared/components/ConfirmModal";
 import { FormSheet } from "../../../shared/components/FormSheet";
 import { PAGE_SECTION_CHROMELESS_CLASS_NAME } from "../../../shared/styles/pageSection";
 import {
@@ -38,7 +39,6 @@ import {
   smoothSortableLayoutChanges,
   smoothSortableTransition,
 } from "../../../shared/utils/sortableAnimation";
-import { ConfirmModal } from "../../admin/components/ConfirmModal";
 
 export type ShoppingItemFormState = {
   name: string;
