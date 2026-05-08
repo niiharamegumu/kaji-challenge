@@ -7,8 +7,8 @@ import (
 	"time"
 
 	dbsqlc "github.com/megu/kaji-challenge/backend/internal/db/sqlc"
+	model "github.com/megu/kaji-challenge/backend/internal/http/application/model"
 	pushsvc "github.com/megu/kaji-challenge/backend/internal/push"
-	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 )
 
 type fakePushSender struct {
@@ -34,25 +34,25 @@ func TestPushSubscriptionLifecycle(t *testing.T) {
 	t.Setenv("VAPID_PUBLIC_KEY", "BElfakeKey")
 	_, userID := createTeamWithMember(t, s, "push-lifecycle@example.com", time.Date(2026, 4, 1, 9, 0, 0, 0, s.loc))
 
-	first, err := s.UpsertPushSubscription(ctx, userID, api.UpsertPushSubscriptionRequest{
+	first, err := s.UpsertPushSubscription(ctx, userID, model.UpsertPushSubscriptionRequest{
 		Endpoint: "https://example.com/push/1",
-		Keys: api.PushSubscriptionKeys{
+		Keys: model.PushSubscriptionKeys{
 			P256dh: "key-1",
 			Auth:   "auth-1",
 		},
-		Platform: api.PushPlatform(notifyPlatformIOSSafariPWA),
+		Platform: model.PushPlatform(notifyPlatformIOSSafariPWA),
 	})
 	if err != nil {
 		t.Fatalf("first UpsertPushSubscription failed: %v", err)
 	}
 
-	second, err := s.UpsertPushSubscription(ctx, userID, api.UpsertPushSubscriptionRequest{
+	second, err := s.UpsertPushSubscription(ctx, userID, model.UpsertPushSubscriptionRequest{
 		Endpoint: "https://example.com/push/1",
-		Keys: api.PushSubscriptionKeys{
+		Keys: model.PushSubscriptionKeys{
 			P256dh: "key-2",
 			Auth:   "auth-2",
 		},
-		Platform:  api.PushPlatform(notifyPlatformIOSSafariPWA),
+		Platform:  model.PushPlatform(notifyPlatformIOSSafariPWA),
 		UserAgent: stringPtrForPushTest("MobileSafari"),
 	})
 	if err != nil {
@@ -93,14 +93,14 @@ func TestNotifySlotSendsAgainWhenReExecuted(t *testing.T) {
 	s.now = func() time.Time { return now }
 
 	teamID, userID := createTeamWithMember(t, s, "push-notify@example.com", now.Add(-24*time.Hour))
-	createTaskWithIDAt(t, s, teamID, api.TaskTypeDaily, 3, 1, now.Add(-24*time.Hour))
-	_, err := s.UpsertPushSubscription(ctx, userID, api.UpsertPushSubscriptionRequest{
+	createTaskWithIDAt(t, s, teamID, model.TaskTypeDaily, 3, 1, now.Add(-24*time.Hour))
+	_, err := s.UpsertPushSubscription(ctx, userID, model.UpsertPushSubscriptionRequest{
 		Endpoint: "https://example.com/push/notify",
-		Keys: api.PushSubscriptionKeys{
+		Keys: model.PushSubscriptionKeys{
 			P256dh: "key-notify",
 			Auth:   "auth-notify",
 		},
-		Platform: api.PushPlatform(notifyPlatformIOSSafariPWA),
+		Platform: model.PushPlatform(notifyPlatformIOSSafariPWA),
 	})
 	if err != nil {
 		t.Fatalf("UpsertPushSubscription failed: %v", err)
@@ -135,25 +135,25 @@ func TestPushSubscriptionKeepsOnlyLatestEndpointPerUser(t *testing.T) {
 	ctx := context.Background()
 	teamID, userID := createTeamWithMember(t, s, "push-latest-only@example.com", time.Date(2026, 4, 1, 9, 0, 0, 0, s.loc))
 
-	first, err := s.UpsertPushSubscription(ctx, userID, api.UpsertPushSubscriptionRequest{
+	first, err := s.UpsertPushSubscription(ctx, userID, model.UpsertPushSubscriptionRequest{
 		Endpoint: "https://example.com/push/old",
-		Keys: api.PushSubscriptionKeys{
+		Keys: model.PushSubscriptionKeys{
 			P256dh: "key-old",
 			Auth:   "auth-old",
 		},
-		Platform: api.PushPlatform(notifyPlatformIOSSafariPWA),
+		Platform: model.PushPlatform(notifyPlatformIOSSafariPWA),
 	})
 	if err != nil {
 		t.Fatalf("first UpsertPushSubscription failed: %v", err)
 	}
 
-	second, err := s.UpsertPushSubscription(ctx, userID, api.UpsertPushSubscriptionRequest{
+	second, err := s.UpsertPushSubscription(ctx, userID, model.UpsertPushSubscriptionRequest{
 		Endpoint: "https://example.com/push/new",
-		Keys: api.PushSubscriptionKeys{
+		Keys: model.PushSubscriptionKeys{
 			P256dh: "key-new",
 			Auth:   "auth-new",
 		},
-		Platform: api.PushPlatform(notifyPlatformIOSSafariPWA),
+		Platform: model.PushPlatform(notifyPlatformIOSSafariPWA),
 	})
 	if err != nil {
 		t.Fatalf("second UpsertPushSubscription failed: %v", err)
@@ -189,14 +189,14 @@ func TestNotifySlotDeactivatesExpiredEndpoint(t *testing.T) {
 	s.now = func() time.Time { return now }
 
 	teamID, userID := createTeamWithMember(t, s, "push-expired@example.com", now.Add(-7*24*time.Hour))
-	createTaskWithIDAt(t, s, teamID, api.TaskTypeWeekly, 5, 2, now.Add(-7*24*time.Hour))
-	sub, err := s.UpsertPushSubscription(ctx, userID, api.UpsertPushSubscriptionRequest{
+	createTaskWithIDAt(t, s, teamID, model.TaskTypeWeekly, 5, 2, now.Add(-7*24*time.Hour))
+	sub, err := s.UpsertPushSubscription(ctx, userID, model.UpsertPushSubscriptionRequest{
 		Endpoint: "https://example.com/push/expired",
-		Keys: api.PushSubscriptionKeys{
+		Keys: model.PushSubscriptionKeys{
 			P256dh: "key-expired",
 			Auth:   "auth-expired",
 		},
-		Platform: api.PushPlatform(notifyPlatformIOSSafariPWA),
+		Platform: model.PushPlatform(notifyPlatformIOSSafariPWA),
 	})
 	if err != nil {
 		t.Fatalf("UpsertPushSubscription failed: %v", err)
@@ -232,7 +232,7 @@ func TestNotifySlotRetriesAfterPartialDeliveryFailure(t *testing.T) {
 	s.now = func() time.Time { return now }
 
 	teamID, userID := createTeamWithMember(t, s, "push-partial-a@example.com", now.Add(-24*time.Hour))
-	createTaskWithIDAt(t, s, teamID, api.TaskTypeDaily, 3, 1, now.Add(-24*time.Hour))
+	createTaskWithIDAt(t, s, teamID, model.TaskTypeDaily, 3, 1, now.Add(-24*time.Hour))
 
 	successUserID := userID
 	failUserID := s.nextID("user")
@@ -247,30 +247,30 @@ func TestNotifySlotRetriesAfterPartialDeliveryFailure(t *testing.T) {
 	if err := s.q.AddTeamMember(ctx, dbsqlc.AddTeamMemberParams{
 		TeamID:    teamID,
 		UserID:    failUserID,
-		Role:      string(api.TeamMembershipRoleMember),
+		Role:      string(model.TeamMembershipRoleMember),
 		CreatedAt: toPgTimestamptz(now.Add(-24 * time.Hour)),
 	}); err != nil {
 		t.Fatalf("failed to add second team member: %v", err)
 	}
 
-	_, err := s.UpsertPushSubscription(ctx, successUserID, api.UpsertPushSubscriptionRequest{
+	_, err := s.UpsertPushSubscription(ctx, successUserID, model.UpsertPushSubscriptionRequest{
 		Endpoint: "https://example.com/push/success",
-		Keys: api.PushSubscriptionKeys{
+		Keys: model.PushSubscriptionKeys{
 			P256dh: "key-success",
 			Auth:   "auth-success",
 		},
-		Platform: api.PushPlatform(notifyPlatformIOSSafariPWA),
+		Platform: model.PushPlatform(notifyPlatformIOSSafariPWA),
 	})
 	if err != nil {
 		t.Fatalf("UpsertPushSubscription success failed: %v", err)
 	}
-	_, err = s.UpsertPushSubscription(ctx, failUserID, api.UpsertPushSubscriptionRequest{
+	_, err = s.UpsertPushSubscription(ctx, failUserID, model.UpsertPushSubscriptionRequest{
 		Endpoint: "https://example.com/push/fail",
-		Keys: api.PushSubscriptionKeys{
+		Keys: model.PushSubscriptionKeys{
 			P256dh: "key-fail",
 			Auth:   "auth-fail",
 		},
-		Platform: api.PushPlatform(notifyPlatformIOSSafariPWA),
+		Platform: model.PushPlatform(notifyPlatformIOSSafariPWA),
 	})
 	if err != nil {
 		t.Fatalf("UpsertPushSubscription fail failed: %v", err)
@@ -309,15 +309,15 @@ func TestNotifySlotUsesLatestSubscriptionAfterRefresh(t *testing.T) {
 	s.now = func() time.Time { return now }
 
 	teamID, userID := createTeamWithMember(t, s, "push-refresh@example.com", now.Add(-24*time.Hour))
-	createTaskWithIDAt(t, s, teamID, api.TaskTypeDaily, 3, 1, now.Add(-24*time.Hour))
+	createTaskWithIDAt(t, s, teamID, model.TaskTypeDaily, 3, 1, now.Add(-24*time.Hour))
 
-	_, err := s.UpsertPushSubscription(ctx, userID, api.UpsertPushSubscriptionRequest{
+	_, err := s.UpsertPushSubscription(ctx, userID, model.UpsertPushSubscriptionRequest{
 		Endpoint: "https://example.com/push/original",
-		Keys: api.PushSubscriptionKeys{
+		Keys: model.PushSubscriptionKeys{
 			P256dh: "key-original",
 			Auth:   "auth-original",
 		},
-		Platform: api.PushPlatform(notifyPlatformIOSSafariPWA),
+		Platform: model.PushPlatform(notifyPlatformIOSSafariPWA),
 	})
 	if err != nil {
 		t.Fatalf("UpsertPushSubscription original failed: %v", err)
@@ -325,7 +325,7 @@ func TestNotifySlotUsesLatestSubscriptionAfterRefresh(t *testing.T) {
 
 	sender := &fakePushSender{
 		results: map[string]pushsvc.Result{
-			"https://example.com/push/original": {StatusCode: 201},
+			"https://example.com/push/original":  {StatusCode: 201},
 			"https://example.com/push/refreshed": {StatusCode: 201},
 		},
 		errors: map[string]error{},
@@ -340,13 +340,13 @@ func TestNotifySlotUsesLatestSubscriptionAfterRefresh(t *testing.T) {
 	}
 
 	s.now = func() time.Time { return now.Add(time.Minute) }
-	_, err = s.UpsertPushSubscription(ctx, userID, api.UpsertPushSubscriptionRequest{
+	_, err = s.UpsertPushSubscription(ctx, userID, model.UpsertPushSubscriptionRequest{
 		Endpoint: "https://example.com/push/refreshed",
-		Keys: api.PushSubscriptionKeys{
+		Keys: model.PushSubscriptionKeys{
 			P256dh: "key-refreshed",
 			Auth:   "auth-refreshed",
 		},
-		Platform: api.PushPlatform(notifyPlatformIOSSafariPWA),
+		Platform: model.PushPlatform(notifyPlatformIOSSafariPWA),
 	})
 	if err != nil {
 		t.Fatalf("UpsertPushSubscription refreshed failed: %v", err)

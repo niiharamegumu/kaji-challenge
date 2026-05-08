@@ -12,7 +12,7 @@ import (
 	"time"
 
 	dbsqlc "github.com/megu/kaji-challenge/backend/internal/db/sqlc"
-	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
+	model "github.com/megu/kaji-challenge/backend/internal/http/application/model"
 	pushsvc "github.com/megu/kaji-challenge/backend/internal/push"
 )
 
@@ -66,26 +66,26 @@ func parseNotifySlot(raw string) (notifySlot, error) {
 	}
 }
 
-func (s *Store) UpsertPushSubscription(ctx context.Context, userID string, req api.UpsertPushSubscriptionRequest) (api.PushSubscription, error) {
+func (s *Store) UpsertPushSubscription(ctx context.Context, userID string, req model.UpsertPushSubscriptionRequest) (model.PushSubscription, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
-		return api.PushSubscription{}, err
+		return model.PushSubscription{}, err
 	}
 	endpoint := strings.TrimSpace(req.Endpoint)
 	if endpoint == "" {
-		return api.PushSubscription{}, errors.New("endpoint is required")
+		return model.PushSubscription{}, errors.New("endpoint is required")
 	}
 	p256dh := strings.TrimSpace(req.Keys.P256dh)
 	if p256dh == "" {
-		return api.PushSubscription{}, errors.New("keys.p256dh is required")
+		return model.PushSubscription{}, errors.New("keys.p256dh is required")
 	}
 	auth := strings.TrimSpace(req.Keys.Auth)
 	if auth == "" {
-		return api.PushSubscription{}, errors.New("keys.auth is required")
+		return model.PushSubscription{}, errors.New("keys.auth is required")
 	}
 	platform := strings.TrimSpace(string(req.Platform))
 	if platform != string(notifyPlatformIOSSafariPWA) {
-		return api.PushSubscription{}, errors.New("invalid push platform")
+		return model.PushSubscription{}, errors.New("invalid push platform")
 	}
 	now := s.now()
 	row, err := s.q.UpsertPushSubscription(ctx, dbsqlc.UpsertPushSubscriptionParams{
@@ -102,7 +102,7 @@ func (s *Store) UpsertPushSubscription(ctx context.Context, userID string, req a
 		UpdatedAt:  toPgTimestamptz(now),
 	})
 	if err != nil {
-		return api.PushSubscription{}, err
+		return model.PushSubscription{}, err
 	}
 	return pushSubscriptionFromUpsertRowToAPI(row, s.loc), nil
 }
@@ -122,16 +122,16 @@ func (s *Store) DeletePushSubscription(ctx context.Context, userID, subscription
 	return nil
 }
 
-func (s *Store) ListPushSubscriptions(ctx context.Context, userID string) (api.ListPushSubscriptionsResponse, error) {
+func (s *Store) ListPushSubscriptions(ctx context.Context, userID string) (model.ListPushSubscriptionsResponse, error) {
 	rows, err := s.queries(ctx).ListPushSubscriptionsByUserID(ctx, userID)
 	if err != nil {
-		return api.ListPushSubscriptionsResponse{}, err
+		return model.ListPushSubscriptionsResponse{}, err
 	}
-	items := make([]api.PushSubscription, 0, len(rows))
+	items := make([]model.PushSubscription, 0, len(rows))
 	for _, row := range rows {
 		items = append(items, pushSubscriptionFromListRowToAPI(row, s.loc))
 	}
-	return api.ListPushSubscriptionsResponse{
+	return model.ListPushSubscriptionsResponse{
 		Items:          items,
 		VapidPublicKey: pushsvc.PublicKeyFromEnv(),
 	}, nil
@@ -209,9 +209,9 @@ func (s *Store) preparePushDispatchAt(ctx context.Context, teamID string, slot n
 	}
 	title, body := buildPushMessage(slot, tasks)
 	return preparedPushDispatch{
-		teamID:      teamID,
-		slotKind:    slot,
-		slotDate:    slotDate,
+		teamID:   teamID,
+		slotKind: slot,
+		slotDate: slotDate,
 		payload: pushsvc.Payload{
 			Title:    title,
 			Body:     body,
@@ -342,7 +342,7 @@ func (s *Store) listPendingTasksForSlot(ctx context.Context, teamID string, slot
 	}
 	pending := make([]pendingPushTask, 0, len(rows))
 	switch taskType {
-	case api.TaskTypeDaily:
+	case model.TaskTypeDaily:
 		completedRows, err := s.q.ListTaskCompletionDailyByTeamAndDate(ctx, dbsqlc.ListTaskCompletionDailyByTeamAndDateParams{
 			TeamID:     teamID,
 			TargetDate: toPgDate(slotDate),
@@ -364,7 +364,7 @@ func (s *Store) listPendingTasksForSlot(ctx context.Context, teamID string, slot
 				Remaining: 1,
 			})
 		}
-	case api.TaskTypeWeekly:
+	case model.TaskTypeWeekly:
 		weekStart := startOfWeek(slotDate, s.loc)
 		countRows, err := s.q.ListTaskCompletionWeeklyCountsByTeamAndWeek(ctx, dbsqlc.ListTaskCompletionWeeklyCountsByTeamAndWeekParams{
 			TeamID:    teamID,
@@ -412,7 +412,7 @@ func buildPushMessage(slot notifySlot, tasks []pendingPushTask) (string, string)
 	parts := make([]string, 0, previewLimit+1)
 	for _, task := range tasks[:previewLimit] {
 		label := task.Title
-		if slot.taskType() == api.TaskTypeWeekly && task.Remaining > 1 {
+		if slot.taskType() == model.TaskTypeWeekly && task.Remaining > 1 {
 			label = fmt.Sprintf("%s（あと%d回）", task.Title, task.Remaining)
 		}
 		parts = append(parts, label)
@@ -429,7 +429,7 @@ func buildPushMessage(slot notifySlot, tasks []pendingPushTask) (string, string)
 
 func taskTypeLabelForSlot(slot notifySlot) string {
 	switch slot.taskType() {
-	case api.TaskTypeWeekly:
+	case model.TaskTypeWeekly:
 		return "週間タスク"
 	default:
 		return "日間タスク"
@@ -447,23 +447,23 @@ func (s notifySlot) targetDate(today time.Time, loc *time.Location) time.Time {
 	}
 }
 
-func (s notifySlot) taskType() api.TaskType {
+func (s notifySlot) taskType() model.TaskType {
 	switch s {
 	case notifySlotDaily2100:
-		return api.TaskTypeDaily
+		return model.TaskTypeDaily
 	default:
-		return api.TaskTypeWeekly
+		return model.TaskTypeWeekly
 	}
 }
 
-func pushSubscriptionFromUpsertRowToAPI(row dbsqlc.UpsertPushSubscriptionRow, loc *time.Location) api.PushSubscription {
-	return api.PushSubscription{
+func pushSubscriptionFromUpsertRowToAPI(row dbsqlc.UpsertPushSubscriptionRow, loc *time.Location) model.PushSubscription {
+	return model.PushSubscription{
 		Id:         row.ID,
 		TeamId:     row.TeamID,
 		UserId:     row.UserID,
 		Endpoint:   row.Endpoint,
 		UserAgent:  stringPtrOrNil(row.UserAgent),
-		Platform:   api.PushPlatform(row.Platform),
+		Platform:   model.PushPlatform(row.Platform),
 		IsActive:   row.IsActive,
 		LastSeenAt: row.LastSeenAt.Time.In(loc),
 		CreatedAt:  row.CreatedAt.Time.In(loc),
@@ -471,14 +471,14 @@ func pushSubscriptionFromUpsertRowToAPI(row dbsqlc.UpsertPushSubscriptionRow, lo
 	}
 }
 
-func pushSubscriptionFromListRowToAPI(row dbsqlc.ListPushSubscriptionsByUserIDRow, loc *time.Location) api.PushSubscription {
-	return api.PushSubscription{
+func pushSubscriptionFromListRowToAPI(row dbsqlc.ListPushSubscriptionsByUserIDRow, loc *time.Location) model.PushSubscription {
+	return model.PushSubscription{
 		Id:         row.ID,
 		TeamId:     row.TeamID,
 		UserId:     row.UserID,
 		Endpoint:   row.Endpoint,
 		UserAgent:  stringPtrOrNil(row.UserAgent),
-		Platform:   api.PushPlatform(row.Platform),
+		Platform:   model.PushPlatform(row.Platform),
 		IsActive:   row.IsActive,
 		LastSeenAt: row.LastSeenAt.Time.In(loc),
 		CreatedAt:  row.CreatedAt.Time.In(loc),
@@ -501,4 +501,4 @@ func stringPtrOrNil(value string) *string {
 	return &trimmed
 }
 
-var notifyPlatformIOSSafariPWA = string(api.IosSafariPwa)
+var notifyPlatformIOSSafariPWA = string(model.IosSafariPwa)

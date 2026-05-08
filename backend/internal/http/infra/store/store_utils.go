@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
-	openapi_types "github.com/oapi-codegen/runtime/types"
+	model "github.com/megu/kaji-challenge/backend/internal/http/application/model"
 )
 
 func toPgTimestamptz(t time.Time) pgtype.Timestamptz {
@@ -144,11 +144,11 @@ func randomToken() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-func toDate(t time.Time) openapi_types.Date {
-	return openapi_types.Date{Time: dateOnly(t, t.Location())}
+func toDate(t time.Time) model.Date {
+	return model.Date{Time: dateOnly(t, t.Location())}
 }
 
-func datePtr(t *time.Time) *openapi_types.Date {
+func datePtr(t *time.Time) *model.Date {
 	if t == nil {
 		return nil
 	}

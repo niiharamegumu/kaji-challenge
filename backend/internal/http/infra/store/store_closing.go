@@ -9,15 +9,15 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	dbsqlc "github.com/megu/kaji-challenge/backend/internal/db/sqlc"
-	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
+	model "github.com/megu/kaji-challenge/backend/internal/http/application/model"
 )
 
 var errMonthAlreadyClosed = errors.New("monthly summary is already closed")
 
-func (s *Store) CloseDayForUser(ctx context.Context, userID string) (api.CloseResponse, error) {
+func (s *Store) CloseDayForUser(ctx context.Context, userID string) (model.CloseResponse, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
-		return api.CloseResponse{}, err
+		return model.CloseResponse{}, err
 	}
 	now := s.now()
 	if _, err := s.runWithTeamRevisionCAS(
@@ -36,15 +36,15 @@ func (s *Store) CloseDayForUser(ctx context.Context, userID string) (api.CloseRe
 			return err
 		},
 	); err != nil {
-		return api.CloseResponse{}, err
+		return model.CloseResponse{}, err
 	}
-	return api.CloseResponse{ClosedAt: now, Month: monthKeyFromTime(now, s.loc)}, nil
+	return model.CloseResponse{ClosedAt: now, Month: monthKeyFromTime(now, s.loc)}, nil
 }
 
-func (s *Store) CloseWeekForUser(ctx context.Context, userID string) (api.CloseResponse, error) {
+func (s *Store) CloseWeekForUser(ctx context.Context, userID string) (model.CloseResponse, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
-		return api.CloseResponse{}, err
+		return model.CloseResponse{}, err
 	}
 	now := s.now()
 	if _, err := s.runWithTeamRevisionCAS(
@@ -63,15 +63,15 @@ func (s *Store) CloseWeekForUser(ctx context.Context, userID string) (api.CloseR
 			return err
 		},
 	); err != nil {
-		return api.CloseResponse{}, err
+		return model.CloseResponse{}, err
 	}
-	return api.CloseResponse{ClosedAt: now, Month: monthKeyFromTime(now, s.loc)}, nil
+	return model.CloseResponse{ClosedAt: now, Month: monthKeyFromTime(now, s.loc)}, nil
 }
 
-func (s *Store) CloseMonthForUser(ctx context.Context, userID string) (api.CloseResponse, error) {
+func (s *Store) CloseMonthForUser(ctx context.Context, userID string) (model.CloseResponse, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
-		return api.CloseResponse{}, err
+		return model.CloseResponse{}, err
 	}
 	now := s.now()
 	processed := 0
@@ -93,36 +93,36 @@ func (s *Store) CloseMonthForUser(ctx context.Context, userID string) (api.Close
 			return err
 		},
 	); err != nil {
-		return api.CloseResponse{}, err
+		return model.CloseResponse{}, err
 	}
-	return api.CloseResponse{ClosedAt: now, Month: closedMonth}, nil
+	return model.CloseResponse{ClosedAt: now, Month: closedMonth}, nil
 }
 
-func (s *Store) CloseDayForTeam(ctx context.Context, teamID string) (api.CloseResponse, error) {
+func (s *Store) CloseDayForTeam(ctx context.Context, teamID string) (model.CloseResponse, error) {
 	now := s.now()
 	_, err := s.catchUpDayLocked(ctx, now, teamID)
 	if err != nil {
-		return api.CloseResponse{}, err
+		return model.CloseResponse{}, err
 	}
-	return api.CloseResponse{ClosedAt: now, Month: monthKeyFromTime(now, s.loc)}, nil
+	return model.CloseResponse{ClosedAt: now, Month: monthKeyFromTime(now, s.loc)}, nil
 }
 
-func (s *Store) CloseWeekForTeam(ctx context.Context, teamID string) (api.CloseResponse, error) {
+func (s *Store) CloseWeekForTeam(ctx context.Context, teamID string) (model.CloseResponse, error) {
 	now := s.now()
 	_, err := s.catchUpWeekLocked(ctx, now, teamID)
 	if err != nil {
-		return api.CloseResponse{}, err
+		return model.CloseResponse{}, err
 	}
-	return api.CloseResponse{ClosedAt: now, Month: monthKeyFromTime(now, s.loc)}, nil
+	return model.CloseResponse{ClosedAt: now, Month: monthKeyFromTime(now, s.loc)}, nil
 }
 
-func (s *Store) CloseMonthForTeam(ctx context.Context, teamID string) (api.CloseResponse, error) {
+func (s *Store) CloseMonthForTeam(ctx context.Context, teamID string) (model.CloseResponse, error) {
 	now := s.now()
 	_, closedMonth, err := s.catchUpMonthLocked(ctx, now, teamID)
 	if err != nil {
-		return api.CloseResponse{}, err
+		return model.CloseResponse{}, err
 	}
-	return api.CloseResponse{ClosedAt: now, Month: closedMonth}, nil
+	return model.CloseResponse{ClosedAt: now, Month: closedMonth}, nil
 }
 
 func (s *Store) ListClosableTeamIDs(ctx context.Context) ([]string, error) {
@@ -206,9 +206,9 @@ func (s *Store) recalculateOpenMonthDailyPenaltyLocked(ctx context.Context, team
 
 	monthEnd := monthStart.AddDate(0, 1, 0)
 	targets, err := s.queries(ctx).ListCloseRunTargetDatesInRange(ctx, dbsqlc.ListCloseRunTargetDatesInRangeParams{
-		TeamID:     teamID,
-		Scope:      "close_day",
-		TargetDate: toPgDate(monthStart),
+		TeamID:       teamID,
+		Scope:        "close_day",
+		TargetDate:   toPgDate(monthStart),
 		TargetDate_2: toPgDate(monthEnd),
 	})
 	if err != nil {

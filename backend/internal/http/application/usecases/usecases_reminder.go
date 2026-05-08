@@ -4,22 +4,22 @@ import (
 	"context"
 	"time"
 
-	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
+	model "github.com/megu/kaji-challenge/backend/internal/http/application/model"
 )
 
-func (u reminderUsecase) ListReminders(ctx context.Context, userID string, from, to time.Time) ([]api.ReminderCalendarDay, error) {
+func (u reminderUsecase) ListReminders(ctx context.Context, userID string, from, to time.Time) ([]model.ReminderCalendarDay, error) {
 	return u.repo.ListReminders(ctx, userID, from, to)
 }
 
-func (u reminderUsecase) ListReminderDefinitions(ctx context.Context, userID string) ([]api.Reminder, error) {
+func (u reminderUsecase) ListReminderDefinitions(ctx context.Context, userID string) ([]model.Reminder, error) {
 	return u.repo.ListReminderDefinitions(ctx, userID)
 }
 
-func (u reminderUsecase) CreateReminder(ctx context.Context, userID string, req api.CreateReminderRequest) (api.Reminder, error) {
+func (u reminderUsecase) CreateReminder(ctx context.Context, userID string, req model.CreateReminderRequest) (model.Reminder, error) {
 	return u.repo.CreateReminder(ctx, userID, req)
 }
 
-func (u reminderUsecase) PatchReminder(ctx context.Context, userID, reminderID string, req api.UpdateReminderRequest) (api.Reminder, error) {
+func (u reminderUsecase) PatchReminder(ctx context.Context, userID, reminderID string, req model.UpdateReminderRequest) (model.Reminder, error) {
 	return u.repo.PatchReminder(ctx, userID, reminderID, req)
 }
 

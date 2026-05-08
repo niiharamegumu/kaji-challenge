@@ -9,10 +9,10 @@ import (
 	"time"
 
 	dbsqlc "github.com/megu/kaji-challenge/backend/internal/db/sqlc"
-	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
+	model "github.com/megu/kaji-challenge/backend/internal/http/application/model"
 )
 
-func (s *Store) ListTasks(ctx context.Context, userID string, filter *api.TaskType) ([]api.Task, error) {
+func (s *Store) ListTasks(ctx context.Context, userID string, filter *model.TaskType) ([]model.Task, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -21,7 +21,7 @@ func (s *Store) ListTasks(ctx context.Context, userID string, filter *api.TaskTy
 	if err != nil {
 		return nil, err
 	}
-	items := []api.Task{}
+	items := []model.Task{}
 	for _, row := range rows {
 		t := taskFromListRow(row, s.loc)
 		if filter != nil && t.Type != *filter {
@@ -32,31 +32,31 @@ func (s *Store) ListTasks(ctx context.Context, userID string, filter *api.TaskTy
 	return items, nil
 }
 
-func (s *Store) CreateTask(ctx context.Context, userID string, req api.CreateTaskRequest) (api.Task, error) {
+func (s *Store) CreateTask(ctx context.Context, userID string, req model.CreateTaskRequest) (model.Task, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
-		return api.Task{}, err
+		return model.Task{}, err
 	}
 	title := strings.TrimSpace(req.Title)
 	if title == "" {
-		return api.Task{}, errors.New("title is required")
+		return model.Task{}, errors.New("title is required")
 	}
 
 	required := 1
-	if req.Type == api.TaskTypeWeekly && req.RequiredCompletionsPerWeek != nil {
+	if req.Type == model.TaskTypeWeekly && req.RequiredCompletionsPerWeek != nil {
 		required = *req.RequiredCompletionsPerWeek
 	}
 	required, err = normalizeRequiredCompletionsPerWeek(req.Type, required)
 	if err != nil {
-		return api.Task{}, err
+		return model.Task{}, err
 	}
 	penalty32, err := safeInt32(req.PenaltyPoints, "penalty points")
 	if err != nil {
-		return api.Task{}, err
+		return model.Task{}, err
 	}
 	required32, err := safeInt32(required, "required completions")
 	if err != nil {
-		return api.Task{}, err
+		return model.Task{}, err
 	}
 
 	now := time.Now().In(s.loc)
@@ -126,15 +126,15 @@ func (s *Store) CreateTask(ctx context.Context, userID string, req api.CreateTas
 			})
 		},
 	); err != nil {
-		return api.Task{}, err
+		return model.Task{}, err
 	}
 	return task.toAPI(), nil
 }
 
-func (s *Store) PatchTask(ctx context.Context, userID, taskID string, req api.UpdateTaskRequest) (api.Task, error) {
+func (s *Store) PatchTask(ctx context.Context, userID, taskID string, req model.UpdateTaskRequest) (model.Task, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
-		return api.Task{}, err
+		return model.Task{}, err
 	}
 	var task taskRecord
 	if _, err := s.runWithTeamRevisionCAS(
@@ -167,7 +167,7 @@ func (s *Store) PatchTask(ctx context.Context, userID, taskID string, req api.Up
 			if req.AssigneeUserId != nil {
 				task.AssigneeID = req.AssigneeUserId
 			}
-			if req.RequiredCompletionsPerWeek != nil && task.Type == api.TaskTypeWeekly {
+			if req.RequiredCompletionsPerWeek != nil && task.Type == model.TaskTypeWeekly {
 				required, err := normalizeRequiredCompletionsPerWeek(
 					task.Type,
 					*req.RequiredCompletionsPerWeek,
@@ -197,13 +197,13 @@ func (s *Store) PatchTask(ctx context.Context, userID, taskID string, req api.Up
 			})
 		},
 	); err != nil {
-		return api.Task{}, err
+		return model.Task{}, err
 	}
 	return task.toAPI(), nil
 }
 
-func normalizeRequiredCompletionsPerWeek(taskType api.TaskType, required int) (int, error) {
-	if taskType == api.TaskTypeDaily {
+func normalizeRequiredCompletionsPerWeek(taskType model.TaskType, required int) (int, error) {
+	if taskType == model.TaskTypeDaily {
 		return requiredCompletionsPerWeekMin, nil
 	}
 	if required < requiredCompletionsPerWeekMin || required > requiredCompletionsPerWeekMax {
@@ -244,7 +244,7 @@ func (s *Store) DeleteTask(ctx context.Context, userID, taskID string) error {
 	return err
 }
 
-func (s *Store) ReorderTasks(ctx context.Context, userID string, req api.ReorderTasksRequest) ([]api.Task, error) {
+func (s *Store) ReorderTasks(ctx context.Context, userID string, req model.ReorderTasksRequest) ([]model.Task, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -263,7 +263,7 @@ func (s *Store) ReorderTasks(ctx context.Context, userID string, req api.Reorder
 		seen[taskID] = struct{}{}
 	}
 
-	items := make([]api.Task, 0, len(req.TaskIds))
+	items := make([]model.Task, 0, len(req.TaskIds))
 	if _, err := s.runWithTeamRevisionCAS(
 		ctx,
 		teamID,
@@ -398,20 +398,20 @@ func (s *Store) ReorderTasks(ctx context.Context, userID string, req api.Reorder
 	return items, nil
 }
 
-func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string, target time.Time, action *api.ToggleTaskCompletionRequestAction) (api.TaskCompletionResponse, error) {
+func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string, target time.Time, action *model.ToggleTaskCompletionRequestAction) (model.TaskCompletionResponse, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
-		return api.TaskCompletionResponse{}, err
+		return model.TaskCompletionResponse{}, err
 	}
-	mode := api.Toggle
+	mode := model.Toggle
 	if action != nil {
 		mode = *action
 		if mode == "" {
-			mode = api.Toggle
+			mode = model.Toggle
 		}
 	}
 	actionName := string(mode)
-	res := api.TaskCompletionResponse{}
+	res := model.TaskCompletionResponse{}
 	if _, err := s.runWithTeamRevisionCAS(
 		ctx,
 		teamID,
@@ -429,7 +429,7 @@ func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string,
 			}
 			today := dateOnly(s.now(), s.loc)
 			targetDate := dateOnly(target.In(s.loc), s.loc)
-			if task.Type == api.TaskTypeWeekly {
+			if task.Type == model.TaskTypeWeekly {
 				weekStart := startOfWeek(today, s.loc)
 				weekEnd := weekStart.AddDate(0, 0, 6)
 				if targetDate.Before(weekStart) || targetDate.After(weekEnd) {
@@ -438,12 +438,12 @@ func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string,
 			}
 
 			targetPg := toPgDate(targetDate)
-			if task.Type == api.TaskTypeDaily {
+			if task.Type == model.TaskTypeDaily {
 				isToday := sameDate(targetDate, today)
 				targetMonth := monthKeyFromTime(targetDate, s.loc)
 				currentMonth := monthKeyFromTime(today, s.loc)
 				if isToday {
-					if mode != api.Toggle {
+					if mode != model.Toggle {
 						return errors.New("daily tasks only support toggle action for today")
 					}
 				} else {
@@ -460,7 +460,7 @@ func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string,
 					if summary.IsClosed {
 						return errors.New("daily completion cannot be changed for closed month")
 					}
-					if mode != api.Complete {
+					if mode != model.Complete {
 						return errors.New("past daily completion only supports complete action")
 					}
 				}
@@ -472,13 +472,13 @@ func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string,
 					return err
 				}
 				if exists {
-					res = api.TaskCompletionResponse{
+					res = model.TaskCompletionResponse{
 						TaskId:               taskID,
 						TargetDate:           toDate(targetDate),
 						Completed:            true,
 						WeeklyCompletedCount: 0,
 					}
-					if !isToday && mode == api.Complete {
+					if !isToday && mode == model.Complete {
 						return nil
 					}
 					if err := q.DeleteTaskCompletionDaily(txCtx, dbsqlc.DeleteTaskCompletionDailyParams{
@@ -495,16 +495,16 @@ func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string,
 					}); err != nil {
 						return err
 					}
-					if !isToday && mode == api.Complete {
+					if !isToday && mode == model.Complete {
 						if err := s.recalculateOpenMonthDailyPenaltyLocked(txCtx, teamID, targetMonth); err != nil {
 							return err
 						}
 					}
 				}
-				res = api.TaskCompletionResponse{
+				res = model.TaskCompletionResponse{
 					TaskId:               taskID,
 					TargetDate:           toDate(targetDate),
-					Completed:            isToday && !exists || (!isToday && mode == api.Complete),
+					Completed:            isToday && !exists || (!isToday && mode == model.Complete),
 					WeeklyCompletedCount: 0,
 				}
 				return nil
@@ -521,7 +521,7 @@ func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string,
 			}
 			nextCount := currentCount
 			if task.Required <= 1 {
-				if mode != api.Toggle {
+				if mode != model.Toggle {
 					return errors.New("weekly tasks with required completions of 1 only support toggle action")
 				}
 				if currentCount > 0 {
@@ -548,7 +548,7 @@ func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string,
 				}
 			} else {
 				switch mode {
-				case api.Toggle, api.Increment:
+				case model.Toggle, model.Increment:
 					if currentCount >= int64(task.Required) {
 						nextCount = currentCount
 						break
@@ -562,7 +562,7 @@ func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string,
 						return err
 					}
 					nextCount = currentCount + 1
-				case api.Decrement:
+				case model.Decrement:
 					if currentCount <= 0 {
 						nextCount = 0
 						break
@@ -582,7 +582,7 @@ func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string,
 				}
 			}
 
-			res = api.TaskCompletionResponse{
+			res = model.TaskCompletionResponse{
 				TaskId:               taskID,
 				TargetDate:           toDate(targetDate),
 				Completed:            nextCount > 0,
@@ -591,7 +591,7 @@ func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string,
 			return nil
 		},
 	); err != nil {
-		return api.TaskCompletionResponse{}, err
+		return model.TaskCompletionResponse{}, err
 	}
 	return res, nil
 }

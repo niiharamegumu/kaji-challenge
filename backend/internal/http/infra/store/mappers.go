@@ -4,11 +4,11 @@ import (
 	"time"
 
 	dbsqlc "github.com/megu/kaji-challenge/backend/internal/db/sqlc"
-	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
+	model "github.com/megu/kaji-challenge/backend/internal/http/application/model"
 )
 
-func (u userRecord) toAPI() api.User {
-	return api.User{
+func (u userRecord) toAPI() model.User {
+	return model.User{
 		Id:          u.ID,
 		Email:       u.Email,
 		DisplayName: u.Name,
@@ -16,8 +16,8 @@ func (u userRecord) toAPI() api.User {
 	}
 }
 
-func (t taskRecord) toAPI() api.Task {
-	return api.Task{
+func (t taskRecord) toAPI() model.Task {
+	return model.Task{
 		Id:                         t.ID,
 		TeamId:                     t.TeamID,
 		Title:                      t.Title,
@@ -32,8 +32,8 @@ func (t taskRecord) toAPI() api.Task {
 	}
 }
 
-func (r ruleRecord) toAPI() api.PenaltyRule {
-	return api.PenaltyRule{
+func (r ruleRecord) toAPI() model.PenaltyRule {
+	return model.PenaltyRule{
 		Id:          r.ID,
 		TeamId:      r.TeamID,
 		Threshold:   r.Threshold,
@@ -45,8 +45,8 @@ func (r ruleRecord) toAPI() api.PenaltyRule {
 	}
 }
 
-func (i shoppingItemRecord) toAPI() api.ShoppingListItem {
-	return api.ShoppingListItem{
+func (i shoppingItemRecord) toAPI() model.ShoppingListItem {
+	return model.ShoppingListItem{
 		Id:        i.ID,
 		TeamId:    i.TeamID,
 		Name:      i.Name,
@@ -58,8 +58,8 @@ func (i shoppingItemRecord) toAPI() api.ShoppingListItem {
 	}
 }
 
-func (r reminderRecord) toAPI() api.Reminder {
-	return api.Reminder{
+func (r reminderRecord) toAPI() model.Reminder {
+	return model.Reminder{
 		Id:           r.ID,
 		TeamId:       r.TeamID,
 		Title:        r.Title,
@@ -73,16 +73,16 @@ func (r reminderRecord) toAPI() api.Reminder {
 	}
 }
 
-func (m monthSummary) toAPI() api.MonthlyPenaltySummary {
+func (m monthSummary) toAPI() model.MonthlyPenaltySummary {
 	triggeredRuleIDs := m.TriggeredRuleID
 	if triggeredRuleIDs == nil {
 		triggeredRuleIDs = []string{}
 	}
 	taskStatusByDate := m.TaskStatusByDate
 	if taskStatusByDate == nil {
-		taskStatusByDate = []api.MonthlyTaskStatusGroup{}
+		taskStatusByDate = []model.MonthlyTaskStatusGroup{}
 	}
-	return api.MonthlyPenaltySummary{
+	return model.MonthlyPenaltySummary{
 		Month:                   m.Month,
 		TeamId:                  m.TeamID,
 		DailyPenaltyTotal:       m.DailyPenalty,
@@ -95,9 +95,9 @@ func (m monthSummary) toAPI() api.MonthlyPenaltySummary {
 }
 
 func reminderFromDB(row dbsqlc.Reminder, loc *time.Location) reminderRecord {
-	var scheduleType *api.ReminderScheduleType
+	var scheduleType *model.ReminderScheduleType
 	if row.ScheduleType.Valid {
-		value := api.ReminderScheduleType(row.ScheduleType.String)
+		value := model.ReminderScheduleType(row.ScheduleType.String)
 		scheduleType = &value
 	}
 	return reminderRecord{
@@ -105,7 +105,7 @@ func reminderFromDB(row dbsqlc.Reminder, loc *time.Location) reminderRecord {
 		TeamID:       row.TeamID,
 		Title:        row.Title,
 		Notes:        ptrFromText(row.Notes),
-		Kind:         api.ReminderKind(row.Kind),
+		Kind:         model.ReminderKind(row.Kind),
 		ScheduleType: scheduleType,
 		StartDate:    row.StartDate.Time.In(loc),
 		EndDate:      ptrFromDate(row.EndDate, loc),
@@ -120,7 +120,7 @@ func taskFromGetRow(row dbsqlc.GetTaskByIDRow, loc *time.Location) taskRecord {
 		TeamID:     row.TeamID,
 		Title:      row.Title,
 		Notes:      ptrFromText(row.Notes),
-		Type:       api.TaskType(row.Type),
+		Type:       model.TaskType(row.Type),
 		Penalty:    int(row.PenaltyPoints),
 		AssigneeID: ptrFromAny(row.AssigneeUserID),
 		Required:   int(row.RequiredCompletionsPerWeek),
@@ -137,7 +137,7 @@ func taskFromListRow(row dbsqlc.ListTasksByTeamIDRow, loc *time.Location) taskRe
 		TeamID:     row.TeamID,
 		Title:      row.Title,
 		Notes:      ptrFromText(row.Notes),
-		Type:       api.TaskType(row.Type),
+		Type:       model.TaskType(row.Type),
 		Penalty:    int(row.PenaltyPoints),
 		AssigneeID: ptrFromAny(row.AssigneeUserID),
 		Required:   int(row.RequiredCompletionsPerWeek),
@@ -154,7 +154,7 @@ func taskFromUndeletedListRow(row dbsqlc.ListUndeletedTasksByTeamIDRow, loc *tim
 		TeamID:     row.TeamID,
 		Title:      row.Title,
 		Notes:      ptrFromText(row.Notes),
-		Type:       api.TaskType(row.Type),
+		Type:       model.TaskType(row.Type),
 		Penalty:    int(row.PenaltyPoints),
 		AssigneeID: ptrFromAny(row.AssigneeUserID),
 		Required:   int(row.RequiredCompletionsPerWeek),

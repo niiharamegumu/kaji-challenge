@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 
 const root = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
@@ -104,12 +104,20 @@ function violationsFor(path, imports) {
   return violations;
 }
 
-const baseline = new Set(
-  readFileSync(join(root, "architecture-baseline.txt"), "utf8")
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line !== "" && !line.startsWith("#")),
-);
+function loadBaseline() {
+  const baselinePath = join(root, "architecture-baseline.txt");
+  if (!existsSync(baselinePath)) {
+    return new Set();
+  }
+  return new Set(
+    readFileSync(baselinePath, "utf8")
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line !== "" && !line.startsWith("#")),
+  );
+}
+
+const baseline = loadBaseline();
 
 const violations = [];
 for (const path of walk(join(root, "src"))) {

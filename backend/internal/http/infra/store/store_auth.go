@@ -15,8 +15,8 @@ import (
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	dbsqlc "github.com/megu/kaji-challenge/backend/internal/db/sqlc"
+	model "github.com/megu/kaji-challenge/backend/internal/http/application/model"
 	"github.com/megu/kaji-challenge/backend/internal/http/application/ports"
-	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 	"golang.org/x/oauth2"
 )
 
@@ -65,18 +65,18 @@ func (s *Store) LookupSession(ctx context.Context, token string) (string, bool) 
 	return rec.UserID, true
 }
 
-func (s *Store) StartGoogleAuth(ctx context.Context) (api.AuthStartResponse, error) {
+func (s *Store) StartGoogleAuth(ctx context.Context) (model.AuthStartResponse, error) {
 	state, err := randomToken()
 	if err != nil {
-		return api.AuthStartResponse{}, err
+		return model.AuthStartResponse{}, err
 	}
 	nonce, err := randomToken()
 	if err != nil {
-		return api.AuthStartResponse{}, err
+		return model.AuthStartResponse{}, err
 	}
 	verifier, err := randomToken()
 	if err != nil {
-		return api.AuthStartResponse{}, err
+		return model.AuthStartResponse{}, err
 	}
 	expiresAt := time.Now().In(s.loc).Add(10 * time.Minute)
 	if s.q != nil {
@@ -86,7 +86,7 @@ func (s *Store) StartGoogleAuth(ctx context.Context) (api.AuthStartResponse, err
 			CodeVerifier: verifier,
 			ExpiresAt:    toPgTimestamptz(expiresAt),
 		}); err != nil {
-			return api.AuthStartResponse{}, err
+			return model.AuthStartResponse{}, err
 		}
 	} else {
 		s.mu.Lock()
@@ -101,9 +101,9 @@ func (s *Store) StartGoogleAuth(ctx context.Context) (api.AuthStartResponse, err
 	authURL, err := s.buildAuthorizationURLLocked(ctx, state, nonce, verifier)
 	s.mu.Unlock()
 	if err != nil {
-		return api.AuthStartResponse{}, err
+		return model.AuthStartResponse{}, err
 	}
-	return api.AuthStartResponse{AuthorizationUrl: authURL}, nil
+	return model.AuthStartResponse{AuthorizationUrl: authURL}, nil
 }
 
 func (s *Store) CompleteGoogleAuth(ctx context.Context, code, state, mockEmail, mockName, mockSub, mockIss string) (string, string, error) {

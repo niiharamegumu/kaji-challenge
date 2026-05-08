@@ -3,25 +3,25 @@ package usecases
 import (
 	"context"
 
-	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
+	model "github.com/megu/kaji-challenge/backend/internal/http/application/model"
 )
 
-func (u taskOverviewUsecase) GetTaskOverview(ctx context.Context, userID string) (api.TaskOverviewResponse, error) {
+func (u taskOverviewUsecase) GetTaskOverview(ctx context.Context, userID string) (model.TaskOverviewResponse, error) {
 	return u.repo.GetTaskOverview(ctx, userID)
 }
 
-func (u taskOverviewUsecase) GetMonthlySummary(ctx context.Context, userID string, month *string) (api.MonthlyPenaltySummary, error) {
+func (u taskOverviewUsecase) GetMonthlySummary(ctx context.Context, userID string, month *string) (model.MonthlyPenaltySummary, error) {
 	return u.repo.GetMonthlySummary(ctx, userID, month)
 }
 
-func (u adminUsecase) CloseDayForUser(ctx context.Context, userID string) (api.CloseResponse, error) {
+func (u adminUsecase) CloseDayForUser(ctx context.Context, userID string) (model.CloseResponse, error) {
 	return u.repo.CloseDayForUser(ctx, userID)
 }
 
-func (u adminUsecase) CloseWeekForUser(ctx context.Context, userID string) (api.CloseResponse, error) {
+func (u adminUsecase) CloseWeekForUser(ctx context.Context, userID string) (model.CloseResponse, error) {
 	return u.repo.CloseWeekForUser(ctx, userID)
 }
 
-func (u adminUsecase) CloseMonthForUser(ctx context.Context, userID string) (api.CloseResponse, error) {
+func (u adminUsecase) CloseMonthForUser(ctx context.Context, userID string) (model.CloseResponse, error) {
 	return u.repo.CloseMonthForUser(ctx, userID)
 }

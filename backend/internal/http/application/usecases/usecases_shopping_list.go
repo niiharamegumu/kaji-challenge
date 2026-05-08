@@ -3,18 +3,18 @@ package usecases
 import (
 	"context"
 
-	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
+	model "github.com/megu/kaji-challenge/backend/internal/http/application/model"
 )
 
-func (u shoppingListUsecase) ListShoppingItems(ctx context.Context, userID string) ([]api.ShoppingListItem, error) {
+func (u shoppingListUsecase) ListShoppingItems(ctx context.Context, userID string) ([]model.ShoppingListItem, error) {
 	return u.repo.ListShoppingItems(ctx, userID)
 }
 
-func (u shoppingListUsecase) CreateShoppingItem(ctx context.Context, userID string, req api.CreateShoppingListItemRequest) (api.ShoppingListItem, error) {
+func (u shoppingListUsecase) CreateShoppingItem(ctx context.Context, userID string, req model.CreateShoppingListItemRequest) (model.ShoppingListItem, error) {
 	return u.repo.CreateShoppingItem(ctx, userID, req)
 }
 
-func (u shoppingListUsecase) PatchShoppingItem(ctx context.Context, userID, itemID string, req api.UpdateShoppingListItemRequest) (api.ShoppingListItem, error) {
+func (u shoppingListUsecase) PatchShoppingItem(ctx context.Context, userID, itemID string, req model.UpdateShoppingListItemRequest) (model.ShoppingListItem, error) {
 	return u.repo.PatchShoppingItem(ctx, userID, itemID, req)
 }
 
@@ -22,6 +22,6 @@ func (u shoppingListUsecase) DeleteShoppingItem(ctx context.Context, userID, ite
 	return u.repo.DeleteShoppingItem(ctx, userID, itemID)
 }
 
-func (u shoppingListUsecase) ReorderShoppingItems(ctx context.Context, userID string, req api.ReorderShoppingListItemsRequest) ([]api.ShoppingListItem, error) {
+func (u shoppingListUsecase) ReorderShoppingItems(ctx context.Context, userID string, req model.ReorderShoppingListItemsRequest) ([]model.ShoppingListItem, error) {
 	return u.repo.ReorderShoppingItems(ctx, userID, req)
 }

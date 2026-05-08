@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
+	model "github.com/megu/kaji-challenge/backend/internal/http/application/model"
 )
 
 func TestCreateTaskPrependsWithinType(t *testing.T) {
@@ -14,26 +14,26 @@ func TestCreateTaskPrependsWithinType(t *testing.T) {
 	base := time.Date(2026, 3, 1, 9, 0, 0, 0, s.loc)
 	_, userID := createTeamWithMember(t, s, "task-create@example.com", base)
 
-	firstDaily, err := s.CreateTask(withLatestIfMatchForUser(t, s, ctx, userID), userID, api.CreateTaskRequest{
+	firstDaily, err := s.CreateTask(withLatestIfMatchForUser(t, s, ctx, userID), userID, model.CreateTaskRequest{
 		Title:         "皿洗い",
-		Type:          api.TaskTypeDaily,
+		Type:          model.TaskTypeDaily,
 		PenaltyPoints: 1,
 	})
 	if err != nil {
 		t.Fatalf("CreateTask daily failed: %v", err)
 	}
-	firstWeekly, err := s.CreateTask(withLatestIfMatchForUser(t, s, ctx, userID), userID, api.CreateTaskRequest{
+	firstWeekly, err := s.CreateTask(withLatestIfMatchForUser(t, s, ctx, userID), userID, model.CreateTaskRequest{
 		Title:                      "風呂掃除",
-		Type:                       api.TaskTypeWeekly,
+		Type:                       model.TaskTypeWeekly,
 		PenaltyPoints:              2,
 		RequiredCompletionsPerWeek: intPtr(2),
 	})
 	if err != nil {
 		t.Fatalf("CreateTask weekly failed: %v", err)
 	}
-	secondDaily, err := s.CreateTask(withLatestIfMatchForUser(t, s, ctx, userID), userID, api.CreateTaskRequest{
+	secondDaily, err := s.CreateTask(withLatestIfMatchForUser(t, s, ctx, userID), userID, model.CreateTaskRequest{
 		Title:         "洗濯",
-		Type:          api.TaskTypeDaily,
+		Type:          model.TaskTypeDaily,
 		PenaltyPoints: 3,
 	})
 	if err != nil {
@@ -58,9 +58,9 @@ func TestListTasksOrdersByTypeAndPosition(t *testing.T) {
 	base := time.Date(2026, 3, 1, 9, 0, 0, 0, s.loc)
 	_, userID := createTeamWithMember(t, s, "task-list@example.com", base)
 
-	weeklyID := createTaskWithIDAt(t, s, teamIDForUser(t, s, userID), api.TaskTypeWeekly, 3, 2, base)
-	firstDailyID := createTaskWithIDAt(t, s, teamIDForUser(t, s, userID), api.TaskTypeDaily, 1, 1, base.Add(time.Minute))
-	secondDailyID := createTaskWithIDAt(t, s, teamIDForUser(t, s, userID), api.TaskTypeDaily, 2, 1, base.Add(2*time.Minute))
+	weeklyID := createTaskWithIDAt(t, s, teamIDForUser(t, s, userID), model.TaskTypeWeekly, 3, 2, base)
+	firstDailyID := createTaskWithIDAt(t, s, teamIDForUser(t, s, userID), model.TaskTypeDaily, 1, 1, base.Add(time.Minute))
+	secondDailyID := createTaskWithIDAt(t, s, teamIDForUser(t, s, userID), model.TaskTypeDaily, 2, 1, base.Add(2*time.Minute))
 
 	items, err := s.ListTasks(ctx, userID, nil)
 	if err != nil {
@@ -87,9 +87,9 @@ func TestDeleteTaskKeepsExistingSortKeysWithinType(t *testing.T) {
 	_, userID := createTeamWithMember(t, s, "task-delete@example.com", base)
 	teamID := teamIDForUser(t, s, userID)
 
-	firstDailyID := createTaskWithIDAt(t, s, teamID, api.TaskTypeDaily, 1, 1, base)
-	secondDailyID := createTaskWithIDAt(t, s, teamID, api.TaskTypeDaily, 2, 1, base.Add(time.Minute))
-	thirdDailyID := createTaskWithIDAt(t, s, teamID, api.TaskTypeDaily, 3, 1, base.Add(2*time.Minute))
+	firstDailyID := createTaskWithIDAt(t, s, teamID, model.TaskTypeDaily, 1, 1, base)
+	secondDailyID := createTaskWithIDAt(t, s, teamID, model.TaskTypeDaily, 2, 1, base.Add(time.Minute))
+	thirdDailyID := createTaskWithIDAt(t, s, teamID, model.TaskTypeDaily, 3, 1, base.Add(2*time.Minute))
 
 	if err := s.DeleteTask(withLatestIfMatchForUser(t, s, ctx, userID), userID, secondDailyID); err != nil {
 		t.Fatalf("DeleteTask failed: %v", err)
@@ -117,22 +117,22 @@ func TestCreateTaskPrependsAfterDeleteAndReorder(t *testing.T) {
 	_, userID := createTeamWithMember(t, s, "task-create-after-reorder@example.com", base)
 	teamID := teamIDForUser(t, s, userID)
 
-	firstID := createTaskWithIDAt(t, s, teamID, api.TaskTypeDaily, 1, 1, base)
-	secondID := createTaskWithIDAt(t, s, teamID, api.TaskTypeDaily, 2, 1, base.Add(time.Minute))
-	thirdID := createTaskWithIDAt(t, s, teamID, api.TaskTypeDaily, 3, 1, base.Add(2*time.Minute))
+	firstID := createTaskWithIDAt(t, s, teamID, model.TaskTypeDaily, 1, 1, base)
+	secondID := createTaskWithIDAt(t, s, teamID, model.TaskTypeDaily, 2, 1, base.Add(time.Minute))
+	thirdID := createTaskWithIDAt(t, s, teamID, model.TaskTypeDaily, 3, 1, base.Add(2*time.Minute))
 
 	if err := s.DeleteTask(withLatestIfMatchForUser(t, s, ctx, userID), userID, secondID); err != nil {
 		t.Fatalf("DeleteTask failed: %v", err)
 	}
-	if _, err := s.ReorderTasks(withLatestIfMatchForUser(t, s, ctx, userID), userID, api.ReorderTasksRequest{
+	if _, err := s.ReorderTasks(withLatestIfMatchForUser(t, s, ctx, userID), userID, model.ReorderTasksRequest{
 		TaskIds: []string{thirdID, firstID},
 	}); err != nil {
 		t.Fatalf("ReorderTasks failed: %v", err)
 	}
 
-	created, err := s.CreateTask(withLatestIfMatchForUser(t, s, ctx, userID), userID, api.CreateTaskRequest{
+	created, err := s.CreateTask(withLatestIfMatchForUser(t, s, ctx, userID), userID, model.CreateTaskRequest{
 		Title:         "掃除機",
-		Type:          api.TaskTypeDaily,
+		Type:          model.TaskTypeDaily,
 		PenaltyPoints: 1,
 	})
 	if err != nil {
@@ -154,12 +154,12 @@ func TestReorderTasksPersistsRequestedOrderWithinType(t *testing.T) {
 	_, userID := createTeamWithMember(t, s, "task-reorder@example.com", base)
 	teamID := teamIDForUser(t, s, userID)
 
-	firstID := createTaskWithIDAt(t, s, teamID, api.TaskTypeDaily, 1, 1, base)
-	secondID := createTaskWithIDAt(t, s, teamID, api.TaskTypeDaily, 2, 1, base.Add(time.Minute))
-	thirdID := createTaskWithIDAt(t, s, teamID, api.TaskTypeDaily, 3, 1, base.Add(2*time.Minute))
-	createTaskWithIDAt(t, s, teamID, api.TaskTypeWeekly, 2, 2, base.Add(3*time.Minute))
+	firstID := createTaskWithIDAt(t, s, teamID, model.TaskTypeDaily, 1, 1, base)
+	secondID := createTaskWithIDAt(t, s, teamID, model.TaskTypeDaily, 2, 1, base.Add(time.Minute))
+	thirdID := createTaskWithIDAt(t, s, teamID, model.TaskTypeDaily, 3, 1, base.Add(2*time.Minute))
+	createTaskWithIDAt(t, s, teamID, model.TaskTypeWeekly, 2, 2, base.Add(3*time.Minute))
 
-	items, err := s.ReorderTasks(withLatestIfMatchForUser(t, s, ctx, userID), userID, api.ReorderTasksRequest{
+	items, err := s.ReorderTasks(withLatestIfMatchForUser(t, s, ctx, userID), userID, model.ReorderTasksRequest{
 		TaskIds: []string{thirdID, firstID, secondID},
 	})
 	if err != nil {
@@ -183,15 +183,15 @@ func TestReorderTasksHandlesNonContiguousPositions(t *testing.T) {
 	_, userID := createTeamWithMember(t, s, "task-reorder-gapped@example.com", base)
 	teamID := teamIDForUser(t, s, userID)
 
-	firstID := createTaskWithIDAt(t, s, teamID, api.TaskTypeDaily, 1, 1, base)
-	secondID := createTaskWithIDAt(t, s, teamID, api.TaskTypeDaily, 2, 1, base.Add(time.Minute))
-	thirdID := createTaskWithIDAt(t, s, teamID, api.TaskTypeDaily, 3, 1, base.Add(2*time.Minute))
+	firstID := createTaskWithIDAt(t, s, teamID, model.TaskTypeDaily, 1, 1, base)
+	secondID := createTaskWithIDAt(t, s, teamID, model.TaskTypeDaily, 2, 1, base.Add(time.Minute))
+	thirdID := createTaskWithIDAt(t, s, teamID, model.TaskTypeDaily, 3, 1, base.Add(2*time.Minute))
 
 	if err := s.q.DeleteTask(ctx, secondID); err != nil {
 		t.Fatalf("failed to create gapped positions: %v", err)
 	}
 
-	items, err := s.ReorderTasks(withLatestIfMatchForUser(t, s, ctx, userID), userID, api.ReorderTasksRequest{
+	items, err := s.ReorderTasks(withLatestIfMatchForUser(t, s, ctx, userID), userID, model.ReorderTasksRequest{
 		TaskIds: []string{thirdID, firstID},
 	})
 	if err != nil {
@@ -215,21 +215,21 @@ func TestReorderTasksRejectsMismatchedTypeAndIDs(t *testing.T) {
 	_, userID := createTeamWithMember(t, s, "task-reorder-invalid@example.com", base)
 	teamID := teamIDForUser(t, s, userID)
 
-	firstDailyID := createTaskWithIDAt(t, s, teamID, api.TaskTypeDaily, 1, 1, base)
-	secondDailyID := createTaskWithIDAt(t, s, teamID, api.TaskTypeDaily, 2, 1, base.Add(time.Minute))
-	weeklyID := createTaskWithIDAt(t, s, teamID, api.TaskTypeWeekly, 3, 2, base.Add(2*time.Minute))
+	firstDailyID := createTaskWithIDAt(t, s, teamID, model.TaskTypeDaily, 1, 1, base)
+	secondDailyID := createTaskWithIDAt(t, s, teamID, model.TaskTypeDaily, 2, 1, base.Add(time.Minute))
+	weeklyID := createTaskWithIDAt(t, s, teamID, model.TaskTypeWeekly, 3, 2, base.Add(2*time.Minute))
 
-	if _, err := s.ReorderTasks(withLatestIfMatchForUser(t, s, ctx, userID), userID, api.ReorderTasksRequest{
+	if _, err := s.ReorderTasks(withLatestIfMatchForUser(t, s, ctx, userID), userID, model.ReorderTasksRequest{
 		TaskIds: []string{firstDailyID, weeklyID},
 	}); err == nil {
 		t.Fatalf("expected ReorderTasks to reject mixed task types")
 	}
-	if _, err := s.ReorderTasks(withLatestIfMatchForUser(t, s, ctx, userID), userID, api.ReorderTasksRequest{
+	if _, err := s.ReorderTasks(withLatestIfMatchForUser(t, s, ctx, userID), userID, model.ReorderTasksRequest{
 		TaskIds: []string{firstDailyID, secondDailyID, secondDailyID},
 	}); err == nil {
 		t.Fatalf("expected ReorderTasks to reject duplicate ids")
 	}
-	if _, err := s.ReorderTasks(withLatestIfMatchForUser(t, s, ctx, userID), userID, api.ReorderTasksRequest{
+	if _, err := s.ReorderTasks(withLatestIfMatchForUser(t, s, ctx, userID), userID, model.ReorderTasksRequest{
 		TaskIds: []string{"missing-id"},
 	}); err == nil {
 		t.Fatalf("expected ReorderTasks to reject mismatched ids")

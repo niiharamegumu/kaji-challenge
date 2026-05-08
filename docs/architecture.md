@@ -5,7 +5,7 @@ This repository uses two explicit architecture styles:
 - Backend: Clean Architecture
 - Frontend: Feature-Based Architecture
 
-The boundary rules are enforced by `node scripts/check-architecture.mjs`. Existing debt is listed in `architecture-baseline.txt`; new violations fail the check, and removed violations must also be removed from the baseline.
+The boundary rules are enforced by `node scripts/check-architecture.mjs`. There is no accepted baseline debt; new violations fail the check.
 
 ## Backend: Clean Architecture
 
@@ -36,7 +36,7 @@ Backend rules:
 
 Current migration note:
 
-- The existing code still uses `internal/http/*` package names and OpenAPI generated types inside `application`. These are tracked in `architecture-baseline.txt` and should be removed as the Clean Architecture migration proceeds.
+- The existing code still uses `internal/http/*` package names. OpenAPI generated types have been removed from `application`; remaining backend migration work is package relocation and moving store-level business rules toward usecase/domain services.
 
 ## Frontend: Feature-Based Architecture
 

@@ -6,7 +6,7 @@ import (
 	"time"
 
 	dbsqlc "github.com/megu/kaji-challenge/backend/internal/db/sqlc"
-	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
+	model "github.com/megu/kaji-challenge/backend/internal/http/application/model"
 )
 
 func TestShoppingItemsFollowTeamScopeAndOrdering(t *testing.T) {
@@ -40,7 +40,7 @@ func TestCreateShoppingItemPrependsToStart(t *testing.T) {
 	_, userID := createTeamWithMember(t, s, "shopping-create@example.com", base)
 
 	firstID := createShoppingItemAt(t, s, userID, "牛乳", nil, nil, base)
-	item, err := s.CreateShoppingItem(withLatestIfMatchForUser(t, s, ctx, userID), userID, api.CreateShoppingListItemRequest{
+	item, err := s.CreateShoppingItem(withLatestIfMatchForUser(t, s, ctx, userID), userID, model.CreateShoppingListItemRequest{
 		Name:     "卵",
 		Quantity: stringPtr("10個"),
 	})
@@ -69,7 +69,7 @@ func TestPatchShoppingItemUpdatesFields(t *testing.T) {
 	_, userID := createTeamWithMember(t, s, "shopping-patch@example.com", base)
 	itemID := createShoppingItemAt(t, s, userID, "牛乳", stringPtr("1本"), nil, base)
 
-	updated, err := s.PatchShoppingItem(withLatestIfMatchForUser(t, s, ctx, userID), userID, itemID, api.UpdateShoppingListItemRequest{
+	updated, err := s.PatchShoppingItem(withLatestIfMatchForUser(t, s, ctx, userID), userID, itemID, model.UpdateShoppingListItemRequest{
 		Name:     stringPtr("低脂肪乳"),
 		Quantity: stringPtr("2本"),
 		Notes:    stringPtr("週末特売"),
@@ -133,13 +133,13 @@ func TestCreateShoppingItemPrependsAfterDeleteAndReorder(t *testing.T) {
 	if err := s.DeleteShoppingItem(withLatestIfMatchForUser(t, s, ctx, userID), userID, secondID); err != nil {
 		t.Fatalf("DeleteShoppingItem failed: %v", err)
 	}
-	if _, err := s.ReorderShoppingItems(withLatestIfMatchForUser(t, s, ctx, userID), userID, api.ReorderShoppingListItemsRequest{
+	if _, err := s.ReorderShoppingItems(withLatestIfMatchForUser(t, s, ctx, userID), userID, model.ReorderShoppingListItemsRequest{
 		ItemIds: []string{thirdID, firstID},
 	}); err != nil {
 		t.Fatalf("ReorderShoppingItems failed: %v", err)
 	}
 
-	created, err := s.CreateShoppingItem(withLatestIfMatchForUser(t, s, ctx, userID), userID, api.CreateShoppingListItemRequest{
+	created, err := s.CreateShoppingItem(withLatestIfMatchForUser(t, s, ctx, userID), userID, model.CreateShoppingListItemRequest{
 		Name: "チーズ",
 	})
 	if err != nil {
@@ -164,7 +164,7 @@ func TestReorderShoppingItemsPersistsRequestedOrder(t *testing.T) {
 	secondID := createShoppingItemAt(t, s, userID, "卵", nil, nil, base.Add(time.Minute))
 	thirdID := createShoppingItemAt(t, s, userID, "パン", nil, nil, base.Add(2*time.Minute))
 
-	items, err := s.ReorderShoppingItems(withLatestIfMatchForUser(t, s, ctx, userID), userID, api.ReorderShoppingListItemsRequest{
+	items, err := s.ReorderShoppingItems(withLatestIfMatchForUser(t, s, ctx, userID), userID, model.ReorderShoppingListItemsRequest{
 		ItemIds: []string{thirdID, firstID, secondID},
 	})
 	if err != nil {
@@ -190,7 +190,7 @@ func TestReorderShoppingItemsRejectsMismatchedIDs(t *testing.T) {
 	createShoppingItemAt(t, s, userID, "牛乳", nil, nil, base)
 	createShoppingItemAt(t, s, userID, "卵", nil, nil, base.Add(time.Minute))
 
-	if _, err := s.ReorderShoppingItems(withLatestIfMatchForUser(t, s, ctx, userID), userID, api.ReorderShoppingListItemsRequest{
+	if _, err := s.ReorderShoppingItems(withLatestIfMatchForUser(t, s, ctx, userID), userID, model.ReorderShoppingListItemsRequest{
 		ItemIds: []string{"missing-id"},
 	}); err == nil {
 		t.Fatalf("expected ReorderShoppingItems to reject mismatched ids")
@@ -206,7 +206,7 @@ func TestReorderShoppingItemsRejectsDuplicateIDs(t *testing.T) {
 	firstID := createShoppingItemAt(t, s, userID, "牛乳", nil, nil, base)
 	createShoppingItemAt(t, s, userID, "卵", nil, nil, base.Add(time.Minute))
 
-	if _, err := s.ReorderShoppingItems(withLatestIfMatchForUser(t, s, ctx, userID), userID, api.ReorderShoppingListItemsRequest{
+	if _, err := s.ReorderShoppingItems(withLatestIfMatchForUser(t, s, ctx, userID), userID, model.ReorderShoppingListItemsRequest{
 		ItemIds: []string{firstID, firstID},
 	}); err == nil {
 		t.Fatalf("expected ReorderShoppingItems to reject duplicate ids")
@@ -224,7 +224,7 @@ func TestReorderShoppingItemsRejectsOtherTeamIDs(t *testing.T) {
 	createShoppingItemAt(t, s, userID, "卵", nil, nil, base.Add(time.Minute))
 	foreignID := createShoppingItemForTeamAt(t, s, teamB, "パン", nil, nil, base.Add(2*time.Minute))
 
-	if _, err := s.ReorderShoppingItems(withLatestIfMatchForUser(t, s, ctx, userID), userID, api.ReorderShoppingListItemsRequest{
+	if _, err := s.ReorderShoppingItems(withLatestIfMatchForUser(t, s, ctx, userID), userID, model.ReorderShoppingListItemsRequest{
 		ItemIds: []string{firstID, foreignID},
 	}); err == nil {
 		t.Fatalf("expected ReorderShoppingItems to reject ids from another team")
@@ -237,7 +237,7 @@ func TestCreateShoppingItemRequiresLatestETag(t *testing.T) {
 	base := time.Date(2026, 3, 1, 9, 0, 0, 0, s.loc)
 	_, userID := createTeamWithMember(t, s, "shopping-precondition@example.com", base)
 
-	if _, err := s.CreateShoppingItem(ctx, userID, api.CreateShoppingListItemRequest{Name: "牛乳"}); err == nil {
+	if _, err := s.CreateShoppingItem(ctx, userID, model.CreateShoppingListItemRequest{Name: "牛乳"}); err == nil {
 		t.Fatalf("expected precondition failure without If-Match")
 	}
 }

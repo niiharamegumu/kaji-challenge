@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/megu/kaji-challenge/backend/internal/http/application/model"
 	"github.com/megu/kaji-challenge/backend/internal/http/infra"
 	pushsvc "github.com/megu/kaji-challenge/backend/internal/push"
-	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 )
 
 type fakeCloseRunner struct {
@@ -39,26 +39,26 @@ func (f *fakeCloseRunner) ListClosableTeamIDs(context.Context) ([]string, error)
 	return append([]string{}, f.list...), nil
 }
 
-func (f *fakeCloseRunner) CloseDayForTeam(_ context.Context, teamID string) (api.CloseResponse, error) {
+func (f *fakeCloseRunner) CloseDayForTeam(_ context.Context, teamID string) (model.CloseResponse, error) {
 	f.closedTeams = append(f.closedTeams, "day:"+teamID)
 	if err := f.dayErrByTeam[teamID]; err != nil {
-		return api.CloseResponse{}, err
+		return model.CloseResponse{}, err
 	}
 	return okResp(), nil
 }
 
-func (f *fakeCloseRunner) CloseWeekForTeam(_ context.Context, teamID string) (api.CloseResponse, error) {
+func (f *fakeCloseRunner) CloseWeekForTeam(_ context.Context, teamID string) (model.CloseResponse, error) {
 	f.closedTeams = append(f.closedTeams, "week:"+teamID)
 	if err := f.weekErrByTeam[teamID]; err != nil {
-		return api.CloseResponse{}, err
+		return model.CloseResponse{}, err
 	}
 	return okResp(), nil
 }
 
-func (f *fakeCloseRunner) CloseMonthForTeam(_ context.Context, teamID string) (api.CloseResponse, error) {
+func (f *fakeCloseRunner) CloseMonthForTeam(_ context.Context, teamID string) (model.CloseResponse, error) {
 	f.closedTeams = append(f.closedTeams, "month:"+teamID)
 	if err := f.monthErrByTeam[teamID]; err != nil {
-		return api.CloseResponse{}, err
+		return model.CloseResponse{}, err
 	}
 	return okResp(), nil
 }
@@ -71,8 +71,8 @@ func (f *fakeNotifyRunner) NotifySlot(_ context.Context, slot string, _ pushsvc.
 	return f.result, nil
 }
 
-func okResp() api.CloseResponse {
-	return api.CloseResponse{
+func okResp() model.CloseResponse {
+	return model.CloseResponse{
 		Month:    "2026-02",
 		ClosedAt: time.Date(2026, 2, 21, 12, 0, 0, 0, time.UTC),
 	}

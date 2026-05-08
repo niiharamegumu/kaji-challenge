@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/megu/kaji-challenge/backend/internal/http/application"
+	"github.com/megu/kaji-challenge/backend/internal/http/application/model"
 	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 )
 
@@ -81,7 +82,7 @@ func (h *Handler) PostAuthSessionsExchange(c *gin.Context) {
 		return
 	}
 	setSessionCookie(c.Writer, session.Token, shouldUseSecureCookie(c.Request))
-	c.JSON(http.StatusOK, api.AuthSessionResponse{User: session.User})
+	c.JSON(http.StatusOK, model.AuthSessionResponse{User: session.User})
 }
 
 func (h *Handler) PostAuthLogout(c *gin.Context) {

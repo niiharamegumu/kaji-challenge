@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/megu/kaji-challenge/backend/internal/http/application/model"
 	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 )
 
@@ -31,7 +32,11 @@ func (h *Handler) PostShoppingItem(c *gin.Context, _ api.PostShoppingItemParams)
 	if !ok {
 		return
 	}
-	item, err := h.services.ShoppingList.CreateShoppingItem(c.Request.Context(), userID, req)
+	appReq, ok := convertTransportModel[model.CreateShoppingListItemRequest](c, req)
+	if !ok {
+		return
+	}
+	item, err := h.services.ShoppingList.CreateShoppingItem(c.Request.Context(), userID, appReq)
 	if err != nil {
 		writeAppError(c, err, http.StatusBadRequest)
 		return
@@ -50,7 +55,11 @@ func (h *Handler) PatchShoppingItem(c *gin.Context, itemID string, _ api.PatchSh
 	if !ok {
 		return
 	}
-	item, err := h.services.ShoppingList.PatchShoppingItem(c.Request.Context(), userID, itemID, req)
+	appReq, ok := convertTransportModel[model.UpdateShoppingListItemRequest](c, req)
+	if !ok {
+		return
+	}
+	item, err := h.services.ShoppingList.PatchShoppingItem(c.Request.Context(), userID, itemID, appReq)
 	if err != nil {
 		writeAppError(c, err, http.StatusBadRequest)
 		return
@@ -83,7 +92,11 @@ func (h *Handler) PostShoppingItemsReorder(c *gin.Context, _ api.PostShoppingIte
 	if !ok {
 		return
 	}
-	items, err := h.services.ShoppingList.ReorderShoppingItems(c.Request.Context(), userID, req)
+	appReq, ok := convertTransportModel[model.ReorderShoppingListItemsRequest](c, req)
+	if !ok {
+		return
+	}
+	items, err := h.services.ShoppingList.ReorderShoppingItems(c.Request.Context(), userID, appReq)
 	if err != nil {
 		writeAppError(c, err, http.StatusBadRequest)
 		return

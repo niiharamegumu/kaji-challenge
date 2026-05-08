@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 
 const root = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
@@ -96,10 +96,21 @@ function backendViolations(path, imports) {
   const violations = [];
   const inDomain = file.startsWith("backend/internal/domain/");
   const inApplication = file.startsWith("backend/internal/http/application/");
+  const canUseOpenAPI =
+    file.startsWith("backend/internal/openapi/") ||
+    file.startsWith("backend/internal/http/transport/") ||
+    file === "backend/internal/http/router.go" ||
+    file === "backend/internal/http/router_test.go";
 
   for (const item of imports) {
     const specifier = item.value;
     if (inDomain && specifier.startsWith("github.com/megu/kaji-challenge/")) {
+      violations.push(`${file} imports ${specifier}`);
+    }
+    if (
+      !canUseOpenAPI &&
+      specifier.includes("/backend/internal/openapi/generated")
+    ) {
       violations.push(`${file} imports ${specifier}`);
     }
     if (
@@ -154,8 +165,12 @@ function frontendViolations(path, imports) {
 }
 
 function loadBaseline() {
+  const baselinePath = join(root, "architecture-baseline.txt");
+  if (!existsSync(baselinePath)) {
+    return new Set();
+  }
   return new Set(
-    readFileSync(join(root, "architecture-baseline.txt"), "utf8")
+    readFileSync(baselinePath, "utf8")
       .split(/\r?\n/)
       .map((line) => line.trim())
       .filter((line) => line !== "" && !line.startsWith("#")),

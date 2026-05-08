@@ -7,7 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	dbsqlc "github.com/megu/kaji-challenge/backend/internal/db/sqlc"
-	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
+	model "github.com/megu/kaji-challenge/backend/internal/http/application/model"
 )
 
 const (
@@ -57,7 +57,7 @@ type userRecord struct {
 
 type membership struct {
 	TeamID string
-	Role   api.TeamMembershipRole
+	Role   model.TeamMembershipRole
 }
 
 type inviteCode struct {
@@ -71,7 +71,7 @@ type taskRecord struct {
 	TeamID     string
 	Title      string
 	Notes      *string
-	Type       api.TaskType
+	Type       model.TaskType
 	Penalty    int
 	AssigneeID *string
 	Required   int
@@ -108,8 +108,8 @@ type reminderRecord struct {
 	TeamID       string
 	Title        string
 	Notes        *string
-	Kind         api.ReminderKind
-	ScheduleType *api.ReminderScheduleType
+	Kind         model.ReminderKind
+	ScheduleType *model.ReminderScheduleType
 	StartDate    time.Time
 	EndDate      *time.Time
 	CreatedAt    time.Time
@@ -123,5 +123,5 @@ type monthSummary struct {
 	WeeklyPenalty    int
 	IsClosed         bool
 	TriggeredRuleID  []string
-	TaskStatusByDate []api.MonthlyTaskStatusGroup
+	TaskStatusByDate []model.MonthlyTaskStatusGroup
 }

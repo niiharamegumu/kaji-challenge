@@ -11,14 +11,15 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/megu/kaji-challenge/backend/internal/http/application"
+	"github.com/megu/kaji-challenge/backend/internal/http/application/model"
 	"github.com/megu/kaji-challenge/backend/internal/http/application/ports"
 	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 )
 
 type mockAuthService struct{}
 
-func (m mockAuthService) StartGoogleAuth(context.Context) (api.AuthStartResponse, error) {
-	return api.AuthStartResponse{}, nil
+func (m mockAuthService) StartGoogleAuth(context.Context) (model.AuthStartResponse, error) {
+	return model.AuthStartResponse{}, nil
 }
 func (m mockAuthService) CompleteGoogleAuth(context.Context, string, string, string, string, string, string) (string, string, error) {
 	return "", "", nil
@@ -31,118 +32,118 @@ func (m mockAuthService) LookupSession(context.Context, string) (string, bool) {
 
 type mockTeamService struct{ err error }
 
-func (m mockTeamService) GetMe(context.Context, string) (api.MeResponse, error) {
+func (m mockTeamService) GetMe(context.Context, string) (model.MeResponse, error) {
 	if m.err != nil {
-		return api.MeResponse{}, m.err
+		return model.MeResponse{}, m.err
 	}
-	return api.MeResponse{}, nil
+	return model.MeResponse{}, nil
 }
-func (m mockTeamService) PatchMeNickname(context.Context, string, api.UpdateNicknameRequest) (api.UpdateNicknameResponse, error) {
-	return api.UpdateNicknameResponse{}, nil
+func (m mockTeamService) PatchMeNickname(context.Context, string, model.UpdateNicknameRequest) (model.UpdateNicknameResponse, error) {
+	return model.UpdateNicknameResponse{}, nil
 }
-func (m mockTeamService) PatchMeColor(context.Context, string, api.UpdateColorRequest) (api.UpdateColorResponse, error) {
-	return api.UpdateColorResponse{}, nil
+func (m mockTeamService) PatchMeColor(context.Context, string, model.UpdateColorRequest) (model.UpdateColorResponse, error) {
+	return model.UpdateColorResponse{}, nil
 }
-func (m mockTeamService) CreateInvite(context.Context, string, api.CreateInviteRequest) (api.InviteCodeResponse, error) {
-	return api.InviteCodeResponse{}, nil
+func (m mockTeamService) CreateInvite(context.Context, string, model.CreateInviteRequest) (model.InviteCodeResponse, error) {
+	return model.InviteCodeResponse{}, nil
 }
-func (m mockTeamService) GetTeamCurrentInvite(context.Context, string) (api.InviteCodeResponse, error) {
-	return api.InviteCodeResponse{}, nil
+func (m mockTeamService) GetTeamCurrentInvite(context.Context, string) (model.InviteCodeResponse, error) {
+	return model.InviteCodeResponse{}, nil
 }
-func (m mockTeamService) PatchTeamCurrent(context.Context, string, api.UpdateCurrentTeamRequest) (api.TeamInfoResponse, error) {
-	return api.TeamInfoResponse{}, nil
+func (m mockTeamService) PatchTeamCurrent(context.Context, string, model.UpdateCurrentTeamRequest) (model.TeamInfoResponse, error) {
+	return model.TeamInfoResponse{}, nil
 }
-func (m mockTeamService) GetTeamCurrentMembers(context.Context, string) (api.TeamMembersResponse, error) {
-	return api.TeamMembersResponse{}, nil
+func (m mockTeamService) GetTeamCurrentMembers(context.Context, string) (model.TeamMembersResponse, error) {
+	return model.TeamMembersResponse{}, nil
 }
-func (m mockTeamService) JoinTeam(context.Context, string, string) (api.JoinTeamResponse, error) {
-	return api.JoinTeamResponse{}, nil
+func (m mockTeamService) JoinTeam(context.Context, string, string) (model.JoinTeamResponse, error) {
+	return model.JoinTeamResponse{}, nil
 }
-func (m mockTeamService) PostTeamLeave(context.Context, string) (api.JoinTeamResponse, error) {
-	return api.JoinTeamResponse{}, nil
+func (m mockTeamService) PostTeamLeave(context.Context, string) (model.JoinTeamResponse, error) {
+	return model.JoinTeamResponse{}, nil
 }
 
 type mockPushService struct{}
 
-func (m mockPushService) UpsertPushSubscription(context.Context, string, api.UpsertPushSubscriptionRequest) (api.PushSubscription, error) {
-	return api.PushSubscription{}, nil
+func (m mockPushService) UpsertPushSubscription(context.Context, string, model.UpsertPushSubscriptionRequest) (model.PushSubscription, error) {
+	return model.PushSubscription{}, nil
 }
 func (m mockPushService) DeletePushSubscription(context.Context, string, string) error {
 	return nil
 }
-func (m mockPushService) ListPushSubscriptions(context.Context, string) (api.ListPushSubscriptionsResponse, error) {
-	return api.ListPushSubscriptionsResponse{}, nil
+func (m mockPushService) ListPushSubscriptions(context.Context, string) (model.ListPushSubscriptionsResponse, error) {
+	return model.ListPushSubscriptionsResponse{}, nil
 }
 
 type mockTaskService struct{}
 
-func (m mockTaskService) ListTasks(context.Context, string, *api.TaskType) ([]api.Task, error) {
+func (m mockTaskService) ListTasks(context.Context, string, *model.TaskType) ([]model.Task, error) {
 	return nil, nil
 }
-func (m mockTaskService) CreateTask(context.Context, string, api.CreateTaskRequest) (api.Task, error) {
-	return api.Task{}, nil
+func (m mockTaskService) CreateTask(context.Context, string, model.CreateTaskRequest) (model.Task, error) {
+	return model.Task{}, nil
 }
-func (m mockTaskService) PatchTask(context.Context, string, string, api.UpdateTaskRequest) (api.Task, error) {
-	return api.Task{}, nil
+func (m mockTaskService) PatchTask(context.Context, string, string, model.UpdateTaskRequest) (model.Task, error) {
+	return model.Task{}, nil
 }
 func (m mockTaskService) DeleteTask(context.Context, string, string) error { return nil }
-func (m mockTaskService) ReorderTasks(context.Context, string, api.ReorderTasksRequest) ([]api.Task, error) {
+func (m mockTaskService) ReorderTasks(context.Context, string, model.ReorderTasksRequest) ([]model.Task, error) {
 	return nil, nil
 }
-func (m mockTaskService) ToggleTaskCompletion(context.Context, string, string, time.Time, *api.ToggleTaskCompletionRequestAction) (api.TaskCompletionResponse, error) {
-	return api.TaskCompletionResponse{}, nil
+func (m mockTaskService) ToggleTaskCompletion(context.Context, string, string, time.Time, *model.ToggleTaskCompletionRequestAction) (model.TaskCompletionResponse, error) {
+	return model.TaskCompletionResponse{}, nil
 }
 
 type mockPenaltyService struct{}
 
-func (m mockPenaltyService) ListPenaltyRules(context.Context, string, bool) ([]api.PenaltyRule, error) {
+func (m mockPenaltyService) ListPenaltyRules(context.Context, string, bool) ([]model.PenaltyRule, error) {
 	return nil, nil
 }
-func (m mockPenaltyService) CreatePenaltyRule(context.Context, string, api.CreatePenaltyRuleRequest) (api.PenaltyRule, error) {
-	return api.PenaltyRule{}, nil
+func (m mockPenaltyService) CreatePenaltyRule(context.Context, string, model.CreatePenaltyRuleRequest) (model.PenaltyRule, error) {
+	return model.PenaltyRule{}, nil
 }
-func (m mockPenaltyService) PatchPenaltyRule(context.Context, string, string, api.UpdatePenaltyRuleRequest) (api.PenaltyRule, error) {
-	return api.PenaltyRule{}, nil
+func (m mockPenaltyService) PatchPenaltyRule(context.Context, string, string, model.UpdatePenaltyRuleRequest) (model.PenaltyRule, error) {
+	return model.PenaltyRule{}, nil
 }
 func (m mockPenaltyService) DeletePenaltyRule(context.Context, string, string) error { return nil }
 
 type mockShoppingListService struct{}
 
-func (m mockShoppingListService) ListShoppingItems(context.Context, string) ([]api.ShoppingListItem, error) {
+func (m mockShoppingListService) ListShoppingItems(context.Context, string) ([]model.ShoppingListItem, error) {
 	return nil, nil
 }
-func (m mockShoppingListService) CreateShoppingItem(context.Context, string, api.CreateShoppingListItemRequest) (api.ShoppingListItem, error) {
-	return api.ShoppingListItem{}, nil
+func (m mockShoppingListService) CreateShoppingItem(context.Context, string, model.CreateShoppingListItemRequest) (model.ShoppingListItem, error) {
+	return model.ShoppingListItem{}, nil
 }
-func (m mockShoppingListService) PatchShoppingItem(context.Context, string, string, api.UpdateShoppingListItemRequest) (api.ShoppingListItem, error) {
-	return api.ShoppingListItem{}, nil
+func (m mockShoppingListService) PatchShoppingItem(context.Context, string, string, model.UpdateShoppingListItemRequest) (model.ShoppingListItem, error) {
+	return model.ShoppingListItem{}, nil
 }
 func (m mockShoppingListService) DeleteShoppingItem(context.Context, string, string) error {
 	return nil
 }
-func (m mockShoppingListService) ReorderShoppingItems(context.Context, string, api.ReorderShoppingListItemsRequest) ([]api.ShoppingListItem, error) {
+func (m mockShoppingListService) ReorderShoppingItems(context.Context, string, model.ReorderShoppingListItemsRequest) ([]model.ShoppingListItem, error) {
 	return nil, nil
 }
 
 type mockTaskOverviewService struct{}
 
-func (m mockTaskOverviewService) GetTaskOverview(context.Context, string) (api.TaskOverviewResponse, error) {
-	return api.TaskOverviewResponse{}, nil
+func (m mockTaskOverviewService) GetTaskOverview(context.Context, string) (model.TaskOverviewResponse, error) {
+	return model.TaskOverviewResponse{}, nil
 }
-func (m mockTaskOverviewService) GetMonthlySummary(context.Context, string, *string) (api.MonthlyPenaltySummary, error) {
-	return api.MonthlyPenaltySummary{}, nil
+func (m mockTaskOverviewService) GetMonthlySummary(context.Context, string, *string) (model.MonthlyPenaltySummary, error) {
+	return model.MonthlyPenaltySummary{}, nil
 }
 
 type mockAdminService struct{}
 
-func (m mockAdminService) CloseDayForUser(context.Context, string) (api.CloseResponse, error) {
-	return api.CloseResponse{}, nil
+func (m mockAdminService) CloseDayForUser(context.Context, string) (model.CloseResponse, error) {
+	return model.CloseResponse{}, nil
 }
-func (m mockAdminService) CloseWeekForUser(context.Context, string) (api.CloseResponse, error) {
-	return api.CloseResponse{}, nil
+func (m mockAdminService) CloseWeekForUser(context.Context, string) (model.CloseResponse, error) {
+	return model.CloseResponse{}, nil
 }
-func (m mockAdminService) CloseMonthForUser(context.Context, string) (api.CloseResponse, error) {
-	return api.CloseResponse{}, nil
+func (m mockAdminService) CloseMonthForUser(context.Context, string) (model.CloseResponse, error) {
+	return model.CloseResponse{}, nil
 }
 
 func newTestHandler(teamErr error) *Handler {

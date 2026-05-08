@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/megu/kaji-challenge/backend/internal/http/application/model"
 	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 )
 
@@ -31,7 +32,11 @@ func (h *Handler) PatchMeNickname(c *gin.Context) {
 	if !ok {
 		return
 	}
-	res, err := h.services.Team.PatchMeNickname(c.Request.Context(), userID, req)
+	appReq, ok := convertTransportModel[model.UpdateNicknameRequest](c, req)
+	if !ok {
+		return
+	}
+	res, err := h.services.Team.PatchMeNickname(c.Request.Context(), userID, appReq)
 	if err != nil {
 		writeAppError(c, err, http.StatusBadRequest)
 		return
@@ -49,7 +54,11 @@ func (h *Handler) PatchMeColor(c *gin.Context) {
 	if !ok {
 		return
 	}
-	res, err := h.services.Team.PatchMeColor(c.Request.Context(), userID, req)
+	appReq, ok := convertTransportModel[model.UpdateColorRequest](c, req)
+	if !ok {
+		return
+	}
+	res, err := h.services.Team.PatchMeColor(c.Request.Context(), userID, appReq)
 	if err != nil {
 		writeAppError(c, err, http.StatusBadRequest)
 		return
@@ -63,13 +72,17 @@ func (h *Handler) PostTeamInvite(c *gin.Context) {
 		return
 	}
 	injectIfMatchContext(c)
-	var req api.CreateInviteRequest
+	var req model.CreateInviteRequest
 	if c.Request.ContentLength > 0 {
 		v, ok := bindJSON[api.CreateInviteRequest](c)
 		if !ok {
 			return
 		}
-		req = v
+		appReq, ok := convertTransportModel[model.CreateInviteRequest](c, v)
+		if !ok {
+			return
+		}
+		req = appReq
 	}
 	invite, err := h.services.Team.CreateInvite(c.Request.Context(), userID, req)
 	if err != nil {
@@ -103,7 +116,11 @@ func (h *Handler) PatchTeamCurrent(c *gin.Context) {
 	if !ok {
 		return
 	}
-	res, err := h.services.Team.PatchTeamCurrent(c.Request.Context(), userID, req)
+	appReq, ok := convertTransportModel[model.UpdateCurrentTeamRequest](c, req)
+	if !ok {
+		return
+	}
+	res, err := h.services.Team.PatchTeamCurrent(c.Request.Context(), userID, appReq)
 	if err != nil {
 		writeAppError(c, err, http.StatusBadRequest)
 		return

@@ -10,11 +10,10 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 	dbsqlc "github.com/megu/kaji-challenge/backend/internal/db/sqlc"
-	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
-	openapi_types "github.com/oapi-codegen/runtime/types"
+	model "github.com/megu/kaji-challenge/backend/internal/http/application/model"
 )
 
-func (s *Store) ListReminderDefinitions(ctx context.Context, userID string) ([]api.Reminder, error) {
+func (s *Store) ListReminderDefinitions(ctx context.Context, userID string) ([]model.Reminder, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -26,14 +25,14 @@ func (s *Store) ListReminderDefinitions(ctx context.Context, userID string) ([]a
 	if err != nil {
 		return nil, err
 	}
-	items := make([]api.Reminder, 0, len(rows))
+	items := make([]model.Reminder, 0, len(rows))
 	for _, row := range rows {
 		items = append(items, reminderFromDB(row, s.loc).toAPI())
 	}
 	return items, nil
 }
 
-func (s *Store) ListReminders(ctx context.Context, userID string, from, to time.Time) ([]api.ReminderCalendarDay, error) {
+func (s *Store) ListReminders(ctx context.Context, userID string, from, to time.Time) ([]model.ReminderCalendarDay, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -48,7 +47,7 @@ func (s *Store) ListReminders(ctx context.Context, userID string, from, to time.
 	}
 	currentMonthStart := monthStartDate(dateOnly(s.now(), s.loc), s.loc)
 	if toDateValue.Before(currentMonthStart) {
-		return []api.ReminderCalendarDay{}, nil
+		return []model.ReminderCalendarDay{}, nil
 	}
 	fromDate = maxDate(fromDate, currentMonthStart)
 
@@ -57,7 +56,7 @@ func (s *Store) ListReminders(ctx context.Context, userID string, from, to time.
 		return nil, err
 	}
 
-	days := make(map[string][]api.ReminderOccurrence)
+	days := make(map[string][]model.ReminderOccurrence)
 	for _, row := range rows {
 		record := reminderFromDB(row, s.loc)
 		for _, occurrence := range expandReminderOccurrences(record, fromDate, toDateValue) {
@@ -72,9 +71,9 @@ func (s *Store) ListReminders(ctx context.Context, userID string, from, to time.
 	}
 	sort.Strings(orderedKeys)
 
-	response := make([]api.ReminderCalendarDay, 0, len(orderedKeys))
+	response := make([]model.ReminderCalendarDay, 0, len(orderedKeys))
 	for _, key := range orderedKeys {
-		response = append(response, api.ReminderCalendarDay{
+		response = append(response, model.ReminderCalendarDay{
 			Date:  toDate(dateMustParse(key, s.loc)),
 			Items: days[key],
 		})
@@ -82,20 +81,20 @@ func (s *Store) ListReminders(ctx context.Context, userID string, from, to time.
 	return response, nil
 }
 
-func (s *Store) CreateReminder(ctx context.Context, userID string, req api.CreateReminderRequest) (api.Reminder, error) {
+func (s *Store) CreateReminder(ctx context.Context, userID string, req model.CreateReminderRequest) (model.Reminder, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
-		return api.Reminder{}, err
+		return model.Reminder{}, err
 	}
 
 	title := strings.TrimSpace(req.Title)
 	if title == "" {
-		return api.Reminder{}, errors.New("title is required")
+		return model.Reminder{}, errors.New("title is required")
 	}
 
 	record, err := buildReminderRecordFromCreate(teamID, title, req, s.loc, s.now())
 	if err != nil {
-		return api.Reminder{}, err
+		return model.Reminder{}, err
 	}
 	record.ID = s.nextID("rem")
 
@@ -122,16 +121,16 @@ func (s *Store) CreateReminder(ctx context.Context, userID string, req api.Creat
 			})
 		},
 	); err != nil {
-		return api.Reminder{}, err
+		return model.Reminder{}, err
 	}
 
 	return record.toAPI(), nil
 }
 
-func (s *Store) PatchReminder(ctx context.Context, userID, reminderID string, req api.UpdateReminderRequest) (api.Reminder, error) {
+func (s *Store) PatchReminder(ctx context.Context, userID, reminderID string, req model.UpdateReminderRequest) (model.Reminder, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
-		return api.Reminder{}, err
+		return model.Reminder{}, err
 	}
 
 	var record reminderRecord
@@ -175,7 +174,7 @@ func (s *Store) PatchReminder(ctx context.Context, userID, reminderID string, re
 			if req.EndDate != nil {
 				record.EndDate = dateTimePtr(req.EndDate, s.loc)
 			}
-			if req.Kind != nil && *req.Kind == api.OneTime {
+			if req.Kind != nil && *req.Kind == model.OneTime {
 				record.ScheduleType = nil
 				record.EndDate = nil
 			}
@@ -195,7 +194,7 @@ func (s *Store) PatchReminder(ctx context.Context, userID, reminderID string, re
 			})
 		},
 	); err != nil {
-		return api.Reminder{}, err
+		return model.Reminder{}, err
 	}
 	return record.toAPI(), nil
 }
@@ -256,7 +255,7 @@ func cleanupExpiredOneTimeRemindersTx(ctx context.Context, qtx *dbsqlc.Queries, 
 	return err
 }
 
-func buildReminderRecordFromCreate(teamID, title string, req api.CreateReminderRequest, loc *time.Location, now time.Time) (reminderRecord, error) {
+func buildReminderRecordFromCreate(teamID, title string, req model.CreateReminderRequest, loc *time.Location, now time.Time) (reminderRecord, error) {
 	record := reminderRecord{
 		ID:        "",
 		TeamID:    teamID,
@@ -283,7 +282,7 @@ func validateReminderRecord(record reminderRecord) error {
 	if strings.TrimSpace(record.Title) == "" {
 		return errors.New("title is required")
 	}
-	if record.Kind == api.OneTime {
+	if record.Kind == model.OneTime {
 		if record.ScheduleType != nil {
 			return errors.New("one-time reminder cannot have schedule type")
 		}
@@ -292,14 +291,14 @@ func validateReminderRecord(record reminderRecord) error {
 		}
 		return nil
 	}
-	if record.Kind != api.Recurring {
+	if record.Kind != model.Recurring {
 		return fmt.Errorf("invalid reminder kind: %s", record.Kind)
 	}
 	if record.ScheduleType == nil {
 		return errors.New("recurring reminder requires schedule type")
 	}
 	switch *record.ScheduleType {
-	case api.ReminderScheduleTypeDaily, api.ReminderScheduleTypeWeekly, api.ReminderScheduleTypeMonthly:
+	case model.ReminderScheduleTypeDaily, model.ReminderScheduleTypeWeekly, model.ReminderScheduleTypeMonthly:
 	default:
 		return fmt.Errorf("invalid reminder schedule type: %s", *record.ScheduleType)
 	}
@@ -309,18 +308,18 @@ func validateReminderRecord(record reminderRecord) error {
 	return nil
 }
 
-func expandReminderOccurrences(record reminderRecord, from, to time.Time) []api.ReminderOccurrence {
-	occurrences := []api.ReminderOccurrence{}
+func expandReminderOccurrences(record reminderRecord, from, to time.Time) []model.ReminderOccurrence {
+	occurrences := []model.ReminderOccurrence{}
 	effectiveFrom := maxDate(from, record.StartDate)
 	if to.Before(effectiveFrom) {
 		return occurrences
 	}
 	switch record.Kind {
-	case api.OneTime:
+	case model.OneTime:
 		if !record.StartDate.Before(from) && !record.StartDate.After(to) {
 			occurrences = append(occurrences, reminderOccurrenceFromRecord(record, record.StartDate))
 		}
-	case api.Recurring:
+	case model.Recurring:
 		if record.ScheduleType == nil {
 			return occurrences
 		}
@@ -332,16 +331,16 @@ func expandReminderOccurrences(record reminderRecord, from, to time.Time) []api.
 			return occurrences
 		}
 		switch *record.ScheduleType {
-		case api.ReminderScheduleTypeDaily:
+		case model.ReminderScheduleTypeDaily:
 			for current := effectiveFrom; !current.After(limit); current = current.AddDate(0, 0, 1) {
 				occurrences = append(occurrences, reminderOccurrenceFromRecord(record, current))
 			}
-		case api.ReminderScheduleTypeWeekly:
+		case model.ReminderScheduleTypeWeekly:
 			first := nextWeeklyOccurrence(effectiveFrom, record.StartDate)
 			for current := first; !current.After(limit); current = current.AddDate(0, 0, 7) {
 				occurrences = append(occurrences, reminderOccurrenceFromRecord(record, current))
 			}
-		case api.ReminderScheduleTypeMonthly:
+		case model.ReminderScheduleTypeMonthly:
 			for current := nextMonthlyOccurrence(effectiveFrom, record.StartDate); !current.IsZero() && !current.After(limit); current = nextMonthlyOccurrence(current.AddDate(0, 0, 1), record.StartDate) {
 				occurrences = append(occurrences, reminderOccurrenceFromRecord(record, current))
 			}
@@ -350,8 +349,8 @@ func expandReminderOccurrences(record reminderRecord, from, to time.Time) []api.
 	return occurrences
 }
 
-func reminderOccurrenceFromRecord(record reminderRecord, date time.Time) api.ReminderOccurrence {
-	return api.ReminderOccurrence{
+func reminderOccurrenceFromRecord(record reminderRecord, date time.Time) model.ReminderOccurrence {
+	return model.ReminderOccurrence{
 		ReminderId:   record.ID,
 		Date:         toDate(date),
 		Title:        record.Title,
@@ -407,7 +406,7 @@ func dateMustParse(value string, loc *time.Location) time.Time {
 	return parsed
 }
 
-func reminderScheduleTypeString(value *api.ReminderScheduleType) *string {
+func reminderScheduleTypeString(value *model.ReminderScheduleType) *string {
 	if value == nil {
 		return nil
 	}
@@ -422,7 +421,7 @@ func pgDateFromPtr(value *time.Time) pgtype.Date {
 	return toPgDate(*value)
 }
 
-func dateTimePtr(value *openapi_types.Date, loc *time.Location) *time.Time {
+func dateTimePtr(value *model.Date, loc *time.Location) *time.Time {
 	if value == nil {
 		return nil
 	}

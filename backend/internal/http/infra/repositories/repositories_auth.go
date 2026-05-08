@@ -3,11 +3,11 @@ package repositories
 import (
 	"context"
 
+	model "github.com/megu/kaji-challenge/backend/internal/http/application/model"
 	"github.com/megu/kaji-challenge/backend/internal/http/application/ports"
-	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 )
 
-func (r authRepo) StartGoogleAuth(ctx context.Context) (api.AuthStartResponse, error) {
+func (r authRepo) StartGoogleAuth(ctx context.Context) (model.AuthStartResponse, error) {
 	res, err := r.store.StartGoogleAuth(ctx)
 	return res, mapInfraErr(err)
 }

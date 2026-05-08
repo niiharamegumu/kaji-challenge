@@ -7,16 +7,16 @@ import (
 	"time"
 
 	dbsqlc "github.com/megu/kaji-challenge/backend/internal/db/sqlc"
-	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
+	model "github.com/megu/kaji-challenge/backend/internal/http/application/model"
 )
 
-func (s *Store) GetTaskOverview(ctx context.Context, userID string) (resp api.TaskOverviewResponse, err error) {
+func (s *Store) GetTaskOverview(ctx context.Context, userID string) (resp model.TaskOverviewResponse, err error) {
 	startedAt := time.Now()
 	queryCount := 0
 	taskCount := 0
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
-		return api.TaskOverviewResponse{}, err
+		return model.TaskOverviewResponse{}, err
 	}
 	defer func() {
 		s.logSQLPerformance("get_task_overview", startedAt, queryCount, fmt.Sprintf("team_id=%s task_count=%d error=%t", teamID, taskCount, err != nil))
@@ -29,15 +29,15 @@ func (s *Store) GetTaskOverview(ctx context.Context, userID string) (resp api.Ta
 	monthKey := monthKeyFromTime(today, s.loc)
 	monthly, err := s.ensureMonthSummaryLocked(ctx, teamID, monthKey)
 	if err != nil {
-		return api.TaskOverviewResponse{}, err
+		return model.TaskOverviewResponse{}, err
 	}
 	if err := s.cleanupExpiredOneTimeReminders(ctx, teamID); err != nil {
-		return api.TaskOverviewResponse{}, err
+		return model.TaskOverviewResponse{}, err
 	}
-	daily := []api.TaskOverviewDailyTask{}
-	weekly := []api.TaskOverviewWeeklyTask{}
+	daily := []model.TaskOverviewDailyTask{}
+	weekly := []model.TaskOverviewWeeklyTask{}
 	type overviewReminderOccurrence struct {
-		occurrence api.ReminderOccurrence
+		occurrence model.ReminderOccurrence
 		createdAt  time.Time
 	}
 	weeklyReminderItems := []overviewReminderOccurrence{}
@@ -45,7 +45,7 @@ func (s *Store) GetTaskOverview(ctx context.Context, userID string) (resp api.Ta
 	tasks, err := s.q.ListUndeletedTasksByTeamID(ctx, teamID)
 	queryCount++
 	if err != nil {
-		return api.TaskOverviewResponse{}, err
+		return model.TaskOverviewResponse{}, err
 	}
 	taskCount = len(tasks)
 
@@ -55,10 +55,10 @@ func (s *Store) GetTaskOverview(ctx context.Context, userID string) (resp api.Ta
 	})
 	queryCount++
 	if err != nil {
-		return api.TaskOverviewResponse{}, err
+		return model.TaskOverviewResponse{}, err
 	}
 	dailyDone := make(map[string]bool, len(dailyCompletionRows))
-	dailyActorByTaskID := make(map[string]*api.TaskCompletionActor, len(dailyCompletionRows))
+	dailyActorByTaskID := make(map[string]*model.TaskCompletionActor, len(dailyCompletionRows))
 	for _, row := range dailyCompletionRows {
 		dailyDone[row.TaskID] = true
 		dailyActorByTaskID[row.TaskID] = taskCompletionActorPtr(row.CompletedByUserID, row.CompletedByEffectiveName, row.CompletedByColorHex)
@@ -70,7 +70,7 @@ func (s *Store) GetTaskOverview(ctx context.Context, userID string) (resp api.Ta
 	})
 	queryCount++
 	if err != nil {
-		return api.TaskOverviewResponse{}, err
+		return model.TaskOverviewResponse{}, err
 	}
 	weeklyDone := make(map[string]int, len(weeklyCompletionRows))
 	for _, row := range weeklyCompletionRows {
@@ -82,19 +82,19 @@ func (s *Store) GetTaskOverview(ctx context.Context, userID string) (resp api.Ta
 	})
 	queryCount++
 	if err != nil {
-		return api.TaskOverviewResponse{}, err
+		return model.TaskOverviewResponse{}, err
 	}
-	weeklySlotsByTaskID := map[string]map[int]*api.TaskCompletionActor{}
+	weeklySlotsByTaskID := map[string]map[int]*model.TaskCompletionActor{}
 	for _, row := range weeklySlotRows {
 		if weeklySlotsByTaskID[row.TaskID] == nil {
-			weeklySlotsByTaskID[row.TaskID] = map[int]*api.TaskCompletionActor{}
+			weeklySlotsByTaskID[row.TaskID] = map[int]*model.TaskCompletionActor{}
 		}
 		weeklySlotsByTaskID[row.TaskID][int(row.Slot)] = taskCompletionActorPtr(row.CompletedByUserID, row.CompletedByEffectiveName, row.CompletedByColorHex)
 	}
 	reminderRows, err := s.q.ListRemindersByTeamID(ctx, teamID)
 	queryCount++
 	if err != nil {
-		return api.TaskOverviewResponse{}, err
+		return model.TaskOverviewResponse{}, err
 	}
 	for _, row := range reminderRows {
 		record := reminderFromDB(row, s.loc)
@@ -108,15 +108,15 @@ func (s *Store) GetTaskOverview(ctx context.Context, userID string) (resp api.Ta
 
 	for _, row := range tasks {
 		t := taskFromUndeletedListRow(row, s.loc)
-		if t.Type == api.TaskTypeDaily {
-			daily = append(daily, api.TaskOverviewDailyTask{
+		if t.Type == model.TaskTypeDaily {
+			daily = append(daily, model.TaskOverviewDailyTask{
 				Task:           t.toAPI(),
 				CompletedToday: dailyDone[t.ID],
 				CompletedBy:    dailyActorByTaskID[t.ID],
 			})
 			continue
 		}
-		weekly = append(weekly, api.TaskOverviewWeeklyTask{
+		weekly = append(weekly, model.TaskOverviewWeeklyTask{
 			Task:                       t.toAPI(),
 			WeekCompletedCount:         weeklyDone[t.ID],
 			RequiredCompletionsPerWeek: t.Required,
@@ -148,13 +148,13 @@ func (s *Store) GetTaskOverview(ctx context.Context, userID string) (resp api.Ta
 		}
 		return weeklyReminderItems[i].occurrence.Date.Time.Before(weeklyReminderItems[j].occurrence.Date.Time)
 	})
-	weeklyReminders := make([]api.ReminderOccurrence, 0, len(weeklyReminderItems))
+	weeklyReminders := make([]model.ReminderOccurrence, 0, len(weeklyReminderItems))
 	for _, item := range weeklyReminderItems {
 		weeklyReminders = append(weeklyReminders, item.occurrence)
 	}
 
 	elapsed := int(today.Sub(weekStart).Hours()/24) + 1
-	resp = api.TaskOverviewResponse{
+	resp = model.TaskOverviewResponse{
 		Month:               monthKey,
 		Today:               toDate(today),
 		ElapsedDaysInWeek:   elapsed,
@@ -166,10 +166,10 @@ func (s *Store) GetTaskOverview(ctx context.Context, userID string) (resp api.Ta
 	return resp, nil
 }
 
-func (s *Store) GetMonthlySummary(ctx context.Context, userID string, month *string) (api.MonthlyPenaltySummary, error) {
+func (s *Store) GetMonthlySummary(ctx context.Context, userID string, month *string) (model.MonthlyPenaltySummary, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
-		return api.MonthlyPenaltySummary{}, err
+		return model.MonthlyPenaltySummary{}, err
 	}
 	targetMonth := time.Now().In(s.loc).Format("2006-01")
 	if month != nil && *month != "" {
@@ -177,7 +177,7 @@ func (s *Store) GetMonthlySummary(ctx context.Context, userID string, month *str
 	}
 	summary, err := s.ensureMonthSummaryLocked(ctx, teamID, targetMonth)
 	if err != nil {
-		return api.MonthlyPenaltySummary{}, err
+		return model.MonthlyPenaltySummary{}, err
 	}
 	var triggered []string
 	if summary.IsClosed {
@@ -186,12 +186,12 @@ func (s *Store) GetMonthlySummary(ctx context.Context, userID string, month *str
 			MonthStart: summary.MonthStart,
 		})
 		if err != nil {
-			return api.MonthlyPenaltySummary{}, err
+			return model.MonthlyPenaltySummary{}, err
 		}
 	} else {
 		monthStart, err := monthStartFromKey(targetMonth, s.loc)
 		if err != nil {
-			return api.MonthlyPenaltySummary{}, err
+			return model.MonthlyPenaltySummary{}, err
 		}
 		monthEnd := monthStart.AddDate(0, 1, 0)
 		asOf := time.Now().In(s.loc)
@@ -203,7 +203,7 @@ func (s *Store) GetMonthlySummary(ctx context.Context, userID string, month *str
 			AsOf:   toPgTimestamptz(asOf),
 		})
 		if err != nil {
-			return api.MonthlyPenaltySummary{}, err
+			return model.MonthlyPenaltySummary{}, err
 		}
 		total := int(summary.DailyPenaltyTotal + summary.WeeklyPenaltyTotal)
 		triggered = make([]string, 0, len(effectiveRules))
@@ -215,7 +215,7 @@ func (s *Store) GetMonthlySummary(ctx context.Context, userID string, month *str
 	}
 	taskStatusByDate, err := s.buildMonthlyTaskStatusByDate(ctx, teamID, targetMonth)
 	if err != nil {
-		return api.MonthlyPenaltySummary{}, err
+		return model.MonthlyPenaltySummary{}, err
 	}
 	return monthSummary{
 		TeamID:           summary.TeamID,
@@ -232,7 +232,7 @@ type monthlyTaskStatusRecord struct {
 	ID        string
 	Title     string
 	Notes     *string
-	Type      api.TaskType
+	Type      model.TaskType
 	Penalty   int
 	Required  int
 	SortKey   int
@@ -240,7 +240,7 @@ type monthlyTaskStatusRecord struct {
 	DeletedAt *time.Time
 }
 
-func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month string) ([]api.MonthlyTaskStatusGroup, error) {
+func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month string) ([]model.MonthlyTaskStatusGroup, error) {
 	monthStart, err := monthStartFromKey(month, s.loc)
 	if err != nil {
 		return nil, err
@@ -253,7 +253,7 @@ func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month 
 		displayEndExclusive = todayEndExclusive
 	}
 	if !displayEndExclusive.After(monthStart) {
-		return []api.MonthlyTaskStatusGroup{}, nil
+		return []model.MonthlyTaskStatusGroup{}, nil
 	}
 
 	taskRows, err := s.q.ListTasksForMonthlyStatusByTeam(ctx, dbsqlc.ListTasksForMonthlyStatusByTeamParams{
@@ -270,7 +270,7 @@ func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month 
 			ID:        row.ID,
 			Title:     row.Title,
 			Notes:     ptrFromText(row.Notes),
-			Type:      api.TaskType(row.Type),
+			Type:      model.TaskType(row.Type),
 			Penalty:   int(row.PenaltyPoints),
 			Required:  int(row.RequiredCompletionsPerWeek),
 			SortKey:   int(row.SortKey),
@@ -288,14 +288,14 @@ func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month 
 		return nil, err
 	}
 	dailyDone := map[string]map[string]bool{}
-	dailyActors := map[string]map[string]*api.TaskCompletionActor{}
+	dailyActors := map[string]map[string]*model.TaskCompletionActor{}
 	for _, row := range dailyRows {
 		dateKey := row.TargetDate.Time.In(s.loc).Format("2006-01-02")
 		if dailyDone[dateKey] == nil {
 			dailyDone[dateKey] = map[string]bool{}
 		}
 		if dailyActors[dateKey] == nil {
-			dailyActors[dateKey] = map[string]*api.TaskCompletionActor{}
+			dailyActors[dateKey] = map[string]*model.TaskCompletionActor{}
 		}
 		dailyDone[dateKey][row.TaskID] = true
 		dailyActors[dateKey][row.TaskID] = taskCompletionActorPtr(row.CompletedByUserID, row.CompletedByEffectiveName, row.CompletedByColorHex)
@@ -325,14 +325,14 @@ func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month 
 	if err != nil {
 		return nil, err
 	}
-	weeklyActors := map[string]map[string]map[int]*api.TaskCompletionActor{}
+	weeklyActors := map[string]map[string]map[int]*model.TaskCompletionActor{}
 	for _, row := range weeklySlotRows {
 		weekStartKey := row.WeekStart.Time.In(s.loc).Format("2006-01-02")
 		if weeklyActors[weekStartKey] == nil {
-			weeklyActors[weekStartKey] = map[string]map[int]*api.TaskCompletionActor{}
+			weeklyActors[weekStartKey] = map[string]map[int]*model.TaskCompletionActor{}
 		}
 		if weeklyActors[weekStartKey][row.TaskID] == nil {
-			weeklyActors[weekStartKey][row.TaskID] = map[int]*api.TaskCompletionActor{}
+			weeklyActors[weekStartKey][row.TaskID] = map[int]*model.TaskCompletionActor{}
 		}
 		weeklyActors[weekStartKey][row.TaskID][int(row.Slot)] = taskCompletionActorPtr(row.CompletedByUserID, row.CompletedByEffectiveName, row.CompletedByColorHex)
 	}
@@ -350,18 +350,18 @@ func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month 
 		weeklyAnchorByDay[anchor.Format("2006-01-02")] = weekStart
 	}
 
-	groups := []api.MonthlyTaskStatusGroup{}
+	groups := []model.MonthlyTaskStatusGroup{}
 	for day := displayEndExclusive.AddDate(0, 0, -1); !day.Before(monthStart); day = day.AddDate(0, 0, -1) {
 		dayStart := dateOnly(day, s.loc)
 		dayEnd := dayStart.AddDate(0, 0, 1)
 		dayKey := dayStart.Format("2006-01-02")
-		items := []api.MonthlyTaskStatusItem{}
+		items := []model.MonthlyTaskStatusItem{}
 
 		for _, task := range tasks {
 			completed := false
-			var completionSlots []api.TaskCompletionSlot
+			var completionSlots []model.TaskCompletionSlot
 			switch task.Type {
-			case api.TaskTypeDaily:
+			case model.TaskTypeDaily:
 				if task.CreatedAt.In(s.loc).After(dayEnd.Add(-time.Nanosecond)) {
 					continue
 				}
@@ -369,10 +369,10 @@ func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month 
 					continue
 				}
 				completed = dailyDone[dayKey] != nil && dailyDone[dayKey][task.ID]
-				completionSlots = buildCompletionSlots(1, map[int]*api.TaskCompletionActor{
+				completionSlots = buildCompletionSlots(1, map[int]*model.TaskCompletionActor{
 					1: dailyActors[dayKey][task.ID],
 				})
-			case api.TaskTypeWeekly:
+			case model.TaskTypeWeekly:
 				weekStart, ok := weeklyAnchorByDay[dayKey]
 				if !ok {
 					continue
@@ -391,7 +391,7 @@ func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month 
 				return nil, fmt.Errorf("unknown task type: %s", task.Type)
 			}
 
-			items = append(items, api.MonthlyTaskStatusItem{
+			items = append(items, model.MonthlyTaskStatusItem{
 				TaskId:          task.ID,
 				Title:           task.Title,
 				Notes:           task.Notes,
@@ -421,7 +421,7 @@ func (s *Store) buildMonthlyTaskStatusByDate(ctx context.Context, teamID, month 
 			}
 			return items[i].TaskId < items[j].TaskId
 		})
-		groups = append(groups, api.MonthlyTaskStatusGroup{
+		groups = append(groups, model.MonthlyTaskStatusGroup{
 			Date:  toDate(dayStart),
 			Items: items,
 		})
@@ -438,28 +438,28 @@ func tasksByID(taskID string, tasks []monthlyTaskStatusRecord) monthlyTaskStatus
 	return monthlyTaskStatusRecord{}
 }
 
-func taskCompletionActorPtr(userIDRaw interface{}, effectiveName string, colorHexRaw interface{}) *api.TaskCompletionActor {
+func taskCompletionActorPtr(userIDRaw interface{}, effectiveName string, colorHexRaw interface{}) *model.TaskCompletionActor {
 	userID := ptrFromAny(userIDRaw)
 	if userID == nil {
 		return nil
 	}
-	return &api.TaskCompletionActor{
+	return &model.TaskCompletionActor{
 		UserId:        *userID,
 		EffectiveName: effectiveName,
 		ColorHex:      ptrFromAny(colorHexRaw),
 	}
 }
 
-func buildCompletionSlots(required int, actorsBySlot map[int]*api.TaskCompletionActor) []api.TaskCompletionSlot {
+func buildCompletionSlots(required int, actorsBySlot map[int]*model.TaskCompletionActor) []model.TaskCompletionSlot {
 	if required < requiredCompletionsPerWeekMin {
 		required = requiredCompletionsPerWeekMin
 	}
 	if required > requiredCompletionsPerWeekMax {
 		required = requiredCompletionsPerWeekMax
 	}
-	slots := make([]api.TaskCompletionSlot, 0, required)
+	slots := make([]model.TaskCompletionSlot, 0, required)
 	for idx := 1; idx <= required; idx++ {
-		slots = append(slots, api.TaskCompletionSlot{
+		slots = append(slots, model.TaskCompletionSlot{
 			Slot:  idx,
 			Actor: actorsBySlot[idx],
 		})

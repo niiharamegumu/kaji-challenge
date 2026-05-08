@@ -3,11 +3,11 @@ package usecases
 import (
 	"context"
 
+	model "github.com/megu/kaji-challenge/backend/internal/http/application/model"
 	"github.com/megu/kaji-challenge/backend/internal/http/application/ports"
-	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 )
 
-func (u authUsecase) StartGoogleAuth(ctx context.Context) (api.AuthStartResponse, error) {
+func (u authUsecase) StartGoogleAuth(ctx context.Context) (model.AuthStartResponse, error) {
 	return u.repo.StartGoogleAuth(ctx)
 }
 

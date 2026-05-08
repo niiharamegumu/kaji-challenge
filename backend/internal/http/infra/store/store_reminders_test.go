@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
+	model "github.com/megu/kaji-challenge/backend/internal/http/application/model"
 )
 
 func TestListRemindersIncludesPastDatesInCurrentMonth(t *testing.T) {
@@ -14,10 +14,10 @@ func TestListRemindersIncludesPastDatesInCurrentMonth(t *testing.T) {
 	now := time.Date(2026, 4, 15, 9, 0, 0, 0, s.loc)
 	s.now = func() time.Time { return now }
 	teamID, userID := createTeamWithMember(t, s, "reminders-current-month@example.com", now)
-	daily := api.ReminderScheduleTypeDaily
+	daily := model.ReminderScheduleTypeDaily
 
-	createReminderAt(t, s, teamID, "daily", api.Recurring, &daily, now, dateMustParse("2026-04-01", s.loc), nil)
-	createReminderAt(t, s, teamID, "one-time", api.OneTime, nil, now, dateMustParse("2026-04-10", s.loc), nil)
+	createReminderAt(t, s, teamID, "daily", model.Recurring, &daily, now, dateMustParse("2026-04-01", s.loc), nil)
+	createReminderAt(t, s, teamID, "one-time", model.OneTime, nil, now, dateMustParse("2026-04-10", s.loc), nil)
 
 	days, err := s.ListReminders(ctx, userID, dateMustParse("2026-04-01", s.loc), dateMustParse("2026-04-30", s.loc))
 	if err != nil {
@@ -37,9 +37,9 @@ func TestListRemindersIncludesWeeklyOccurrenceOnCurrentMonthStart(t *testing.T) 
 	now := time.Date(2026, 5, 7, 9, 0, 0, 0, s.loc)
 	s.now = func() time.Time { return now }
 	teamID, userID := createTeamWithMember(t, s, "reminders-weekly-month-start@example.com", now)
-	weekly := api.ReminderScheduleTypeWeekly
+	weekly := model.ReminderScheduleTypeWeekly
 
-	createReminderAt(t, s, teamID, "weekly", api.Recurring, &weekly, now, dateMustParse("2026-03-27", s.loc), nil)
+	createReminderAt(t, s, teamID, "weekly", model.Recurring, &weekly, now, dateMustParse("2026-03-27", s.loc), nil)
 
 	days, err := s.ListReminders(ctx, userID, dateMustParse("2026-05-01", s.loc), dateMustParse("2026-05-31", s.loc))
 	if err != nil {
@@ -59,9 +59,9 @@ func TestListRemindersHidesPastMonth(t *testing.T) {
 	now := time.Date(2026, 4, 15, 9, 0, 0, 0, s.loc)
 	s.now = func() time.Time { return now }
 	teamID, userID := createTeamWithMember(t, s, "reminders-past-month@example.com", now)
-	daily := api.ReminderScheduleTypeDaily
+	daily := model.ReminderScheduleTypeDaily
 
-	createReminderAt(t, s, teamID, "march daily", api.Recurring, &daily, now, dateMustParse("2026-03-01", s.loc), nil)
+	createReminderAt(t, s, teamID, "march daily", model.Recurring, &daily, now, dateMustParse("2026-03-01", s.loc), nil)
 
 	days, err := s.ListReminders(ctx, userID, dateMustParse("2026-03-01", s.loc), dateMustParse("2026-03-31", s.loc))
 	if err != nil {
@@ -79,8 +79,8 @@ func TestGetTaskOverviewWeeklyRemindersStillStartsToday(t *testing.T) {
 	s.now = func() time.Time { return now }
 	teamID, userID := createTeamWithMember(t, s, "overview-reminders-current-week@example.com", now)
 
-	createReminderAt(t, s, teamID, "yesterday", api.OneTime, nil, now, dateMustParse("2026-04-14", s.loc), nil)
-	createReminderAt(t, s, teamID, "today", api.OneTime, nil, now, dateMustParse("2026-04-15", s.loc), nil)
+	createReminderAt(t, s, teamID, "yesterday", model.OneTime, nil, now, dateMustParse("2026-04-14", s.loc), nil)
+	createReminderAt(t, s, teamID, "today", model.OneTime, nil, now, dateMustParse("2026-04-15", s.loc), nil)
 
 	overview, err := s.GetTaskOverview(ctx, userID)
 	if err != nil {
@@ -94,7 +94,7 @@ func TestGetTaskOverviewWeeklyRemindersStillStartsToday(t *testing.T) {
 	}
 }
 
-func containsReminderOnDate(days []api.ReminderCalendarDay, dateKey string, title string) bool {
+func containsReminderOnDate(days []model.ReminderCalendarDay, dateKey string, title string) bool {
 	for _, day := range days {
 		if day.Date.Time.Format("2006-01-02") != dateKey {
 			continue
@@ -108,7 +108,7 @@ func containsReminderOnDate(days []api.ReminderCalendarDay, dateKey string, titl
 	return false
 }
 
-func containsOverviewReminder(items []api.ReminderOccurrence, title string) bool {
+func containsOverviewReminder(items []model.ReminderOccurrence, title string) bool {
 	for _, item := range items {
 		if item.Title == title {
 			return true

@@ -7,10 +7,10 @@ import (
 	"strings"
 
 	dbsqlc "github.com/megu/kaji-challenge/backend/internal/db/sqlc"
-	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
+	model "github.com/megu/kaji-challenge/backend/internal/http/application/model"
 )
 
-func (s *Store) ListShoppingItems(ctx context.Context, userID string) ([]api.ShoppingListItem, error) {
+func (s *Store) ListShoppingItems(ctx context.Context, userID string) ([]model.ShoppingListItem, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -19,21 +19,21 @@ func (s *Store) ListShoppingItems(ctx context.Context, userID string) ([]api.Sho
 	if err != nil {
 		return nil, err
 	}
-	items := make([]api.ShoppingListItem, 0, len(rows))
+	items := make([]model.ShoppingListItem, 0, len(rows))
 	for _, row := range rows {
 		items = append(items, shoppingItemFromDB(row, s.loc).toAPI())
 	}
 	return items, nil
 }
 
-func (s *Store) CreateShoppingItem(ctx context.Context, userID string, req api.CreateShoppingListItemRequest) (api.ShoppingListItem, error) {
+func (s *Store) CreateShoppingItem(ctx context.Context, userID string, req model.CreateShoppingListItemRequest) (model.ShoppingListItem, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
-		return api.ShoppingListItem{}, err
+		return model.ShoppingListItem{}, err
 	}
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
-		return api.ShoppingListItem{}, errors.New("name is required")
+		return model.ShoppingListItem{}, errors.New("name is required")
 	}
 	now := s.now()
 	item := shoppingItemRecord{
@@ -89,15 +89,15 @@ func (s *Store) CreateShoppingItem(ctx context.Context, userID string, req api.C
 			})
 		},
 	); err != nil {
-		return api.ShoppingListItem{}, err
+		return model.ShoppingListItem{}, err
 	}
 	return item.toAPI(), nil
 }
 
-func (s *Store) PatchShoppingItem(ctx context.Context, userID, itemID string, req api.UpdateShoppingListItemRequest) (api.ShoppingListItem, error) {
+func (s *Store) PatchShoppingItem(ctx context.Context, userID, itemID string, req model.UpdateShoppingListItemRequest) (model.ShoppingListItem, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
-		return api.ShoppingListItem{}, err
+		return model.ShoppingListItem{}, err
 	}
 	var item shoppingItemRecord
 	if _, err := s.runWithTeamRevisionCAS(
@@ -137,7 +137,7 @@ func (s *Store) PatchShoppingItem(ctx context.Context, userID, itemID string, re
 			})
 		},
 	); err != nil {
-		return api.ShoppingListItem{}, err
+		return model.ShoppingListItem{}, err
 	}
 	return item.toAPI(), nil
 }
@@ -174,7 +174,7 @@ func (s *Store) DeleteShoppingItem(ctx context.Context, userID, itemID string) e
 	return err
 }
 
-func (s *Store) ReorderShoppingItems(ctx context.Context, userID string, req api.ReorderShoppingListItemsRequest) ([]api.ShoppingListItem, error) {
+func (s *Store) ReorderShoppingItems(ctx context.Context, userID string, req model.ReorderShoppingListItemsRequest) ([]model.ShoppingListItem, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -193,7 +193,7 @@ func (s *Store) ReorderShoppingItems(ctx context.Context, userID string, req api
 		seen[itemID] = struct{}{}
 	}
 
-	items := make([]api.ShoppingListItem, 0, len(req.ItemIds))
+	items := make([]model.ShoppingListItem, 0, len(req.ItemIds))
 	if _, err := s.runWithTeamRevisionCAS(
 		ctx,
 		teamID,

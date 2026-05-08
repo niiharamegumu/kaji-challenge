@@ -7,10 +7,10 @@ import (
 	"time"
 
 	dbsqlc "github.com/megu/kaji-challenge/backend/internal/db/sqlc"
-	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
+	model "github.com/megu/kaji-challenge/backend/internal/http/application/model"
 )
 
-func (s *Store) ListPenaltyRules(ctx context.Context, userID string, includeDeleted bool) ([]api.PenaltyRule, error) {
+func (s *Store) ListPenaltyRules(ctx context.Context, userID string, includeDeleted bool) ([]model.PenaltyRule, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -24,17 +24,17 @@ func (s *Store) ListPenaltyRules(ctx context.Context, userID string, includeDele
 	if err != nil {
 		return nil, err
 	}
-	items := []api.PenaltyRule{}
+	items := []model.PenaltyRule{}
 	for _, row := range rows {
 		items = append(items, ruleFromDB(row, s.loc).toAPI())
 	}
 	return items, nil
 }
 
-func (s *Store) CreatePenaltyRule(ctx context.Context, userID string, req api.CreatePenaltyRuleRequest) (api.PenaltyRule, error) {
+func (s *Store) CreatePenaltyRule(ctx context.Context, userID string, req model.CreatePenaltyRuleRequest) (model.PenaltyRule, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
-		return api.PenaltyRule{}, err
+		return model.PenaltyRule{}, err
 	}
 	now := time.Now().In(s.loc)
 	r := ruleRecord{
@@ -48,7 +48,7 @@ func (s *Store) CreatePenaltyRule(ctx context.Context, userID string, req api.Cr
 	}
 	threshold32, err := safeInt32(r.Threshold, "threshold")
 	if err != nil {
-		return api.PenaltyRule{}, err
+		return model.PenaltyRule{}, err
 	}
 	if _, err := s.runWithTeamRevisionCAS(
 		ctx,
@@ -67,15 +67,15 @@ func (s *Store) CreatePenaltyRule(ctx context.Context, userID string, req api.Cr
 			})
 		},
 	); err != nil {
-		return api.PenaltyRule{}, err
+		return model.PenaltyRule{}, err
 	}
 	return r.toAPI(), nil
 }
 
-func (s *Store) PatchPenaltyRule(ctx context.Context, userID, ruleID string, req api.UpdatePenaltyRuleRequest) (api.PenaltyRule, error) {
+func (s *Store) PatchPenaltyRule(ctx context.Context, userID, ruleID string, req model.UpdatePenaltyRuleRequest) (model.PenaltyRule, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
 	if err != nil {
-		return api.PenaltyRule{}, err
+		return model.PenaltyRule{}, err
 	}
 	var rule ruleRecord
 	if _, err := s.runWithTeamRevisionCAS(
@@ -115,7 +115,7 @@ func (s *Store) PatchPenaltyRule(ctx context.Context, userID, ruleID string, req
 			})
 		},
 	); err != nil {
-		return api.PenaltyRule{}, err
+		return model.PenaltyRule{}, err
 	}
 	return rule.toAPI(), nil
 }

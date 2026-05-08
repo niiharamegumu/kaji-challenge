@@ -8,16 +8,16 @@ import (
 	"os"
 	"strings"
 
+	"github.com/megu/kaji-challenge/backend/internal/http/application/model"
 	"github.com/megu/kaji-challenge/backend/internal/http/infra"
 	pushsvc "github.com/megu/kaji-challenge/backend/internal/push"
-	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 )
 
 type closeRunner interface {
 	ListClosableTeamIDs(ctx context.Context) ([]string, error)
-	CloseDayForTeam(ctx context.Context, teamID string) (api.CloseResponse, error)
-	CloseWeekForTeam(ctx context.Context, teamID string) (api.CloseResponse, error)
-	CloseMonthForTeam(ctx context.Context, teamID string) (api.CloseResponse, error)
+	CloseDayForTeam(ctx context.Context, teamID string) (model.CloseResponse, error)
+	CloseWeekForTeam(ctx context.Context, teamID string) (model.CloseResponse, error)
+	CloseMonthForTeam(ctx context.Context, teamID string) (model.CloseResponse, error)
 }
 
 type notifyRunner interface {
@@ -115,7 +115,7 @@ func runClose(args []string, logger *log.Logger, runner closeRunner) int {
 	return 0
 }
 
-func runScope(ctx context.Context, runner closeRunner, scope, teamID string) (api.CloseResponse, error) {
+func runScope(ctx context.Context, runner closeRunner, scope, teamID string) (model.CloseResponse, error) {
 	switch scope {
 	case "day":
 		return runner.CloseDayForTeam(ctx, teamID)
@@ -124,7 +124,7 @@ func runScope(ctx context.Context, runner closeRunner, scope, teamID string) (ap
 	case "month":
 		return runner.CloseMonthForTeam(ctx, teamID)
 	default:
-		return api.CloseResponse{}, fmt.Errorf("unsupported scope: %s", scope)
+		return model.CloseResponse{}, fmt.Errorf("unsupported scope: %s", scope)
 	}
 }
 

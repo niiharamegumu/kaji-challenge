@@ -3,18 +3,18 @@ package usecases
 import (
 	"context"
 
-	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
+	model "github.com/megu/kaji-challenge/backend/internal/http/application/model"
 )
 
-func (u penaltyUsecase) ListPenaltyRules(ctx context.Context, userID string, includeDeleted bool) ([]api.PenaltyRule, error) {
+func (u penaltyUsecase) ListPenaltyRules(ctx context.Context, userID string, includeDeleted bool) ([]model.PenaltyRule, error) {
 	return u.repo.ListPenaltyRules(ctx, userID, includeDeleted)
 }
 
-func (u penaltyUsecase) CreatePenaltyRule(ctx context.Context, userID string, req api.CreatePenaltyRuleRequest) (api.PenaltyRule, error) {
+func (u penaltyUsecase) CreatePenaltyRule(ctx context.Context, userID string, req model.CreatePenaltyRuleRequest) (model.PenaltyRule, error) {
 	return u.repo.CreatePenaltyRule(ctx, userID, req)
 }
 
-func (u penaltyUsecase) PatchPenaltyRule(ctx context.Context, userID, ruleID string, req api.UpdatePenaltyRuleRequest) (api.PenaltyRule, error) {
+func (u penaltyUsecase) PatchPenaltyRule(ctx context.Context, userID, ruleID string, req model.UpdatePenaltyRuleRequest) (model.PenaltyRule, error) {
 	return u.repo.PatchPenaltyRule(ctx, userID, ruleID, req)
 }
 
