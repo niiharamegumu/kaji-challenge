@@ -95,12 +95,13 @@ function backendViolations(path, imports) {
   const file = rel(path);
   const violations = [];
   const inDomain = file.startsWith("backend/internal/domain/");
-  const inApplication = file.startsWith("backend/internal/http/application/");
+  const inApplication = file.startsWith("backend/internal/application/");
+  const inAdapterTransport = file.startsWith("backend/internal/adapter/transport/");
+  const inAdapterPersistence = file.startsWith("backend/internal/adapter/persistence/");
+  const isTest = file.endsWith("_test.go");
   const canUseOpenAPI =
     file.startsWith("backend/internal/openapi/") ||
-    file.startsWith("backend/internal/http/transport/") ||
-    file === "backend/internal/http/router.go" ||
-    file === "backend/internal/http/router_test.go";
+    inAdapterTransport;
 
   for (const item of imports) {
     const specifier = item.value;
@@ -114,13 +115,34 @@ function backendViolations(path, imports) {
       violations.push(`${file} imports ${specifier}`);
     }
     if (
+      !inAdapterPersistence &&
+      specifier.includes("/backend/internal/db/sqlc")
+    ) {
+      violations.push(`${file} imports ${specifier}`);
+    }
+    if (
       inApplication &&
       (specifier.includes("/backend/internal/openapi/generated") ||
         specifier.includes("/backend/internal/db/sqlc") ||
-        specifier.includes("/backend/internal/http/infra") ||
-        specifier.includes("/backend/internal/http/transport") ||
-        specifier.includes("/backend/internal/http/middleware") ||
+        specifier.includes("/backend/internal/adapter") ||
         specifier === "github.com/gin-gonic/gin")
+    ) {
+      violations.push(`${file} imports ${specifier}`);
+    }
+    if (
+      inAdapterTransport &&
+      !isTest &&
+      (specifier.includes("/backend/internal/adapter/persistence") ||
+        specifier.includes("/backend/internal/adapter/external"))
+    ) {
+      violations.push(`${file} imports ${specifier}`);
+    }
+    if (
+      specifier.includes("/backend/internal/http/application") ||
+      specifier.includes("/backend/internal/http/infra") ||
+      specifier.includes("/backend/internal/http/transport") ||
+      specifier.includes("/backend/internal/http/middleware") ||
+      specifier.includes("/backend/internal/push")
     ) {
       violations.push(`${file} imports ${specifier}`);
     }

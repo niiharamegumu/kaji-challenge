@@ -8,9 +8,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/megu/kaji-challenge/backend/internal/http/application/model"
-	"github.com/megu/kaji-challenge/backend/internal/http/infra"
-	pushsvc "github.com/megu/kaji-challenge/backend/internal/push"
+	pushsvc "github.com/megu/kaji-challenge/backend/internal/adapter/external/push"
+	"github.com/megu/kaji-challenge/backend/internal/adapter/persistence/postgres"
+	"github.com/megu/kaji-challenge/backend/internal/application/model"
+	"github.com/megu/kaji-challenge/backend/internal/domain/notification"
 )
 
 type closeRunner interface {
@@ -21,12 +22,12 @@ type closeRunner interface {
 }
 
 type notifyRunner interface {
-	NotifySlot(ctx context.Context, slot string, sender pushsvc.Sender) (infra.NotifyRunResult, error)
+	NotifySlot(ctx context.Context, slot string, sender pushsvc.Sender) (postgres.NotifyRunResult, error)
 }
 
 func main() {
 	logger := log.New(os.Stdout, "", log.LstdFlags)
-	store := infra.NewStore()
+	store := postgres.NewStore()
 	os.Exit(run(os.Args[1:], logger, store, store))
 }
 
@@ -138,7 +139,7 @@ func runNotify(args []string, logger *log.Logger, runner notifyRunner) int {
 		logger.Printf("failed to parse notify flags: %v", err)
 		return 1
 	}
-	parsedSlot, err := infra.ParseNotifySlot(*slot)
+	parsedSlot, err := notification.ParseSlot(*slot)
 	if err != nil {
 		logger.Printf("invalid --slot %q: %v", *slot, err)
 		return 1
@@ -148,11 +149,12 @@ func runNotify(args []string, logger *log.Logger, runner notifyRunner) int {
 		logger.Printf("failed to initialize web push sender: %v", err)
 		return 1
 	}
-	logger.Printf("ops notify started: slot=%s", parsedSlot)
-	result, err := runner.NotifySlot(context.Background(), parsedSlot, sender)
+	parsedSlotString := string(parsedSlot)
+	logger.Printf("ops notify started: slot=%s", parsedSlotString)
+	result, err := runner.NotifySlot(context.Background(), parsedSlotString, sender)
 	logger.Printf(
 		"ops notify finished: slot=%s processed=%d sent=%d skipped=%d failed=%d",
-		parsedSlot,
+		parsedSlotString,
 		result.Processed,
 		result.Sent,
 		result.Skipped,
@@ -160,7 +162,7 @@ func runNotify(args []string, logger *log.Logger, runner notifyRunner) int {
 	)
 	if err != nil || result.Failed > 0 {
 		if err != nil {
-			logger.Printf("ops notify failed: slot=%s err=%v", parsedSlot, err)
+			logger.Printf("ops notify failed: slot=%s err=%v", parsedSlotString, err)
 		}
 		return 1
 	}

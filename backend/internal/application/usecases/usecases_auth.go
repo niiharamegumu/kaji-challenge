@@ -1,0 +1,28 @@
+package usecases
+
+import (
+	"context"
+
+	model "github.com/megu/kaji-challenge/backend/internal/application/model"
+	"github.com/megu/kaji-challenge/backend/internal/application/ports"
+)
+
+func (u authUsecase) StartGoogleAuth(ctx context.Context) (model.AuthStartResponse, error) {
+	return u.repo.StartGoogleAuth(ctx)
+}
+
+func (u authUsecase) CompleteGoogleAuth(ctx context.Context, code, state, mockEmail, mockName, mockSub, mockIss string) (string, string, error) {
+	return u.repo.CompleteGoogleAuth(ctx, code, state, mockEmail, mockName, mockSub, mockIss)
+}
+
+func (u authUsecase) ExchangeSession(ctx context.Context, exchangeCode string) (ports.AuthSession, error) {
+	return u.repo.ExchangeSession(ctx, exchangeCode)
+}
+
+func (u authUsecase) RevokeSession(ctx context.Context, token string) {
+	u.repo.RevokeSession(ctx, token)
+}
+
+func (u authUsecase) LookupSession(ctx context.Context, token string) (string, bool) {
+	return u.repo.LookupSession(ctx, token)
+}

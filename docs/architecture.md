@@ -13,8 +13,8 @@ Target dependency direction:
 
 ```text
 transport -> application/usecase -> domain <- application/ports
-infra/persistence -> application/ports
-infra/external -> application/ports
+adapter/persistence -> application/ports
+adapter/external -> application/ports
 ```
 
 Responsibilities:
@@ -29,14 +29,12 @@ Responsibilities:
 Backend rules:
 
 - `domain` must not import project packages.
-- `application` must not import Gin, OpenAPI generated types, sqlc, transport, middleware, or infra implementation packages.
+- `application` must not import Gin, OpenAPI generated types, sqlc, transport, middleware, or adapter implementation packages.
+- `adapter/transport` must not import persistence or external adapters in normal code; command entrypoints compose adapters.
+- `adapter/persistence` is the only layer allowed to import sqlc.
 - OpenAPI generated types belong at the transport boundary.
 - sqlc generated types belong at the persistence boundary.
 - Business rules should live in domain/usecase, not in store methods.
-
-Current migration note:
-
-- The existing code still uses `internal/http/*` package names. OpenAPI generated types have been removed from `application`; remaining backend migration work is package relocation and moving store-level business rules toward usecase/domain services.
 
 ## Frontend: Feature-Based Architecture
 

@@ -4,11 +4,13 @@ import (
 	"log"
 	"os"
 
-	httpapi "github.com/megu/kaji-challenge/backend/internal/http"
+	"github.com/megu/kaji-challenge/backend/internal/adapter/persistence/postgres"
+	"github.com/megu/kaji-challenge/backend/internal/adapter/transport"
 )
 
 func main() {
-	r := httpapi.NewRouter()
+	store := postgres.NewStore()
+	r := transport.NewRouter(postgres.NewServices(store), store)
 
 	port := os.Getenv("PORT")
 	if port == "" {

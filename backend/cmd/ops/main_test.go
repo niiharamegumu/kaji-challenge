@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/megu/kaji-challenge/backend/internal/http/application/model"
-	"github.com/megu/kaji-challenge/backend/internal/http/infra"
-	pushsvc "github.com/megu/kaji-challenge/backend/internal/push"
+	pushsvc "github.com/megu/kaji-challenge/backend/internal/adapter/external/push"
+	"github.com/megu/kaji-challenge/backend/internal/adapter/persistence/postgres"
+	"github.com/megu/kaji-challenge/backend/internal/application/model"
 )
 
 type fakeCloseRunner struct {
@@ -28,7 +28,7 @@ type fakeCloseRunner struct {
 
 type fakeNotifyRunner struct {
 	calledSlots []string
-	result      infra.NotifyRunResult
+	result      postgres.NotifyRunResult
 	errBySlot   map[string]error
 }
 
@@ -63,10 +63,10 @@ func (f *fakeCloseRunner) CloseMonthForTeam(_ context.Context, teamID string) (m
 	return okResp(), nil
 }
 
-func (f *fakeNotifyRunner) NotifySlot(_ context.Context, slot string, _ pushsvc.Sender) (infra.NotifyRunResult, error) {
+func (f *fakeNotifyRunner) NotifySlot(_ context.Context, slot string, _ pushsvc.Sender) (postgres.NotifyRunResult, error) {
 	f.calledSlots = append(f.calledSlots, slot)
 	if err := f.errBySlot[slot]; err != nil {
-		return infra.NotifyRunResult{}, err
+		return postgres.NotifyRunResult{}, err
 	}
 	return f.result, nil
 }
