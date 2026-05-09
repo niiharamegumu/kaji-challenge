@@ -16,8 +16,8 @@ func NewStore() *Store {
 	return store.NewStore()
 }
 
-func NewServices(s *Store) *ports.Services {
-	return repositories.NewServices(s)
+func NewServices(s *Store, oidcProviders ...ports.OIDCProvider) *ports.Services {
+	return repositories.NewServices(s, oidcProviders...)
 }
 
 func RejectMockParamsInStrictModeForTest(ctx context.Context, loc *time.Location) error {

@@ -32,10 +32,10 @@ Backend rules:
 - `application` must not import Gin, OpenAPI generated types, sqlc, transport, middleware, or adapter implementation packages.
 - `adapter/transport` must not import persistence or external adapters in normal code; command entrypoints compose adapters.
 - `adapter/persistence` is the only layer allowed to import sqlc.
-- `adapter/persistence` must not import push sender implementations; push delivery orchestration belongs to application usecases and `adapter/external/push` only sends.
+- `adapter/persistence` must not import external adapters. OIDC and push delivery live behind application ports and are composed at command entrypoints.
 - OpenAPI generated types belong at the transport boundary.
 - sqlc generated types belong at the persistence boundary.
-- Workflow orchestration belongs in usecases. Store methods should be limited to DB transactions, sqlc calls, and row mapping.
+- Workflow orchestration belongs in usecases. Store methods should be limited to DB transactions, sqlc calls, query primitives, and row mapping.
 
 ## Frontend: Feature-Based Architecture
 

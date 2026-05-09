@@ -73,27 +73,6 @@ func (r reminderRecord) toAPI() model.Reminder {
 	}
 }
 
-func (m monthSummary) toAPI() model.MonthlyPenaltySummary {
-	triggeredRuleIDs := m.TriggeredRuleID
-	if triggeredRuleIDs == nil {
-		triggeredRuleIDs = []string{}
-	}
-	taskStatusByDate := m.TaskStatusByDate
-	if taskStatusByDate == nil {
-		taskStatusByDate = []model.MonthlyTaskStatusGroup{}
-	}
-	return model.MonthlyPenaltySummary{
-		Month:                   m.Month,
-		TeamId:                  m.TeamID,
-		DailyPenaltyTotal:       m.DailyPenalty,
-		WeeklyPenaltyTotal:      m.WeeklyPenalty,
-		TotalPenalty:            m.DailyPenalty + m.WeeklyPenalty,
-		IsClosed:                m.IsClosed,
-		TriggeredPenaltyRuleIds: triggeredRuleIDs,
-		TaskStatusByDate:        taskStatusByDate,
-	}
-}
-
 func reminderFromDB(row dbsqlc.Reminder, loc *time.Location) reminderRecord {
 	var scheduleType *model.ReminderScheduleType
 	if row.ScheduleType.Valid {

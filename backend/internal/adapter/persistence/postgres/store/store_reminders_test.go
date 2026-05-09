@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/megu/kaji-challenge/backend/internal/adapter/persistence/postgres/repositories"
 	model "github.com/megu/kaji-challenge/backend/internal/application/model"
 )
 
@@ -82,7 +83,7 @@ func TestGetTaskOverviewWeeklyRemindersStillStartsToday(t *testing.T) {
 	createReminderAt(t, s, teamID, "yesterday", model.OneTime, nil, now, dateMustParse("2026-04-14", s.loc), nil)
 	createReminderAt(t, s, teamID, "today", model.OneTime, nil, now, dateMustParse("2026-04-15", s.loc), nil)
 
-	overview, err := s.GetTaskOverview(ctx, userID)
+	overview, err := repositories.NewServices(s).TaskOverview.GetTaskOverview(ctx, userID)
 	if err != nil {
 		t.Fatalf("GetTaskOverview failed: %v", err)
 	}

@@ -249,6 +249,10 @@ func (s *Store) cleanupExpiredOneTimeReminders(ctx context.Context, teamID strin
 	return nil
 }
 
+func (s *Store) CleanupExpiredOneTimeReminders(ctx context.Context, teamID string) error {
+	return s.cleanupExpiredOneTimeReminders(ctx, teamID)
+}
+
 func cleanupExpiredOneTimeRemindersTx(ctx context.Context, qtx *dbsqlc.Queries, teamID string, today time.Time) error {
 	_, err := qtx.DeleteExpiredOneTimeRemindersByTeam(ctx, dbsqlc.DeleteExpiredOneTimeRemindersByTeamParams{
 		TeamID:    teamID,

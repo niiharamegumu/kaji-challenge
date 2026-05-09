@@ -22,8 +22,10 @@ type Store interface {
 }
 
 type AuthStore interface {
-	StartGoogleAuth(ctx context.Context) (model.AuthStartResponse, error)
-	CompleteGoogleAuth(ctx context.Context, code, state, mockEmail, mockName, mockSub, mockIss string) (string, string, error)
+	CreateAuthRequest(ctx context.Context, state, nonce, codeVerifier string, expiresAt time.Time) error
+	ConsumeAuthRequest(ctx context.Context, state string, now time.Time) (ports.AuthRequest, error)
+	GetOrCreateAuthUser(ctx context.Context, issuer, subject, email, name string) (ports.AuthUserResult, error)
+	CreateExchangeCode(ctx context.Context, userID string, expiresAt time.Time) (string, error)
 	ExchangeSession(ctx context.Context, exchangeCode string) (ports.AuthSession, error)
 	RevokeSession(ctx context.Context, token string)
 	LookupSession(ctx context.Context, token string) (string, bool)
@@ -85,8 +87,21 @@ type ReminderStore interface {
 }
 
 type TaskOverviewStore interface {
-	GetTaskOverview(ctx context.Context, userID string) (model.TaskOverviewResponse, error)
-	GetMonthlySummary(ctx context.Context, userID string, month *string) (model.MonthlyPenaltySummary, error)
+	PrimaryTeamID(ctx context.Context, userID string) (string, error)
+	Now() time.Time
+	EnsureMonthSummary(ctx context.Context, teamID, month string) (ports.MonthlyPenaltySummarySnapshot, error)
+	CleanupExpiredOneTimeReminders(ctx context.Context, teamID string) error
+	ListOverviewTasks(ctx context.Context, teamID string) ([]ports.OverviewTask, error)
+	ListDailyCompletionActors(ctx context.Context, teamID string, targetDate time.Time) ([]ports.DailyCompletionActor, error)
+	ListWeeklyCompletionCounts(ctx context.Context, teamID string, weekStart time.Time) ([]ports.WeeklyCompletionCount, error)
+	ListWeeklyCompletionSlots(ctx context.Context, teamID string, weekStart time.Time) ([]ports.WeeklyCompletionSlot, error)
+	ListReminderRecords(ctx context.Context, teamID string) ([]ports.ReminderRecord, error)
+	ListTriggeredRuleIDs(ctx context.Context, teamID string, monthStart time.Time) ([]string, error)
+	ListEffectivePenaltyRules(ctx context.Context, teamID string, asOf time.Time) ([]ports.PenaltyRuleSnapshot, error)
+	ListMonthlyStatusTasks(ctx context.Context, teamID string, monthStart, monthEnd time.Time) ([]ports.MonthlyTaskStatusRecord, error)
+	ListDailyCompletionsByMonth(ctx context.Context, teamID string, monthStart, monthEnd time.Time) ([]ports.DailyCompletionByDate, error)
+	ListWeeklyCompletionCountsByMonth(ctx context.Context, teamID string, weekStart, monthEnd time.Time) ([]ports.WeeklyCompletionCountByWeek, error)
+	ListWeeklyCompletionSlotsByMonth(ctx context.Context, teamID string, weekStart, monthEnd time.Time) ([]ports.WeeklyCompletionSlotByWeek, error)
 }
 
 type AdminStore interface {
@@ -100,12 +115,6 @@ type AdminStore interface {
 	CloseWeekTarget(ctx context.Context, teamID string, weekStart time.Time) (bool, error)
 	CloseMonthTarget(ctx context.Context, teamID string, monthStart time.Time) (bool, string, error)
 	Now() time.Time
-	CloseDayForUser(ctx context.Context, userID string) (model.CloseResponse, error)
-	CloseWeekForUser(ctx context.Context, userID string) (model.CloseResponse, error)
-	CloseMonthForUser(ctx context.Context, userID string) (model.CloseResponse, error)
-	CloseDayForTeam(ctx context.Context, teamID string) (model.CloseResponse, error)
-	CloseWeekForTeam(ctx context.Context, teamID string) (model.CloseResponse, error)
-	CloseMonthForTeam(ctx context.Context, teamID string) (model.CloseResponse, error)
 }
 
 type authRepo struct{ store AuthStore }
@@ -118,7 +127,11 @@ type reminderRepo struct{ store ReminderStore }
 type taskOverviewRepo struct{ store TaskOverviewStore }
 type adminRepo struct{ store AdminStore }
 
-func NewServices(s Store) *ports.Services {
+func NewServices(s Store, oidcProviders ...ports.OIDCProvider) *ports.Services {
+	var oidcProvider ports.OIDCProvider
+	if len(oidcProviders) > 0 {
+		oidcProvider = oidcProviders[0]
+	}
 	deps := ports.Dependencies{
 		AuthRepo:         authRepo{store: s},
 		TeamRepo:         teamRepo{store: s},
@@ -129,6 +142,7 @@ func NewServices(s Store) *ports.Services {
 		ReminderRepo:     reminderRepo{store: s},
 		TaskOverviewRepo: taskOverviewRepo{store: s},
 		AdminRepo:        adminRepo{store: s},
+		OIDCProvider:     oidcProvider,
 	}
 	return usecases.NewServices(deps)
 }

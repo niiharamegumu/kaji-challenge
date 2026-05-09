@@ -2,7 +2,10 @@ package usecases
 
 import "github.com/megu/kaji-challenge/backend/internal/application/ports"
 
-type authUsecase struct{ repo ports.AuthRepository }
+type authUsecase struct {
+	repo ports.AuthRepository
+	oidc ports.OIDCProvider
+}
 type teamUsecase struct{ repo ports.TeamRepository }
 type pushUsecase struct{ repo ports.PushRepository }
 type taskUsecase struct{ repo ports.TaskRepository }
@@ -14,7 +17,7 @@ type adminUsecase struct{ repo ports.AdminRepository }
 
 func NewServices(deps ports.Dependencies) *ports.Services {
 	return &ports.Services{
-		Auth:         authUsecase{repo: deps.AuthRepo},
+		Auth:         authUsecase{repo: deps.AuthRepo, oidc: deps.OIDCProvider},
 		Team:         teamUsecase{repo: deps.TeamRepo},
 		Push:         pushUsecase{repo: deps.PushRepo},
 		Task:         taskUsecase{repo: deps.TaskRepo},

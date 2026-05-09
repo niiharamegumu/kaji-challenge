@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/megu/kaji-challenge/backend/internal/adapter/persistence/postgres/repositories"
 	model "github.com/megu/kaji-challenge/backend/internal/application/model"
 	"github.com/megu/kaji-challenge/backend/internal/application/requestcontext"
 	dbsqlc "github.com/megu/kaji-challenge/backend/internal/db/sqlc"
@@ -43,14 +44,15 @@ func TestListClosableTeamIDs(t *testing.T) {
 func TestCloseDayForTeamIsIdempotent(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
+	admin := repositories.NewServices(s).Admin
 
 	teamID, _ := createTeamWithMember(t, s, "daily@example.com", time.Now().In(s.loc))
 	createTask(t, s, teamID, model.TaskTypeDaily, 7, 1)
 
-	if _, err := s.CloseDayForTeam(ctx, teamID); err != nil {
+	if _, err := admin.CloseDayForTeam(ctx, teamID); err != nil {
 		t.Fatalf("first CloseDayForTeam failed: %v", err)
 	}
-	if _, err := s.CloseDayForTeam(ctx, teamID); err != nil {
+	if _, err := admin.CloseDayForTeam(ctx, teamID); err != nil {
 		t.Fatalf("second CloseDayForTeam failed: %v", err)
 	}
 
@@ -63,6 +65,7 @@ func TestCloseDayForTeamIsIdempotent(t *testing.T) {
 func TestCloseWeekAndMonthForTeam(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
+	admin := repositories.NewServices(s).Admin
 
 	now := time.Date(2026, 1, 3, 9, 0, 0, 0, s.loc)
 	s.now = func() time.Time { return now }
@@ -71,11 +74,11 @@ func TestCloseWeekAndMonthForTeam(t *testing.T) {
 	teamID, userID := createTeamWithMember(t, s, "weekly@example.com", base)
 	createTaskAt(t, s, teamID, model.TaskTypeWeekly, 5, 2, base)
 
-	weekResA, err := s.CloseWeekForTeam(ctx, teamID)
+	weekResA, err := admin.CloseWeekForTeam(ctx, teamID)
 	if err != nil {
 		t.Fatalf("first CloseWeekForTeam failed: %v", err)
 	}
-	weekResB, err := s.CloseWeekForTeam(ctx, teamID)
+	weekResB, err := admin.CloseWeekForTeam(ctx, teamID)
 	if err != nil {
 		t.Fatalf("second CloseWeekForTeam failed: %v", err)
 	}
@@ -83,11 +86,11 @@ func TestCloseWeekAndMonthForTeam(t *testing.T) {
 		t.Fatalf("expected same week close month, got %s and %s", weekResA.Month, weekResB.Month)
 	}
 
-	monthResTeam, err := s.CloseMonthForTeam(ctx, teamID)
+	monthResTeam, err := admin.CloseMonthForTeam(ctx, teamID)
 	if err != nil {
 		t.Fatalf("CloseMonthForTeam failed: %v", err)
 	}
-	monthResUser, err := s.CloseMonthForUser(withLatestIfMatchForUser(t, s, ctx, userID), userID)
+	monthResUser, err := admin.CloseMonthForUser(withLatestIfMatchForUser(t, s, ctx, userID), userID)
 	if err != nil {
 		t.Fatalf("CloseMonthForUser failed: %v", err)
 	}
@@ -252,6 +255,7 @@ func TestCatchUpDayLockedProcessesMissingDays(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 	base := time.Date(2026, 1, 1, 12, 0, 0, 0, s.loc)
+	admin := repositories.NewServices(s).Admin
 
 	teamID, _ := createTeamWithMember(t, s, "catchup-day@example.com", base)
 	createTaskAt(t, s, teamID, model.TaskTypeDaily, 2, 1, base)
@@ -260,12 +264,9 @@ func TestCatchUpDayLockedProcessesMissingDays(t *testing.T) {
 		t.Fatalf("initial closeDayForTargetLocked failed: %v", err)
 	}
 
-	processed, err := s.catchUpDayLocked(ctx, time.Date(2026, 1, 5, 9, 0, 0, 0, s.loc), teamID)
-	if err != nil {
-		t.Fatalf("catchUpDayLocked failed: %v", err)
-	}
-	if processed != 3 {
-		t.Fatalf("expected 3 processed days, got %d", processed)
+	s.now = func() time.Time { return time.Date(2026, 1, 5, 9, 0, 0, 0, s.loc) }
+	if _, err := admin.CloseDayForTeam(ctx, teamID); err != nil {
+		t.Fatalf("CloseDayForTeam failed: %v", err)
 	}
 
 	jan := getMonthSummary(t, s, teamID, "2026-01")
@@ -291,6 +292,7 @@ func TestCatchUpDayLockedUsesTargetTimeTaskSnapshot(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 	base := time.Date(2026, 1, 1, 12, 0, 0, 0, s.loc)
+	admin := repositories.NewServices(s).Admin
 
 	teamID, _ := createTeamWithMember(t, s, "snapshot-day@example.com", base)
 	createTaskAt(t, s, teamID, model.TaskTypeDaily, 1, 1, time.Date(2026, 1, 1, 10, 0, 0, 0, s.loc))
@@ -302,12 +304,9 @@ func TestCatchUpDayLockedUsesTargetTimeTaskSnapshot(t *testing.T) {
 	// This task is created on 1/3 noon. It must not affect targetDate=1/2 (cutoff=1/3 00:00).
 	createTaskAt(t, s, teamID, model.TaskTypeDaily, 1, 1, time.Date(2026, 1, 3, 12, 0, 0, 0, s.loc))
 
-	processed, err := s.catchUpDayLocked(ctx, time.Date(2026, 1, 4, 9, 0, 0, 0, s.loc), teamID)
-	if err != nil {
-		t.Fatalf("catchUpDayLocked failed: %v", err)
-	}
-	if processed != 2 {
-		t.Fatalf("expected 2 processed days, got %d", processed)
+	s.now = func() time.Time { return time.Date(2026, 1, 4, 9, 0, 0, 0, s.loc) }
+	if _, err := admin.CloseDayForTeam(ctx, teamID); err != nil {
+		t.Fatalf("CloseDayForTeam failed: %v", err)
 	}
 
 	jan := getMonthSummary(t, s, teamID, "2026-01")
@@ -322,6 +321,7 @@ func TestCatchUpWeekLockedProcessesMissingWeeks(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 	base := time.Date(2026, 1, 1, 12, 0, 0, 0, s.loc)
+	admin := repositories.NewServices(s).Admin
 
 	teamID, _ := createTeamWithMember(t, s, "catchup-week@example.com", base)
 	createTaskAt(t, s, teamID, model.TaskTypeWeekly, 3, 2, base)
@@ -330,12 +330,9 @@ func TestCatchUpWeekLockedProcessesMissingWeeks(t *testing.T) {
 		t.Fatalf("initial closeWeekForTargetLocked failed: %v", err)
 	}
 
-	processed, err := s.catchUpWeekLocked(ctx, time.Date(2026, 2, 4, 9, 0, 0, 0, s.loc), teamID)
-	if err != nil {
-		t.Fatalf("catchUpWeekLocked failed: %v", err)
-	}
-	if processed != 3 {
-		t.Fatalf("expected 3 processed weeks, got %d", processed)
+	s.now = func() time.Time { return time.Date(2026, 2, 4, 9, 0, 0, 0, s.loc) }
+	if _, err := admin.CloseWeekForTeam(ctx, teamID); err != nil {
+		t.Fatalf("CloseWeekForTeam failed: %v", err)
 	}
 
 	jan := getMonthSummary(t, s, teamID, "2026-01")
@@ -371,7 +368,7 @@ func TestCloseWeekForTargetLockedAddsPenaltyToWeekEndMonth(t *testing.T) {
 	}
 
 	targetMonth := "2026-01"
-	apiSummary, err := s.GetMonthlySummary(ctx, userID, &targetMonth)
+	apiSummary, err := repositories.NewServices(s).TaskOverview.GetMonthlySummary(ctx, userID, &targetMonth)
 	if err != nil {
 		t.Fatalf("GetMonthlySummary failed: %v", err)
 	}
@@ -510,7 +507,7 @@ func TestGetMonthlySummaryUsesAsOfSnapshotForUnclosedMonth(t *testing.T) {
 	softDeletePenaltyRuleAt(t, s, ruleDeletedAfterMonthEnd, time.Date(2026, 2, 2, 0, 0, 0, 0, s.loc))
 
 	targetMonth := "2026-01"
-	summary, err := s.GetMonthlySummary(ctx, userID, &targetMonth)
+	summary, err := repositories.NewServices(s).TaskOverview.GetMonthlySummary(ctx, userID, &targetMonth)
 	if err != nil {
 		t.Fatalf("GetMonthlySummary failed: %v", err)
 	}
@@ -523,19 +520,18 @@ func TestGetMonthlySummaryUsesAsOfSnapshotForUnclosedMonth(t *testing.T) {
 func TestCatchUpMonthLockedProcessesMissingMonths(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
+	admin := repositories.NewServices(s).Admin
 
 	teamID, _ := createTeamWithMember(t, s, "catchup-month@example.com", time.Date(2025, 11, 15, 10, 0, 0, 0, s.loc))
 	createTaskAt(t, s, teamID, model.TaskTypeDaily, 1, 1, time.Date(2025, 11, 15, 10, 0, 0, 0, s.loc))
 
-	processed, lastMonth, err := s.catchUpMonthLocked(ctx, time.Date(2026, 2, 10, 9, 0, 0, 0, s.loc), teamID)
+	s.now = func() time.Time { return time.Date(2026, 2, 10, 9, 0, 0, 0, s.loc) }
+	res, err := admin.CloseMonthForTeam(ctx, teamID)
 	if err != nil {
-		t.Fatalf("catchUpMonthLocked failed: %v", err)
+		t.Fatalf("CloseMonthForTeam failed: %v", err)
 	}
-	if processed != 3 {
-		t.Fatalf("expected 3 processed months, got %d", processed)
-	}
-	if lastMonth != "2026-01" {
-		t.Fatalf("expected lastMonth=2026-01, got %s", lastMonth)
+	if res.Month != "2026-01" {
+		t.Fatalf("expected closed month=2026-01, got %s", res.Month)
 	}
 
 	for _, month := range []string{"2025-11", "2025-12", "2026-01"} {

@@ -57,9 +57,6 @@ func newStore() *Store {
 	if hook := consumeNextStoreTrimSessionsForUserExecForTest(); hook != nil {
 		s.trimSessionsForUserExec = hook
 	}
-	if err := validateOIDCSettings(); err != nil {
-		panic(err)
-	}
 	if err := validateSignupGuardSettings(); err != nil {
 		panic(err)
 	}

@@ -8,8 +8,10 @@ import (
 )
 
 type AuthRepository interface {
-	StartGoogleAuth(ctx context.Context) (model.AuthStartResponse, error)
-	CompleteGoogleAuth(ctx context.Context, code, state, mockEmail, mockName, mockSub, mockIss string) (string, string, error)
+	CreateAuthRequest(ctx context.Context, state, nonce, codeVerifier string, expiresAt time.Time) error
+	ConsumeAuthRequest(ctx context.Context, state string, now time.Time) (AuthRequest, error)
+	GetOrCreateAuthUser(ctx context.Context, issuer, subject, email, name string) (AuthUserResult, error)
+	CreateExchangeCode(ctx context.Context, userID string, expiresAt time.Time) (string, error)
 	ExchangeSession(ctx context.Context, exchangeCode string) (AuthSession, error)
 	RevokeSession(ctx context.Context, token string)
 	LookupSession(ctx context.Context, token string) (string, bool)
@@ -71,8 +73,21 @@ type ReminderRepository interface {
 }
 
 type TaskOverviewRepository interface {
-	GetTaskOverview(ctx context.Context, userID string) (model.TaskOverviewResponse, error)
-	GetMonthlySummary(ctx context.Context, userID string, month *string) (model.MonthlyPenaltySummary, error)
+	PrimaryTeamID(ctx context.Context, userID string) (string, error)
+	Now() time.Time
+	EnsureMonthSummary(ctx context.Context, teamID, month string) (MonthlyPenaltySummarySnapshot, error)
+	CleanupExpiredOneTimeReminders(ctx context.Context, teamID string) error
+	ListOverviewTasks(ctx context.Context, teamID string) ([]OverviewTask, error)
+	ListDailyCompletionActors(ctx context.Context, teamID string, targetDate time.Time) ([]DailyCompletionActor, error)
+	ListWeeklyCompletionCounts(ctx context.Context, teamID string, weekStart time.Time) ([]WeeklyCompletionCount, error)
+	ListWeeklyCompletionSlots(ctx context.Context, teamID string, weekStart time.Time) ([]WeeklyCompletionSlot, error)
+	ListReminderRecords(ctx context.Context, teamID string) ([]ReminderRecord, error)
+	ListTriggeredRuleIDs(ctx context.Context, teamID string, monthStart time.Time) ([]string, error)
+	ListEffectivePenaltyRules(ctx context.Context, teamID string, asOf time.Time) ([]PenaltyRuleSnapshot, error)
+	ListMonthlyStatusTasks(ctx context.Context, teamID string, monthStart, monthEnd time.Time) ([]MonthlyTaskStatusRecord, error)
+	ListDailyCompletionsByMonth(ctx context.Context, teamID string, monthStart, monthEnd time.Time) ([]DailyCompletionByDate, error)
+	ListWeeklyCompletionCountsByMonth(ctx context.Context, teamID string, weekStart, monthEnd time.Time) ([]WeeklyCompletionCountByWeek, error)
+	ListWeeklyCompletionSlotsByMonth(ctx context.Context, teamID string, weekStart, monthEnd time.Time) ([]WeeklyCompletionSlotByWeek, error)
 }
 
 type AdminRepository interface {
@@ -86,12 +101,6 @@ type AdminRepository interface {
 	CloseWeekTarget(ctx context.Context, teamID string, weekStart time.Time) (bool, error)
 	CloseMonthTarget(ctx context.Context, teamID string, monthStart time.Time) (bool, string, error)
 	Now() time.Time
-	CloseDayForUser(ctx context.Context, userID string) (model.CloseResponse, error)
-	CloseWeekForUser(ctx context.Context, userID string) (model.CloseResponse, error)
-	CloseMonthForUser(ctx context.Context, userID string) (model.CloseResponse, error)
-	CloseDayForTeam(ctx context.Context, teamID string) (model.CloseResponse, error)
-	CloseWeekForTeam(ctx context.Context, teamID string) (model.CloseResponse, error)
-	CloseMonthForTeam(ctx context.Context, teamID string) (model.CloseResponse, error)
 }
 
 type Dependencies struct {
@@ -104,6 +113,35 @@ type Dependencies struct {
 	ReminderRepo     ReminderRepository
 	TaskOverviewRepo TaskOverviewRepository
 	AdminRepo        AdminRepository
+	OIDCProvider     OIDCProvider
+}
+
+type AuthRequest struct {
+	Nonce        string
+	CodeVerifier string
+	ExpiresAt    time.Time
+}
+
+type AuthUserResult struct {
+	UserID string
+	User   model.User
+}
+
+type OIDCClaims struct {
+	Iss   string
+	Sub   string
+	Email string
+	Name  string
+	Nonce string
+}
+
+type OIDCProvider interface {
+	Configured() bool
+	StrictMode() bool
+	ValidateSettings() error
+	MockAuthorizationURL(state string) string
+	AuthorizationURL(ctx context.Context, state, nonce, verifier string) (string, error)
+	ExchangeAndVerify(ctx context.Context, code, verifier string) (OIDCClaims, error)
 }
 
 type NotifyRunResult struct {
@@ -151,4 +189,88 @@ type PushResult struct {
 
 type PushSender interface {
 	Send(ctx context.Context, sub PushSubscriptionEndpoint, payload PushPayload) (PushResult, error)
+}
+
+type MonthlyPenaltySummarySnapshot struct {
+	TeamID             string
+	MonthStart         time.Time
+	DailyPenaltyTotal  int
+	WeeklyPenaltyTotal int
+	IsClosed           bool
+}
+
+type OverviewTask struct {
+	ID                         string
+	TeamID                     string
+	Title                      string
+	Notes                      *string
+	Type                       model.TaskType
+	PenaltyPoints              int
+	AssigneeUserID             *string
+	RequiredCompletionsPerWeek int
+	SortKey                    int
+	CreatedAt                  time.Time
+	UpdatedAt                  time.Time
+	DeletedAt                  *time.Time
+}
+
+type TaskCompletionActor struct {
+	UserID        string
+	EffectiveName string
+	ColorHex      *string
+}
+
+type DailyCompletionActor struct {
+	TaskID string
+	Actor  *TaskCompletionActor
+}
+
+type WeeklyCompletionCount struct {
+	TaskID          string
+	CompletionCount int
+}
+
+type WeeklyCompletionSlot struct {
+	TaskID string
+	Slot   int
+	Actor  *TaskCompletionActor
+}
+
+type ReminderRecord struct {
+	ID           string
+	TeamID       string
+	Title        string
+	Notes        *string
+	Kind         model.ReminderKind
+	ScheduleType *model.ReminderScheduleType
+	StartDate    time.Time
+	EndDate      *time.Time
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
+type PenaltyRuleSnapshot struct {
+	ID        string
+	Threshold int
+}
+
+type MonthlyTaskStatusRecord = OverviewTask
+
+type DailyCompletionByDate struct {
+	Date   time.Time
+	TaskID string
+	Actor  *TaskCompletionActor
+}
+
+type WeeklyCompletionCountByWeek struct {
+	WeekStart       time.Time
+	TaskID          string
+	CompletionCount int
+}
+
+type WeeklyCompletionSlotByWeek struct {
+	WeekStart time.Time
+	TaskID    string
+	Slot      int
+	Actor     *TaskCompletionActor
 }

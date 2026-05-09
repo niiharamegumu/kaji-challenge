@@ -13,6 +13,8 @@ import (
 
 	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
+
+	"github.com/megu/kaji-challenge/backend/internal/application/ports"
 )
 
 type Client struct {
@@ -27,6 +29,68 @@ type Claims struct {
 	Email string `json:"email"`
 	Name  string `json:"name"`
 	Nonce string `json:"nonce"`
+}
+
+type Provider struct {
+	client *Client
+}
+
+func NewProvider() *Provider {
+	return &Provider{}
+}
+
+func (p *Provider) Configured() bool {
+	return Configured()
+}
+
+func (p *Provider) StrictMode() bool {
+	return StrictMode()
+}
+
+func (p *Provider) ValidateSettings() error {
+	return ValidateSettings()
+}
+
+func (p *Provider) MockAuthorizationURL(state string) string {
+	return MockAuthorizationURL(state)
+}
+
+func (p *Provider) AuthorizationURL(ctx context.Context, state, nonce, verifier string) (string, error) {
+	client, err := p.ensureClient(ctx)
+	if err != nil {
+		return "", err
+	}
+	return client.AuthorizationURL(state, nonce, verifier), nil
+}
+
+func (p *Provider) ExchangeAndVerify(ctx context.Context, code, verifier string) (ports.OIDCClaims, error) {
+	client, err := p.ensureClient(ctx)
+	if err != nil {
+		return ports.OIDCClaims{}, err
+	}
+	claims, err := client.ExchangeAndVerify(ctx, code, verifier)
+	if err != nil {
+		return ports.OIDCClaims{}, err
+	}
+	return ports.OIDCClaims{
+		Iss:   claims.Iss,
+		Sub:   claims.Sub,
+		Email: claims.Email,
+		Name:  claims.Name,
+		Nonce: claims.Nonce,
+	}, nil
+}
+
+func (p *Provider) ensureClient(ctx context.Context) (*Client, error) {
+	if p.client != nil {
+		return p.client, nil
+	}
+	client, err := NewClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	p.client = client
+	return p.client, nil
 }
 
 func Configured() bool {

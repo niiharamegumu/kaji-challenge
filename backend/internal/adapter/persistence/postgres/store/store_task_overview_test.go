@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/megu/kaji-challenge/backend/internal/adapter/persistence/postgres/repositories"
 	model "github.com/megu/kaji-challenge/backend/internal/application/model"
 	dbsqlc "github.com/megu/kaji-challenge/backend/internal/db/sqlc"
 )
@@ -24,7 +25,7 @@ func TestGetTaskOverviewWeeklyRemindersSortsByDateThenCreatedAt(t *testing.T) {
 	createReminderAt(t, s, teamID, "z-created-second", model.OneTime, nil, today.Add(time.Hour), today, nil)
 	createReminderAt(t, s, teamID, "a-created-first", model.OneTime, nil, today.Add(30*time.Minute), today, nil)
 
-	overview, err := s.GetTaskOverview(ctx, userID)
+	overview, err := repositories.NewServices(s).TaskOverview.GetTaskOverview(ctx, userID)
 	if err != nil {
 		t.Fatalf("GetTaskOverview failed: %v", err)
 	}
@@ -68,7 +69,7 @@ func TestGetTaskOverviewUsesTaskPositionOrder(t *testing.T) {
 		t.Fatalf("failed to reorder weekly tasks: %v", err)
 	}
 
-	overview, err := s.GetTaskOverview(ctx, userID)
+	overview, err := repositories.NewServices(s).TaskOverview.GetTaskOverview(ctx, userID)
 	if err != nil {
 		t.Fatalf("GetTaskOverview failed: %v", err)
 	}
@@ -93,7 +94,7 @@ func TestBuildMonthlyTaskStatusByDateDailyOmitAfterDeleteTime(t *testing.T) {
 	ctx := context.Background()
 
 	base := time.Date(2026, 1, 1, 9, 0, 0, 0, s.loc)
-	teamID, _ := createTeamWithMember(t, s, "summary-daily-delete@example.com", base)
+	teamID, userID := createTeamWithMember(t, s, "summary-daily-delete@example.com", base)
 	taskID := createTaskAtWithID(t, s, teamID, model.TaskTypeDaily, 2, 1, base)
 
 	if err := s.q.CreateTaskCompletionDaily(ctx, dbsqlc.CreateTaskCompletionDailyParams{
@@ -108,7 +109,7 @@ func TestBuildMonthlyTaskStatusByDateDailyOmitAfterDeleteTime(t *testing.T) {
 		t.Fatalf("failed to soft delete task: %v", err)
 	}
 
-	groups, err := s.buildMonthlyTaskStatusByDate(ctx, teamID, "2026-01")
+	groups, err := monthlyTaskStatusGroupsForTest(ctx, s, userID, "2026-01")
 	if err != nil {
 		t.Fatalf("buildMonthlyTaskStatusByDate failed: %v", err)
 	}
@@ -126,7 +127,7 @@ func TestBuildMonthlyTaskStatusByDateWeeklyOmitFromDeleteWeek(t *testing.T) {
 	ctx := context.Background()
 
 	base := time.Date(2026, 1, 1, 9, 0, 0, 0, s.loc)
-	teamID, _ := createTeamWithMember(t, s, "summary-weekly-delete@example.com", base)
+	teamID, userID := createTeamWithMember(t, s, "summary-weekly-delete@example.com", base)
 	taskID := createTaskAtWithID(t, s, teamID, model.TaskTypeWeekly, 3, 1, base)
 
 	if err := insertWeeklyCompletionEntriesForTest(ctx, s, taskID, time.Date(2026, 1, 5, 0, 0, 0, 0, s.loc), 1); err != nil {
@@ -141,7 +142,7 @@ func TestBuildMonthlyTaskStatusByDateWeeklyOmitFromDeleteWeek(t *testing.T) {
 		t.Fatalf("failed to soft delete task: %v", err)
 	}
 
-	groups, err := s.buildMonthlyTaskStatusByDate(ctx, teamID, "2026-01")
+	groups, err := monthlyTaskStatusGroupsForTest(ctx, s, userID, "2026-01")
 	if err != nil {
 		t.Fatalf("buildMonthlyTaskStatusByDate failed: %v", err)
 	}
@@ -159,14 +160,14 @@ func TestBuildMonthlyTaskStatusByDateWeeklyCrossMonthShownOnMonthStart(t *testin
 	ctx := context.Background()
 
 	base := time.Date(2026, 1, 1, 9, 0, 0, 0, s.loc)
-	teamID, _ := createTeamWithMember(t, s, "summary-weekly-cross-month@example.com", base)
+	teamID, userID := createTeamWithMember(t, s, "summary-weekly-cross-month@example.com", base)
 	taskID := createTaskAtWithID(t, s, teamID, model.TaskTypeWeekly, 3, 1, base)
 
 	if err := insertWeeklyCompletionEntriesForTest(ctx, s, taskID, time.Date(2025, 12, 29, 0, 0, 0, 0, s.loc), 1); err != nil {
 		t.Fatalf("failed to create cross-month weekly completion: %v", err)
 	}
 
-	groups, err := s.buildMonthlyTaskStatusByDate(ctx, teamID, "2026-01")
+	groups, err := monthlyTaskStatusGroupsForTest(ctx, s, userID, "2026-01")
 	if err != nil {
 		t.Fatalf("buildMonthlyTaskStatusByDate failed: %v", err)
 	}
@@ -188,11 +189,11 @@ func TestBuildMonthlyTaskStatusByDateIncludesNotes(t *testing.T) {
 	ctx := context.Background()
 
 	base := time.Date(2026, 1, 1, 9, 0, 0, 0, s.loc)
-	teamID, _ := createTeamWithMember(t, s, "summary-notes@example.com", base)
+	teamID, userID := createTeamWithMember(t, s, "summary-notes@example.com", base)
 	notes := "食器を片付ける"
 	taskID := createTaskAtWithIDAndNotes(t, s, teamID, model.TaskTypeDaily, 2, 1, base, &notes)
 
-	groups, err := s.buildMonthlyTaskStatusByDate(ctx, teamID, "2026-01")
+	groups, err := monthlyTaskStatusGroupsForTest(ctx, s, userID, "2026-01")
 	if err != nil {
 		t.Fatalf("buildMonthlyTaskStatusByDate failed: %v", err)
 	}
@@ -226,7 +227,7 @@ func TestBuildMonthlyTaskStatusByDateUsesTaskPositionOrder(t *testing.T) {
 		t.Fatalf("failed to reorder tasks: %v", err)
 	}
 
-	groups, err := s.buildMonthlyTaskStatusByDate(ctx, teamID, "2026-01")
+	groups, err := monthlyTaskStatusGroupsForTest(ctx, s, userID, "2026-01")
 	if err != nil {
 		t.Fatalf("buildMonthlyTaskStatusByDate failed: %v", err)
 	}
@@ -245,10 +246,10 @@ func TestBuildMonthlyTaskStatusByDateLeavesNotesNilWhenEmpty(t *testing.T) {
 	ctx := context.Background()
 
 	base := time.Date(2026, 1, 1, 9, 0, 0, 0, s.loc)
-	teamID, _ := createTeamWithMember(t, s, "summary-notes-empty@example.com", base)
+	teamID, userID := createTeamWithMember(t, s, "summary-notes-empty@example.com", base)
 	taskID := createTaskAtWithID(t, s, teamID, model.TaskTypeDaily, 2, 1, base)
 
-	groups, err := s.buildMonthlyTaskStatusByDate(ctx, teamID, "2026-01")
+	groups, err := monthlyTaskStatusGroupsForTest(ctx, s, userID, "2026-01")
 	if err != nil {
 		t.Fatalf("buildMonthlyTaskStatusByDate failed: %v", err)
 	}
@@ -276,10 +277,10 @@ func TestBuildMonthlyTaskStatusByDateCurrentMonthDoesNotIncludeFutureDates(t *te
 	monthStart := time.Date(today.Year(), today.Month(), 1, 0, 0, 0, 0, s.loc)
 	month := monthStart.Format("2006-01")
 
-	teamID, _ := createTeamWithMember(t, s, "summary-current-month@example.com", monthStart.Add(9*time.Hour))
+	teamID, userID := createTeamWithMember(t, s, "summary-current-month@example.com", monthStart.Add(9*time.Hour))
 	taskID := createTaskAtWithID(t, s, teamID, model.TaskTypeDaily, 2, 1, monthStart.Add(9*time.Hour))
 
-	groups, err := s.buildMonthlyTaskStatusByDate(ctx, teamID, month)
+	groups, err := monthlyTaskStatusGroupsForTest(ctx, s, userID, month)
 	if err != nil {
 		t.Fatalf("buildMonthlyTaskStatusByDate failed: %v", err)
 	}
@@ -310,10 +311,10 @@ func TestBuildMonthlyTaskStatusByDateFutureMonthReturnsEmpty(t *testing.T) {
 	futureMonthStart := thisMonthStart.AddDate(0, 1, 0)
 	futureMonth := futureMonthStart.Format("2006-01")
 
-	teamID, _ := createTeamWithMember(t, s, "summary-future-month@example.com", today.Add(9*time.Hour))
+	teamID, userID := createTeamWithMember(t, s, "summary-future-month@example.com", today.Add(9*time.Hour))
 	createTaskAtWithID(t, s, teamID, model.TaskTypeDaily, 2, 1, futureMonthStart.Add(9*time.Hour))
 
-	groups, err := s.buildMonthlyTaskStatusByDate(ctx, teamID, futureMonth)
+	groups, err := monthlyTaskStatusGroupsForTest(ctx, s, userID, futureMonth)
 	if err != nil {
 		t.Fatalf("buildMonthlyTaskStatusByDate failed: %v", err)
 	}
@@ -333,16 +334,24 @@ func TestBuildMonthlyTaskStatusByDatePastMonthKeepsMonthEnd(t *testing.T) {
 	pastMonth := pastMonthStart.Format("2006-01")
 	pastMonthLastDay := pastMonthStart.AddDate(0, 1, -1).Format("2006-01-02")
 
-	teamID, _ := createTeamWithMember(t, s, "summary-past-month@example.com", pastMonthStart.Add(9*time.Hour))
+	teamID, userID := createTeamWithMember(t, s, "summary-past-month@example.com", pastMonthStart.Add(9*time.Hour))
 	taskID := createTaskAtWithID(t, s, teamID, model.TaskTypeDaily, 2, 1, pastMonthStart.Add(9*time.Hour))
 
-	groups, err := s.buildMonthlyTaskStatusByDate(ctx, teamID, pastMonth)
+	groups, err := monthlyTaskStatusGroupsForTest(ctx, s, userID, pastMonth)
 	if err != nil {
 		t.Fatalf("buildMonthlyTaskStatusByDate failed: %v", err)
 	}
 	if !containsTaskOnDate(groups, pastMonthLastDay, taskID) {
 		t.Fatalf("expected task on past month end date: %s", pastMonthLastDay)
 	}
+}
+
+func monthlyTaskStatusGroupsForTest(ctx context.Context, s *Store, userID, month string) ([]model.MonthlyTaskStatusGroup, error) {
+	summary, err := repositories.NewServices(s).TaskOverview.GetMonthlySummary(ctx, userID, &month)
+	if err != nil {
+		return nil, err
+	}
+	return summary.TaskStatusByDate, nil
 }
 
 func createTaskAtWithID(t *testing.T, s *Store, teamID string, taskType model.TaskType, penalty, required int, createdAt time.Time) string {

@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	oidcauth "github.com/megu/kaji-challenge/backend/internal/adapter/external/oidc"
 	model "github.com/megu/kaji-challenge/backend/internal/application/model"
 	dbsqlc "github.com/megu/kaji-challenge/backend/internal/db/sqlc"
 )
@@ -42,8 +41,6 @@ type Store struct {
 
 	authRequests  map[string]authRequest
 	exchangeCodes map[string]exchangeCodeRecord
-
-	oidc *oidcauth.Client
 
 	trimSessionsForUserExec func(ctx context.Context, exec dbsqlc.DBTX, userID string, keepCount int32) error
 	now                     func() time.Time
