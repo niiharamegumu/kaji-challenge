@@ -130,6 +130,45 @@ func (s *Store) ListClosableTeamIDs(ctx context.Context) ([]string, error) {
 	return s.queries(ctx).ListTeamIDsForClose(ctx)
 }
 
+func (s *Store) PrimaryTeamID(ctx context.Context, userID string) (string, error) {
+	return s.primaryTeamLocked(ctx, userID)
+}
+
+func (s *Store) RunTeamRevisionCAS(ctx context.Context, teamID, entity string, hints map[string]string, fn func(context.Context) error) error {
+	_, err := s.runWithTeamRevisionCAS(ctx, teamID, entity, hints, func(txCtx context.Context, _ *dbsqlc.Queries) error {
+		err := fn(txCtx)
+		if err != nil && err.Error() == errNoStateChange.Error() {
+			return errNoStateChange
+		}
+		return err
+	})
+	return err
+}
+
+func (s *Store) NextDayCloseTarget(ctx context.Context, teamID string) (time.Time, bool, error) {
+	return s.nextDayTargetLocked(ctx, teamID)
+}
+
+func (s *Store) NextWeekCloseTarget(ctx context.Context, teamID string) (time.Time, bool, error) {
+	return s.nextWeekTargetLocked(ctx, teamID)
+}
+
+func (s *Store) NextMonthCloseTarget(ctx context.Context, teamID string) (time.Time, bool, error) {
+	return s.nextMonthTargetLocked(ctx, teamID)
+}
+
+func (s *Store) CloseDayTarget(ctx context.Context, teamID string, targetDate time.Time) (bool, error) {
+	return s.closeDayForTargetLocked(ctx, targetDate, teamID)
+}
+
+func (s *Store) CloseWeekTarget(ctx context.Context, teamID string, weekStart time.Time) (bool, error) {
+	return s.closeWeekForTargetLocked(ctx, weekStart, teamID)
+}
+
+func (s *Store) CloseMonthTarget(ctx context.Context, teamID string, monthStart time.Time) (bool, string, error) {
+	return s.closeMonthForTargetLocked(ctx, monthStart, teamID)
+}
+
 func (s *Store) closeDayForTargetLocked(ctx context.Context, targetDate time.Time, teamID string) (bool, error) {
 	startedAt := time.Now()
 	queryCount := 0

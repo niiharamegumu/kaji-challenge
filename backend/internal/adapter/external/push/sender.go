@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
+	"github.com/megu/kaji-challenge/backend/internal/application/ports"
 )
 
 type Payload struct {
@@ -41,6 +42,37 @@ type Result struct {
 type Sender interface {
 	Send(ctx context.Context, sub Subscription, payload Payload) (Result, error)
 	PublicKey() string
+}
+
+type PortsSender struct {
+	Sender Sender
+}
+
+func AsPortsSender(sender Sender) PortsSender {
+	return PortsSender{Sender: sender}
+}
+
+func (s PortsSender) Send(ctx context.Context, sub ports.PushSubscriptionEndpoint, payload ports.PushPayload) (ports.PushResult, error) {
+	result, err := s.Sender.Send(ctx, Subscription{
+		Endpoint: sub.Endpoint,
+		P256DH:   sub.P256DH,
+		Auth:     sub.Auth,
+	}, Payload{
+		Title:    payload.Title,
+		Body:     payload.Body,
+		Tag:      payload.Tag,
+		Url:      payload.URL,
+		TeamID:   payload.TeamID,
+		SlotKind: payload.SlotKind,
+	})
+	return ports.PushResult{
+		StatusCode: result.StatusCode,
+		Expired:    result.Expired,
+		APNSID:     result.APNSID,
+		Location:   result.Location,
+		RetryAfter: result.RetryAfter,
+		Body:       result.Body,
+	}, err
 }
 
 type WebPushSender struct {

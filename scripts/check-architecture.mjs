@@ -138,6 +138,13 @@ function backendViolations(path, imports) {
       violations.push(`${file} imports ${specifier}`);
     }
     if (
+      inAdapterPersistence &&
+      !isTest &&
+      specifier.includes("/backend/internal/adapter/external/push")
+    ) {
+      violations.push(`${file} imports ${specifier}`);
+    }
+    if (
       specifier.includes("/backend/internal/http/application") ||
       specifier.includes("/backend/internal/http/infra") ||
       specifier.includes("/backend/internal/http/transport") ||

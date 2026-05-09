@@ -48,6 +48,7 @@ type PushService interface {
 	UpsertPushSubscription(ctx context.Context, userID string, req model.UpsertPushSubscriptionRequest) (model.PushSubscription, error)
 	DeletePushSubscription(ctx context.Context, userID, subscriptionID string) error
 	ListPushSubscriptions(ctx context.Context, userID string) (model.ListPushSubscriptionsResponse, error)
+	NotifySlot(ctx context.Context, slot string, sender PushSender) (NotifyRunResult, error)
 }
 
 type TaskService interface {
@@ -88,7 +89,11 @@ type TaskOverviewService interface {
 }
 
 type AdminService interface {
+	ListClosableTeamIDs(ctx context.Context) ([]string, error)
 	CloseDayForUser(ctx context.Context, userID string) (model.CloseResponse, error)
 	CloseWeekForUser(ctx context.Context, userID string) (model.CloseResponse, error)
 	CloseMonthForUser(ctx context.Context, userID string) (model.CloseResponse, error)
+	CloseDayForTeam(ctx context.Context, teamID string) (model.CloseResponse, error)
+	CloseWeekForTeam(ctx context.Context, teamID string) (model.CloseResponse, error)
+	CloseMonthForTeam(ctx context.Context, teamID string) (model.CloseResponse, error)
 }

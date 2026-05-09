@@ -11,7 +11,6 @@ import (
 )
 
 type Store = store.Store
-type NotifyRunResult = store.NotifyRunResult
 
 func NewStore() *Store {
 	return store.NewStore()

@@ -11,6 +11,7 @@ import (
 	pushsvc "github.com/megu/kaji-challenge/backend/internal/adapter/external/push"
 	"github.com/megu/kaji-challenge/backend/internal/adapter/persistence/postgres"
 	"github.com/megu/kaji-challenge/backend/internal/application/model"
+	"github.com/megu/kaji-challenge/backend/internal/application/ports"
 	"github.com/megu/kaji-challenge/backend/internal/domain/notification"
 )
 
@@ -22,13 +23,14 @@ type closeRunner interface {
 }
 
 type notifyRunner interface {
-	NotifySlot(ctx context.Context, slot string, sender pushsvc.Sender) (postgres.NotifyRunResult, error)
+	NotifySlot(ctx context.Context, slot string, sender ports.PushSender) (ports.NotifyRunResult, error)
 }
 
 func main() {
 	logger := log.New(os.Stdout, "", log.LstdFlags)
 	store := postgres.NewStore()
-	os.Exit(run(os.Args[1:], logger, store, store))
+	services := postgres.NewServices(store)
+	os.Exit(run(os.Args[1:], logger, services.Admin, services.Push))
 }
 
 func run(args []string, logger *log.Logger, closer closeRunner, notifier notifyRunner) int {
@@ -151,7 +153,7 @@ func runNotify(args []string, logger *log.Logger, runner notifyRunner) int {
 	}
 	parsedSlotString := string(parsedSlot)
 	logger.Printf("ops notify started: slot=%s", parsedSlotString)
-	result, err := runner.NotifySlot(context.Background(), parsedSlotString, sender)
+	result, err := runner.NotifySlot(context.Background(), parsedSlotString, pushsvc.AsPortsSender(sender))
 	logger.Printf(
 		"ops notify finished: slot=%s processed=%d sent=%d skipped=%d failed=%d",
 		parsedSlotString,

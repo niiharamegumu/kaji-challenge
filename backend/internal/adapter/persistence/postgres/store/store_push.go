@@ -2,58 +2,17 @@ package store
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"log"
-	"net/url"
+	"os"
 	"strings"
 	"time"
 
-	pushsvc "github.com/megu/kaji-challenge/backend/internal/adapter/external/push"
 	model "github.com/megu/kaji-challenge/backend/internal/application/model"
+	"github.com/megu/kaji-challenge/backend/internal/application/ports"
 	dbsqlc "github.com/megu/kaji-challenge/backend/internal/db/sqlc"
-	"github.com/megu/kaji-challenge/backend/internal/domain/notification"
 	"github.com/megu/kaji-challenge/backend/internal/domain/pushsubscription"
 )
-
-type notifySlot string
-
-const (
-	notifySlotDaily2100         notifySlot = notifySlot(notification.SlotDaily2100)
-	notifySlotWeeklyPrevSat1900 notifySlot = notifySlot(notification.SlotWeeklyPrevSat1900)
-	notifySlotWeeklyDueSun1000  notifySlot = notifySlot(notification.SlotWeeklyDueSun1000)
-)
-
-type NotifyRunResult struct {
-	Processed int
-	Sent      int
-	Skipped   int
-	Failed    int
-}
-
-type pendingPushTask struct {
-	ID        string
-	Title     string
-	Remaining int
-}
-
-type preparedPushDispatch struct {
-	teamID        string
-	slotKind      notifySlot
-	slotDate      time.Time
-	payload       pushsvc.Payload
-	subscriptions []dbsqlc.ListActivePushSubscriptionsByTeamIDRow
-}
-
-func parseNotifySlot(raw string) (notifySlot, error) {
-	slot, err := notification.ParseSlot(raw)
-	if err != nil {
-		return "", err
-	}
-	return notifySlot(slot), nil
-}
 
 func (s *Store) UpsertPushSubscription(ctx context.Context, userID string, req model.UpsertPushSubscriptionRequest) (model.PushSubscription, error) {
 	teamID, err := s.primaryTeamLocked(ctx, userID)
@@ -110,205 +69,15 @@ func (s *Store) ListPushSubscriptions(ctx context.Context, userID string) (model
 	}
 	return model.ListPushSubscriptionsResponse{
 		Items:          items,
-		VapidPublicKey: pushsvc.PublicKeyFromEnv(),
+		VapidPublicKey: strings.TrimSpace(os.Getenv("VAPID_PUBLIC_KEY")),
 	}, nil
 }
 
-func (s *Store) NotifySlot(ctx context.Context, rawSlot string, sender pushsvc.Sender) (NotifyRunResult, error) {
-	slot, err := parseNotifySlot(rawSlot)
-	if err != nil {
-		return NotifyRunResult{}, err
-	}
-	if sender == nil {
-		return NotifyRunResult{}, errors.New("push sender is required")
-	}
-	teamIDs, err := s.queries(ctx).ListTeamIDsForPush(ctx)
-	if err != nil {
-		return NotifyRunResult{}, err
-	}
-	now := s.now()
-	result := NotifyRunResult{}
-	var firstErr error
-	for _, teamID := range teamIDs {
-		result.Processed++
-		sent, skip, err := s.notifySlotForTeam(ctx, teamID, slot, now, sender)
-		if skip {
-			result.Skipped++
-			continue
-		}
-		if err != nil {
-			result.Failed++
-			if firstErr == nil {
-				firstErr = fmt.Errorf("team_id=%s: %w", teamID, err)
-			}
-			continue
-		}
-		if sent {
-			result.Sent++
-		}
-	}
-	if firstErr != nil {
-		return result, firstErr
-	}
-	return result, nil
+func (s *Store) ListPushTeamIDs(ctx context.Context) ([]string, error) {
+	return s.queries(ctx).ListTeamIDsForPush(ctx)
 }
 
-func (s *Store) notifySlotForTeam(ctx context.Context, teamID string, slot notifySlot, now time.Time, sender pushsvc.Sender) (bool, bool, error) {
-	slotDate := slot.targetDate(dateOnly(now, s.loc), s.loc)
-	dispatch, skip, err := s.preparePushDispatchAt(ctx, teamID, slot, now, slotDate)
-	if err != nil {
-		return false, false, err
-	}
-	if skip {
-		return false, true, nil
-	}
-	err = s.executePushDispatch(ctx, dispatch, sender, now)
-	if err != nil {
-		return false, false, err
-	}
-	return true, false, nil
-}
-
-func (s *Store) preparePushDispatchAt(ctx context.Context, teamID string, slot notifySlot, now, slotDate time.Time) (preparedPushDispatch, bool, error) {
-	tasks, err := s.listPendingTasksForSlot(ctx, teamID, slot, now, slotDate)
-	if err != nil {
-		return preparedPushDispatch{}, false, err
-	}
-	if len(tasks) == 0 {
-		return preparedPushDispatch{}, true, nil
-	}
-	subscriptions, err := s.queries(ctx).ListActivePushSubscriptionsByTeamID(ctx, teamID)
-	if err != nil {
-		return preparedPushDispatch{}, false, err
-	}
-	if len(subscriptions) == 0 {
-		return preparedPushDispatch{}, true, nil
-	}
-	title, body := buildPushMessage(slot, tasks)
-	return preparedPushDispatch{
-		teamID:   teamID,
-		slotKind: slot,
-		slotDate: slotDate,
-		payload: pushsvc.Payload{
-			Title:    title,
-			Body:     body,
-			Tag:      fmt.Sprintf("team:%s:%s:%s", teamID, slot, slotDate.Format("2006-01-02")),
-			Url:      "/",
-			TeamID:   teamID,
-			SlotKind: string(slot),
-		},
-		subscriptions: subscriptions,
-	}, false, nil
-}
-
-func (s *Store) executePushDispatch(ctx context.Context, dispatch preparedPushDispatch, sender pushsvc.Sender, sentAt time.Time) error {
-	q := s.queries(ctx)
-	var deliveryErr error
-	successCount := 0
-	expiredCount := 0
-	for _, sub := range dispatch.subscriptions {
-		result, err := sender.Send(ctx, pushsvc.Subscription{
-			Endpoint: sub.Endpoint,
-			P256DH:   sub.P256dh,
-			Auth:     sub.Auth,
-		}, dispatch.payload)
-		logPushDispatchAttempt(dispatch, sub.Endpoint, result, err)
-		if result.Expired {
-			expiredCount++
-			if _, deactivateErr := q.DeactivatePushSubscriptionByEndpoint(ctx, dbsqlc.DeactivatePushSubscriptionByEndpointParams{
-				Endpoint:  sub.Endpoint,
-				UpdatedAt: toPgTimestamptz(sentAt),
-			}); deactivateErr != nil {
-				return deactivateErr
-			}
-			continue
-		}
-		if err != nil {
-			deliveryErr = err
-			continue
-		}
-		successCount++
-	}
-	if deliveryErr != nil && successCount == 0 && expiredCount == 0 {
-		return deliveryErr
-	}
-	return deliveryErr
-}
-
-func logPushDispatchAttempt(dispatch preparedPushDispatch, endpoint string, result pushsvc.Result, err error) {
-	u, parseErr := url.Parse(endpoint)
-	host := ""
-	if parseErr == nil {
-		host = u.Host
-	}
-	endpointHash := sha256.Sum256([]byte(endpoint))
-	hashText := hex.EncodeToString(endpointHash[:8])
-	bodySuffix := ""
-	if result.Body != "" {
-		bodySuffix = fmt.Sprintf(" body=%q", result.Body)
-	}
-	if err != nil {
-		log.Printf(
-			"push dispatch delivery failed: team_id=%s slot=%s slot_date=%s host=%s endpoint_hash=%s status=%d expired=%t apns_id=%q location=%q retry_after=%q title=%q tag=%q url=%q err=%v%s",
-			dispatch.teamID,
-			dispatch.slotKind,
-			dispatch.slotDate.Format("2006-01-02"),
-			host,
-			hashText,
-			result.StatusCode,
-			result.Expired,
-			result.APNSID,
-			result.Location,
-			result.RetryAfter,
-			dispatch.payload.Title,
-			dispatch.payload.Tag,
-			dispatch.payload.Url,
-			err,
-			bodySuffix,
-		)
-		return
-	}
-	if result.Expired {
-		log.Printf(
-			"push dispatch delivery expired: team_id=%s slot=%s slot_date=%s host=%s endpoint_hash=%s status=%d expired=%t apns_id=%q location=%q retry_after=%q title=%q tag=%q url=%q%s",
-			dispatch.teamID,
-			dispatch.slotKind,
-			dispatch.slotDate.Format("2006-01-02"),
-			host,
-			hashText,
-			result.StatusCode,
-			result.Expired,
-			result.APNSID,
-			result.Location,
-			result.RetryAfter,
-			dispatch.payload.Title,
-			dispatch.payload.Tag,
-			dispatch.payload.Url,
-			bodySuffix,
-		)
-		return
-	}
-	log.Printf(
-		"push dispatch delivery accepted: team_id=%s slot=%s slot_date=%s host=%s endpoint_hash=%s status=%d expired=%t apns_id=%q location=%q retry_after=%q title=%q tag=%q url=%q%s",
-		dispatch.teamID,
-		dispatch.slotKind,
-		dispatch.slotDate.Format("2006-01-02"),
-		host,
-		hashText,
-		result.StatusCode,
-		result.Expired,
-		result.APNSID,
-		result.Location,
-		result.RetryAfter,
-		dispatch.payload.Title,
-		dispatch.payload.Tag,
-		dispatch.payload.Url,
-		bodySuffix,
-	)
-}
-
-func (s *Store) listPendingTasksForSlot(ctx context.Context, teamID string, slot notifySlot, now, slotDate time.Time) ([]pendingPushTask, error) {
-	taskType := slot.taskType()
+func (s *Store) ListPendingPushTasks(ctx context.Context, teamID string, taskType model.TaskType, now, slotDate time.Time) ([]ports.PendingPushTask, error) {
 	rows, err := s.q.ListTasksEffectiveForCloseByTeamAndType(ctx, dbsqlc.ListTasksEffectiveForCloseByTeamAndTypeParams{
 		TeamID:    teamID,
 		Type:      string(taskType),
@@ -317,7 +86,7 @@ func (s *Store) listPendingTasksForSlot(ctx context.Context, teamID string, slot
 	if err != nil {
 		return nil, err
 	}
-	pending := make([]pendingPushTask, 0, len(rows))
+	pending := make([]ports.PendingPushTask, 0, len(rows))
 	switch taskType {
 	case model.TaskTypeDaily:
 		completedRows, err := s.q.ListTaskCompletionDailyByTeamAndDate(ctx, dbsqlc.ListTaskCompletionDailyByTeamAndDateParams{
@@ -335,7 +104,7 @@ func (s *Store) listPendingTasksForSlot(ctx context.Context, teamID string, slot
 			if completed[row.ID] {
 				continue
 			}
-			pending = append(pending, pendingPushTask{
+			pending = append(pending, ports.PendingPushTask{
 				ID:        row.ID,
 				Title:     row.Title,
 				Remaining: 1,
@@ -360,7 +129,7 @@ func (s *Store) listPendingTasksForSlot(ctx context.Context, teamID string, slot
 			if remaining <= 0 {
 				continue
 			}
-			pending = append(pending, pendingPushTask{
+			pending = append(pending, ports.PendingPushTask{
 				ID:        row.ID,
 				Title:     row.Title,
 				Remaining: remaining,
@@ -372,65 +141,32 @@ func (s *Store) listPendingTasksForSlot(ctx context.Context, teamID string, slot
 	return pending, nil
 }
 
-func buildPushMessage(slot notifySlot, tasks []pendingPushTask) (string, string) {
-	count := len(tasks)
-	title := fmt.Sprintf("未完了が%d件あります", count)
-	switch slot {
-	case notifySlotDaily2100:
-		title = fmt.Sprintf("今日の未完了が%d件あります", count)
-	case notifySlotWeeklyPrevSat1900, notifySlotWeeklyDueSun1000:
-		title = fmt.Sprintf("今週の未完了が%d件あります", count)
+func (s *Store) ListActivePushSubscriptions(ctx context.Context, teamID string) ([]ports.PushSubscriptionTarget, error) {
+	rows, err := s.queries(ctx).ListActivePushSubscriptionsByTeamID(ctx, teamID)
+	if err != nil {
+		return nil, err
 	}
-
-	previewLimit := 3
-	if len(tasks) < previewLimit {
-		previewLimit = len(tasks)
+	items := make([]ports.PushSubscriptionTarget, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, ports.PushSubscriptionTarget{
+			Endpoint: row.Endpoint,
+			P256DH:   row.P256dh,
+			Auth:     row.Auth,
+		})
 	}
-	parts := make([]string, 0, previewLimit+1)
-	for _, task := range tasks[:previewLimit] {
-		label := task.Title
-		if slot.taskType() == model.TaskTypeWeekly && task.Remaining > 1 {
-			label = fmt.Sprintf("%s（あと%d回）", task.Title, task.Remaining)
-		}
-		parts = append(parts, label)
-	}
-	if remaining := len(tasks) - previewLimit; remaining > 0 {
-		parts = append(parts, fmt.Sprintf("ほか%d件", remaining))
-	}
-	body := taskTypeLabelForSlot(slot)
-	if len(parts) > 0 {
-		body = fmt.Sprintf("%s\n%s", body, strings.Join(parts, "、"))
-	}
-	return title, body
+	return items, nil
 }
 
-func taskTypeLabelForSlot(slot notifySlot) string {
-	switch slot.taskType() {
-	case model.TaskTypeWeekly:
-		return "週間タスク"
-	default:
-		return "日間タスク"
-	}
+func (s *Store) DeactivatePushSubscriptionByEndpoint(ctx context.Context, endpoint string, updatedAt time.Time) error {
+	_, err := s.queries(ctx).DeactivatePushSubscriptionByEndpoint(ctx, dbsqlc.DeactivatePushSubscriptionByEndpointParams{
+		Endpoint:  endpoint,
+		UpdatedAt: toPgTimestamptz(updatedAt),
+	})
+	return err
 }
 
-func (s notifySlot) targetDate(today time.Time, loc *time.Location) time.Time {
-	switch s {
-	case notifySlotDaily2100:
-		return dateOnly(today, loc)
-	case notifySlotWeeklyPrevSat1900, notifySlotWeeklyDueSun1000:
-		return startOfWeek(today, loc).AddDate(0, 0, 6)
-	default:
-		return dateOnly(today, loc)
-	}
-}
-
-func (s notifySlot) taskType() model.TaskType {
-	switch s {
-	case notifySlotDaily2100:
-		return model.TaskTypeDaily
-	default:
-		return model.TaskTypeWeekly
-	}
+func (s *Store) Now() time.Time {
+	return s.now()
 }
 
 func pushSubscriptionFromUpsertRowToAPI(row dbsqlc.UpsertPushSubscriptionRow, loc *time.Location) model.PushSubscription {

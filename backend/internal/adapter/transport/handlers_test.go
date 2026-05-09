@@ -74,6 +74,9 @@ func (m mockPushService) DeletePushSubscription(context.Context, string, string)
 func (m mockPushService) ListPushSubscriptions(context.Context, string) (model.ListPushSubscriptionsResponse, error) {
 	return model.ListPushSubscriptionsResponse{}, nil
 }
+func (m mockPushService) NotifySlot(context.Context, string, ports.PushSender) (ports.NotifyRunResult, error) {
+	return ports.NotifyRunResult{}, nil
+}
 
 type mockTaskService struct{}
 
@@ -136,6 +139,9 @@ func (m mockTaskOverviewService) GetMonthlySummary(context.Context, string, *str
 
 type mockAdminService struct{}
 
+func (m mockAdminService) ListClosableTeamIDs(context.Context) ([]string, error) {
+	return nil, nil
+}
 func (m mockAdminService) CloseDayForUser(context.Context, string) (model.CloseResponse, error) {
 	return model.CloseResponse{}, nil
 }
@@ -143,6 +149,15 @@ func (m mockAdminService) CloseWeekForUser(context.Context, string) (model.Close
 	return model.CloseResponse{}, nil
 }
 func (m mockAdminService) CloseMonthForUser(context.Context, string) (model.CloseResponse, error) {
+	return model.CloseResponse{}, nil
+}
+func (m mockAdminService) CloseDayForTeam(context.Context, string) (model.CloseResponse, error) {
+	return model.CloseResponse{}, nil
+}
+func (m mockAdminService) CloseWeekForTeam(context.Context, string) (model.CloseResponse, error) {
+	return model.CloseResponse{}, nil
+}
+func (m mockAdminService) CloseMonthForTeam(context.Context, string) (model.CloseResponse, error) {
 	return model.CloseResponse{}, nil
 }
 

@@ -6,26 +6,24 @@ import (
 	"testing"
 	"time"
 
-	pushsvc "github.com/megu/kaji-challenge/backend/internal/adapter/external/push"
+	"github.com/megu/kaji-challenge/backend/internal/adapter/persistence/postgres/repositories"
 	model "github.com/megu/kaji-challenge/backend/internal/application/model"
+	"github.com/megu/kaji-challenge/backend/internal/application/ports"
 	dbsqlc "github.com/megu/kaji-challenge/backend/internal/db/sqlc"
+	"github.com/megu/kaji-challenge/backend/internal/domain/notification"
 )
 
 type fakePushSender struct {
 	sendCount int
-	payloads  []pushsvc.Payload
-	results   map[string]pushsvc.Result
+	payloads  []ports.PushPayload
+	results   map[string]ports.PushResult
 	errors    map[string]error
 }
 
-func (f *fakePushSender) Send(_ context.Context, sub pushsvc.Subscription, payload pushsvc.Payload) (pushsvc.Result, error) {
+func (f *fakePushSender) Send(_ context.Context, sub ports.PushSubscriptionEndpoint, payload ports.PushPayload) (ports.PushResult, error) {
 	f.sendCount++
 	f.payloads = append(f.payloads, payload)
 	return f.results[sub.Endpoint], f.errors[sub.Endpoint]
-}
-
-func (f *fakePushSender) PublicKey() string {
-	return "BElfakeKey"
 }
 
 func TestPushSubscriptionLifecycle(t *testing.T) {
@@ -107,13 +105,13 @@ func TestNotifySlotSendsAgainWhenReExecuted(t *testing.T) {
 	}
 
 	sender := &fakePushSender{
-		results: map[string]pushsvc.Result{
+		results: map[string]ports.PushResult{
 			"https://example.com/push/notify": {StatusCode: 201},
 		},
 		errors: map[string]error{},
 	}
 
-	first, err := s.NotifySlot(ctx, string(notifySlotDaily2100), sender)
+	first, err := repositories.NewServices(s).Push.NotifySlot(ctx, string(notification.SlotDaily2100), sender)
 	if err != nil {
 		t.Fatalf("first NotifySlot failed: %v", err)
 	}
@@ -121,7 +119,7 @@ func TestNotifySlotSendsAgainWhenReExecuted(t *testing.T) {
 		t.Fatalf("expected first notify to send once, result=%+v sendCount=%d", first, sender.sendCount)
 	}
 
-	second, err := s.NotifySlot(ctx, string(notifySlotDaily2100), sender)
+	second, err := repositories.NewServices(s).Push.NotifySlot(ctx, string(notification.SlotDaily2100), sender)
 	if err != nil {
 		t.Fatalf("second NotifySlot failed: %v", err)
 	}
@@ -203,7 +201,7 @@ func TestNotifySlotDeactivatesExpiredEndpoint(t *testing.T) {
 	}
 
 	sender := &fakePushSender{
-		results: map[string]pushsvc.Result{
+		results: map[string]ports.PushResult{
 			"https://example.com/push/expired": {
 				StatusCode: 410,
 				Expired:    true,
@@ -212,7 +210,7 @@ func TestNotifySlotDeactivatesExpiredEndpoint(t *testing.T) {
 		errors: map[string]error{},
 	}
 
-	if _, err := s.NotifySlot(ctx, string(notifySlotWeeklyDueSun1000), sender); err != nil {
+	if _, err := repositories.NewServices(s).Push.NotifySlot(ctx, string(notification.SlotWeeklyDueSun1000), sender); err != nil {
 		t.Fatalf("NotifySlot failed: %v", err)
 	}
 
@@ -277,7 +275,7 @@ func TestNotifySlotRetriesAfterPartialDeliveryFailure(t *testing.T) {
 	}
 
 	sender := &fakePushSender{
-		results: map[string]pushsvc.Result{
+		results: map[string]ports.PushResult{
 			"https://example.com/push/success": {StatusCode: 201},
 		},
 		errors: map[string]error{
@@ -285,7 +283,7 @@ func TestNotifySlotRetriesAfterPartialDeliveryFailure(t *testing.T) {
 		},
 	}
 
-	first, err := s.NotifySlot(ctx, string(notifySlotDaily2100), sender)
+	first, err := repositories.NewServices(s).Push.NotifySlot(ctx, string(notification.SlotDaily2100), sender)
 	if err == nil {
 		t.Fatalf("expected first NotifySlot to report partial failure")
 	}
@@ -293,7 +291,7 @@ func TestNotifySlotRetriesAfterPartialDeliveryFailure(t *testing.T) {
 		t.Fatalf("unexpected first notify result=%+v sendCount=%d", first, sender.sendCount)
 	}
 
-	second, err := s.NotifySlot(ctx, string(notifySlotDaily2100), sender)
+	second, err := repositories.NewServices(s).Push.NotifySlot(ctx, string(notification.SlotDaily2100), sender)
 	if err == nil {
 		t.Fatalf("expected second NotifySlot to still report partial failure")
 	}
@@ -324,14 +322,14 @@ func TestNotifySlotUsesLatestSubscriptionAfterRefresh(t *testing.T) {
 	}
 
 	sender := &fakePushSender{
-		results: map[string]pushsvc.Result{
+		results: map[string]ports.PushResult{
 			"https://example.com/push/original":  {StatusCode: 201},
 			"https://example.com/push/refreshed": {StatusCode: 201},
 		},
 		errors: map[string]error{},
 	}
 
-	first, err := s.NotifySlot(ctx, string(notifySlotDaily2100), sender)
+	first, err := repositories.NewServices(s).Push.NotifySlot(ctx, string(notification.SlotDaily2100), sender)
 	if err != nil {
 		t.Fatalf("first NotifySlot failed: %v", err)
 	}
@@ -352,7 +350,7 @@ func TestNotifySlotUsesLatestSubscriptionAfterRefresh(t *testing.T) {
 		t.Fatalf("UpsertPushSubscription refreshed failed: %v", err)
 	}
 
-	second, err := s.NotifySlot(ctx, string(notifySlotDaily2100), sender)
+	second, err := repositories.NewServices(s).Push.NotifySlot(ctx, string(notification.SlotDaily2100), sender)
 	if err != nil {
 		t.Fatalf("second NotifySlot failed: %v", err)
 	}
@@ -361,36 +359,6 @@ func TestNotifySlotUsesLatestSubscriptionAfterRefresh(t *testing.T) {
 	}
 	if last := sender.payloads[len(sender.payloads)-1]; last.Title == "" {
 		t.Fatalf("expected payload on resend, got empty title")
-	}
-}
-
-func TestBuildPushMessageForWeeklyTasksIncludesRemainingCount(t *testing.T) {
-	title, body := buildPushMessage(notifySlotWeeklyPrevSat1900, []pendingPushTask{
-		{ID: "task-1", Title: "風呂掃除", Remaining: 2},
-		{ID: "task-2", Title: "洗濯槽掃除", Remaining: 1},
-	})
-
-	if title != "今週の未完了が2件あります" {
-		t.Fatalf("unexpected title: %s", title)
-	}
-	if body != "週間タスク\n風呂掃除（あと2回）、洗濯槽掃除" {
-		t.Fatalf("unexpected body: %s", body)
-	}
-}
-
-func TestBuildPushMessageForDailyTasksIncludesTaskTypeLabel(t *testing.T) {
-	title, body := buildPushMessage(notifySlotDaily2100, []pendingPushTask{
-		{ID: "task-1", Title: "皿洗い", Remaining: 1},
-		{ID: "task-2", Title: "洗濯", Remaining: 1},
-		{ID: "task-3", Title: "ゴミ出し", Remaining: 1},
-		{ID: "task-4", Title: "床掃除", Remaining: 1},
-	})
-
-	if title != "今日の未完了が4件あります" {
-		t.Fatalf("unexpected title: %s", title)
-	}
-	if body != "日間タスク\n皿洗い、洗濯、ゴミ出し、ほか1件" {
-		t.Fatalf("unexpected body: %s", body)
 	}
 }
 

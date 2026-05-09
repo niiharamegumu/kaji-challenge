@@ -21,7 +21,7 @@ Responsibilities:
 
 - `internal/domain`: entities, value objects, domain errors, and pure business rules.
 - `internal/application/usecases`: use case orchestration and transaction-independent business flow.
-- `internal/application/ports`: repository and external service interfaces expressed in domain types.
+- `internal/application/ports`: repository and external service interfaces expressed in domain/application boundary types.
 - `internal/adapter/transport`: Gin handlers, OpenAPI request/response mapping, cookies, headers, and HTTP status mapping.
 - `internal/adapter/persistence`: PostgreSQL/sqlc implementation and DB row mapping.
 - `internal/adapter/external`: OIDC, Push, and other external system clients.
@@ -32,9 +32,10 @@ Backend rules:
 - `application` must not import Gin, OpenAPI generated types, sqlc, transport, middleware, or adapter implementation packages.
 - `adapter/transport` must not import persistence or external adapters in normal code; command entrypoints compose adapters.
 - `adapter/persistence` is the only layer allowed to import sqlc.
+- `adapter/persistence` must not import push sender implementations; push delivery orchestration belongs to application usecases and `adapter/external/push` only sends.
 - OpenAPI generated types belong at the transport boundary.
 - sqlc generated types belong at the persistence boundary.
-- Business rules should live in domain/usecase, not in store methods.
+- Workflow orchestration belongs in usecases. Store methods should be limited to DB transactions, sqlc calls, and row mapping.
 
 ## Frontend: Feature-Based Architecture
 
@@ -71,8 +72,3 @@ import { handleTeamStatePreconditionFailure } from "../../shell/lib/teamStateRef
 import { postTask } from "../../../lib/api/generated/client";
 import { ShoppingListItemsSection } from "../../shopping-list/components/ShoppingListManager";
 ```
-
-Current migration note:
-
-- `ConfirmModal`, status toast state, and team-state refresh helpers have been moved to `shared`.
-- Frontend feature-cross imports and component-level generated API imports have been removed from the baseline.

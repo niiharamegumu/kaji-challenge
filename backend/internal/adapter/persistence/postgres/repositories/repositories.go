@@ -45,6 +45,11 @@ type PushStore interface {
 	UpsertPushSubscription(ctx context.Context, userID string, req model.UpsertPushSubscriptionRequest) (model.PushSubscription, error)
 	DeletePushSubscription(ctx context.Context, userID, subscriptionID string) error
 	ListPushSubscriptions(ctx context.Context, userID string) (model.ListPushSubscriptionsResponse, error)
+	ListPushTeamIDs(ctx context.Context) ([]string, error)
+	ListPendingPushTasks(ctx context.Context, teamID string, taskType model.TaskType, now, slotDate time.Time) ([]ports.PendingPushTask, error)
+	ListActivePushSubscriptions(ctx context.Context, teamID string) ([]ports.PushSubscriptionTarget, error)
+	DeactivatePushSubscriptionByEndpoint(ctx context.Context, endpoint string, updatedAt time.Time) error
+	Now() time.Time
 }
 
 type TaskStore interface {
@@ -85,9 +90,22 @@ type TaskOverviewStore interface {
 }
 
 type AdminStore interface {
+	ListClosableTeamIDs(ctx context.Context) ([]string, error)
+	PrimaryTeamID(ctx context.Context, userID string) (string, error)
+	RunTeamRevisionCAS(ctx context.Context, teamID, entity string, hints map[string]string, fn func(context.Context) error) error
+	NextDayCloseTarget(ctx context.Context, teamID string) (time.Time, bool, error)
+	NextWeekCloseTarget(ctx context.Context, teamID string) (time.Time, bool, error)
+	NextMonthCloseTarget(ctx context.Context, teamID string) (time.Time, bool, error)
+	CloseDayTarget(ctx context.Context, teamID string, targetDate time.Time) (bool, error)
+	CloseWeekTarget(ctx context.Context, teamID string, weekStart time.Time) (bool, error)
+	CloseMonthTarget(ctx context.Context, teamID string, monthStart time.Time) (bool, string, error)
+	Now() time.Time
 	CloseDayForUser(ctx context.Context, userID string) (model.CloseResponse, error)
 	CloseWeekForUser(ctx context.Context, userID string) (model.CloseResponse, error)
 	CloseMonthForUser(ctx context.Context, userID string) (model.CloseResponse, error)
+	CloseDayForTeam(ctx context.Context, teamID string) (model.CloseResponse, error)
+	CloseWeekForTeam(ctx context.Context, teamID string) (model.CloseResponse, error)
+	CloseMonthForTeam(ctx context.Context, teamID string) (model.CloseResponse, error)
 }
 
 type authRepo struct{ store AuthStore }

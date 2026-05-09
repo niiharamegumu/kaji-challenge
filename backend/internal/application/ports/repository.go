@@ -31,6 +31,11 @@ type PushRepository interface {
 	UpsertPushSubscription(ctx context.Context, userID string, req model.UpsertPushSubscriptionRequest) (model.PushSubscription, error)
 	DeletePushSubscription(ctx context.Context, userID, subscriptionID string) error
 	ListPushSubscriptions(ctx context.Context, userID string) (model.ListPushSubscriptionsResponse, error)
+	ListPushTeamIDs(ctx context.Context) ([]string, error)
+	ListPendingPushTasks(ctx context.Context, teamID string, taskType model.TaskType, now, slotDate time.Time) ([]PendingPushTask, error)
+	ListActivePushSubscriptions(ctx context.Context, teamID string) ([]PushSubscriptionTarget, error)
+	DeactivatePushSubscriptionByEndpoint(ctx context.Context, endpoint string, updatedAt time.Time) error
+	Now() time.Time
 }
 
 type TaskRepository interface {
@@ -71,9 +76,22 @@ type TaskOverviewRepository interface {
 }
 
 type AdminRepository interface {
+	ListClosableTeamIDs(ctx context.Context) ([]string, error)
+	PrimaryTeamID(ctx context.Context, userID string) (string, error)
+	RunTeamRevisionCAS(ctx context.Context, teamID, entity string, hints map[string]string, fn func(context.Context) error) error
+	NextDayCloseTarget(ctx context.Context, teamID string) (time.Time, bool, error)
+	NextWeekCloseTarget(ctx context.Context, teamID string) (time.Time, bool, error)
+	NextMonthCloseTarget(ctx context.Context, teamID string) (time.Time, bool, error)
+	CloseDayTarget(ctx context.Context, teamID string, targetDate time.Time) (bool, error)
+	CloseWeekTarget(ctx context.Context, teamID string, weekStart time.Time) (bool, error)
+	CloseMonthTarget(ctx context.Context, teamID string, monthStart time.Time) (bool, string, error)
+	Now() time.Time
 	CloseDayForUser(ctx context.Context, userID string) (model.CloseResponse, error)
 	CloseWeekForUser(ctx context.Context, userID string) (model.CloseResponse, error)
 	CloseMonthForUser(ctx context.Context, userID string) (model.CloseResponse, error)
+	CloseDayForTeam(ctx context.Context, teamID string) (model.CloseResponse, error)
+	CloseWeekForTeam(ctx context.Context, teamID string) (model.CloseResponse, error)
+	CloseMonthForTeam(ctx context.Context, teamID string) (model.CloseResponse, error)
 }
 
 type Dependencies struct {
@@ -86,4 +104,51 @@ type Dependencies struct {
 	ReminderRepo     ReminderRepository
 	TaskOverviewRepo TaskOverviewRepository
 	AdminRepo        AdminRepository
+}
+
+type NotifyRunResult struct {
+	Processed int
+	Sent      int
+	Skipped   int
+	Failed    int
+}
+
+type PendingPushTask struct {
+	ID        string
+	Title     string
+	Remaining int
+}
+
+type PushSubscriptionTarget struct {
+	Endpoint string
+	P256DH   string
+	Auth     string
+}
+
+type PushSubscriptionEndpoint struct {
+	Endpoint string
+	P256DH   string
+	Auth     string
+}
+
+type PushPayload struct {
+	Title    string
+	Body     string
+	Tag      string
+	URL      string
+	TeamID   string
+	SlotKind string
+}
+
+type PushResult struct {
+	StatusCode int
+	Expired    bool
+	Body       string
+	APNSID     string
+	Location   string
+	RetryAfter string
+}
+
+type PushSender interface {
+	Send(ctx context.Context, sub PushSubscriptionEndpoint, payload PushPayload) (PushResult, error)
 }
