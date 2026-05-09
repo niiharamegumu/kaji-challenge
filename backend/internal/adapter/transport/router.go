@@ -8,6 +8,9 @@ import (
 )
 
 func NewRouter(svcs *ports.Services, syncProvider syncProvider) *gin.Engine {
+	if err := svcs.Auth.ValidateSettings(); err != nil {
+		panic(err)
+	}
 	r := gin.Default()
 	r.Use(middleware.CORS())
 	r.Use(middleware.Auth(svcs.Auth))

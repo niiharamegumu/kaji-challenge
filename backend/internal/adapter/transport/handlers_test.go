@@ -18,6 +18,7 @@ import (
 
 type mockAuthService struct{}
 
+func (m mockAuthService) ValidateSettings() error { return nil }
 func (m mockAuthService) StartGoogleAuth(context.Context) (model.AuthStartResponse, error) {
 	return model.AuthStartResponse{}, nil
 }

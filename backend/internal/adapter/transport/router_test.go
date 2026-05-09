@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	oidcauth "github.com/megu/kaji-challenge/backend/internal/adapter/external/oidc"
 	"github.com/megu/kaji-challenge/backend/internal/adapter/persistence/postgres"
 	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 	"github.com/megu/kaji-challenge/backend/internal/testutil/dbtest"
@@ -68,7 +69,9 @@ func TestNewRouterPanicsWhenStrictModeMissingOIDCEnv(t *testing.T) {
 			t.Fatalf("expected panic when strict mode env is incomplete")
 		}
 	}()
-	_ = postgres.NewStore()
+	t.Setenv("DATABASE_URL", dbtest.IsolatedDatabaseURL(t))
+	store := postgres.NewStore()
+	_ = NewRouter(postgres.NewServices(store, oidcauth.NewProvider()), store)
 }
 
 func TestNewRouterPanicsWhenSignupGuardEnabledWithoutAllowlist(t *testing.T) {

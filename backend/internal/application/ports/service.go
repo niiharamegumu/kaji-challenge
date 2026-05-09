@@ -25,6 +25,7 @@ type AuthSession struct {
 }
 
 type AuthService interface {
+	ValidateSettings() error
 	StartGoogleAuth(ctx context.Context) (model.AuthStartResponse, error)
 	CompleteGoogleAuth(ctx context.Context, code, state, mockEmail, mockName, mockSub, mockIss string) (string, string, error)
 	ExchangeSession(ctx context.Context, exchangeCode string) (AuthSession, error)

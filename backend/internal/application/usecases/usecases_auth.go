@@ -14,7 +14,7 @@ import (
 )
 
 func (u authUsecase) StartGoogleAuth(ctx context.Context) (model.AuthStartResponse, error) {
-	if err := u.validateOIDCSettings(); err != nil {
+	if err := u.ValidateSettings(); err != nil {
 		return model.AuthStartResponse{}, err
 	}
 	state, err := randomToken()
@@ -103,7 +103,7 @@ func (u authUsecase) LookupSession(ctx context.Context, token string) (string, b
 	return u.repo.LookupSession(ctx, token)
 }
 
-func (u authUsecase) validateOIDCSettings() error {
+func (u authUsecase) ValidateSettings() error {
 	if u.oidc == nil {
 		return nil
 	}
