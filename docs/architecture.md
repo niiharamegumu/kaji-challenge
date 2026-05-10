@@ -53,6 +53,7 @@ Feature rules:
 - Cross-feature UI belongs in `shared/components`.
 - Cross-feature query/state helpers belong in `shared/query` or `shared/state`.
 - Components and routes should not value-import `src/lib/api/generated/client`; use feature hooks/api adapters instead.
+- Orval mutator files under `src/lib/api` must not read Vite-only globals such as `import.meta.env` directly; inject runtime config from `src/app` or app entrypoints.
 - `shared` must not import from `features`.
 
 Allowed examples:
