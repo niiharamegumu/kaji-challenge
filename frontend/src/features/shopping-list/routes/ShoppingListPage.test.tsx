@@ -1,16 +1,13 @@
-import {
-  cleanup,
-  render,
-  screen,
-  waitFor,
-  within,
-} from "@testing-library/react";
+import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AppProviders } from "../../../app/providers";
-import { SuspenseQueryBoundary } from "../../../shared/components/SuspenseQueryBoundary";
-import { appQueryClient } from "../../../shared/query/queryClient";
+import { resetApiMocks, resolvedData } from "../../../test/apiMock";
+import { withExpectedConsoleError } from "../../../test/console";
+import {
+  renderWithProviders,
+  resetTestQueryClient,
+} from "../../../test/render";
 import { ShoppingListPage } from "./ShoppingListPage";
 
 const mockListShoppingItems = vi.fn();
@@ -18,6 +15,13 @@ const mockPostShoppingItem = vi.fn();
 const mockPatchShoppingItem = vi.fn();
 const mockDeleteShoppingItem = vi.fn();
 const mockPostShoppingItemsReorder = vi.fn();
+const apiMocks = {
+  mockListShoppingItems,
+  mockPostShoppingItem,
+  mockPatchShoppingItem,
+  mockDeleteShoppingItem,
+  mockPostShoppingItemsReorder,
+};
 
 vi.mock("../../../lib/api/generated/client", async () => {
   const actual = await vi.importActual<object>(
@@ -36,17 +40,13 @@ vi.mock("../../../lib/api/generated/client", async () => {
 
 describe("ShoppingListPage", () => {
   beforeEach(() => {
-    appQueryClient.clear();
-    mockListShoppingItems.mockReset();
-    mockPostShoppingItem.mockReset();
-    mockPatchShoppingItem.mockReset();
-    mockDeleteShoppingItem.mockReset();
-    mockPostShoppingItemsReorder.mockReset();
-    mockListShoppingItems.mockResolvedValue({ data: { items: [] } });
-    mockPostShoppingItem.mockResolvedValue({ data: {} });
-    mockPatchShoppingItem.mockResolvedValue({ data: {} });
-    mockDeleteShoppingItem.mockResolvedValue({ data: {} });
-    mockPostShoppingItemsReorder.mockResolvedValue({ data: { items: [] } });
+    resetTestQueryClient();
+    resetApiMocks(apiMocks);
+    mockListShoppingItems.mockResolvedValue(resolvedData({ items: [] }));
+    mockPostShoppingItem.mockResolvedValue(resolvedData({}));
+    mockPatchShoppingItem.mockResolvedValue(resolvedData({}));
+    mockDeleteShoppingItem.mockResolvedValue(resolvedData({}));
+    mockPostShoppingItemsReorder.mockResolvedValue(resolvedData({ items: [] }));
   });
 
   afterEach(() => {
@@ -54,13 +54,9 @@ describe("ShoppingListPage", () => {
   });
 
   const renderPage = () =>
-    render(
-      <AppProviders>
-        <SuspenseQueryBoundary errorMessage="買い物リスト画面の読み込みに失敗しました。">
-          <ShoppingListPage />
-        </SuspenseQueryBoundary>
-      </AppProviders>,
-    );
+    renderWithProviders(<ShoppingListPage />, {
+      errorMessage: "買い物リスト画面の読み込みに失敗しました。",
+    });
 
   it("creates a shopping item from the form", async () => {
     const user = userEvent.setup();
@@ -219,17 +215,21 @@ describe("ShoppingListPage", () => {
   });
 
   it("shows boundary error when the list query fails", async () => {
-    mockListShoppingItems.mockRejectedValue(new Error("request failed: 500"));
-    renderPage();
+    await withExpectedConsoleError(async () => {
+      mockListShoppingItems.mockRejectedValue(new Error("request failed: 500"));
+      renderPage();
 
-    await waitFor(
-      () => {
-        expect(
-          screen.getByText("買い物リスト画面の読み込みに失敗しました。"),
-        ).toBeInTheDocument();
-      },
-      { timeout: 4_000 },
-    );
-    expect(screen.getByRole("button", { name: "再試行" })).toBeInTheDocument();
+      await waitFor(
+        () => {
+          expect(
+            screen.getByText("買い物リスト画面の読み込みに失敗しました。"),
+          ).toBeInTheDocument();
+        },
+        { timeout: 4_000 },
+      );
+      expect(
+        screen.getByRole("button", { name: "再試行" }),
+      ).toBeInTheDocument();
+    });
   });
 });

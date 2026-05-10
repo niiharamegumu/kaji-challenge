@@ -1,10 +1,4 @@
-import {
-  cleanup,
-  render,
-  screen,
-  waitFor,
-  within,
-} from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -81,7 +75,7 @@ vi.mock("../../../lib/api/generated/client", async () => {
   };
 });
 
-describe("AdminInvitesPage", () => {
+describe("AdminPushSettings", () => {
   beforeEach(() => {
     appQueryClient.clear();
     mockGetMe.mockReset();
@@ -146,7 +140,30 @@ describe("AdminInvitesPage", () => {
     cleanup();
   });
 
-  it("does not fetch me on settings page render", async () => {
+  it("does not sync browser subscription automatically on render", async () => {
+    const encoder = new TextEncoder();
+    vi.stubGlobal("Notification", createNotificationMock("granted"));
+    Object.defineProperty(window, "matchMedia", {
+      writable: true,
+      value: vi.fn().mockReturnValue({ matches: true }),
+    });
+    mockWaitForPWARegistration.mockResolvedValue({
+      pushManager: {
+        getSubscription: vi.fn().mockResolvedValue({
+          endpoint: "https://example.com/push/sub-1",
+          getKey: vi.fn((name: string) => {
+            if (name === "p256dh") {
+              return encoder.encode("hello").buffer;
+            }
+            if (name === "auth") {
+              return encoder.encode("world").buffer;
+            }
+            return null;
+          }),
+        }),
+      },
+    });
+
     render(
       <AppProviders>
         <SuspenseQueryBoundary errorMessage="テスト用エラー">
@@ -158,11 +175,66 @@ describe("AdminInvitesPage", () => {
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "設定" })).toBeInTheDocument();
     });
-    expect(mockGetMe).not.toHaveBeenCalled();
+    expect(mockPostPushSubscription).not.toHaveBeenCalled();
   });
 
-  it("does not re-fetch current invite immediately after creating invite", async () => {
+  it("does not sync browser subscription outside standalone pwa", async () => {
+    const encoder = new TextEncoder();
+    vi.stubGlobal("Notification", createNotificationMock("granted"));
+    Object.defineProperty(window, "matchMedia", {
+      writable: true,
+      value: vi.fn().mockReturnValue({ matches: false }),
+    });
+    mockWaitForPWARegistration.mockResolvedValue({
+      pushManager: {
+        getSubscription: vi.fn().mockResolvedValue({
+          endpoint: "https://example.com/push/sub-standalone",
+          getKey: vi.fn((name: string) => {
+            if (name === "p256dh") {
+              return encoder.encode("hello").buffer;
+            }
+            if (name === "auth") {
+              return encoder.encode("world").buffer;
+            }
+            return null;
+          }),
+        }),
+      },
+    });
+
+    render(
+      <AppProviders>
+        <SuspenseQueryBoundary errorMessage="テスト用エラー">
+          <AdminInvitesPage />
+        </SuspenseQueryBoundary>
+      </AppProviders>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "設定" })).toBeInTheDocument();
+    });
+    expect(mockPostPushSubscription).not.toHaveBeenCalled();
+  });
+
+  it("sends notification test with a unique tag", async () => {
     const user = userEvent.setup();
+    const showNotification = vi.fn().mockResolvedValue(undefined);
+
+    vi.stubGlobal("Notification", createNotificationMock("granted"));
+    Object.defineProperty(window, "matchMedia", {
+      writable: true,
+      value: vi.fn().mockReturnValue({ matches: true }),
+    });
+    mockWaitForPWARegistration.mockResolvedValue({
+      active: null,
+      installing: null,
+      pushManager: {
+        getSubscription: vi.fn().mockResolvedValue(null),
+      },
+      scope: "https://kaji.megumu.me/",
+      showNotification,
+      waiting: null,
+    });
 
     render(
       <AppProviders>
@@ -173,139 +245,27 @@ describe("AdminInvitesPage", () => {
     );
 
     await user.click(
-      await screen.findByRole("button", { name: "招待コードを発行" }),
+      await screen.findByRole("button", { name: "プッシュ通知をテスト" }),
     );
 
     await waitFor(() => {
-      expect(mockPostTeamInvite).toHaveBeenCalledTimes(1);
+      expect(showNotification).toHaveBeenCalledTimes(1);
     });
-    expect(mockGetTeamCurrentInvite).toHaveBeenCalledTimes(1);
-  });
-
-  it("clears nickname by saving an empty value", async () => {
-    mockGetTeamCurrentMembers.mockResolvedValue({
-      data: {
-        items: [
-          {
-            userId: "u1",
-            displayName: "Owner",
-            nickname: "にっく",
-            effectiveName: "にっく",
-            colorHex: "#111111",
-            joinedAt: "2026-02-24T00:00:00Z",
-            role: "owner",
-          },
-        ],
-      },
-    });
-    const user = userEvent.setup();
-
-    render(
-      <AppProviders>
-        <SuspenseQueryBoundary errorMessage="テスト用エラー">
-          <AdminInvitesPage />
-        </SuspenseQueryBoundary>
-      </AppProviders>,
+    expect(showNotification).toHaveBeenCalledWith(
+      "家事チャレンジ",
+      expect.objectContaining({
+        body: "プッシュ通知テストです。表示できれば OS 側の通知機能は正常です。",
+        badge: "/icons/pwa-64x64.png",
+        data: {
+          slotKind: "local_test",
+          teamId: "",
+          url: "/",
+        },
+        icon: "/icons/pwa-192x192.png",
+        renotify: true,
+        tag: expect.stringMatching(/^kaji-challenge-local-test:\d+$/),
+        timestamp: expect.any(Number),
+      }),
     );
-
-    const accountHeading = await screen.findByRole("heading", {
-      name: "アカウント設定",
-    });
-    const accountCard = accountHeading.closest("article");
-    if (accountCard == null) {
-      throw new Error("account card not found");
-    }
-    const nicknameInput = within(accountCard).getByLabelText("ニックネーム");
-    await waitFor(() => {
-      expect(nicknameInput).toHaveValue("にっく");
-    });
-    await user.clear(nicknameInput);
-    await waitFor(() => {
-      expect(nicknameInput).toHaveValue("");
-    });
-
-    const nicknameField = nicknameInput.closest("div");
-    if (nicknameField == null) {
-      throw new Error("nickname field container not found");
-    }
-    const saveButton = within(nicknameField).getByRole("button", {
-      name: "保存",
-    });
-    await user.click(saveButton);
-
-    await waitFor(() => {
-      expect(mockPatchMeNickname).toHaveBeenCalledWith({ nickname: "" });
-    });
-  });
-
-  it("does not keep dirty nickname draft after current user changes", async () => {
-    mockGetTeamCurrentMembers.mockResolvedValue({
-      data: {
-        items: [
-          {
-            userId: "u1",
-            displayName: "Owner",
-            nickname: "にっく",
-            effectiveName: "にっく",
-            colorHex: "#111111",
-            joinedAt: "2026-02-24T00:00:00Z",
-            role: "owner",
-          },
-          {
-            userId: "u2",
-            displayName: "Partner",
-            nickname: "ぱーとなー",
-            effectiveName: "ぱーとなー",
-            colorHex: "#222222",
-            joinedAt: "2026-02-24T00:00:00Z",
-            role: "member",
-          },
-        ],
-      },
-    });
-    const user = userEvent.setup();
-
-    const { rerender } = render(
-      <AppProviders>
-        <SuspenseQueryBoundary errorMessage="テスト用エラー">
-          <AdminInvitesPage />
-        </SuspenseQueryBoundary>
-      </AppProviders>,
-    );
-
-    const accountHeading = await screen.findByRole("heading", {
-      name: "アカウント設定",
-    });
-    const accountCard = accountHeading.closest("article");
-    if (accountCard == null) {
-      throw new Error("account card not found");
-    }
-    const nicknameInput = within(accountCard).getByLabelText("ニックネーム");
-    await waitFor(() => {
-      expect(nicknameInput).toHaveValue("にっく");
-    });
-    await user.clear(nicknameInput);
-    await user.type(nicknameInput, "編集中");
-    expect(nicknameInput).toHaveValue("編集中");
-
-    mockOutletContext.mockReturnValue({
-      currentUserId: "u2",
-      currentTeamName: "Team B",
-      displayName: "Partner",
-    });
-
-    rerender(
-      <AppProviders>
-        <SuspenseQueryBoundary errorMessage="テスト用エラー">
-          <AdminInvitesPage />
-        </SuspenseQueryBoundary>
-      </AppProviders>,
-    );
-
-    await waitFor(() => {
-      expect(within(accountCard).getByLabelText("ニックネーム")).toHaveValue(
-        "ぱーとなー",
-      );
-    });
   });
 });
