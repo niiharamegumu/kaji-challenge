@@ -8,26 +8,29 @@ import (
 	"os"
 	"strings"
 
-	"github.com/megu/kaji-challenge/backend/internal/http/infra"
-	pushsvc "github.com/megu/kaji-challenge/backend/internal/push"
-	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
+	pushsvc "github.com/megu/kaji-challenge/backend/internal/adapter/external/push"
+	"github.com/megu/kaji-challenge/backend/internal/adapter/persistence/postgres"
+	"github.com/megu/kaji-challenge/backend/internal/application/model"
+	"github.com/megu/kaji-challenge/backend/internal/application/ports"
+	"github.com/megu/kaji-challenge/backend/internal/domain/notification"
 )
 
 type closeRunner interface {
 	ListClosableTeamIDs(ctx context.Context) ([]string, error)
-	CloseDayForTeam(ctx context.Context, teamID string) (api.CloseResponse, error)
-	CloseWeekForTeam(ctx context.Context, teamID string) (api.CloseResponse, error)
-	CloseMonthForTeam(ctx context.Context, teamID string) (api.CloseResponse, error)
+	CloseDayForTeam(ctx context.Context, teamID string) (model.CloseResponse, error)
+	CloseWeekForTeam(ctx context.Context, teamID string) (model.CloseResponse, error)
+	CloseMonthForTeam(ctx context.Context, teamID string) (model.CloseResponse, error)
 }
 
 type notifyRunner interface {
-	NotifySlot(ctx context.Context, slot string, sender pushsvc.Sender) (infra.NotifyRunResult, error)
+	NotifySlot(ctx context.Context, slot string, sender ports.PushSender) (ports.NotifyRunResult, error)
 }
 
 func main() {
 	logger := log.New(os.Stdout, "", log.LstdFlags)
-	store := infra.NewStore()
-	os.Exit(run(os.Args[1:], logger, store, store))
+	store := postgres.NewStore()
+	services := postgres.NewServices(store)
+	os.Exit(run(os.Args[1:], logger, services.Admin, services.Push))
 }
 
 func run(args []string, logger *log.Logger, closer closeRunner, notifier notifyRunner) int {
@@ -115,7 +118,7 @@ func runClose(args []string, logger *log.Logger, runner closeRunner) int {
 	return 0
 }
 
-func runScope(ctx context.Context, runner closeRunner, scope, teamID string) (api.CloseResponse, error) {
+func runScope(ctx context.Context, runner closeRunner, scope, teamID string) (model.CloseResponse, error) {
 	switch scope {
 	case "day":
 		return runner.CloseDayForTeam(ctx, teamID)
@@ -124,7 +127,7 @@ func runScope(ctx context.Context, runner closeRunner, scope, teamID string) (ap
 	case "month":
 		return runner.CloseMonthForTeam(ctx, teamID)
 	default:
-		return api.CloseResponse{}, fmt.Errorf("unsupported scope: %s", scope)
+		return model.CloseResponse{}, fmt.Errorf("unsupported scope: %s", scope)
 	}
 }
 
@@ -138,7 +141,7 @@ func runNotify(args []string, logger *log.Logger, runner notifyRunner) int {
 		logger.Printf("failed to parse notify flags: %v", err)
 		return 1
 	}
-	parsedSlot, err := infra.ParseNotifySlot(*slot)
+	parsedSlot, err := notification.ParseSlot(*slot)
 	if err != nil {
 		logger.Printf("invalid --slot %q: %v", *slot, err)
 		return 1
@@ -148,11 +151,12 @@ func runNotify(args []string, logger *log.Logger, runner notifyRunner) int {
 		logger.Printf("failed to initialize web push sender: %v", err)
 		return 1
 	}
-	logger.Printf("ops notify started: slot=%s", parsedSlot)
-	result, err := runner.NotifySlot(context.Background(), parsedSlot, sender)
+	parsedSlotString := string(parsedSlot)
+	logger.Printf("ops notify started: slot=%s", parsedSlotString)
+	result, err := runner.NotifySlot(context.Background(), parsedSlotString, pushsvc.AsPortsSender(sender))
 	logger.Printf(
 		"ops notify finished: slot=%s processed=%d sent=%d skipped=%d failed=%d",
-		parsedSlot,
+		parsedSlotString,
 		result.Processed,
 		result.Sent,
 		result.Skipped,
@@ -160,7 +164,7 @@ func runNotify(args []string, logger *log.Logger, runner notifyRunner) int {
 	)
 	if err != nil || result.Failed > 0 {
 		if err != nil {
-			logger.Printf("ops notify failed: slot=%s err=%v", parsedSlot, err)
+			logger.Printf("ops notify failed: slot=%s err=%v", parsedSlotString, err)
 		}
 		return 1
 	}

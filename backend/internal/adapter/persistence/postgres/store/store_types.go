@@ -1,0 +1,125 @@
+package store
+
+import (
+	"context"
+	"sync"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+	model "github.com/megu/kaji-challenge/backend/internal/application/model"
+	dbsqlc "github.com/megu/kaji-challenge/backend/internal/db/sqlc"
+)
+
+const (
+	authUserIDKey = "auth.userId"
+	authTokenKey  = "auth.token"
+	jstTZ         = "Asia/Tokyo"
+)
+
+type Store struct {
+	mu sync.Mutex
+
+	loc *time.Location
+	db  *pgxpool.Pool
+	q   *dbsqlc.Queries
+
+	users       map[string]userRecord
+	usersByMail map[string]string
+	memberships map[string][]membership
+	sessions    map[string]string
+
+	invites map[string]inviteCode
+	tasks   map[string]taskRecord
+	rules   map[string]ruleRecord
+
+	completions map[string]bool
+
+	monthSummaries map[string]*monthSummary
+	dayPenaltyKeys map[string]bool
+	weekPenaltyKey map[string]bool
+	monthClosedKey map[string]bool
+
+	authRequests  map[string]authRequest
+	exchangeCodes map[string]exchangeCodeRecord
+
+	trimSessionsForUserExec func(ctx context.Context, exec dbsqlc.DBTX, userID string, keepCount int32) error
+	now                     func() time.Time
+}
+
+type userRecord struct {
+	ID        string
+	Email     string
+	Name      string
+	CreatedAt time.Time
+}
+
+type membership struct {
+	TeamID string
+	Role   model.TeamMembershipRole
+}
+
+type inviteCode struct {
+	Code      string
+	TeamID    string
+	ExpiresAt time.Time
+}
+
+type taskRecord struct {
+	ID         string
+	TeamID     string
+	Title      string
+	Notes      *string
+	Type       model.TaskType
+	Penalty    int
+	AssigneeID *string
+	Required   int
+	SortKey    int
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+	DeletedAt  *time.Time
+}
+
+type ruleRecord struct {
+	ID          string
+	TeamID      string
+	Threshold   int
+	Name        string
+	Description *string
+	DeletedAt   *time.Time
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+type shoppingItemRecord struct {
+	ID        string
+	TeamID    string
+	Name      string
+	Quantity  *string
+	Notes     *string
+	SortKey   int
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+type reminderRecord struct {
+	ID           string
+	TeamID       string
+	Title        string
+	Notes        *string
+	Kind         model.ReminderKind
+	ScheduleType *model.ReminderScheduleType
+	StartDate    time.Time
+	EndDate      *time.Time
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
+type monthSummary struct {
+	TeamID           string
+	Month            string
+	DailyPenalty     int
+	WeeklyPenalty    int
+	IsClosed         bool
+	TriggeredRuleID  []string
+	TaskStatusByDate []model.MonthlyTaskStatusGroup
+}

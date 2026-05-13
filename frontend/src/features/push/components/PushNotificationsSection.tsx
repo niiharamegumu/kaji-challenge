@@ -1,6 +1,6 @@
 import { useSetAtom } from "jotai";
 
-import { statusMessageAtom } from "../../shell/state/status";
+import { statusMessageAtom } from "../../../shared/state/status";
 import { usePushNotifications } from "../hooks/usePushNotifications";
 
 export function PushNotificationsSection() {

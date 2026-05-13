@@ -16,17 +16,17 @@ import {
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useSearchParams } from "react-router-dom";
 
-import {
-  getPenaltySummaryMonthly,
-  listPenaltyRules,
-  postTaskCompletionToggle,
-} from "../../../lib/api/generated/client";
 import { CompletionSlots } from "../../../shared/components/CompletionSlots";
+import { ConfirmModal } from "../../../shared/components/ConfirmModal";
 import { queryKeys } from "../../../shared/query/queryKeys";
+import { handleTeamStatePreconditionFailure } from "../../../shared/query/teamStateRefresh";
 import { PAGE_SECTION_CHROMELESS_CLASS_NAME } from "../../../shared/styles/pageSection";
 import { dateStringInJST, formatError } from "../../../shared/utils/errors";
-import { handleTeamStatePreconditionFailure } from "../../shell/lib/teamStateRefresh";
-import { ConfirmModal } from "../components/ConfirmModal";
+import {
+  completePastDailyTask as completePastDailyTaskRequest,
+  getMonthlyPenaltySummary,
+  listPenaltyRulesWithDeleted,
+} from "../api/summaryApi";
 
 const monthPattern = /^\d{4}-\d{2}$/;
 
@@ -94,12 +94,11 @@ export function AdminSummaryPage() {
     queries: [
       {
         queryKey: [...queryKeys.monthlySummary, month],
-        queryFn: async () => (await getPenaltySummaryMonthly({ month })).data,
+        queryFn: async () => getMonthlyPenaltySummary(month),
       },
       {
         queryKey: [...queryKeys.rules, "withDeleted"],
-        queryFn: async () =>
-          (await listPenaltyRules({ includeDeleted: true })).data.items,
+        queryFn: listPenaltyRulesWithDeleted,
       },
     ],
   });
@@ -149,11 +148,7 @@ export function AdminSummaryPage() {
     }: {
       taskId: string;
       targetDate: string;
-    }) =>
-      postTaskCompletionToggle(taskId, {
-        targetDate,
-        action: "complete",
-      }),
+    }) => completePastDailyTaskRequest(taskId, targetDate),
     onSuccess: async () => {
       setStatus("過去日タスクを完了に更新しました");
       setConfirmTarget(null);

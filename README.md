@@ -12,6 +12,12 @@
 - `backend/`: API
 - `api/`: OpenAPI と codegen 設定
 
+## アーキテクチャ
+
+- backend は Clean Architecture、frontend は Feature-Based Architecture として整理します。
+- 詳細な責務、依存方向、禁止 import は `docs/architecture.md` に記載しています。
+- 境界チェックは `make architecture-check` または frontend の `npm run architecture:check` で実行できます。
+
 ## 前提ツール
 
 - Docker / Docker Compose

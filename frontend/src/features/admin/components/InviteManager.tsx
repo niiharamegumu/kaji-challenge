@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 import type { TeamMember } from "../../../lib/api/generated/client";
 import { PAGE_SECTION_CHROMELESS_CLASS_NAME } from "../../../shared/styles/pageSection";
-import { PushNotificationsSection } from "../../push/components/PushNotificationsSection";
+import { PushNotificationsSection } from "../../push";
 import { COPY_FEEDBACK_TIMEOUT_MS } from "../constants/invite";
 import type { InviteState } from "../state/ui";
 import {

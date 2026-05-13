@@ -6,9 +6,9 @@ import {
   authCallbackLoader,
 } from "../features/auth/routes/AuthCallbackPage";
 import { HomePage, HomePageSkeleton } from "../features/home/routes/HomePage";
-import { RootLayout } from "../features/shell/routes/RootLayout";
 import { SuspenseQueryBoundary } from "../shared/components/SuspenseQueryBoundary";
 import { InitialViewReady } from "./boot";
+import { RootLayout } from "./layout/RootLayout";
 import {
   AdminInvitesPage,
   AdminPenaltiesPage,

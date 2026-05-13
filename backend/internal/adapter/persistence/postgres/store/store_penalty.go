@@ -1,0 +1,153 @@
+package store
+
+import (
+	"context"
+	"errors"
+	"time"
+
+	model "github.com/megu/kaji-challenge/backend/internal/application/model"
+	dbsqlc "github.com/megu/kaji-challenge/backend/internal/db/sqlc"
+	domainpenalty "github.com/megu/kaji-challenge/backend/internal/domain/penalty"
+)
+
+func (s *Store) ListPenaltyRules(ctx context.Context, userID string, includeDeleted bool) ([]model.PenaltyRule, error) {
+	teamID, err := s.primaryTeamLocked(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	var rows []dbsqlc.PenaltyRule
+	if includeDeleted {
+		rows, err = s.q.ListPenaltyRulesByTeamID(ctx, teamID)
+	} else {
+		rows, err = s.q.ListUndeletedPenaltyRulesByTeamID(ctx, teamID)
+	}
+	if err != nil {
+		return nil, err
+	}
+	items := []model.PenaltyRule{}
+	for _, row := range rows {
+		items = append(items, ruleFromDB(row, s.loc).toAPI())
+	}
+	return items, nil
+}
+
+func (s *Store) CreatePenaltyRule(ctx context.Context, userID string, req model.CreatePenaltyRuleRequest) (model.PenaltyRule, error) {
+	teamID, err := s.primaryTeamLocked(ctx, userID)
+	if err != nil {
+		return model.PenaltyRule{}, err
+	}
+	now := time.Now().In(s.loc)
+	r := ruleRecord{
+		ID:          s.nextID("pr"),
+		TeamID:      teamID,
+		Threshold:   req.Threshold,
+		Name:        req.Name,
+		Description: req.Description,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	threshold32, err := safeInt32(r.Threshold, "threshold")
+	if err != nil {
+		return model.PenaltyRule{}, err
+	}
+	if _, err := s.runWithTeamRevisionCAS(
+		ctx,
+		teamID,
+		"penalty_rule",
+		map[string]string{"ruleId": r.ID, "action": "create"},
+		func(_ context.Context, qtx *dbsqlc.Queries) error {
+			return qtx.CreatePenaltyRule(ctx, dbsqlc.CreatePenaltyRuleParams{
+				ID:          r.ID,
+				TeamID:      r.TeamID,
+				Threshold:   threshold32,
+				Name:        r.Name,
+				Description: textFromPtr(r.Description),
+				CreatedAt:   toPgTimestamptz(r.CreatedAt),
+				UpdatedAt:   toPgTimestamptz(r.UpdatedAt),
+			})
+		},
+	); err != nil {
+		return model.PenaltyRule{}, err
+	}
+	return r.toAPI(), nil
+}
+
+func (s *Store) PatchPenaltyRule(ctx context.Context, userID, ruleID string, req model.UpdatePenaltyRuleRequest) (model.PenaltyRule, error) {
+	teamID, err := s.primaryTeamLocked(ctx, userID)
+	if err != nil {
+		return model.PenaltyRule{}, err
+	}
+	var rule ruleRecord
+	if _, err := s.runWithTeamRevisionCAS(
+		ctx,
+		teamID,
+		"penalty_rule",
+		map[string]string{"ruleId": ruleID, "action": "update"},
+		func(_ context.Context, qtx *dbsqlc.Queries) error {
+			row, err := qtx.GetUndeletedPenaltyRuleByID(ctx, ruleID)
+			if err != nil {
+				return errors.New("rule not found")
+			}
+			rule = ruleFromDB(row, s.loc)
+			if rule.TeamID != teamID {
+				return errors.New("rule not found")
+			}
+			if req.Threshold != nil {
+				rule.Threshold = *req.Threshold
+			}
+			if req.Name != nil {
+				rule.Name = domainpenalty.NormalizeRuleName(*req.Name)
+			}
+			if req.Description != nil {
+				rule.Description = req.Description
+			}
+			rule.UpdatedAt = time.Now().In(s.loc)
+			threshold32, err := safeInt32(rule.Threshold, "threshold")
+			if err != nil {
+				return err
+			}
+			return qtx.UpdatePenaltyRule(ctx, dbsqlc.UpdatePenaltyRuleParams{
+				ID:          rule.ID,
+				Threshold:   threshold32,
+				Name:        rule.Name,
+				Description: textFromPtr(rule.Description),
+				UpdatedAt:   toPgTimestamptz(rule.UpdatedAt),
+			})
+		},
+	); err != nil {
+		return model.PenaltyRule{}, err
+	}
+	return rule.toAPI(), nil
+}
+
+func (s *Store) DeletePenaltyRule(ctx context.Context, userID, ruleID string) error {
+	teamID, err := s.primaryTeamLocked(ctx, userID)
+	if err != nil {
+		return err
+	}
+	_, err = s.runWithTeamRevisionCAS(
+		ctx,
+		teamID,
+		"penalty_rule",
+		map[string]string{"ruleId": ruleID, "action": "delete"},
+		func(_ context.Context, qtx *dbsqlc.Queries) error {
+			rule, err := qtx.GetUndeletedPenaltyRuleByID(ctx, ruleID)
+			if err != nil || rule.TeamID != teamID {
+				return errors.New("rule not found")
+			}
+			now := time.Now().In(s.loc)
+			rows, err := qtx.SoftDeletePenaltyRule(ctx, dbsqlc.SoftDeletePenaltyRuleParams{
+				ID:        ruleID,
+				DeletedAt: toPgTimestamptz(now),
+			})
+			if err != nil {
+				return err
+			}
+			if rows == 0 {
+				return errors.New("rule not found")
+			}
+			return nil
+		},
+	)
+	return err
+}

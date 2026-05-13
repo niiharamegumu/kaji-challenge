@@ -5,7 +5,7 @@ import type {
   ShoppingListItem,
   UpdateShoppingListItemRequest,
 } from "../../../lib/api/generated/client";
-import { ShoppingListItemsSection } from "../../shopping-list/components/ShoppingListManager";
+import { ShoppingListItemsSection } from "../../shopping-list";
 import { HOME_PANEL_CLASS_NAME } from "./panelStyles";
 
 type Props = {

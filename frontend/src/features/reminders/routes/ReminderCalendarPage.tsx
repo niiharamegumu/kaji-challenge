@@ -24,27 +24,32 @@ import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
 
 import type {
-  CreateReminderRequest,
   Reminder,
   ReminderKind,
   ReminderOccurrence,
   ReminderScheduleType,
-  UpdateReminderRequest,
 } from "../../../lib/api/generated/client";
-import {
-  ReminderKind as ReminderKindConst,
-  ReminderScheduleType as ReminderScheduleTypeConst,
-} from "../../../lib/api/generated/client";
+import { ConfirmModal } from "../../../shared/components/ConfirmModal";
 import { FooterQuickAction } from "../../../shared/components/FooterQuickAction";
 import { FormSheet } from "../../../shared/components/FormSheet";
+import { statusMessageAtom } from "../../../shared/state/status";
 import { PAGE_SECTION_CHROMELESS_CLASS_NAME } from "../../../shared/styles/pageSection";
-import { ConfirmModal } from "../../admin/components/ConfirmModal";
-import { statusMessageAtom } from "../../shell/state/status";
 import {
   useReminderCalendarQuery,
   useReminderDefinitionsQuery,
   useReminderMutations,
 } from "../hooks/useReminders";
+import {
+  type ReminderFormState,
+  ReminderKindConst,
+  ReminderScheduleTypeConst,
+  buildCreateReminderRequest,
+  buildInitialFormState,
+  buildUpdateReminderRequest,
+  isRecurringReminder,
+  kindLabel,
+  toFormState,
+} from "../model/reminders";
 import {
   formatDateLabel,
   formatMonthLabel,
@@ -52,15 +57,6 @@ import {
   normalizeDateKey,
   todayDateKey,
 } from "../utils/date";
-
-type ReminderFormState = {
-  title: string;
-  notes: string;
-  kind: ReminderKind;
-  scheduleType: ReminderScheduleType;
-  startDate: string;
-  endDate: string;
-};
 
 const calendarButtonClass =
   "flex h-10 w-10 items-center justify-center rounded-full border border-stone-300 bg-white text-stone-700 transition-colors hover:bg-stone-100";
@@ -81,36 +77,6 @@ const mobileDotIds = [
   "twelve",
 ] as const;
 
-function kindLabel(
-  kind: ReminderKind,
-  scheduleType?: ReminderScheduleType | null,
-) {
-  if (kind === ReminderKindConst.one_time) {
-    return "1回だけ";
-  }
-  switch (scheduleType) {
-    case ReminderScheduleTypeConst.daily:
-      return "毎日";
-    case ReminderScheduleTypeConst.weekly:
-      return "毎週";
-    case ReminderScheduleTypeConst.monthly:
-      return "毎月";
-    default:
-      return "定期";
-  }
-}
-
-function buildInitialFormState(selectedDate: string): ReminderFormState {
-  return {
-    title: "",
-    notes: "",
-    kind: ReminderKindConst.one_time,
-    scheduleType: ReminderScheduleTypeConst.daily,
-    startDate: selectedDate,
-    endDate: "",
-  };
-}
-
 function calendarDescription(isMobile: boolean) {
   return isMobile
     ? "今月と来月以降の予定を表示します。過去月は表示しません。日付変更は編集から行えます。"
@@ -121,17 +87,6 @@ function normalizeVisibleDateKey(dateKey: string, todayKey: string) {
   return monthKeyFromDateKey(dateKey) < monthKeyFromDateKey(todayKey)
     ? todayKey
     : dateKey;
-}
-
-function toFormState(reminder: Reminder): ReminderFormState {
-  return {
-    title: reminder.title,
-    notes: reminder.notes ?? "",
-    kind: reminder.kind,
-    scheduleType: reminder.scheduleType ?? ReminderScheduleTypeConst.daily,
-    startDate: reminder.startDate,
-    endDate: reminder.endDate ?? "",
-  };
 }
 
 function ReminderSheet({
@@ -255,7 +210,7 @@ function ReminderFormFields({
   form: ReminderFormState;
   onChange: (next: ReminderFormState) => void;
 }) {
-  const isRecurring = form.kind === ReminderKindConst.recurring;
+  const isRecurring = isRecurringReminder(form);
 
   return (
     <div className="grid gap-3">
@@ -814,20 +769,7 @@ export function ReminderCalendarPage() {
       return;
     }
     if (sheetMode === "create") {
-      const payload: CreateReminderRequest = {
-        title: form.title.trim(),
-        notes: form.notes.trim() === "" ? undefined : form.notes.trim(),
-        kind: form.kind,
-        startDate: form.startDate,
-        scheduleType:
-          form.kind === ReminderKindConst.recurring
-            ? form.scheduleType
-            : undefined,
-        endDate:
-          form.kind === ReminderKindConst.recurring && form.endDate !== ""
-            ? form.endDate
-            : undefined,
-      };
+      const payload = buildCreateReminderRequest(form);
       void createReminder.mutateAsync(payload).then(() => {
         setSheetMode(null);
         if (isMobile) {
@@ -839,20 +781,7 @@ export function ReminderCalendarPage() {
     if (editingReminderId == null) {
       return;
     }
-    const payload: UpdateReminderRequest = {
-      title: form.title.trim(),
-      notes: form.notes.trim() === "" ? null : form.notes.trim(),
-      kind: form.kind,
-      startDate: form.startDate,
-      scheduleType:
-        form.kind === ReminderKindConst.recurring ? form.scheduleType : null,
-      endDate:
-        form.kind === ReminderKindConst.recurring
-          ? form.endDate === ""
-            ? null
-            : form.endDate
-          : null,
-    };
+    const payload = buildUpdateReminderRequest(form);
     void updateReminder
       .mutateAsync({ reminderId: editingReminderId, payload })
       .then(() => {

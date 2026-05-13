@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
+let apiBaseUrl = "/api";
 
 export type ApiRequestError = {
   name: "ApiRequestError";
@@ -21,6 +21,10 @@ export const isApiRequestError = (value: unknown): value is ApiRequestError => {
 };
 
 let latestTeamEtag = "";
+
+export const setApiBaseUrl = (value: string) => {
+  apiBaseUrl = value;
+};
 
 export const getLatestTeamEtag = () => latestTeamEtag;
 
@@ -63,7 +67,7 @@ export const customFetch = async <T>(
     headers["If-Match"] = latestTeamEtag;
   }
 
-  const response = await fetch(`${API_BASE_URL}${url}`, {
+  const response = await fetch(`${apiBaseUrl}${url}`, {
     ...options,
     credentials: "include",
     headers,

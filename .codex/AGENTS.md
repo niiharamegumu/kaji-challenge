@@ -24,6 +24,21 @@ If future subprojects add their own `AGENTS.md`, the nearest file takes preceden
 
 ## Project Workflow
 
+### Architecture Rules (Required)
+This repository uses:
+- Backend: Clean Architecture
+- Frontend: Feature-Based Architecture
+
+Before backend/frontend structural changes, refactors, package moves, or import-boundary changes:
+1. Read `docs/architecture.md`.
+2. Keep backend dependency direction aligned with Clean Architecture.
+3. Keep frontend feature access aligned with Feature-Based Architecture and feature public APIs.
+4. Do not introduce architecture baseline exceptions.
+
+Architecture boundaries are enforced by:
+- Root check: `node scripts/check-architecture.mjs`
+- Frontend check: `npm run architecture:check` from `frontend/`
+
 ### Spec-First API Rule (Required)
 When changing API behavior:
 1. Update `api/openapi.yaml` first.
@@ -43,6 +58,7 @@ When changing API behavior:
 A task is complete only when all applicable items are satisfied:
 - Build/type/lint/test pass for changed areas.
 - Generated files are updated when API/schema changed.
+- Architecture checks pass when backend/frontend structure or imports changed.
 - Security and auth implications were reviewed for API/backend changes.
 - Change summary includes what was changed and how it was validated.
 

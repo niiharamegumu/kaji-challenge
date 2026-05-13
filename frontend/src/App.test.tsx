@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { appQueryClient } from "./shared/query/queryClient";
 import { queryKeys } from "./shared/query/queryKeys";
+import { withExpectedConsoleError } from "./test/console";
 
 const mockGetAuthStart = vi.fn();
 const mockGetTaskOverview = vi.fn();
@@ -433,22 +434,26 @@ describe("App", () => {
   });
 
   it("shows boundary error on home when task overview fetch fails", async () => {
-    mockGetMe.mockResolvedValue({
-      data: { user: { id: "u1", displayName: "Owner" }, memberships: [] },
+    await withExpectedConsoleError(async () => {
+      mockGetMe.mockResolvedValue({
+        data: { user: { id: "u1", displayName: "Owner" }, memberships: [] },
+      });
+      mockGetTaskOverview.mockRejectedValue(new Error("request failed: 500"));
+
+      render(<App />);
+
+      await waitFor(
+        () => {
+          expect(
+            screen.getByText("ホーム画面の読み込みに失敗しました。"),
+          ).toBeInTheDocument();
+        },
+        { timeout: 4_000 },
+      );
+      expect(
+        screen.getByRole("button", { name: "再試行" }),
+      ).toBeInTheDocument();
     });
-    mockGetTaskOverview.mockRejectedValue(new Error("request failed: 500"));
-
-    render(<App />);
-
-    await waitFor(
-      () => {
-        expect(
-          screen.getByText("ホーム画面の読み込みに失敗しました。"),
-        ).toBeInTheDocument();
-      },
-      { timeout: 4_000 },
-    );
-    expect(screen.getByRole("button", { name: "再試行" })).toBeInTheDocument();
   });
 
   it("preloads route chunks when nav links receive intent", async () => {

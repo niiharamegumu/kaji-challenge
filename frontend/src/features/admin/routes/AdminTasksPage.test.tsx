@@ -1,0 +1,608 @@
+import {
+  act,
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { useSetAtom } from "jotai";
+import type { ReactNode } from "react";
+import { useEffect } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { AppProviders } from "../../../app/providers";
+import { SuspenseQueryBoundary } from "../../../shared/components/SuspenseQueryBoundary";
+import { appQueryClient } from "../../../shared/query/queryClient";
+import { sessionAtom } from "../../../state/session";
+import { AdminTasksPage } from "./AdminTasksPage";
+
+const mockPostTask = vi.fn();
+const mockPostPenaltyRule = vi.fn();
+const mockPatchTask = vi.fn();
+const mockDeleteTask = vi.fn();
+const mockPostTasksReorder = vi.fn();
+const mockListTasks = vi.fn();
+const mockListPenaltyRules = vi.fn();
+const mockPatchPenaltyRule = vi.fn();
+const mockDeletePenaltyRule = vi.fn();
+
+type MockDragEndEvent = {
+  active: { id: string };
+  over: { id: string } | null;
+};
+
+type MockDndContextProps = {
+  children: ReactNode;
+  onDragEnd?: (event: MockDragEndEvent) => void;
+};
+
+type MockChildrenProps = {
+  children: ReactNode;
+};
+
+let latestOnDragEnd: ((event: MockDragEndEvent) => void) | null = null;
+
+vi.mock("@dnd-kit/core", async () => {
+  const React = await vi.importActual<typeof import("react")>("react");
+  return {
+    DndContext: ({ children, onDragEnd }: MockDndContextProps) => {
+      latestOnDragEnd = onDragEnd ?? null;
+      return React.createElement("div", null, children);
+    },
+    KeyboardSensor: class {},
+    PointerSensor: class {},
+    TouchSensor: class {},
+    closestCenter: vi.fn(),
+    useSensor: vi.fn((sensor: unknown, options?: unknown) => ({
+      sensor,
+      options,
+    })),
+    useSensors: vi.fn((...sensors: unknown[]) => sensors),
+  };
+});
+
+vi.mock("@dnd-kit/sortable", async () => {
+  const React = await vi.importActual<typeof import("react")>("react");
+  return {
+    SortableContext: ({ children }: MockChildrenProps) =>
+      React.createElement(React.Fragment, null, children),
+    arrayMove: <T,>(items: T[], oldIndex: number, newIndex: number) => {
+      const nextItems = [...items];
+      const [moved] = nextItems.splice(oldIndex, 1);
+      nextItems.splice(newIndex, 0, moved);
+      return nextItems;
+    },
+    defaultAnimateLayoutChanges: vi.fn(() => true),
+    sortableKeyboardCoordinates: vi.fn(),
+    useSortable: vi.fn(() => ({
+      attributes: {},
+      listeners: {},
+      setNodeRef: vi.fn(),
+      transform: null,
+      transition: null,
+      isDragging: false,
+    })),
+    verticalListSortingStrategy: vi.fn(),
+  };
+});
+
+vi.mock("@dnd-kit/utilities", () => ({
+  CSS: {
+    Transform: {
+      toString: () => undefined,
+    },
+  },
+}));
+
+vi.mock("../../../lib/api/generated/client", async () => {
+  const actual = await vi.importActual<object>(
+    "../../../lib/api/generated/client",
+  );
+  return {
+    ...actual,
+    TaskType: { daily: "daily", weekly: "weekly" },
+    listTasks: (...args: unknown[]) => mockListTasks(...args),
+    listPenaltyRules: (...args: unknown[]) => mockListPenaltyRules(...args),
+    postTask: (...args: unknown[]) => mockPostTask(...args),
+    patchTask: (...args: unknown[]) => mockPatchTask(...args),
+    deleteTask: (...args: unknown[]) => mockDeleteTask(...args),
+    postTasksReorder: (...args: unknown[]) => mockPostTasksReorder(...args),
+    postPenaltyRule: (...args: unknown[]) => mockPostPenaltyRule(...args),
+    patchPenaltyRule: (...args: unknown[]) => mockPatchPenaltyRule(...args),
+    deletePenaltyRule: (...args: unknown[]) => mockDeletePenaltyRule(...args),
+    postTeamInvite: vi.fn().mockResolvedValue({ data: { code: "INVITE1" } }),
+    postTeamJoin: vi.fn(),
+  };
+});
+
+describe("AdminTasksPage", () => {
+  const LoginStateSetter = () => {
+    const setSession = useSetAtom(sessionAtom);
+    useEffect(() => {
+      setSession({ authenticated: true });
+    }, [setSession]);
+    return null;
+  };
+
+  beforeEach(() => {
+    appQueryClient.clear();
+    mockPostTask.mockReset();
+    mockPostPenaltyRule.mockReset();
+    mockPatchTask.mockReset();
+    mockDeleteTask.mockReset();
+    mockPostTasksReorder.mockReset();
+    mockListTasks.mockReset();
+    mockListPenaltyRules.mockReset();
+    mockPatchPenaltyRule.mockReset();
+    mockDeletePenaltyRule.mockReset();
+    mockListTasks.mockResolvedValue({ data: { items: [] } });
+    mockListPenaltyRules.mockResolvedValue({ data: { items: [] } });
+    mockPostTasksReorder.mockResolvedValue({ data: { items: [] } });
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  const renderPage = () =>
+    render(
+      <AppProviders>
+        <LoginStateSetter />
+        <SuspenseQueryBoundary errorMessage="テスト用エラー">
+          <AdminTasksPage />
+        </SuspenseQueryBoundary>
+      </AppProviders>,
+    );
+
+  it("posts task from task manager", async () => {
+    mockPostTask.mockResolvedValue({ data: {} });
+    const user = userEvent.setup();
+
+    renderPage();
+
+    await user.click(await screen.findByRole("button", { name: "追加" }));
+    const dialog = await screen.findByRole("dialog", { name: "タスクを追加" });
+    await user.type(within(dialog).getByLabelText("タスク名"), "食器片付け");
+    await user.click(within(dialog).getByRole("button", { name: "追加する" }));
+
+    await waitFor(() => {
+      expect(mockPostTask).toHaveBeenCalled();
+    });
+  });
+
+  it("shows a created task at the top of its type immediately", async () => {
+    mockListTasks.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: "task-1",
+            teamId: "team-1",
+            title: "皿洗い",
+            notes: null,
+            type: "daily",
+            penaltyPoints: 2,
+            assigneeUserId: undefined,
+            requiredCompletionsPerWeek: 1,
+            sortKey: 100,
+            createdAt: "2026-02-01T00:00:00Z",
+            updatedAt: "2026-02-01T00:00:00Z",
+          },
+        ],
+      },
+    });
+    mockPostTask.mockResolvedValue({
+      data: {
+        id: "task-2",
+        teamId: "team-1",
+        title: "洗濯",
+        notes: null,
+        type: "daily",
+        penaltyPoints: 1,
+        assigneeUserId: undefined,
+        requiredCompletionsPerWeek: 1,
+        sortKey: 200,
+        createdAt: "2026-02-02T00:00:00Z",
+        updatedAt: "2026-02-02T00:00:00Z",
+      },
+    });
+    const user = userEvent.setup();
+
+    renderPage();
+
+    await user.click(await screen.findByRole("button", { name: "追加" }));
+    const dialog = await screen.findByRole("dialog", { name: "タスクを追加" });
+    await user.type(within(dialog).getByLabelText("タスク名"), "洗濯");
+    await user.click(within(dialog).getByRole("button", { name: "追加する" }));
+
+    await waitFor(() => {
+      const dailySection = screen
+        .getByRole("heading", { name: "毎日" })
+        .closest("section");
+      if (dailySection == null) {
+        throw new Error("daily section not found");
+      }
+      const dailyItems = within(dailySection).getAllByRole("listitem");
+      expect(within(dailyItems[0]).getByText("洗濯")).toBeInTheDocument();
+      expect(within(dailyItems[1]).getByText("皿洗い")).toBeInTheDocument();
+    });
+  });
+
+  it("resets task form fields after creating task", async () => {
+    mockPostTask.mockResolvedValue({ data: {} });
+    const user = userEvent.setup();
+
+    renderPage();
+
+    await user.click(await screen.findByRole("button", { name: "追加" }));
+
+    const titleInput = await screen.findByLabelText("タスク名");
+    const notesInput = screen.getByLabelText("メモ");
+    const typeSelect = screen.getByLabelText("種別");
+    const penaltyInput = screen.getByLabelText("未達減点");
+
+    await user.type(titleInput, "浴室掃除");
+    await user.type(notesInput, "日曜夜");
+    await user.selectOptions(typeSelect, "weekly");
+    const requiredInput = await screen.findByLabelText("週間必要回数");
+    await user.clear(penaltyInput);
+    await user.type(penaltyInput, "3");
+    await user.clear(requiredInput);
+    await user.type(requiredInput, "2");
+    await user.click(screen.getByRole("button", { name: "追加する" }));
+
+    await waitFor(() => {
+      expect(mockPostTask).toHaveBeenCalledWith({
+        title: "浴室掃除",
+        notes: "日曜夜",
+        type: "weekly",
+        penaltyPoints: 3,
+        requiredCompletionsPerWeek: 2,
+      });
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("dialog", { name: "タスクを追加" }),
+      ).not.toBeInTheDocument();
+    });
+
+    await user.click(await screen.findByRole("button", { name: "追加" }));
+    const reopenedDialog = await screen.findByRole("dialog", {
+      name: "タスクを追加",
+    });
+    const reopened = within(reopenedDialog);
+    expect(reopened.getByLabelText("タスク名")).toHaveValue("");
+    expect(reopened.getByLabelText("メモ")).toHaveValue("");
+    expect(reopened.getByLabelText("種別")).toHaveValue("daily");
+    expect(reopened.getByLabelText("未達減点")).toHaveValue(1);
+    expect(reopened.queryByLabelText("週間必要回数")).not.toBeInTheDocument();
+
+    await user.selectOptions(reopened.getByLabelText("種別"), "weekly");
+    expect(await reopened.findByLabelText("週間必要回数")).toHaveValue(1);
+  });
+
+  it("starts editing with current values and saves task title/notes", async () => {
+    mockListTasks.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: "task-1",
+            teamId: "team-1",
+            title: "皿洗い",
+            notes: "夜ごはんの後",
+            type: "daily",
+            penaltyPoints: 2,
+            assigneeUserId: undefined,
+            requiredCompletionsPerWeek: 1,
+            createdAt: "2026-02-01T00:00:00Z",
+            updatedAt: "2026-02-01T00:00:00Z",
+          },
+        ],
+      },
+    });
+    mockPatchTask.mockResolvedValue({ data: {} });
+    const user = userEvent.setup();
+
+    renderPage();
+
+    const editButton = await screen.findByRole("button", { name: "編集" });
+    const card = editButton.closest("li");
+    if (card == null) {
+      throw new Error("task card not found");
+    }
+    await user.click(editButton);
+
+    const titleInput = await within(card).findByLabelText("タイトル");
+    const notesInput = within(card).getByLabelText("メモ");
+    expect(titleInput).toHaveValue("皿洗い");
+    expect(notesInput).toHaveValue("夜ごはんの後");
+
+    await user.clear(titleInput);
+    await user.type(titleInput, "台所掃除");
+    await user.clear(notesInput);
+    await user.type(notesInput, "寝る前");
+    await user.click(within(card).getByRole("button", { name: "保存" }));
+
+    await waitFor(() => {
+      expect(mockPatchTask).toHaveBeenCalledWith("task-1", {
+        title: "台所掃除",
+        notes: "寝る前",
+      });
+    });
+  });
+
+  it("allows clearing task notes", async () => {
+    mockListTasks.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: "task-2",
+            teamId: "team-1",
+            title: "洗濯",
+            notes: "夜",
+            type: "daily",
+            penaltyPoints: 1,
+            assigneeUserId: undefined,
+            requiredCompletionsPerWeek: 1,
+            createdAt: "2026-02-01T00:00:00Z",
+            updatedAt: "2026-02-01T00:00:00Z",
+          },
+        ],
+      },
+    });
+    mockPatchTask.mockResolvedValue({ data: {} });
+    const user = userEvent.setup();
+
+    renderPage();
+
+    const editButton = await screen.findByRole("button", { name: "編集" });
+    const card = editButton.closest("li");
+    if (card == null) {
+      throw new Error("task card not found");
+    }
+    await user.click(editButton);
+
+    const notesInput = await within(card).findByLabelText("メモ");
+    await user.clear(notesInput);
+    await user.click(within(card).getByRole("button", { name: "保存" }));
+
+    await waitFor(() => {
+      expect(mockPatchTask).toHaveBeenCalledWith("task-2", {
+        title: "洗濯",
+        notes: "",
+      });
+    });
+  });
+
+  it("does not save when title is blank", async () => {
+    mockListTasks.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: "task-3",
+            teamId: "team-1",
+            title: "ゴミ出し",
+            notes: "",
+            type: "daily",
+            penaltyPoints: 1,
+            assigneeUserId: undefined,
+            requiredCompletionsPerWeek: 1,
+            createdAt: "2026-02-01T00:00:00Z",
+            updatedAt: "2026-02-01T00:00:00Z",
+          },
+        ],
+      },
+    });
+    const user = userEvent.setup();
+
+    renderPage();
+    const editButton = await screen.findByRole("button", { name: "編集" });
+    const card = editButton.closest("li");
+    if (card == null) {
+      throw new Error("task card not found");
+    }
+    await user.click(editButton);
+    const titleInput = await within(card).findByLabelText("タイトル");
+    await user.clear(titleInput);
+    await user.type(titleInput, "   ");
+    const saveButton = within(card).getByRole("button", { name: "保存" });
+    expect(saveButton).toBeDisabled();
+    expect(mockPatchTask).not.toHaveBeenCalled();
+  });
+
+  it("reorders daily tasks from drag-and-drop", async () => {
+    mockListTasks.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: "task-1",
+            teamId: "team-1",
+            title: "皿洗い",
+            notes: null,
+            type: "daily",
+            penaltyPoints: 2,
+            assigneeUserId: undefined,
+            requiredCompletionsPerWeek: 1,
+            sortKey: 1,
+            createdAt: "2026-02-01T00:00:00Z",
+            updatedAt: "2026-02-01T00:00:00Z",
+          },
+          {
+            id: "task-2",
+            teamId: "team-1",
+            title: "洗濯",
+            notes: null,
+            type: "daily",
+            penaltyPoints: 1,
+            assigneeUserId: undefined,
+            requiredCompletionsPerWeek: 1,
+            sortKey: 2,
+            createdAt: "2026-02-02T00:00:00Z",
+            updatedAt: "2026-02-02T00:00:00Z",
+          },
+        ],
+      },
+    });
+    let resolveReorder: (value: unknown) => void = () => {
+      throw new Error("reorder resolver was not registered");
+    };
+    mockPostTasksReorder.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveReorder = resolve;
+        }),
+    );
+
+    renderPage();
+    expect(
+      await screen.findByText(
+        "タスク設定はチーム共通です。並び替えは管理画面でのみ変更できます。",
+      ),
+    ).toBeInTheDocument();
+
+    if (latestOnDragEnd == null) {
+      throw new Error("drag handler was not registered");
+    }
+    act(() => {
+      latestOnDragEnd?.({
+        active: { id: "task-2" },
+        over: { id: "task-1" },
+      });
+    });
+
+    await waitFor(() => {
+      expect(mockPostTasksReorder).toHaveBeenCalledWith({
+        taskIds: ["task-2", "task-1"],
+      });
+    });
+
+    await waitFor(() => {
+      const dailySection = screen
+        .getByRole("heading", { name: "毎日" })
+        .closest("section");
+      if (dailySection == null) {
+        throw new Error("daily section not found");
+      }
+      const dailyItems = within(dailySection).getAllByRole("listitem");
+      expect(within(dailyItems[0]).getByText("洗濯")).toBeInTheDocument();
+      expect(within(dailyItems[1]).getByText("皿洗い")).toBeInTheDocument();
+    });
+
+    resolveReorder({
+      data: {
+        items: [
+          {
+            id: "task-2",
+            teamId: "team-1",
+            title: "洗濯",
+            notes: null,
+            type: "daily",
+            penaltyPoints: 1,
+            assigneeUserId: undefined,
+            requiredCompletionsPerWeek: 1,
+            sortKey: 1,
+            createdAt: "2026-02-02T00:00:00Z",
+            updatedAt: "2026-02-02T00:00:00Z",
+          },
+          {
+            id: "task-1",
+            teamId: "team-1",
+            title: "皿洗い",
+            notes: null,
+            type: "daily",
+            penaltyPoints: 2,
+            assigneeUserId: undefined,
+            requiredCompletionsPerWeek: 1,
+            sortKey: 2,
+            createdAt: "2026-02-01T00:00:00Z",
+            updatedAt: "2026-02-01T00:00:00Z",
+          },
+        ],
+      },
+    });
+  });
+
+  it("cancels editing and restores display state", async () => {
+    mockListTasks.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: "task-4",
+            teamId: "team-1",
+            title: "風呂掃除",
+            notes: "土曜",
+            type: "daily",
+            penaltyPoints: 1,
+            assigneeUserId: undefined,
+            requiredCompletionsPerWeek: 1,
+            createdAt: "2026-02-01T00:00:00Z",
+            updatedAt: "2026-02-01T00:00:00Z",
+          },
+        ],
+      },
+    });
+    const user = userEvent.setup();
+
+    renderPage();
+    const editButton = await screen.findByRole("button", { name: "編集" });
+    const card = editButton.closest("li");
+    if (card == null) {
+      throw new Error("task card not found");
+    }
+    await user.click(editButton);
+    const titleInput = await within(card).findByLabelText("タイトル");
+    await user.clear(titleInput);
+    await user.type(titleInput, "変更後");
+    await user.click(within(card).getByRole("button", { name: "キャンセル" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("風呂掃除")).toBeInTheDocument();
+    });
+    expect(mockPatchTask).not.toHaveBeenCalled();
+    const displayCard = screen.getByText("風呂掃除").closest("li");
+    if (displayCard == null) {
+      throw new Error("card not found");
+    }
+    expect(
+      within(displayCard).queryByLabelText("タイトル"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("deletes task only after confirming in modal", async () => {
+    mockListTasks.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: "task-del-1",
+            teamId: "team-1",
+            title: "誤タップ確認タスク",
+            notes: "",
+            type: "daily",
+            penaltyPoints: 1,
+            assigneeUserId: undefined,
+            requiredCompletionsPerWeek: 1,
+            createdAt: "2026-02-01T00:00:00Z",
+            updatedAt: "2026-02-01T00:00:00Z",
+          },
+        ],
+      },
+    });
+    mockDeleteTask.mockResolvedValue({ status: 204, data: {}, headers: {} });
+    const user = userEvent.setup();
+
+    renderPage();
+
+    await user.click(await screen.findByRole("button", { name: "削除" }));
+    expect(mockDeleteTask).not.toHaveBeenCalled();
+
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "削除する" }));
+
+    await waitFor(() => {
+      expect(mockDeleteTask).toHaveBeenCalledWith("task-del-1");
+    });
+  });
+});

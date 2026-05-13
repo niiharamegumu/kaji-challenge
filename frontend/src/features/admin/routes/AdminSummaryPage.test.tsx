@@ -7,6 +7,7 @@ import { AppProviders } from "../../../app/providers";
 import { SuspenseQueryBoundary } from "../../../shared/components/SuspenseQueryBoundary";
 import { appQueryClient } from "../../../shared/query/queryClient";
 import { dateStringInJST } from "../../../shared/utils/errors";
+import { withExpectedConsoleError } from "../../../test/console";
 import { AdminSummaryPage } from "./AdminSummaryPage";
 
 const mockGetPenaltySummaryMonthly = vi.fn();
@@ -105,20 +106,24 @@ describe("AdminSummaryPage", () => {
   });
 
   it("shows boundary error when summary query fails", async () => {
-    mockGetPenaltySummaryMonthly.mockRejectedValue(
-      new Error("request failed: 500"),
-    );
-    renderPage();
+    await withExpectedConsoleError(async () => {
+      mockGetPenaltySummaryMonthly.mockRejectedValue(
+        new Error("request failed: 500"),
+      );
+      renderPage();
 
-    await waitFor(
-      () => {
-        expect(
-          screen.getByText("サマリー画面の読み込みに失敗しました。"),
-        ).toBeInTheDocument();
-      },
-      { timeout: 4_000 },
-    );
-    expect(screen.getByRole("button", { name: "再試行" })).toBeInTheDocument();
+      await waitFor(
+        () => {
+          expect(
+            screen.getByText("サマリー画面の読み込みに失敗しました。"),
+          ).toBeInTheDocument();
+        },
+        { timeout: 4_000 },
+      );
+      expect(
+        screen.getByRole("button", { name: "再試行" }),
+      ).toBeInTheDocument();
+    });
   });
 
   it("renders safely when summary arrays are null", async () => {
