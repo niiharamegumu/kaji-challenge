@@ -1,0 +1,97 @@
+# Project-local Codex command approval rules.
+#
+# これらは sandbox 外で実行するコマンドの承認制御だけに使う。
+# 開発規約は AGENTS.md、docs、skills に置く。
+
+prefix_rule(
+    pattern = ["make", "test-backend"],
+    decision = "allow",
+    justification = "backend 変更の検証として backend tests の実行を許可する。",
+    match = [
+        "make test-backend",
+    ],
+    not_match = [
+        "make test",
+    ],
+)
+
+prefix_rule(
+    pattern = ["make", "test-frontend"],
+    decision = "allow",
+    justification = "frontend 変更の検証として frontend tests の実行を許可する。",
+    match = [
+        "make test-frontend",
+    ],
+    not_match = [
+        "make test",
+    ],
+)
+
+prefix_rule(
+    pattern = ["make", "architecture-check"],
+    decision = "allow",
+    justification = "構造変更の検証として architecture check の実行を許可する。",
+    match = [
+        "make architecture-check",
+    ],
+    not_match = [
+        "make check",
+    ],
+)
+
+prefix_rule(
+    pattern = ["make", ["gen-backend", "gen-frontend"]],
+    decision = "allow",
+    justification = "OpenAPI 変更後の狭い code generation target 実行を許可する。",
+    match = [
+        "make gen-backend",
+        "make gen-frontend",
+    ],
+    not_match = [
+        "make gen",
+    ],
+)
+
+prefix_rule(
+    pattern = ["gh", "pr", "create"],
+    decision = "prompt",
+    justification = "pull request 作成は外部副作用があるため確認する。",
+    match = [
+        "gh pr create",
+        "gh pr create --draft",
+        "gh pr create --repo niiharamegumu/kaji-challenge",
+    ],
+    not_match = [
+        "gh pr view",
+        "gh issue create",
+    ],
+)
+
+prefix_rule(
+    pattern = ["git", "push"],
+    decision = "prompt",
+    justification = "push は remote repository を変更するため確認する。",
+    match = [
+        "git push",
+        "git push origin feature/example",
+        "git push -u origin feature/example",
+    ],
+    not_match = [
+        "git status",
+        "git commit -m message",
+    ],
+)
+
+prefix_rule(
+    pattern = [["rm", "rmdir"]],
+    decision = "forbidden",
+    justification = "破壊的な file removal はユーザーの明示依頼がある場合だけ個別確認する。",
+    match = [
+        "rm file.txt",
+        "rm -rf .codex",
+        "rmdir old-dir",
+    ],
+    not_match = [
+        "git rm file.txt",
+    ],
+)
