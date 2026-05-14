@@ -18,6 +18,12 @@
 - 詳細な責務、依存方向、禁止 import は `docs/architecture.md` に記載しています。
 - 境界チェックは `make architecture-check` または frontend の `npm run architecture:check` で実行できます。
 
+## Codex / Agent 運用
+
+- Codex のリポジトリ規約は root `AGENTS.md` に記載しています。
+- テスト設計方針は `docs/testing.md` に記載しています。
+- Codex の skill / rule / subagent / spec の使い分けは `docs/codex-workflow.md` に記載しています。
+
 ## 前提ツール
 
 - Docker / Docker Compose

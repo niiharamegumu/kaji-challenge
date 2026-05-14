@@ -1,5 +1,10 @@
 model = "gpt-5.5"
-model_reasoning_summary = "detailed"
+model_reasoning_summary = "auto"
+personality = "pragmatic"
+
+[agents]
+max_threads = 4
+max_depth = 1
 
 [features]
 goals = true
