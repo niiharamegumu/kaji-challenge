@@ -73,6 +73,85 @@ func TestListRemindersHidesPastMonth(t *testing.T) {
 	}
 }
 
+func TestReminderDefinitionLifecycleCleansExpiredOneTime(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	now := time.Date(2026, 4, 15, 9, 0, 0, 0, s.loc)
+	s.now = func() time.Time { return now }
+	teamID, userID := createTeamWithMember(t, s, "reminder-lifecycle@example.com", now)
+	daily := model.ReminderScheduleTypeDaily
+	notes := "bring card"
+
+	createReminderAt(t, s, teamID, "expired one-time", model.OneTime, nil, now.Add(-48*time.Hour), dateMustParse("2026-03-30", s.loc), nil)
+	created, err := s.CreateReminder(withLatestIfMatchForUser(t, s, ctx, userID), userID, model.CreateReminderRequest{
+		Title:        "  Daily reminder  ",
+		Notes:        &notes,
+		Kind:         model.Recurring,
+		ScheduleType: &daily,
+		StartDate:    model.Date{Time: dateMustParse("2026-04-15", s.loc)},
+	})
+	if err != nil {
+		t.Fatalf("CreateReminder failed: %v", err)
+	}
+	if created.Title != "Daily reminder" || created.Notes == nil || *created.Notes != notes {
+		t.Fatalf("unexpected created reminder: %+v", created)
+	}
+
+	definitions, err := s.ListReminderDefinitions(ctx, userID)
+	if err != nil {
+		t.Fatalf("ListReminderDefinitions failed: %v", err)
+	}
+	if len(definitions) != 1 || definitions[0].Title != "Daily reminder" {
+		t.Fatalf("expected expired one-time reminder to be cleaned up, got %+v", definitions)
+	}
+
+	title := "Weekly reminder"
+	weekly := model.ReminderScheduleTypeWeekly
+	patched, err := s.PatchReminder(withLatestIfMatchForUser(t, s, ctx, userID), userID, created.Id, model.UpdateReminderRequest{
+		Title:        &title,
+		ScheduleType: &weekly,
+	})
+	if err != nil {
+		t.Fatalf("PatchReminder failed: %v", err)
+	}
+	if patched.Title != title || patched.ScheduleType == nil || *patched.ScheduleType != weekly {
+		t.Fatalf("unexpected patched reminder: %+v", patched)
+	}
+
+	if err := s.DeleteReminder(withLatestIfMatchForUser(t, s, ctx, userID), userID, created.Id); err != nil {
+		t.Fatalf("DeleteReminder failed: %v", err)
+	}
+	definitions, err = s.ListReminderDefinitions(ctx, userID)
+	if err != nil {
+		t.Fatalf("ListReminderDefinitions after delete failed: %v", err)
+	}
+	if len(definitions) != 0 {
+		t.Fatalf("expected no reminder definitions after delete, got %+v", definitions)
+	}
+}
+
+func TestReminderMutationsRejectMissingIfMatchAndInvalidRange(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	now := time.Date(2026, 4, 15, 9, 0, 0, 0, s.loc)
+	s.now = func() time.Time { return now }
+	_, userID := createTeamWithMember(t, s, "reminder-errors@example.com", now)
+	daily := model.ReminderScheduleTypeDaily
+
+	if _, err := s.CreateReminder(ctx, userID, model.CreateReminderRequest{
+		Title:        "daily",
+		Kind:         model.Recurring,
+		ScheduleType: &daily,
+		StartDate:    model.Date{Time: now},
+	}); err == nil {
+		t.Fatal("expected missing If-Match to fail")
+	}
+
+	if _, err := s.ListReminders(ctx, userID, dateMustParse("2026-04-20", s.loc), dateMustParse("2026-04-10", s.loc)); err == nil {
+		t.Fatal("expected invalid date range to fail")
+	}
+}
+
 func TestGetTaskOverviewWeeklyRemindersStillStartsToday(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
