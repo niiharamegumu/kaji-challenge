@@ -22,6 +22,7 @@ backend/bin/
 backend/tmp/
 frontend/.vite/
 frontend/.wrangler/
+api/openapi.html
 *.log
 coverage/
 

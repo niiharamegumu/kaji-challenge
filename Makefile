@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: dev up down down-reset gen gen-backend gen-frontend lint lint-backend lint-frontend architecture-check typecheck typecheck-frontend test test-backend test-frontend security security-backend security-frontend check diff-gen db-migrate-up db-migrate-down db-migrate-create seed-monthly-dummy backend-cmd-seeder ops-close backend-cmd-ops-close ops-notify backend-cmd-ops-notify vapid-keys backend-cmd-vapid-keys
+.PHONY: dev up down down-reset gen gen-backend gen-frontend lint lint-backend lint-frontend architecture-check typecheck typecheck-frontend test test-backend test-frontend security security-backend security-frontend check diff-gen openapi-serve db-migrate-up db-migrate-down db-migrate-create seed-monthly-dummy backend-cmd-seeder ops-close backend-cmd-ops-close ops-notify backend-cmd-ops-notify vapid-keys backend-cmd-vapid-keys
 
 ifneq (,$(wildcard .env))
 include .env
@@ -101,6 +101,10 @@ check: gen lint architecture-check typecheck test
 
 diff-gen: gen
 	git diff --exit-code
+
+openapi-serve:
+	node scripts/build-openapi-html.cjs
+	cd api && python3 -m http.server 8787
 
 db-migrate-up:
 	@test -n "$(DATABASE_URL)" || (echo "DATABASE_URL is empty. Set it in .env or env var." && exit 1)
