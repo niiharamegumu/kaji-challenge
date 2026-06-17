@@ -127,7 +127,7 @@ func TestTaskOverviewBuildsTasksSlotsActorsAndReminderOccurrences(t *testing.T) 
 	if got.WeeklyTasks[0].CompletionSlots[1].Actor == nil || got.WeeklyTasks[0].CompletionSlots[1].Actor.UserId != "user-1" {
 		t.Fatalf("expected actor in weekly slot 2: %+v", got.WeeklyTasks[0].CompletionSlots)
 	}
-	if len(got.WeeklyReminders) != 1 || got.WeeklyReminders[0].Date.Time.Format(time.DateOnly) != "2026-05-13" {
+	if len(got.WeeklyReminders) != 1 || got.WeeklyReminders[0].Date.Format(time.DateOnly) != "2026-05-13" {
 		t.Fatalf("unexpected reminder occurrences: %+v", got.WeeklyReminders)
 	}
 }
@@ -165,7 +165,7 @@ func TestMonthlySummaryBuildsStatusByDateAndCompletionSlots(t *testing.T) {
 	if got.TotalPenalty != 7 || len(got.TriggeredPenaltyRuleIds) != 1 || got.TriggeredPenaltyRuleIds[0] != "rule-5" {
 		t.Fatalf("unexpected penalty summary: %+v", got)
 	}
-	if len(got.TaskStatusByDate) == 0 || got.TaskStatusByDate[0].Date.Time.Format(time.DateOnly) != "2026-05-13" {
+	if len(got.TaskStatusByDate) == 0 || got.TaskStatusByDate[0].Date.Format(time.DateOnly) != "2026-05-13" {
 		t.Fatalf("expected latest displayed day first, got %+v", got.TaskStatusByDate)
 	}
 	latestItems := got.TaskStatusByDate[0].Items
@@ -175,7 +175,7 @@ func TestMonthlySummaryBuildsStatusByDateAndCompletionSlots(t *testing.T) {
 
 	var weeklyItem *model.MonthlyTaskStatusItem
 	for _, group := range got.TaskStatusByDate {
-		if group.Date.Time.Format(time.DateOnly) != "2026-05-11" {
+		if group.Date.Format(time.DateOnly) != "2026-05-11" {
 			continue
 		}
 		for i := range group.Items {

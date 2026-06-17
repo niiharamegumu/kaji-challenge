@@ -109,7 +109,9 @@ func fetchUserOIDCIdentityByEmail(t *testing.T, email string) (string, string) {
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	var issuer, subject sql.NullString
 	if err := db.QueryRow(`SELECT oidc_issuer, oidc_subject FROM users WHERE LOWER(email) = LOWER($1)`, email).Scan(&issuer, &subject); err != nil {
@@ -129,7 +131,9 @@ func countUsersByOIDCIdentity(t *testing.T, issuer, subject string) int {
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	var count int
 	if err := db.QueryRow(
@@ -167,7 +171,9 @@ func clearTeamMembershipsForTest(t *testing.T, userID string) {
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	if _, err := db.Exec(`DELETE FROM team_members WHERE user_id = $1`, userID); err != nil {
 		t.Fatalf("failed to clear team memberships: %v", err)
@@ -219,7 +225,9 @@ func expireSessionForTest(t *testing.T, rawToken string) {
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	hashed := hashTokenForTest(rawToken)
 	result, err := db.Exec(`UPDATE sessions SET expires_at = NOW() - INTERVAL '1 minute' WHERE token = $1`, hashed)
@@ -246,7 +254,9 @@ func countSessionsByUserID(t *testing.T, userID string) int {
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	var count int
 	if err := db.QueryRow(`SELECT COUNT(*) FROM sessions WHERE user_id = $1`, userID).Scan(&count); err != nil {

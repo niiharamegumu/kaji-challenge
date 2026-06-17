@@ -140,7 +140,7 @@ func TestMonthlySummaryOmitsTaskAfterSameDayDelete(t *testing.T) {
 	}
 
 	for _, group := range after.TaskStatusByDate {
-		if group.Date.Time.Format("2006-01-02") != today {
+		if group.Date.Format("2006-01-02") != today {
 			continue
 		}
 		for _, item := range group.Items {

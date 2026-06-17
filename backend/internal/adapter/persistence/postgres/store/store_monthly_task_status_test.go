@@ -215,7 +215,7 @@ func TestBuildMonthlyTaskStatusByDateCurrentMonthDoesNotIncludeFutureDates(t *te
 	}
 
 	for _, group := range groups {
-		groupDay := dateOnly(group.Date.Time.In(s.loc), s.loc)
+		groupDay := dateOnly(group.Date.In(s.loc), s.loc)
 		if groupDay.After(today) {
 			t.Fatalf("future date should not be included: %s > %s", groupDay.Format("2006-01-02"), todayKey)
 		}

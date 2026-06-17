@@ -15,6 +15,7 @@ const (
 )
 
 func setSessionCookie(w http.ResponseWriter, token string, secure bool) {
+	// #nosec G124 -- Secure is derived from request/env so local HTTP development can work; HttpOnly and SameSite are always set.
 	http.SetCookie(w, &http.Cookie{
 		Name:     SessionCookieName,
 		Value:    token,
@@ -27,6 +28,7 @@ func setSessionCookie(w http.ResponseWriter, token string, secure bool) {
 }
 
 func clearSessionCookie(w http.ResponseWriter, secure bool) {
+	// #nosec G124 -- Secure is derived from request/env so local HTTP development can work; HttpOnly and SameSite are always set.
 	http.SetCookie(w, &http.Cookie{
 		Name:     SessionCookieName,
 		Value:    "",

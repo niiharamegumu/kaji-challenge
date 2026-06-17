@@ -176,7 +176,7 @@ func TestGetTaskOverviewWeeklyRemindersStillStartsToday(t *testing.T) {
 
 func containsReminderOnDate(days []model.ReminderCalendarDay, dateKey string, title string) bool {
 	for _, day := range days {
-		if day.Date.Time.Format("2006-01-02") != dateKey {
+		if day.Date.Format("2006-01-02") != dateKey {
 			continue
 		}
 		for _, item := range day.Items {
