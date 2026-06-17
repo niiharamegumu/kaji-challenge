@@ -9,7 +9,7 @@ endif
 DC := docker compose
 BACKEND_RUN := $(DC) run --rm backend
 FRONTEND_RUN := $(DC) run --rm frontend
-MIGRATE_RUN := $(BACKEND_RUN) go -C /app/backend run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.19.0
+MIGRATE_RUN := $(BACKEND_RUN) go -C /app/backend run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.19.1
 
 # Execution mode:
 # - local dev: run inside Docker Compose
@@ -17,22 +17,22 @@ MIGRATE_RUN := $(BACKEND_RUN) go -C /app/backend run -tags 'postgres' github.com
 ifeq ($(CI),true)
 GEN_BACKEND = cd backend && go generate ./...
 GEN_FRONTEND = cd frontend && npm run gen
-LINT_BACKEND = cd backend && golangci-lint run --go=1.24 ./...
+LINT_BACKEND = cd backend && golangci-lint run ./...
 LINT_FRONTEND = cd frontend && npm run lint:all
 TYPECHECK_FRONTEND = cd frontend && npm run typecheck
 TEST_BACKEND = cd backend && TEST_DATABASE_URL=$${TEST_DATABASE_URL:-postgres://kaji:kaji@localhost:5432/postgres?sslmode=disable} go test ./...
 TEST_FRONTEND = cd frontend && npm run test -- --run
-SECURITY_BACKEND = cd backend && go run github.com/securego/gosec/v2/cmd/gosec@v2.22.8 -exclude-dir=internal/db/sqlc -exclude-dir=internal/openapi/generated ./... && go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 -format json ./... | go run ./cmd/govulncheck-critical -critical-file ./security/critical_goids.txt
+SECURITY_BACKEND = cd backend && go run github.com/securego/gosec/v2/cmd/gosec@v2.27.1 -exclude-dir=internal/db/sqlc -exclude-dir=internal/openapi/generated ./... && go run golang.org/x/vuln/cmd/govulncheck@v1.3.0 -format json ./... | go run ./cmd/govulncheck-critical -critical-file ./security/critical_goids.txt
 SECURITY_FRONTEND = cd frontend && npm audit --omit=dev --audit-level=high
 else
 GEN_BACKEND = $(BACKEND_RUN) go -C /app/backend generate ./...
 GEN_FRONTEND = $(FRONTEND_RUN) npm run gen
-LINT_BACKEND = $(BACKEND_RUN) golangci-lint run --go=1.24 ./...
+LINT_BACKEND = $(BACKEND_RUN) golangci-lint run ./...
 LINT_FRONTEND = $(FRONTEND_RUN) npm run lint:all
 TYPECHECK_FRONTEND = $(FRONTEND_RUN) npm run typecheck
 TEST_BACKEND = $(BACKEND_RUN) sh -c "TEST_DATABASE_URL=$${TEST_DATABASE_URL:-postgres://kaji:kaji@postgres:5432/postgres?sslmode=disable} go -C /app/backend test ./..."
 TEST_FRONTEND = $(FRONTEND_RUN) npm run test -- --run
-SECURITY_BACKEND = $(BACKEND_RUN) sh -c "cd /app/backend && go run github.com/securego/gosec/v2/cmd/gosec@v2.22.8 -exclude-dir=internal/db/sqlc -exclude-dir=internal/openapi/generated ./... && go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 -format json ./... | go run ./cmd/govulncheck-critical -critical-file ./security/critical_goids.txt"
+SECURITY_BACKEND = $(BACKEND_RUN) sh -c "cd /app/backend && go run github.com/securego/gosec/v2/cmd/gosec@v2.27.1 -exclude-dir=internal/db/sqlc -exclude-dir=internal/openapi/generated ./... && go run golang.org/x/vuln/cmd/govulncheck@v1.3.0 -format json ./... | go run ./cmd/govulncheck-critical -critical-file ./security/critical_goids.txt"
 SECURITY_FRONTEND = $(FRONTEND_RUN) npm audit --omit=dev --audit-level=high
 endif
 

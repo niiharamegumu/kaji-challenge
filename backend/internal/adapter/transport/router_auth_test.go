@@ -167,7 +167,9 @@ func TestUsersOIDCIdentityUniqueConstraint(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	_, err = db.Exec(
 		`UPDATE users SET oidc_issuer = $1, oidc_subject = $2, oidc_linked_at = NOW() WHERE LOWER(email) = LOWER($3)`,
@@ -300,7 +302,9 @@ func TestExchangeSessionRollsBackWhenTrimFails(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	var userID string
 	if err := db.QueryRow(`SELECT id FROM users WHERE LOWER(email) = LOWER($1)`, email).Scan(&userID); err != nil {
@@ -337,7 +341,9 @@ func TestSessionsMaxFivePerUserMigrationKeepsLatestFive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	if _, err := db.Exec(`DROP INDEX IF EXISTS uq_sessions_user_id`); err != nil {
 		t.Fatalf("failed to drop session unique index: %v", err)

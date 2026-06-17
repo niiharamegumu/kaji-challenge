@@ -136,7 +136,9 @@ func (s *WebPushSender) Send(ctx context.Context, sub Subscription, payload Payl
 	if err != nil {
 		return Result{}, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	bodyBytes, readErr := io.ReadAll(io.LimitReader(resp.Body, webPushBodyLogMaxSize))
 	if readErr != nil {

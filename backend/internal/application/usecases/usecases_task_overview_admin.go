@@ -107,10 +107,10 @@ func (u taskOverviewUsecase) GetTaskOverview(ctx context.Context, userID string)
 	sortOverviewDaily(daily)
 	sortOverviewWeekly(weekly)
 	sort.Slice(weeklyReminderItems, func(i, j int) bool {
-		if weeklyReminderItems[i].occurrence.Date.Time.Equal(weeklyReminderItems[j].occurrence.Date.Time) {
+		if weeklyReminderItems[i].occurrence.Date.Equal(weeklyReminderItems[j].occurrence.Date.Time) {
 			return weeklyReminderItems[i].createdAt.Before(weeklyReminderItems[j].createdAt)
 		}
-		return weeklyReminderItems[i].occurrence.Date.Time.Before(weeklyReminderItems[j].occurrence.Date.Time)
+		return weeklyReminderItems[i].occurrence.Date.Before(weeklyReminderItems[j].occurrence.Date.Time)
 	})
 	weeklyReminders := make([]model.ReminderOccurrence, 0, len(weeklyReminderItems))
 	for _, item := range weeklyReminderItems {

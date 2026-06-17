@@ -163,7 +163,7 @@ func createTaskAtWithIDAndTitle(t *testing.T, s *Store, teamID string, taskType 
 
 func itemsOnDate(groups []model.MonthlyTaskStatusGroup, date string) []model.MonthlyTaskStatusItem {
 	for _, group := range groups {
-		if group.Date.Time.Format("2006-01-02") == date {
+		if group.Date.Format("2006-01-02") == date {
 			return group.Items
 		}
 	}
@@ -172,7 +172,7 @@ func itemsOnDate(groups []model.MonthlyTaskStatusGroup, date string) []model.Mon
 
 func containsTaskOnDate(groups []model.MonthlyTaskStatusGroup, date, taskID string) bool {
 	for _, group := range groups {
-		if group.Date.Time.Format("2006-01-02") != date {
+		if group.Date.Format("2006-01-02") != date {
 			continue
 		}
 		for _, item := range group.Items {
@@ -186,7 +186,7 @@ func containsTaskOnDate(groups []model.MonthlyTaskStatusGroup, date, taskID stri
 
 func taskCompletedOnDate(groups []model.MonthlyTaskStatusGroup, date, taskID string) (bool, bool) {
 	for _, group := range groups {
-		if group.Date.Time.Format("2006-01-02") != date {
+		if group.Date.Format("2006-01-02") != date {
 			continue
 		}
 		for _, item := range group.Items {

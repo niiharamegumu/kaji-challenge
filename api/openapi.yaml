@@ -893,6 +893,7 @@ components:
         colorHex:
           type: string
           nullable: true
+          x-omitempty: false
         createdAt:
           type: string
           format: date-time
@@ -986,11 +987,13 @@ components:
         nickname:
           type: string
           nullable: true
+          x-omitempty: false
         effectiveName:
           type: string
         colorHex:
           type: string
           nullable: true
+          x-omitempty: false
         joinedAt:
           type: string
           format: date-time
@@ -1060,6 +1063,7 @@ components:
         userAgent:
           type: string
           nullable: true
+          x-omitempty: false
         platform:
           $ref: '#/components/schemas/PushPlatform'
         isActive:
@@ -1135,6 +1139,7 @@ components:
         notes:
           type: string
           nullable: true
+          x-omitempty: false
         kind:
           $ref: '#/components/schemas/ReminderKind'
         scheduleType:
@@ -1147,6 +1152,7 @@ components:
           type: string
           format: date
           nullable: true
+          x-omitempty: false
         createdAt:
           type: string
           format: date-time
@@ -1187,6 +1193,7 @@ components:
           type: string
           maxLength: 500
           nullable: true
+          x-omitempty: false
         kind:
           $ref: '#/components/schemas/ReminderKind'
         scheduleType:
@@ -1199,6 +1206,7 @@ components:
           type: string
           format: date
           nullable: true
+          x-omitempty: false
 
     ReminderOccurrence:
       type: object
@@ -1214,6 +1222,7 @@ components:
         notes:
           type: string
           nullable: true
+          x-omitempty: false
         kind:
           $ref: '#/components/schemas/ReminderKind'
         scheduleType:
@@ -1378,6 +1387,7 @@ components:
         colorHex:
           type: string
           nullable: true
+          x-omitempty: false
 
     TaskCompletionSlot:
       type: object
@@ -1408,6 +1418,7 @@ components:
           type: string
           format: date-time
           nullable: true
+          x-omitempty: false
         createdAt:
           type: string
           format: date-time
@@ -1457,9 +1468,11 @@ components:
         quantity:
           type: string
           nullable: true
+          x-omitempty: false
         notes:
           type: string
           nullable: true
+          x-omitempty: false
         sortKey:
           type: integer
           minimum: 1
@@ -1496,10 +1509,12 @@ components:
           type: string
           maxLength: 100
           nullable: true
+          x-omitempty: false
         notes:
           type: string
           maxLength: 500
           nullable: true
+          x-omitempty: false
 
     ReorderShoppingListItemsRequest:
       type: object

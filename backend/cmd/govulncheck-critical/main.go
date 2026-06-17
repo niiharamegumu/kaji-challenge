@@ -66,8 +66,6 @@ func loadCriticalIDs(path string) (map[string]struct{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
-
 	ids := make(map[string]struct{})
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
@@ -78,6 +76,10 @@ func loadCriticalIDs(path string) (map[string]struct{}, error) {
 		ids[line] = struct{}{}
 	}
 	if err := scanner.Err(); err != nil {
+		_ = file.Close()
+		return nil, err
+	}
+	if err := file.Close(); err != nil {
 		return nil, err
 	}
 	return ids, nil

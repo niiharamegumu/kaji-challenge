@@ -10,7 +10,7 @@ type Date struct {
 }
 
 func (d Date) MarshalJSON() ([]byte, error) {
-	return json.Marshal(d.Time.Format(time.DateOnly))
+	return json.Marshal(d.Format(time.DateOnly))
 }
 
 func (d *Date) UnmarshalJSON(data []byte) error {

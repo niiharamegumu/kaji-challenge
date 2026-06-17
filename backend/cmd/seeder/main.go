@@ -167,7 +167,8 @@ ON CONFLICT (task_id, week_start) DO UPDATE SET
 		log.Fatalf("failed to commit: %v", err)
 	}
 
-	log.Printf("seed completed: month=%s team_id=%s email=%s", *month, teamID, *email)
+	// #nosec G706 -- Values are quoted to escape control characters; this local seed command intentionally logs CLI input.
+	log.Printf("seed completed: month=%q team_id=%q email=%q", *month, teamID, *email)
 	log.Printf("tasks: daily(complete/pending), weekly(complete/pending)")
 	log.Printf("monthly summary is not seeded; run ops close(day/week/month) to aggregate")
 }
