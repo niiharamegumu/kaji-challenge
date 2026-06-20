@@ -503,8 +503,7 @@ export function ShoppingListItemsSection({
   const saveEdit = async (itemId: string) => {
     const payload: UpdateShoppingListItemRequest = {
       name: editState.name.trim(),
-      quantity:
-        editState.quantity.trim() === "" ? null : editState.quantity.trim(),
+      quantity: editState.quantity.trim(),
       notes: editState.notes.trim() === "" ? null : editState.notes.trim(),
     };
     await onUpdate(itemId, payload);

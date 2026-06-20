@@ -180,6 +180,44 @@ describe("ShoppingListPage", () => {
     });
   });
 
+  it("clears an existing quantity", async () => {
+    mockListShoppingItems.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: "item-1",
+            teamId: "team-1",
+            name: "牛乳",
+            quantity: "1本",
+            notes: null,
+            sortKey: 1,
+            createdAt: "2026-03-01T00:00:00Z",
+            updatedAt: "2026-03-01T00:00:00Z",
+          },
+        ],
+      },
+    });
+    const user = userEvent.setup();
+    renderPage();
+
+    const editButton = await screen.findByRole("button", { name: "編集" });
+    const card = editButton.closest("li");
+    if (card == null) {
+      throw new Error("shopping item card not found");
+    }
+    await user.click(editButton);
+    await user.clear(within(card).getByLabelText("数量"));
+    await user.click(within(card).getByRole("button", { name: "保存" }));
+
+    await waitFor(() => {
+      expect(mockPatchShoppingItem).toHaveBeenCalledWith("item-1", {
+        name: "牛乳",
+        quantity: "",
+        notes: null,
+      });
+    });
+  });
+
   it("confirms before deleting a completed item", async () => {
     mockListShoppingItems.mockResolvedValue({
       data: {
