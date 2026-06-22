@@ -17,9 +17,9 @@ func TestShoppingItemsFollowTeamScopeAndOrdering(t *testing.T) {
 	_, userA := createTeamWithMember(t, s, "shopping-a@example.com", base)
 	teamB, _ := createTeamWithMember(t, s, "shopping-b@example.com", base.Add(time.Hour))
 
-	itemA1 := createShoppingItemAt(t, s, userA, "牛乳", stringPtr("1本"), nil, base)
-	itemA2 := createShoppingItemAt(t, s, userA, "卵", stringPtr("10個"), nil, base.Add(time.Minute))
-	createShoppingItemForTeamAt(t, s, teamB, "パン", nil, nil, base.Add(2*time.Minute))
+	itemA1 := createShoppingItemAt(t, s, userA, "牛乳", nil, base)
+	itemA2 := createShoppingItemAt(t, s, userA, "卵", nil, base.Add(time.Minute))
+	createShoppingItemForTeamAt(t, s, teamB, "パン", nil, base.Add(2*time.Minute))
 
 	items, err := s.ListShoppingItems(ctx, userA)
 	if err != nil {
@@ -39,10 +39,10 @@ func TestCreateShoppingItemPrependsToStart(t *testing.T) {
 	base := time.Date(2026, 3, 1, 9, 0, 0, 0, s.loc)
 	_, userID := createTeamWithMember(t, s, "shopping-create@example.com", base)
 
-	firstID := createShoppingItemAt(t, s, userID, "牛乳", nil, nil, base)
+	firstID := createShoppingItemAt(t, s, userID, "牛乳", nil, base)
 	item, err := s.CreateShoppingItem(withLatestIfMatchForUser(t, s, ctx, userID), userID, model.CreateShoppingListItemRequest{
-		Name:     "卵",
-		Quantity: stringPtr("10個"),
+		Name:  "卵",
+		Notes: stringPtr("10個入り"),
 	})
 	if err != nil {
 		t.Fatalf("CreateShoppingItem failed: %v", err)
@@ -50,8 +50,8 @@ func TestCreateShoppingItemPrependsToStart(t *testing.T) {
 	if item.SortKey >= int(sortKeyStep) {
 		t.Fatalf("expected prepended sort key below %d, got %d", sortKeyStep, item.SortKey)
 	}
-	if item.Quantity == nil || *item.Quantity != "10個" {
-		t.Fatalf("expected quantity to be preserved, got %#v", item.Quantity)
+	if item.Notes == nil || *item.Notes != "10個入り" {
+		t.Fatalf("expected notes to be preserved, got %#v", item.Notes)
 	}
 	items, err := s.ListShoppingItems(ctx, userID)
 	if err != nil {
@@ -67,21 +67,17 @@ func TestPatchShoppingItemUpdatesFields(t *testing.T) {
 	ctx := context.Background()
 	base := time.Date(2026, 3, 1, 9, 0, 0, 0, s.loc)
 	_, userID := createTeamWithMember(t, s, "shopping-patch@example.com", base)
-	itemID := createShoppingItemAt(t, s, userID, "牛乳", stringPtr("1本"), nil, base)
+	itemID := createShoppingItemAt(t, s, userID, "牛乳", nil, base)
 
 	updated, err := s.PatchShoppingItem(withLatestIfMatchForUser(t, s, ctx, userID), userID, itemID, model.UpdateShoppingListItemRequest{
-		Name:     stringPtr("低脂肪乳"),
-		Quantity: stringPtr("2本"),
-		Notes:    stringPtr("週末特売"),
+		Name:  stringPtr("低脂肪乳"),
+		Notes: stringPtr("週末特売"),
 	})
 	if err != nil {
 		t.Fatalf("PatchShoppingItem failed: %v", err)
 	}
 	if updated.Name != "低脂肪乳" {
 		t.Fatalf("expected updated name, got %s", updated.Name)
-	}
-	if updated.Quantity == nil || *updated.Quantity != "2本" {
-		t.Fatalf("expected updated quantity, got %#v", updated.Quantity)
 	}
 	if updated.Notes == nil || *updated.Notes != "週末特売" {
 		t.Fatalf("expected updated notes, got %#v", updated.Notes)
@@ -94,9 +90,9 @@ func TestDeleteShoppingItemPhysicallyRemovesAndKeepsExistingSortKeys(t *testing.
 	base := time.Date(2026, 3, 1, 9, 0, 0, 0, s.loc)
 	_, userID := createTeamWithMember(t, s, "shopping-delete@example.com", base)
 
-	firstID := createShoppingItemAt(t, s, userID, "牛乳", nil, nil, base)
-	secondID := createShoppingItemAt(t, s, userID, "卵", nil, nil, base.Add(time.Minute))
-	thirdID := createShoppingItemAt(t, s, userID, "パン", nil, nil, base.Add(2*time.Minute))
+	firstID := createShoppingItemAt(t, s, userID, "牛乳", nil, base)
+	secondID := createShoppingItemAt(t, s, userID, "卵", nil, base.Add(time.Minute))
+	thirdID := createShoppingItemAt(t, s, userID, "パン", nil, base.Add(2*time.Minute))
 
 	if err := s.DeleteShoppingItem(withLatestIfMatchForUser(t, s, ctx, userID), userID, secondID); err != nil {
 		t.Fatalf("DeleteShoppingItem failed: %v", err)
@@ -126,9 +122,9 @@ func TestCreateShoppingItemPrependsAfterDeleteAndReorder(t *testing.T) {
 	base := time.Date(2026, 3, 1, 9, 0, 0, 0, s.loc)
 	_, userID := createTeamWithMember(t, s, "shopping-create-after-reorder@example.com", base)
 
-	firstID := createShoppingItemAt(t, s, userID, "牛乳", nil, nil, base)
-	secondID := createShoppingItemAt(t, s, userID, "卵", nil, nil, base.Add(time.Minute))
-	thirdID := createShoppingItemAt(t, s, userID, "パン", nil, nil, base.Add(2*time.Minute))
+	firstID := createShoppingItemAt(t, s, userID, "牛乳", nil, base)
+	secondID := createShoppingItemAt(t, s, userID, "卵", nil, base.Add(time.Minute))
+	thirdID := createShoppingItemAt(t, s, userID, "パン", nil, base.Add(2*time.Minute))
 
 	if err := s.DeleteShoppingItem(withLatestIfMatchForUser(t, s, ctx, userID), userID, secondID); err != nil {
 		t.Fatalf("DeleteShoppingItem failed: %v", err)
@@ -160,9 +156,9 @@ func TestReorderShoppingItemsPersistsRequestedOrder(t *testing.T) {
 	base := time.Date(2026, 3, 1, 9, 0, 0, 0, s.loc)
 	_, userID := createTeamWithMember(t, s, "shopping-reorder@example.com", base)
 
-	firstID := createShoppingItemAt(t, s, userID, "牛乳", nil, nil, base)
-	secondID := createShoppingItemAt(t, s, userID, "卵", nil, nil, base.Add(time.Minute))
-	thirdID := createShoppingItemAt(t, s, userID, "パン", nil, nil, base.Add(2*time.Minute))
+	firstID := createShoppingItemAt(t, s, userID, "牛乳", nil, base)
+	secondID := createShoppingItemAt(t, s, userID, "卵", nil, base.Add(time.Minute))
+	thirdID := createShoppingItemAt(t, s, userID, "パン", nil, base.Add(2*time.Minute))
 
 	items, err := s.ReorderShoppingItems(withLatestIfMatchForUser(t, s, ctx, userID), userID, model.ReorderShoppingListItemsRequest{
 		ItemIds: []string{thirdID, firstID, secondID},
@@ -187,8 +183,8 @@ func TestReorderShoppingItemsRejectsMismatchedIDs(t *testing.T) {
 	base := time.Date(2026, 3, 1, 9, 0, 0, 0, s.loc)
 	_, userID := createTeamWithMember(t, s, "shopping-reorder-invalid@example.com", base)
 
-	createShoppingItemAt(t, s, userID, "牛乳", nil, nil, base)
-	createShoppingItemAt(t, s, userID, "卵", nil, nil, base.Add(time.Minute))
+	createShoppingItemAt(t, s, userID, "牛乳", nil, base)
+	createShoppingItemAt(t, s, userID, "卵", nil, base.Add(time.Minute))
 
 	if _, err := s.ReorderShoppingItems(withLatestIfMatchForUser(t, s, ctx, userID), userID, model.ReorderShoppingListItemsRequest{
 		ItemIds: []string{"missing-id"},
@@ -203,8 +199,8 @@ func TestReorderShoppingItemsRejectsDuplicateIDs(t *testing.T) {
 	base := time.Date(2026, 3, 1, 9, 0, 0, 0, s.loc)
 	_, userID := createTeamWithMember(t, s, "shopping-reorder-duplicate@example.com", base)
 
-	firstID := createShoppingItemAt(t, s, userID, "牛乳", nil, nil, base)
-	createShoppingItemAt(t, s, userID, "卵", nil, nil, base.Add(time.Minute))
+	firstID := createShoppingItemAt(t, s, userID, "牛乳", nil, base)
+	createShoppingItemAt(t, s, userID, "卵", nil, base.Add(time.Minute))
 
 	if _, err := s.ReorderShoppingItems(withLatestIfMatchForUser(t, s, ctx, userID), userID, model.ReorderShoppingListItemsRequest{
 		ItemIds: []string{firstID, firstID},
@@ -220,9 +216,9 @@ func TestReorderShoppingItemsRejectsOtherTeamIDs(t *testing.T) {
 	_, userID := createTeamWithMember(t, s, "shopping-reorder-team-a@example.com", base)
 	teamB, _ := createTeamWithMember(t, s, "shopping-reorder-team-b@example.com", base.Add(time.Hour))
 
-	firstID := createShoppingItemAt(t, s, userID, "牛乳", nil, nil, base)
-	createShoppingItemAt(t, s, userID, "卵", nil, nil, base.Add(time.Minute))
-	foreignID := createShoppingItemForTeamAt(t, s, teamB, "パン", nil, nil, base.Add(2*time.Minute))
+	firstID := createShoppingItemAt(t, s, userID, "牛乳", nil, base)
+	createShoppingItemAt(t, s, userID, "卵", nil, base.Add(time.Minute))
+	foreignID := createShoppingItemForTeamAt(t, s, teamB, "パン", nil, base.Add(2*time.Minute))
 
 	if _, err := s.ReorderShoppingItems(withLatestIfMatchForUser(t, s, ctx, userID), userID, model.ReorderShoppingListItemsRequest{
 		ItemIds: []string{firstID, foreignID},
@@ -248,12 +244,11 @@ func TestShoppingItemsForeignKeyCascadeAndNonUniqueSortKeys(t *testing.T) {
 	base := time.Date(2026, 3, 1, 9, 0, 0, 0, s.loc)
 	teamID, userID := createTeamWithMember(t, s, "shopping-schema@example.com", base)
 
-	itemID := createShoppingItemAt(t, s, userID, "牛乳", nil, nil, base)
+	itemID := createShoppingItemAt(t, s, userID, "牛乳", nil, base)
 	if err := s.q.CreateShoppingItem(ctx, dbsqlc.CreateShoppingItemParams{
 		ID:        s.nextID("shop"),
 		TeamID:    teamID,
 		Name:      "重複順序",
-		Quantity:  textFromPtr(nil),
 		Notes:     textFromPtr(nil),
 		SortKey:   1,
 		CreatedAt: toPgTimestamptz(base.Add(time.Minute)),
@@ -270,16 +265,16 @@ func TestShoppingItemsForeignKeyCascadeAndNonUniqueSortKeys(t *testing.T) {
 	}
 }
 
-func createShoppingItemAt(t *testing.T, s *Store, userID, name string, quantity, notes *string, createdAt time.Time) string {
+func createShoppingItemAt(t *testing.T, s *Store, userID, name string, notes *string, createdAt time.Time) string {
 	t.Helper()
 	teamID, err := s.primaryTeamLocked(context.Background(), userID)
 	if err != nil {
 		t.Fatalf("failed to load team: %v", err)
 	}
-	return createShoppingItemForTeamAt(t, s, teamID, name, quantity, notes, createdAt)
+	return createShoppingItemForTeamAt(t, s, teamID, name, notes, createdAt)
 }
 
-func createShoppingItemForTeamAt(t *testing.T, s *Store, teamID, name string, quantity, notes *string, createdAt time.Time) string {
+func createShoppingItemForTeamAt(t *testing.T, s *Store, teamID, name string, notes *string, createdAt time.Time) string {
 	t.Helper()
 	maxSortKey, err := s.q.GetShoppingItemMaxSortKeyByTeamID(context.Background(), teamID)
 	if err != nil {
@@ -290,7 +285,6 @@ func createShoppingItemForTeamAt(t *testing.T, s *Store, teamID, name string, qu
 		ID:        itemID,
 		TeamID:    teamID,
 		Name:      name,
-		Quantity:  textFromPtr(quantity),
 		Notes:     textFromPtr(notes),
 		SortKey:   maxSortKey + sortKeyStep,
 		CreatedAt: toPgTimestamptz(createdAt),

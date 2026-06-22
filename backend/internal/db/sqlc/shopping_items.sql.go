@@ -12,15 +12,14 @@ import (
 )
 
 const createShoppingItem = `-- name: CreateShoppingItem :exec
-INSERT INTO shopping_items (id, team_id, name, quantity, notes, sort_key, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO shopping_items (id, team_id, name, notes, sort_key, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 `
 
 type CreateShoppingItemParams struct {
 	ID        string             `json:"id"`
 	TeamID    string             `json:"team_id"`
 	Name      string             `json:"name"`
-	Quantity  pgtype.Text        `json:"quantity"`
 	Notes     pgtype.Text        `json:"notes"`
 	SortKey   int32              `json:"sort_key"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
@@ -32,7 +31,6 @@ func (q *Queries) CreateShoppingItem(ctx context.Context, arg CreateShoppingItem
 		arg.ID,
 		arg.TeamID,
 		arg.Name,
-		arg.Quantity,
 		arg.Notes,
 		arg.SortKey,
 		arg.CreatedAt,
@@ -55,7 +53,7 @@ func (q *Queries) DeleteShoppingItem(ctx context.Context, id string) (int64, err
 }
 
 const getShoppingItemByID = `-- name: GetShoppingItemByID :one
-SELECT id, team_id, name, quantity, notes, sort_key, created_at, updated_at
+SELECT id, team_id, name, notes, sort_key, created_at, updated_at
 FROM shopping_items
 WHERE id = $1
 `
@@ -67,7 +65,6 @@ func (q *Queries) GetShoppingItemByID(ctx context.Context, id string) (ShoppingI
 		&i.ID,
 		&i.TeamID,
 		&i.Name,
-		&i.Quantity,
 		&i.Notes,
 		&i.SortKey,
 		&i.CreatedAt,
@@ -90,7 +87,7 @@ func (q *Queries) GetShoppingItemMaxSortKeyByTeamID(ctx context.Context, teamID 
 }
 
 const listShoppingItemsByTeamID = `-- name: ListShoppingItemsByTeamID :many
-SELECT id, team_id, name, quantity, notes, sort_key, created_at, updated_at
+SELECT id, team_id, name, notes, sort_key, created_at, updated_at
 FROM shopping_items
 WHERE team_id = $1
 ORDER BY sort_key, created_at, id
@@ -109,7 +106,6 @@ func (q *Queries) ListShoppingItemsByTeamID(ctx context.Context, teamID string) 
 			&i.ID,
 			&i.TeamID,
 			&i.Name,
-			&i.Quantity,
 			&i.Notes,
 			&i.SortKey,
 			&i.CreatedAt,
@@ -128,16 +124,14 @@ func (q *Queries) ListShoppingItemsByTeamID(ctx context.Context, teamID string) 
 const updateShoppingItem = `-- name: UpdateShoppingItem :exec
 UPDATE shopping_items
 SET name = $2,
-    quantity = $3,
-    notes = $4,
-    updated_at = $5
+    notes = $3,
+    updated_at = $4
 WHERE id = $1
 `
 
 type UpdateShoppingItemParams struct {
 	ID        string             `json:"id"`
 	Name      string             `json:"name"`
-	Quantity  pgtype.Text        `json:"quantity"`
 	Notes     pgtype.Text        `json:"notes"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
@@ -146,7 +140,6 @@ func (q *Queries) UpdateShoppingItem(ctx context.Context, arg UpdateShoppingItem
 	_, err := q.db.Exec(ctx, updateShoppingItem,
 		arg.ID,
 		arg.Name,
-		arg.Quantity,
 		arg.Notes,
 		arg.UpdatedAt,
 	)

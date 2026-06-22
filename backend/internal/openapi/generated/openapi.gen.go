@@ -199,9 +199,8 @@ type CreateReminderRequest struct {
 
 // CreateShoppingListItemRequest defines model for CreateShoppingListItemRequest.
 type CreateShoppingListItemRequest struct {
-	Name     string  `json:"name"`
-	Notes    *string `json:"notes,omitempty"`
-	Quantity *string `json:"quantity,omitempty"`
+	Name  string  `json:"name"`
+	Notes *string `json:"notes,omitempty"`
 }
 
 // CreateTaskRequest defines model for CreateTaskRequest.
@@ -375,7 +374,6 @@ type ShoppingListItem struct {
 	Id        string    `json:"id"`
 	Name      string    `json:"name"`
 	Notes     *string   `json:"notes"`
-	Quantity  *string   `json:"quantity"`
 	SortKey   int       `json:"sortKey"`
 	TeamId    string    `json:"teamId"`
 	UpdatedAt time.Time `json:"updatedAt"`
@@ -536,9 +534,8 @@ type UpdateReminderRequest struct {
 
 // UpdateShoppingListItemRequest defines model for UpdateShoppingListItemRequest.
 type UpdateShoppingListItemRequest struct {
-	Name     *string `json:"name,omitempty"`
-	Notes    *string `json:"notes"`
-	Quantity *string `json:"quantity"`
+	Name  *string `json:"name,omitempty"`
+	Notes *string `json:"notes"`
 }
 
 // UpdateTaskRequest defines model for UpdateTaskRequest.

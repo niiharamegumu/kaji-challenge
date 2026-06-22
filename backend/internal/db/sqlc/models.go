@@ -103,7 +103,6 @@ type ShoppingItem struct {
 	ID        string             `json:"id"`
 	TeamID    string             `json:"team_id"`
 	Name      string             `json:"name"`
-	Quantity  pgtype.Text        `json:"quantity"`
 	Notes     pgtype.Text        `json:"notes"`
 	SortKey   int32              `json:"sort_key"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
