@@ -427,8 +427,6 @@ export interface ShoppingListItem {
   teamId: string;
   name: string;
   /** @nullable */
-  quantity?: string | null;
-  /** @nullable */
   notes?: string | null;
   /** @minimum 1 */
   sortKey: number;
@@ -442,8 +440,6 @@ export interface CreateShoppingListItemRequest {
      * @maxLength 100
      */
   name: string;
-  /** @maxLength 100 */
-  quantity?: string;
   /** @maxLength 500 */
   notes?: string;
 }
@@ -454,11 +450,6 @@ export interface UpdateShoppingListItemRequest {
      * @maxLength 100
      */
   name?: string;
-  /**
-     * @maxLength 100
-     * @nullable
-     */
-  quantity?: string | null;
   /**
      * @maxLength 500
      * @nullable

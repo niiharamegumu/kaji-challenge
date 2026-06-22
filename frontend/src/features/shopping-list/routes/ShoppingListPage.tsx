@@ -20,7 +20,6 @@ import {
 
 const initialFormState: ShoppingItemFormState = {
   name: "",
-  quantity: "",
   notes: "",
 };
 
@@ -35,7 +34,6 @@ export function ShoppingListPage() {
   const handleCreate = async () => {
     const payload: CreateShoppingListItemRequest = {
       name: form.name.trim(),
-      quantity: form.quantity.trim() === "" ? undefined : form.quantity.trim(),
       notes: form.notes.trim() === "" ? undefined : form.notes.trim(),
     };
     await createItem.mutateAsync(payload);
