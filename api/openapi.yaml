@@ -1465,10 +1465,6 @@ components:
           type: string
         name:
           type: string
-        quantity:
-          type: string
-          nullable: true
-          x-omitempty: false
         notes:
           type: string
           nullable: true
@@ -1491,9 +1487,6 @@ components:
           type: string
           minLength: 1
           maxLength: 100
-        quantity:
-          type: string
-          maxLength: 100
         notes:
           type: string
           maxLength: 500
@@ -1505,11 +1498,6 @@ components:
           type: string
           minLength: 1
           maxLength: 100
-        quantity:
-          type: string
-          maxLength: 100
-          nullable: true
-          x-omitempty: false
         notes:
           type: string
           maxLength: 500

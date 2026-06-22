@@ -138,9 +138,12 @@ func TestShoppingReorderReturnsFreshETagForChainedWrites(t *testing.T) {
 	r := newTestRouter(t)
 	token := login(t, r)
 
-	firstCreate := doRequest(t, r, http.MethodPost, "/v1/shopping-items", `{"name":"牛乳"}`, token)
+	firstCreate := doRequest(t, r, http.MethodPost, "/v1/shopping-items", `{"name":"牛乳","quantity":"1本"}`, token)
 	if firstCreate.Code != http.StatusCreated {
 		t.Fatalf("expected first create 201, got %d: %s", firstCreate.Code, firstCreate.Body.String())
+	}
+	if strings.Contains(firstCreate.Body.String(), `"quantity"`) {
+		t.Fatalf("expected shopping item response to omit quantity: %s", firstCreate.Body.String())
 	}
 	var firstItem api.ShoppingListItem
 	if err := json.Unmarshal(firstCreate.Body.Bytes(), &firstItem); err != nil {

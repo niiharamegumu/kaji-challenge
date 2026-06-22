@@ -94,7 +94,6 @@ type shoppingItemRecord struct {
 	ID        string
 	TeamID    string
 	Name      string
-	Quantity  *string
 	Notes     *string
 	SortKey   int
 	CreatedAt time.Time

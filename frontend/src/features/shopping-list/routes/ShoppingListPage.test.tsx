@@ -66,16 +66,15 @@ describe("ShoppingListPage", () => {
     expect(
       await screen.findByRole("dialog", { name: "買い物項目を追加" }),
     ).toBeInTheDocument();
+    expect(screen.queryByLabelText("数量")).not.toBeInTheDocument();
 
     await user.type(await screen.findByLabelText("名前"), "牛乳");
-    await user.type(screen.getByLabelText("数量"), "2本");
     await user.type(screen.getByLabelText("メモ"), "低脂肪");
     await user.click(screen.getByRole("button", { name: "追加する" }));
 
     await waitFor(() => {
       expect(mockPostShoppingItem).toHaveBeenCalledWith({
         name: "牛乳",
-        quantity: "2本",
         notes: "低脂肪",
       });
     });
@@ -95,7 +94,6 @@ describe("ShoppingListPage", () => {
             id: "item-1",
             teamId: "team-1",
             name: "牛乳",
-            quantity: "1本",
             notes: null,
             sortKey: 100,
             createdAt: "2026-03-01T00:00:00Z",
@@ -109,7 +107,6 @@ describe("ShoppingListPage", () => {
         id: "item-2",
         teamId: "team-1",
         name: "卵",
-        quantity: null,
         notes: null,
         sortKey: 200,
         createdAt: "2026-03-02T00:00:00Z",
@@ -141,7 +138,6 @@ describe("ShoppingListPage", () => {
             id: "item-1",
             teamId: "team-1",
             name: "牛乳",
-            quantity: "1本",
             notes: "低脂肪",
             sortKey: 1,
             createdAt: "2026-03-01T00:00:00Z",
@@ -161,12 +157,9 @@ describe("ShoppingListPage", () => {
     await user.click(editButton);
 
     const nameInput = await within(card).findByLabelText("名前");
-    const quantityInput = within(card).getByLabelText("数量");
     const notesInput = within(card).getByLabelText("メモ");
     await user.clear(nameInput);
     await user.type(nameInput, "低脂肪乳");
-    await user.clear(quantityInput);
-    await user.type(quantityInput, "2本");
     await user.clear(notesInput);
     await user.type(notesInput, "特売");
     await user.click(within(card).getByRole("button", { name: "保存" }));
@@ -174,46 +167,7 @@ describe("ShoppingListPage", () => {
     await waitFor(() => {
       expect(mockPatchShoppingItem).toHaveBeenCalledWith("item-1", {
         name: "低脂肪乳",
-        quantity: "2本",
         notes: "特売",
-      });
-    });
-  });
-
-  it("clears an existing quantity", async () => {
-    mockListShoppingItems.mockResolvedValue({
-      data: {
-        items: [
-          {
-            id: "item-1",
-            teamId: "team-1",
-            name: "牛乳",
-            quantity: "1本",
-            notes: null,
-            sortKey: 1,
-            createdAt: "2026-03-01T00:00:00Z",
-            updatedAt: "2026-03-01T00:00:00Z",
-          },
-        ],
-      },
-    });
-    const user = userEvent.setup();
-    renderPage();
-
-    const editButton = await screen.findByRole("button", { name: "編集" });
-    const card = editButton.closest("li");
-    if (card == null) {
-      throw new Error("shopping item card not found");
-    }
-    await user.click(editButton);
-    await user.clear(within(card).getByLabelText("数量"));
-    await user.click(within(card).getByRole("button", { name: "保存" }));
-
-    await waitFor(() => {
-      expect(mockPatchShoppingItem).toHaveBeenCalledWith("item-1", {
-        name: "牛乳",
-        quantity: "",
-        notes: null,
       });
     });
   });
@@ -226,7 +180,6 @@ describe("ShoppingListPage", () => {
             id: "item-1",
             teamId: "team-1",
             name: "牛乳",
-            quantity: "1本",
             notes: null,
             sortKey: 1,
             createdAt: "2026-03-01T00:00:00Z",

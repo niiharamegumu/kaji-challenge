@@ -80,13 +80,12 @@ describe("ShoppingListManager", () => {
   it("linkifies only http and https URLs in notes", () => {
     render(
       <ShoppingListManager
-        form={{ name: "", quantity: "", notes: "" }}
+        form={{ name: "", notes: "" }}
         items={[
           {
             id: "item-1",
             teamId: "team-1",
             name: "牛乳",
-            quantity: null,
             notes:
               "公式 https://example.com/path?q=1 と <script>alert(1)</script> と javascript:alert(1)",
             sortKey: 1,
@@ -130,7 +129,6 @@ describe("ShoppingListManager", () => {
         id: "item-1",
         teamId: "team-1",
         name: "牛乳",
-        quantity: null,
         notes: null,
         sortKey: 1,
         createdAt: "2026-03-01T00:00:00Z",
@@ -140,7 +138,6 @@ describe("ShoppingListManager", () => {
         id: "item-2",
         teamId: "team-1",
         name: "卵",
-        quantity: null,
         notes: null,
         sortKey: 2,
         createdAt: "2026-03-01T00:00:00Z",
@@ -150,7 +147,7 @@ describe("ShoppingListManager", () => {
 
     const { rerender } = render(
       <ShoppingListManager
-        form={{ name: "", quantity: "", notes: "" }}
+        form={{ name: "", notes: "" }}
         items={items}
         isCreateOpen={false}
         isReordering={false}
@@ -179,7 +176,7 @@ describe("ShoppingListManager", () => {
 
     rerender(
       <ShoppingListManager
-        form={{ name: "", quantity: "", notes: "" }}
+        form={{ name: "", notes: "" }}
         items={items}
         isCreateOpen={false}
         isReordering

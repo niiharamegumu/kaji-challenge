@@ -42,7 +42,6 @@ import {
 
 export type ShoppingItemFormState = {
   name: string;
-  quantity: string;
   notes: string;
 };
 
@@ -87,7 +86,6 @@ type ShoppingListItemsSectionProps = {
 
 type EditState = {
   name: string;
-  quantity: string;
   notes: string;
 };
 
@@ -231,20 +229,6 @@ function SortableShoppingItem({
           />
           <label
             className="text-xs text-stone-700"
-            htmlFor={`shopping-quantity-${item.id}`}
-          >
-            数量
-          </label>
-          <input
-            id={`shopping-quantity-${item.id}`}
-            className="h-10 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
-            value={editState.quantity}
-            onChange={(event) =>
-              onChangeEditState({ ...editState, quantity: event.target.value })
-            }
-          />
-          <label
-            className="text-xs text-stone-700"
             htmlFor={`shopping-notes-${item.id}`}
           >
             メモ
@@ -281,14 +265,7 @@ function SortableShoppingItem({
         <>
           <div className="flex items-start gap-3 pr-10">
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <div className="font-medium text-stone-900">{item.name}</div>
-                {item.quantity != null && item.quantity !== "" ? (
-                  <span className="rounded-full border border-stone-200 bg-stone-50 px-2 py-0.5 text-xs text-stone-700">
-                    {item.quantity}
-                  </span>
-                ) : null}
-              </div>
+              <div className="font-medium text-stone-900">{item.name}</div>
               {item.notes != null && item.notes !== "" ? (
                 <div className="mt-1 whitespace-pre-wrap break-words text-xs text-stone-600">
                   {renderNotesWithLinks(item.notes)}
@@ -364,38 +341,19 @@ export function ShoppingItemForm({
         onChange={handleChange("name")}
         placeholder="例: 牛乳"
       />
-      <div className="grid gap-2 sm:grid-cols-2">
-        <div className="grid gap-1.5">
-          <label
-            className="text-xs text-stone-700 sm:text-sm"
-            htmlFor="shopping-item-quantity"
-          >
-            数量
-          </label>
-          <input
-            id="shopping-item-quantity"
-            className="h-10 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
-            value={form.quantity}
-            onChange={handleChange("quantity")}
-            placeholder="例: 2本"
-          />
-        </div>
-        <div className="grid gap-1.5">
-          <label
-            className="text-xs text-stone-700 sm:text-sm"
-            htmlFor="shopping-item-notes"
-          >
-            メモ
-          </label>
-          <input
-            id="shopping-item-notes"
-            className="h-10 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
-            value={form.notes}
-            onChange={handleChange("notes")}
-            placeholder="例: 低脂肪乳"
-          />
-        </div>
-      </div>
+      <label
+        className="text-xs text-stone-700 sm:text-sm"
+        htmlFor="shopping-item-notes"
+      >
+        メモ
+      </label>
+      <input
+        id="shopping-item-notes"
+        className="h-10 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
+        value={form.notes}
+        onChange={handleChange("notes")}
+        placeholder="例: 低脂肪乳"
+      />
     </div>
   );
 }
@@ -418,7 +376,6 @@ export function ShoppingListItemsSection({
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editState, setEditState] = useState<EditState>({
     name: "",
-    quantity: "",
     notes: "",
   });
   const [pendingCompleteItem, setPendingCompleteItem] =
@@ -490,20 +447,18 @@ export function ShoppingListItemsSection({
     setEditingItemId(item.id);
     setEditState({
       name: item.name,
-      quantity: item.quantity ?? "",
       notes: item.notes ?? "",
     });
   };
 
   const cancelEdit = () => {
     setEditingItemId(null);
-    setEditState({ name: "", quantity: "", notes: "" });
+    setEditState({ name: "", notes: "" });
   };
 
   const saveEdit = async (itemId: string) => {
     const payload: UpdateShoppingListItemRequest = {
       name: editState.name.trim(),
-      quantity: editState.quantity.trim(),
       notes: editState.notes.trim() === "" ? null : editState.notes.trim(),
     };
     await onUpdate(itemId, payload);

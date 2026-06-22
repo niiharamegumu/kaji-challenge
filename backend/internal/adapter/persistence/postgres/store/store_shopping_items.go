@@ -42,7 +42,6 @@ func (s *Store) CreateShoppingItem(ctx context.Context, userID string, req model
 		ID:        s.nextID("shop"),
 		TeamID:    teamID,
 		Name:      name,
-		Quantity:  normalizeOptionalString(req.Quantity),
 		Notes:     normalizeOptionalString(req.Notes),
 		CreatedAt: now,
 		UpdatedAt: now,
@@ -83,7 +82,6 @@ func (s *Store) CreateShoppingItem(ctx context.Context, userID string, req model
 				ID:        item.ID,
 				TeamID:    item.TeamID,
 				Name:      item.Name,
-				Quantity:  textFromPtr(item.Quantity),
 				Notes:     textFromPtr(item.Notes),
 				SortKey:   sortKey32,
 				CreatedAt: toPgTimestamptz(item.CreatedAt),
@@ -123,9 +121,6 @@ func (s *Store) PatchShoppingItem(ctx context.Context, userID, itemID string, re
 				}
 				item.Name = name
 			}
-			if req.Quantity != nil {
-				item.Quantity = normalizeOptionalString(req.Quantity)
-			}
 			if req.Notes != nil {
 				item.Notes = normalizeOptionalString(req.Notes)
 			}
@@ -133,7 +128,6 @@ func (s *Store) PatchShoppingItem(ctx context.Context, userID, itemID string, re
 			return qtx.UpdateShoppingItem(txCtx, dbsqlc.UpdateShoppingItemParams{
 				ID:        item.ID,
 				Name:      item.Name,
-				Quantity:  textFromPtr(item.Quantity),
 				Notes:     textFromPtr(item.Notes),
 				UpdatedAt: toPgTimestamptz(item.UpdatedAt),
 			})
