@@ -9,9 +9,9 @@ import {
 } from "../../shopping-list";
 import { DailyTasksPanel } from "../components/DailyTasksPanel";
 import { HomeShoppingListPanel } from "../components/HomeShoppingListPanel";
+import { HOME_PANEL_SKELETON_CLASS_NAME } from "../components/panelStyles";
 import { WeeklyRemindersPanel } from "../components/WeeklyRemindersPanel";
 import { WeeklyTasksPanel } from "../components/WeeklyTasksPanel";
-import { HOME_PANEL_SKELETON_CLASS_NAME } from "../components/panelStyles";
 import {
   useHomeQuery,
   useToggleCompletionMutation,

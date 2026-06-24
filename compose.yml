@@ -44,7 +44,7 @@ services:
       - backend_golangci_cache:/root/.cache/golangci-lint
 
   frontend:
-    image: node:22
+    image: node:24
     container_name: kaji-frontend-dev
     restart: unless-stopped
     working_dir: /app/frontend

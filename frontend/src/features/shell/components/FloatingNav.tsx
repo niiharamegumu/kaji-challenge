@@ -1,3 +1,4 @@
+import type { LucideIcon } from "lucide-react";
 import {
   CalendarDays,
   ChartColumn,
@@ -11,10 +12,11 @@ import {
   ShoppingCart,
   UserCircle2,
 } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import type {
+  FocusEvent as ReactFocusEvent,
+  PointerEvent as ReactPointerEvent,
+} from "react";
 import { useEffect, useRef, useState } from "react";
-import type { FocusEvent as ReactFocusEvent } from "react";
-import type { PointerEvent as ReactPointerEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import {

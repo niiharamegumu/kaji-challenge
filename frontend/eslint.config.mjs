@@ -1,6 +1,6 @@
 import tsParser from "@typescript-eslint/parser";
-import reactHooks from "eslint-plugin-react-hooks";
 import { defineConfig } from "eslint/config";
+import reactHooks from "eslint-plugin-react-hooks";
 
 export default defineConfig([
   {

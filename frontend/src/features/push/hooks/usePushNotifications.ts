@@ -6,9 +6,9 @@ import {
   waitForPWARegistration,
 } from "../../../app/pwa-register";
 import {
-  PushPlatform,
   deletePushSubscription,
   getPushSubscriptionsMe,
+  PushPlatform,
   postPushSubscription,
 } from "../../../lib/api/generated/client";
 import { queryKeys } from "../../../shared/query/queryKeys";
