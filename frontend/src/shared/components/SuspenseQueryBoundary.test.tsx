@@ -1,5 +1,5 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
-import { type ReactNode, lazy, useEffect } from "react";
+import { lazy, type ReactNode, useEffect } from "react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {

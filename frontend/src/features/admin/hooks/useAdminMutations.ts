@@ -3,13 +3,9 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   type CreatePenaltyRuleRequest,
   type CreateTaskRequest,
-  type InviteCodeResponse,
-  type ReorderTasksRequest,
-  type Task,
-  type UpdatePenaltyRuleRequest,
-  type UpdateTaskRequest,
   deletePenaltyRule,
   deleteTask,
+  type InviteCodeResponse,
   patchMeColor,
   patchMeNickname,
   patchPenaltyRule,
@@ -21,6 +17,10 @@ import {
   postTeamInvite,
   postTeamJoin,
   postTeamLeave,
+  type ReorderTasksRequest,
+  type Task,
+  type UpdatePenaltyRuleRequest,
+  type UpdateTaskRequest,
 } from "../../../lib/api/generated/client";
 import { queryKeys } from "../../../shared/query/queryKeys";
 import { handleTeamStatePreconditionFailure } from "../../../shared/query/teamStateRefresh";

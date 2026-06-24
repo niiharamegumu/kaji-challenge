@@ -1,16 +1,16 @@
 import {
+  closestCenter,
   DndContext,
   type DragEndEvent,
   KeyboardSensor,
   PointerSensor,
   TouchSensor,
-  closestCenter,
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
 import {
-  SortableContext,
   arrayMove,
+  SortableContext,
   sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
@@ -44,7 +44,7 @@ import {
   WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MAX,
   WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MIN,
 } from "../constants/tasks";
-import { TaskTypeConst, canSubmitTaskForm } from "../model/tasks";
+import { canSubmitTaskForm, TaskTypeConst } from "../model/tasks";
 import type { TaskFormState } from "../state/forms";
 import { DeleteConfirmModal } from "./DeleteConfirmModal";
 

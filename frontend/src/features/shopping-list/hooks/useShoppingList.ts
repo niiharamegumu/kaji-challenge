@@ -6,14 +6,14 @@ import {
 
 import {
   type CreateShoppingListItemRequest,
-  type ReorderShoppingListItemsRequest,
-  type ShoppingListItem,
-  type UpdateShoppingListItemRequest,
   deleteShoppingItem,
   listShoppingItems,
   patchShoppingItem,
   postShoppingItem,
   postShoppingItemsReorder,
+  type ReorderShoppingListItemsRequest,
+  type ShoppingListItem,
+  type UpdateShoppingListItemRequest,
 } from "../../../lib/api/generated/client";
 import { queryKeys } from "../../../shared/query/queryKeys";
 import { handleTeamStatePreconditionFailure } from "../../../shared/query/teamStateRefresh";

@@ -1,8 +1,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAtom, useAtomValue } from "jotai";
 import {
-  Suspense,
   lazy,
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -12,8 +12,8 @@ import {
 import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import {
-  LoginCard,
   consumeFlashStatus,
+  LoginCard,
   useExchangeCodeFallback,
   useLoginAction,
   useLogoutAction,

@@ -39,6 +39,7 @@ export function CompletionSlots({ slots, compact = false, className }: Props) {
         return (
           <span
             key={`slot-${slot.slot}`}
+            role="img"
             title={title}
             aria-label={title}
             className={`inline-flex ${sizeClass} items-center justify-center rounded-full border font-semibold leading-none ${

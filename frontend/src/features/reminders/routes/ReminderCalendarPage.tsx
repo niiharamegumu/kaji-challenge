@@ -40,14 +40,14 @@ import {
   useReminderMutations,
 } from "../hooks/useReminders";
 import {
-  type ReminderFormState,
-  ReminderKindConst,
-  ReminderScheduleTypeConst,
   buildCreateReminderRequest,
   buildInitialFormState,
   buildUpdateReminderRequest,
   isRecurringReminder,
   kindLabel,
+  type ReminderFormState,
+  ReminderKindConst,
+  ReminderScheduleTypeConst,
   toFormState,
 } from "../model/reminders";
 import {
@@ -709,6 +709,7 @@ export function ReminderCalendarPage() {
         ) : null}
         {isMobile && occurrenceCount > 0 ? (
           <span
+            role="img"
             className={`grid place-items-center gap-x-1 gap-y-0.5 ${
               mobileMarkerLimit >= 12
                 ? "grid-cols-3"

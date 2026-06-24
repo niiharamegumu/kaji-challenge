@@ -8,10 +8,10 @@ import type {
 } from "../../../lib/api/generated/client";
 import { FooterQuickAction } from "../../../shared/components/FooterQuickAction";
 import { statusMessageAtom } from "../../../shared/state/status";
-import { ShoppingListManager } from "../components/ShoppingListManager";
 import {
   ShoppingItemForm,
   type ShoppingItemFormState,
+  ShoppingListManager,
 } from "../components/ShoppingListManager";
 import {
   useShoppingItemMutations,

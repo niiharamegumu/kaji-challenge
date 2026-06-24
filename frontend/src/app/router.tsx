@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Navigate, createBrowserRouter } from "react-router-dom";
+import { createBrowserRouter, Navigate } from "react-router-dom";
 
 import {
   AuthCallbackPage,
