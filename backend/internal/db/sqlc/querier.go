@@ -101,6 +101,7 @@ type Querier interface {
 	SumDailyPenaltyForClose(ctx context.Context, arg SumDailyPenaltyForCloseParams) (int64, error)
 	SumDailyPenaltyForDate(ctx context.Context, arg SumDailyPenaltyForDateParams) (int64, error)
 	SumWeeklyPenaltyForClose(ctx context.Context, arg SumWeeklyPenaltyForCloseParams) (int64, error)
+	SumWeeklyPenaltyForWeek(ctx context.Context, arg SumWeeklyPenaltyForWeekParams) (int64, error)
 	UpdatePenaltyRule(ctx context.Context, arg UpdatePenaltyRuleParams) error
 	UpdateReminder(ctx context.Context, arg UpdateReminderParams) error
 	UpdateShoppingItem(ctx context.Context, arg UpdateShoppingItemParams) error

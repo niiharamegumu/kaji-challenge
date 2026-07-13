@@ -198,7 +198,7 @@ func (s *Store) recalculateOpenMonthWeeklyPenaltyLocked(ctx context.Context, tea
 		if monthKeyFromTime(weekStart.AddDate(0, 0, 6), s.loc) != month {
 			continue
 		}
-		weekPenalty, err := s.queries(ctx).SumWeeklyPenaltyForClose(ctx, dbsqlc.SumWeeklyPenaltyForCloseParams{
+		weekPenalty, err := s.queries(ctx).SumWeeklyPenaltyForWeek(ctx, dbsqlc.SumWeeklyPenaltyForWeekParams{
 			TeamID:    teamID,
 			WeekStart: toPgDate(weekStart),
 			CreatedAt: toPgTimestamptz(weekStart.AddDate(0, 0, 7)),
