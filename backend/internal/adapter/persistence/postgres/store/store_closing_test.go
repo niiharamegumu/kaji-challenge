@@ -137,6 +137,71 @@ func TestToggleTaskCompletionCompletesPastDailyTaskInOpenMonthAndRecalculatesPen
 	}
 }
 
+func TestToggleTaskCompletionIncrementsPastWeeklyTaskInOpenMonthAndRecalculatesPenalty(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	now := time.Date(2026, 3, 17, 9, 0, 0, 0, s.loc)
+	s.now = func() time.Time { return now }
+
+	weekStart := time.Date(2026, 3, 9, 0, 0, 0, 0, s.loc)
+	createdAt := weekStart.AddDate(0, 0, -2).Add(10 * time.Hour)
+	teamID, userID := createTeamWithMember(t, s, "past-weekly-open@example.com", createdAt)
+	taskID := createTaskWithIDAt(t, s, teamID, model.TaskTypeWeekly, 4, 2, createdAt)
+	if err := s.q.InsertTaskCompletionWeeklyEntry(ctx, dbsqlc.InsertTaskCompletionWeeklyEntryParams{
+		ID:                s.nextID("twce"),
+		TaskID:            taskID,
+		WeekStart:         toPgDate(weekStart),
+		CompletedByUserID: userID,
+	}); err != nil {
+		t.Fatalf("failed to seed weekly completion: %v", err)
+	}
+	if _, err := s.closeWeekForTargetLocked(ctx, weekStart, teamID); err != nil {
+		t.Fatalf("closeWeekForTargetLocked failed: %v", err)
+	}
+
+	before := getMonthSummary(t, s, teamID, "2026-03")
+	if before.WeeklyPenaltyTotal != 4 {
+		t.Fatalf("expected weekly penalty total=4 before completion, got %d", before.WeeklyPenaltyTotal)
+	}
+	action := model.Increment
+	res, err := s.ToggleTaskCompletion(withLatestIfMatchForUser(t, s, ctx, userID), userID, taskID, weekStart, &action)
+	if err != nil {
+		t.Fatalf("ToggleTaskCompletion failed: %v", err)
+	}
+	if res.WeeklyCompletedCount != 2 || !res.Completed {
+		t.Fatalf("unexpected completion response: %+v", res)
+	}
+
+	after := getMonthSummary(t, s, teamID, "2026-03")
+	if after.WeeklyPenaltyTotal != 0 {
+		t.Fatalf("expected weekly penalty total=0 after completion, got %d", after.WeeklyPenaltyTotal)
+	}
+}
+
+func TestToggleTaskCompletionIncrementsCrossMonthPastWeeklyTaskForWeekEndMonth(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	now := time.Date(2026, 3, 10, 9, 0, 0, 0, s.loc)
+	s.now = func() time.Time { return now }
+
+	weekStart := time.Date(2026, 2, 23, 0, 0, 0, 0, s.loc)
+	createdAt := weekStart.AddDate(0, 0, -2).Add(10 * time.Hour)
+	teamID, userID := createTeamWithMember(t, s, "past-weekly-cross-month@example.com", createdAt)
+	taskID := createTaskWithIDAt(t, s, teamID, model.TaskTypeWeekly, 3, 1, createdAt)
+	if _, err := s.closeWeekForTargetLocked(ctx, weekStart, teamID); err != nil {
+		t.Fatalf("closeWeekForTargetLocked failed: %v", err)
+	}
+
+	action := model.Increment
+	if _, err := s.ToggleTaskCompletion(withLatestIfMatchForUser(t, s, ctx, userID), userID, taskID, time.Date(2026, 3, 1, 0, 0, 0, 0, s.loc), &action); err != nil {
+		t.Fatalf("ToggleTaskCompletion failed: %v", err)
+	}
+	after := getMonthSummary(t, s, teamID, "2026-03")
+	if after.WeeklyPenaltyTotal != 0 {
+		t.Fatalf("expected cross-month weekly penalty total=0 after completion, got %d", after.WeeklyPenaltyTotal)
+	}
+}
+
 func TestToggleTaskCompletionRejectsPastDailyToggleAction(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()

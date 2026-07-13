@@ -411,10 +411,23 @@ func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string,
 			}
 			today := dateOnly(s.now(), s.loc)
 			targetDate := dateOnly(target.In(s.loc), s.loc)
+			pastWeeklyCompletion := false
 			if task.Type == model.TaskTypeWeekly {
-				weekStart := startOfWeek(today, s.loc)
-				weekEnd := weekStart.AddDate(0, 0, 6)
-				if err := domaintask.ValidateWeeklyTarget(targetDate, today, weekStart, weekEnd); err != nil {
+				targetWeekStart := startOfWeek(targetDate, s.loc)
+				targetWeekEnd := targetWeekStart.AddDate(0, 0, 6)
+				targetMonth := monthKeyFromTime(targetWeekEnd, s.loc)
+				currentMonth := monthKeyFromTime(today, s.loc)
+				monthClosed := false
+				if targetWeekEnd.Before(today) && targetMonth == currentMonth {
+					summary, err := s.ensureMonthSummaryLocked(txCtx, teamID, targetMonth)
+					if err != nil {
+						return err
+					}
+					monthClosed = summary.IsClosed
+				}
+				var err error
+				pastWeeklyCompletion, err = domaintask.ValidateWeeklyAction(targetDate, today, targetWeekStart, targetWeekEnd, targetMonth, currentMonth, monthClosed, domainAction)
+				if err != nil {
 					return err
 				}
 			}
@@ -552,6 +565,11 @@ func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string,
 				TargetDate:           toDate(targetDate),
 				Completed:            nextCount > 0,
 				WeeklyCompletedCount: int(nextCount),
+			}
+			if pastWeeklyCompletion && shouldMutate {
+				if err := s.recalculateOpenMonthWeeklyPenaltyLocked(txCtx, teamID, monthKeyFromTime(weekStart.AddDate(0, 0, 6), s.loc)); err != nil {
+					return err
+				}
 			}
 			return nil
 		},

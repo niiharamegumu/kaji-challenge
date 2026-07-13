@@ -72,6 +72,26 @@ func ValidateWeeklyTarget(targetDate, today, weekStart, weekEnd time.Time) error
 	return nil
 }
 
+func ValidateWeeklyAction(targetDate, today, weekStart, weekEnd time.Time, targetMonth, currentMonth string, monthClosed bool, mode CompletionAction) (bool, error) {
+	currentWeekStart := startOfWeek(today)
+	if sameDate(weekStart, currentWeekStart) {
+		return false, nil
+	}
+	if !weekEnd.Before(today) {
+		return false, errors.New("weekly completion can only be changed for the current week or completed past weeks")
+	}
+	if targetMonth != currentMonth {
+		return false, errors.New("weekly completion can only be incremented for past weeks ending in current month")
+	}
+	if monthClosed {
+		return false, errors.New("weekly completion cannot be changed for closed month")
+	}
+	if mode != ActionIncrement {
+		return false, errors.New("past weekly completion only supports increment action")
+	}
+	return true, nil
+}
+
 func ValidateDailyAction(targetDate, today time.Time, targetMonth, currentMonth string, monthClosed bool, mode CompletionAction) error {
 	if sameDate(targetDate, today) {
 		if mode != ActionToggle {
@@ -96,8 +116,8 @@ func ValidateDailyAction(targetDate, today time.Time, targetMonth, currentMonth 
 
 func NextWeeklyCompletionCount(currentCount int64, required int, mode CompletionAction) (int64, bool, error) {
 	if required <= 1 {
-		if mode != ActionToggle {
-			return currentCount, false, errors.New("weekly tasks with required completions of 1 only support toggle action")
+		if mode != ActionToggle && mode != ActionIncrement {
+			return currentCount, false, errors.New("weekly tasks with required completions of 1 only support toggle or increment action")
 		}
 		if currentCount > 0 {
 			return currentCount - 1, true, nil
@@ -123,4 +143,12 @@ func NextWeeklyCompletionCount(currentCount int64, required int, mode Completion
 
 func sameDate(a, b time.Time) bool {
 	return a.Format("2006-01-02") == b.Format("2006-01-02")
+}
+
+func startOfWeek(t time.Time) time.Time {
+	weekday := int(t.Weekday())
+	if weekday == 0 {
+		weekday = 7
+	}
+	return time.Date(t.Year(), t.Month(), t.Day()-weekday+1, 0, 0, 0, 0, t.Location())
 }

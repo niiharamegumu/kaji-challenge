@@ -96,6 +96,7 @@ type Querier interface {
 	ListUndeletedPenaltyRulesByTeamID(ctx context.Context, teamID string) ([]PenaltyRule, error)
 	ListUndeletedTasksByTeamID(ctx context.Context, teamID string) ([]ListUndeletedTasksByTeamIDRow, error)
 	SetDailyPenaltyTotal(ctx context.Context, arg SetDailyPenaltyTotalParams) error
+	SetWeeklyPenaltyTotal(ctx context.Context, arg SetWeeklyPenaltyTotalParams) error
 	SoftDeletePenaltyRule(ctx context.Context, arg SoftDeletePenaltyRuleParams) (int64, error)
 	SumDailyPenaltyForClose(ctx context.Context, arg SumDailyPenaltyForCloseParams) (int64, error)
 	SumDailyPenaltyForDate(ctx context.Context, arg SumDailyPenaltyForDateParams) (int64, error)

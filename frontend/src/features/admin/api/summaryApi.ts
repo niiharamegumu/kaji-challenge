@@ -21,3 +21,13 @@ export async function completePastDailyTask(
     action: "complete",
   });
 }
+
+export async function incrementPastWeeklyTask(
+  taskId: string,
+  targetDate: string,
+) {
+  await postTaskCompletionToggle(taskId, {
+    targetDate,
+    action: "increment",
+  });
+}

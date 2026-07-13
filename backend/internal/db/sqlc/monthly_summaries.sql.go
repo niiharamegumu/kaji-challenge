@@ -166,6 +166,23 @@ func (q *Queries) SetDailyPenaltyTotal(ctx context.Context, arg SetDailyPenaltyT
 	return err
 }
 
+const setWeeklyPenaltyTotal = `-- name: SetWeeklyPenaltyTotal :exec
+UPDATE monthly_penalty_summaries
+SET weekly_penalty_total = $3
+WHERE team_id = $1 AND month_start = $2
+`
+
+type SetWeeklyPenaltyTotalParams struct {
+	TeamID             string      `json:"team_id"`
+	MonthStart         pgtype.Date `json:"month_start"`
+	WeeklyPenaltyTotal int32       `json:"weekly_penalty_total"`
+}
+
+func (q *Queries) SetWeeklyPenaltyTotal(ctx context.Context, arg SetWeeklyPenaltyTotalParams) error {
+	_, err := q.db.Exec(ctx, setWeeklyPenaltyTotal, arg.TeamID, arg.MonthStart, arg.WeeklyPenaltyTotal)
+	return err
+}
+
 const upsertMonthlyPenaltySummary = `-- name: UpsertMonthlyPenaltySummary :exec
 INSERT INTO monthly_penalty_summaries (team_id, month_start, daily_penalty_total, weekly_penalty_total, is_closed)
 VALUES ($1, $2, $3, $4, $5)
