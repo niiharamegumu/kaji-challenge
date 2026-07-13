@@ -257,6 +257,41 @@ func TestToggleTaskCompletionDecrementsPastWeeklyTaskInOpenMonthAndRecalculatesP
 	}
 }
 
+func TestToggleTaskCompletionRestoresPastWeeklyPenaltyAfterCompletionIsReverted(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	now := time.Date(2026, 3, 17, 9, 0, 0, 0, s.loc)
+	s.now = func() time.Time { return now }
+
+	weekStart := time.Date(2026, 3, 9, 0, 0, 0, 0, s.loc)
+	createdAt := weekStart.AddDate(0, 0, -2).Add(10 * time.Hour)
+	teamID, userID := createTeamWithMember(t, s, "past-weekly-restore-penalty@example.com", createdAt)
+	taskID := createTaskWithIDAt(t, s, teamID, model.TaskTypeWeekly, 3, 1, createdAt)
+	if _, err := s.closeWeekForTargetLocked(ctx, weekStart, teamID); err != nil {
+		t.Fatalf("closeWeekForTargetLocked failed: %v", err)
+	}
+
+	if got := getMonthSummary(t, s, teamID, "2026-03").WeeklyPenaltyTotal; got != 3 {
+		t.Fatalf("expected weekly penalty total=3 after close, got %d", got)
+	}
+
+	increment := model.Increment
+	if _, err := s.ToggleTaskCompletion(withLatestIfMatchForUser(t, s, ctx, userID), userID, taskID, weekStart, &increment); err != nil {
+		t.Fatalf("increment past weekly completion failed: %v", err)
+	}
+	if got := getMonthSummary(t, s, teamID, "2026-03").WeeklyPenaltyTotal; got != 0 {
+		t.Fatalf("expected weekly penalty total=0 after completion, got %d", got)
+	}
+
+	decrement := model.Decrement
+	if _, err := s.ToggleTaskCompletion(withLatestIfMatchForUser(t, s, ctx, userID), userID, taskID, weekStart, &decrement); err != nil {
+		t.Fatalf("decrement past weekly completion failed: %v", err)
+	}
+	if got := getMonthSummary(t, s, teamID, "2026-03").WeeklyPenaltyTotal; got != 3 {
+		t.Fatalf("expected weekly penalty total=3 after completion was reverted, got %d", got)
+	}
+}
+
 func TestToggleTaskCompletionIncrementsCrossMonthPastWeeklyTaskForWeekEndMonth(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
