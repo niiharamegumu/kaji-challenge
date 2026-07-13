@@ -155,6 +155,7 @@ describe("AdminSummaryPage", () => {
     const month = "2026-03";
     const yesterdayKey = dateStringInJST(new Date("2026-03-16T00:00:00+09:00"));
     const todayKey = dateStringInJST(new Date("2026-03-17T00:00:00+09:00"));
+    const pastWeekKey = dateStringInJST(new Date("2026-03-09T00:00:00+09:00"));
 
     const user = userEvent.setup();
     mockGetPenaltySummaryMonthly.mockResolvedValue({
@@ -177,6 +178,11 @@ describe("AdminSummaryPage", () => {
                 isDeleted: false,
                 completionSlots: [{ slot: 1 }],
               },
+            ],
+          },
+          {
+            date: pastWeekKey,
+            items: [
               {
                 taskId: "weekly-past",
                 title: "掃除",
@@ -214,6 +220,9 @@ describe("AdminSummaryPage", () => {
     expect(
       screen.getAllByRole("button", { name: "過去日タスクを完了にする" }),
     ).toHaveLength(1);
+    expect(
+      screen.getByRole("button", { name: "過去週タスクに1回追加" }),
+    ).toBeInTheDocument();
 
     await user.click(
       screen.getAllByRole("button", { name: "過去日タスクを完了にする" })[0],
@@ -231,6 +240,20 @@ describe("AdminSummaryPage", () => {
       expect(mockPostTaskCompletionToggle).toHaveBeenCalledWith("daily-past", {
         targetDate: yesterdayKey,
         action: "complete",
+      });
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: "過去週タスクに1回追加" }),
+    );
+    expect(
+      await screen.findByText("過去週のタスクに1回分を追加しますか？"),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "1回追加" }));
+    await waitFor(() => {
+      expect(mockPostTaskCompletionToggle).toHaveBeenCalledWith("weekly-past", {
+        targetDate: pastWeekKey,
+        action: "increment",
       });
     });
   });

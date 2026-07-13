@@ -26,6 +26,11 @@ UPDATE monthly_penalty_summaries
 SET weekly_penalty_total = weekly_penalty_total + $3
 WHERE team_id = $1 AND month_start = $2;
 
+-- name: SetWeeklyPenaltyTotal :exec
+UPDATE monthly_penalty_summaries
+SET weekly_penalty_total = $3
+WHERE team_id = $1 AND month_start = $2;
+
 -- name: CloseMonthlyPenaltySummary :exec
 UPDATE monthly_penalty_summaries
 SET is_closed = TRUE

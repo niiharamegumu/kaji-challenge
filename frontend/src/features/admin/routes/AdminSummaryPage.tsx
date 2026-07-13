@@ -25,6 +25,7 @@ import { dateStringInJST, formatError } from "../../../shared/utils/errors";
 import {
   completePastDailyTask as completePastDailyTaskRequest,
   getMonthlyPenaltySummary,
+  incrementPastWeeklyTask as incrementPastWeeklyTaskRequest,
   listPenaltyRulesWithDeleted,
 } from "../api/summaryApi";
 
@@ -65,6 +66,19 @@ const dateFromDateKey = (dateKey: string) => {
   return new Date(year, month - 1, day);
 };
 
+const weekEndDateKey = (dateKey: string) => {
+  const [yearPart, monthPart, dayPart] = dateKey.split("-");
+  const year = Number(yearPart);
+  const month = Number(monthPart);
+  const day = Number(dayPart);
+  if (Number.isNaN(year) || Number.isNaN(month) || Number.isNaN(day)) {
+    return dateKey;
+  }
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() + ((7 - date.getUTCDay()) % 7));
+  return date.toISOString().slice(0, 10);
+};
+
 const asArray = <T,>(value: T[] | null | undefined): T[] => {
   if (Array.isArray(value)) {
     return value;
@@ -83,6 +97,7 @@ export function AdminSummaryPage() {
     taskId: string;
     taskTitle: string;
     date: string;
+    type: "daily" | "weekly";
   } | null>(null);
   const monthFromUrl = searchParams.get("month");
   const month =
@@ -145,12 +160,17 @@ export function AdminSummaryPage() {
     mutationFn: async ({
       taskId,
       targetDate,
+      type,
     }: {
       taskId: string;
       targetDate: string;
-    }) => completePastDailyTaskRequest(taskId, targetDate),
+      type: "daily" | "weekly";
+    }) =>
+      type === "daily"
+        ? completePastDailyTaskRequest(taskId, targetDate)
+        : incrementPastWeeklyTaskRequest(taskId, targetDate),
     onSuccess: async () => {
-      setStatus("過去日タスクを完了に更新しました");
+      setStatus("過去分のタスクを更新しました");
       setConfirmTarget(null);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.monthlySummary }),
@@ -450,6 +470,12 @@ export function AdminSummaryPage() {
                           group.date < currentDateKey &&
                           item.type === "daily" &&
                           !item.completed;
+                        const canIncrementPastWeekly =
+                          !summaryData.isClosed &&
+                          month === currentMonthKey &&
+                          item.type === "weekly" &&
+                          weekEndDateKey(group.date) < currentDateKey &&
+                          !item.completed;
                         return (
                           <li
                             key={`${group.date}-${item.taskId}`}
@@ -524,6 +550,24 @@ export function AdminSummaryPage() {
                                           taskId: item.taskId,
                                           taskTitle: item.title,
                                           date: group.date,
+                                          type: "daily",
+                                        })
+                                      }
+                                    >
+                                      <Check size={12} aria-hidden="true" />
+                                    </button>
+                                  ) : canIncrementPastWeekly ? (
+                                    <button
+                                      type="button"
+                                      aria-label="過去週タスクに1回追加"
+                                      title="1回追加"
+                                      className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-[color:var(--color-matcha-400)] bg-white text-[color:var(--color-matcha-700)] transition-colors hover:bg-[color:var(--color-matcha-50)]"
+                                      onClick={() =>
+                                        setConfirmTarget({
+                                          taskId: item.taskId,
+                                          taskTitle: item.title,
+                                          date: group.date,
+                                          type: "weekly",
                                         })
                                       }
                                     >
@@ -552,13 +596,21 @@ export function AdminSummaryPage() {
       </article>
       <ConfirmModal
         isOpen={confirmTarget != null}
-        title="過去日のタスクを完了に変更しますか？"
+        title={
+          confirmTarget?.type === "weekly"
+            ? "過去週のタスクに1回分を追加しますか？"
+            : "過去日のタスクを完了に変更しますか？"
+        }
         message={
           confirmTarget == null
             ? ""
-            : `${confirmTarget.date} の「${confirmTarget.taskTitle}」を完了済みに変更します。当月中の過去分だけ操作でき、この操作は確定後に未完了へ戻せません。`
+            : confirmTarget.type === "weekly"
+              ? `${confirmTarget.date} の週の「${confirmTarget.taskTitle}」に1回分を追加します。当月中の終了済み週だけ操作できます。`
+              : `${confirmTarget.date} の「${confirmTarget.taskTitle}」を完了済みに変更します。当月中の過去分だけ操作でき、この操作は確定後に未完了へ戻せません。`
         }
-        confirmLabel="完了にする"
+        confirmLabel={
+          confirmTarget?.type === "weekly" ? "1回追加" : "完了にする"
+        }
         onCancel={() => setConfirmTarget(null)}
         onConfirm={() => {
           if (confirmTarget == null || completePastDailyTask.isPending) {
@@ -567,6 +619,7 @@ export function AdminSummaryPage() {
           void completePastDailyTask.mutateAsync({
             taskId: confirmTarget.taskId,
             targetDate: confirmTarget.date,
+            type: confirmTarget.type,
           });
         }}
       />

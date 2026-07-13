@@ -315,7 +315,7 @@ func TestWeeklyTaskIncrementDecrement(t *testing.T) {
 	}
 }
 
-func TestWeeklyTaskWithSingleRequiredRejectsIncrement(t *testing.T) {
+func TestWeeklyTaskWithSingleRequiredAllowsIncrement(t *testing.T) {
 	r := newTestRouter(t)
 	token := login(t, r)
 
@@ -337,8 +337,8 @@ func TestWeeklyTaskWithSingleRequiredRejectsIncrement(t *testing.T) {
 
 	req := `{"targetDate":"` + today + `","action":"increment"}`
 	res := doRequest(t, r, http.MethodPost, "/v1/tasks/"+task.Id+"/completions/toggle", req, token)
-	if res.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d: %s", res.Code, res.Body.String())
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
 	}
 }
 
