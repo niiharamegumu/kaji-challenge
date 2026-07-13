@@ -582,38 +582,29 @@ export function AdminSummaryPage() {
                                       )}
                                     </button>
                                   ) : canAdjustPastWeekly ? (
-                                    <button
-                                      type="button"
-                                      aria-label={
-                                        item.completed
-                                          ? "過去週タスクを1回減らす"
-                                          : "過去週タスクに1回追加"
+                                    <CompletionSlots
+                                      compact
+                                      className="justify-end"
+                                      slots={item.completionSlots}
+                                      showEmptyCheck
+                                      getSlotActionLabel={(slot) =>
+                                        slot.actor == null
+                                          ? "1回追加"
+                                          : "1回取り消す"
                                       }
-                                      title={
-                                        item.completed ? "1回減らす" : "1回追加"
-                                      }
-                                      className={`inline-flex items-center justify-center rounded-full transition-opacity hover:opacity-80 ${item.completed ? "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-500" : "h-5 w-5 border border-[color:var(--color-matcha-400)] bg-white text-[color:var(--color-matcha-700)] hover:bg-[color:var(--color-matcha-50)]"}`}
-                                      onClick={() =>
+                                      onSlotClick={(slot) =>
                                         setConfirmTarget({
                                           taskId: item.taskId,
                                           taskTitle: item.title,
                                           date: group.date,
                                           type: "weekly",
-                                          action: item.completed
-                                            ? "decrement"
-                                            : "increment",
+                                          action:
+                                            slot.actor == null
+                                              ? "increment"
+                                              : "decrement",
                                         })
                                       }
-                                    >
-                                      {item.completed ? (
-                                        <CompletionSlots
-                                          compact
-                                          slots={item.completionSlots}
-                                        />
-                                      ) : (
-                                        <Check size={12} aria-hidden="true" />
-                                      )}
-                                    </button>
+                                    />
                                   ) : (
                                     <CompletionSlots
                                       compact
