@@ -185,7 +185,16 @@ describe("AdminSummaryPage", () => {
                 penaltyPoints: 2,
                 completed: true,
                 isDeleted: false,
-                completionSlots: [{ slot: 1 }],
+                completionSlots: [
+                  {
+                    slot: 1,
+                    actor: {
+                      userId: "user-daily",
+                      effectiveName: "花子",
+                      colorHex: "#228B22",
+                    },
+                  },
+                ],
               },
             ],
           },
@@ -199,7 +208,18 @@ describe("AdminSummaryPage", () => {
                 penaltyPoints: 2,
                 completed: false,
                 isDeleted: false,
-                completionSlots: [{ slot: 1 }],
+                completionSlots: [
+                  {
+                    slot: 1,
+                    actor: {
+                      userId: "user-weekly-partial",
+                      effectiveName: "次郎",
+                      colorHex: "#9932CC",
+                    },
+                  },
+                  { slot: 2 },
+                  { slot: 3 },
+                ],
               },
               {
                 taskId: "weekly-past-completed",
@@ -208,7 +228,32 @@ describe("AdminSummaryPage", () => {
                 penaltyPoints: 2,
                 completed: true,
                 isDeleted: false,
-                completionSlots: [{ slot: 1 }],
+                completionSlots: [
+                  {
+                    slot: 1,
+                    actor: {
+                      userId: "user-weekly",
+                      effectiveName: "太郎",
+                      colorHex: "#1E90FF",
+                    },
+                  },
+                  {
+                    slot: 2,
+                    actor: {
+                      userId: "user-weekly-2",
+                      effectiveName: "次郎",
+                      colorHex: "#9932CC",
+                    },
+                  },
+                  {
+                    slot: 3,
+                    actor: {
+                      userId: "user-weekly-3",
+                      effectiveName: "三郎",
+                      colorHex: "#DC143C",
+                    },
+                  },
+                ],
               },
             ],
           },
@@ -239,13 +284,20 @@ describe("AdminSummaryPage", () => {
       screen.getAllByRole("button", { name: "過去日タスクを完了にする" }),
     ).toHaveLength(1);
     expect(
-      screen.getByRole("button", { name: "過去週タスクに1回追加" }),
-    ).toBeInTheDocument();
-    expect(
       screen.getByRole("button", { name: "過去日タスクを未完了に戻す" }),
     ).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /回目:/ })).toHaveLength(6);
     expect(
-      screen.getByRole("button", { name: "過去週タスクを1回減らす" }),
+      screen.getByRole("button", { name: "2回目: 未完了: 1回追加" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "1回目: 太郎: 1回取り消す" }),
+    ).toBeInTheDocument();
+    expect(screen.getAllByTestId("completion-slot-empty-check")).toHaveLength(
+      2,
+    );
+    expect(
+      screen.getByRole("img", { name: "1回目: 花子" }),
     ).toBeInTheDocument();
 
     await user.click(
@@ -268,7 +320,7 @@ describe("AdminSummaryPage", () => {
     });
 
     await user.click(
-      screen.getByRole("button", { name: "過去週タスクに1回追加" }),
+      screen.getByRole("button", { name: "2回目: 未完了: 1回追加" }),
     );
     expect(
       await screen.findByText("過去週のタスクに1回分を追加しますか？"),
@@ -296,7 +348,7 @@ describe("AdminSummaryPage", () => {
     });
 
     await user.click(
-      screen.getByRole("button", { name: "過去週タスクを1回減らす" }),
+      screen.getByRole("button", { name: "1回目: 太郎: 1回取り消す" }),
     );
     expect(
       await screen.findByText("過去週のタスクを1回分取り消しますか？"),
