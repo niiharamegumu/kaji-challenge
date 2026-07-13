@@ -185,7 +185,16 @@ describe("AdminSummaryPage", () => {
                 penaltyPoints: 2,
                 completed: true,
                 isDeleted: false,
-                completionSlots: [{ slot: 1 }],
+                completionSlots: [
+                  {
+                    slot: 1,
+                    actor: {
+                      userId: "user-daily",
+                      effectiveName: "花子",
+                      colorHex: "#228B22",
+                    },
+                  },
+                ],
               },
             ],
           },
@@ -208,7 +217,16 @@ describe("AdminSummaryPage", () => {
                 penaltyPoints: 2,
                 completed: true,
                 isDeleted: false,
-                completionSlots: [{ slot: 1 }],
+                completionSlots: [
+                  {
+                    slot: 1,
+                    actor: {
+                      userId: "user-weekly",
+                      effectiveName: "太郎",
+                      colorHex: "#1E90FF",
+                    },
+                  },
+                ],
               },
             ],
           },
@@ -246,6 +264,12 @@ describe("AdminSummaryPage", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "過去週タスクを1回減らす" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("img", { name: "1回目: 花子" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("img", { name: "1回目: 太郎" }),
     ).toBeInTheDocument();
 
     await user.click(

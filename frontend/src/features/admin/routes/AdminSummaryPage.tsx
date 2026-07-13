@@ -11,7 +11,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Circle,
-  Minus,
   TriangleAlert,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
@@ -474,30 +473,16 @@ export function AdminSummaryPage() {
                         const isWeekly = item.type === "weekly";
                         const showCrossMonthBadge =
                           isWeekly && isCrossMonthWeek;
-                        const canCompletePastDaily =
+                        const canAdjustPastDaily =
                           !summaryData.isClosed &&
                           month === currentMonthKey &&
                           group.date < currentDateKey &&
-                          item.type === "daily" &&
-                          !item.completed;
-                        const canDecrementPastDaily =
-                          !summaryData.isClosed &&
-                          month === currentMonthKey &&
-                          group.date < currentDateKey &&
-                          item.type === "daily" &&
-                          item.completed;
-                        const canIncrementPastWeekly =
+                          item.type === "daily";
+                        const canAdjustPastWeekly =
                           !summaryData.isClosed &&
                           month === currentMonthKey &&
                           item.type === "weekly" &&
-                          weekEndDateKey(group.date) < currentDateKey &&
-                          !item.completed;
-                        const canDecrementPastWeekly =
-                          !summaryData.isClosed &&
-                          month === currentMonthKey &&
-                          item.type === "weekly" &&
-                          weekEndDateKey(group.date) < currentDateKey &&
-                          item.completed;
+                          weekEndDateKey(group.date) < currentDateKey;
                         return (
                           <li
                             key={`${group.date}-${item.taskId}`}
@@ -561,77 +546,73 @@ export function AdminSummaryPage() {
                                   ) : null}
                                 </div>
                                 <div className="flex shrink-0 items-center gap-1.5">
-                                  {canCompletePastDaily ? (
+                                  {canAdjustPastDaily ? (
                                     <button
                                       type="button"
-                                      aria-label="過去日タスクを完了にする"
-                                      title="完了にする"
-                                      className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-[color:var(--color-matcha-400)] bg-white text-[color:var(--color-matcha-700)] transition-colors hover:bg-[color:var(--color-matcha-50)]"
+                                      aria-label={
+                                        item.completed
+                                          ? "過去日タスクを未完了に戻す"
+                                          : "過去日タスクを完了にする"
+                                      }
+                                      title={
+                                        item.completed
+                                          ? "未完了に戻す"
+                                          : "完了にする"
+                                      }
+                                      className={`inline-flex items-center justify-center rounded-full transition-opacity hover:opacity-80 ${item.completed ? "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-500" : "h-5 w-5 border border-[color:var(--color-matcha-400)] bg-white text-[color:var(--color-matcha-700)] hover:bg-[color:var(--color-matcha-50)]"}`}
                                       onClick={() =>
                                         setConfirmTarget({
                                           taskId: item.taskId,
                                           taskTitle: item.title,
                                           date: group.date,
                                           type: "daily",
-                                          action: "complete",
+                                          action: item.completed
+                                            ? "decrement"
+                                            : "complete",
                                         })
                                       }
                                     >
-                                      <Check size={12} aria-hidden="true" />
+                                      {item.completed ? (
+                                        <CompletionSlots
+                                          compact
+                                          slots={item.completionSlots}
+                                        />
+                                      ) : (
+                                        <Check size={12} aria-hidden="true" />
+                                      )}
                                     </button>
-                                  ) : canDecrementPastDaily ? (
+                                  ) : canAdjustPastWeekly ? (
                                     <button
                                       type="button"
-                                      aria-label="過去日タスクを未完了に戻す"
-                                      title="未完了に戻す"
-                                      className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-rose-300 bg-white text-rose-700 transition-colors hover:bg-rose-50"
-                                      onClick={() =>
-                                        setConfirmTarget({
-                                          taskId: item.taskId,
-                                          taskTitle: item.title,
-                                          date: group.date,
-                                          type: "daily",
-                                          action: "decrement",
-                                        })
+                                      aria-label={
+                                        item.completed
+                                          ? "過去週タスクを1回減らす"
+                                          : "過去週タスクに1回追加"
                                       }
-                                    >
-                                      <Minus size={12} aria-hidden="true" />
-                                    </button>
-                                  ) : canIncrementPastWeekly ? (
-                                    <button
-                                      type="button"
-                                      aria-label="過去週タスクに1回追加"
-                                      title="1回追加"
-                                      className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-[color:var(--color-matcha-400)] bg-white text-[color:var(--color-matcha-700)] transition-colors hover:bg-[color:var(--color-matcha-50)]"
-                                      onClick={() =>
-                                        setConfirmTarget({
-                                          taskId: item.taskId,
-                                          taskTitle: item.title,
-                                          date: group.date,
-                                          type: "weekly",
-                                          action: "increment",
-                                        })
+                                      title={
+                                        item.completed ? "1回減らす" : "1回追加"
                                       }
-                                    >
-                                      <Check size={12} aria-hidden="true" />
-                                    </button>
-                                  ) : canDecrementPastWeekly ? (
-                                    <button
-                                      type="button"
-                                      aria-label="過去週タスクを1回減らす"
-                                      title="1回減らす"
-                                      className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-rose-300 bg-white text-rose-700 transition-colors hover:bg-rose-50"
+                                      className={`inline-flex items-center justify-center rounded-full transition-opacity hover:opacity-80 ${item.completed ? "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-500" : "h-5 w-5 border border-[color:var(--color-matcha-400)] bg-white text-[color:var(--color-matcha-700)] hover:bg-[color:var(--color-matcha-50)]"}`}
                                       onClick={() =>
                                         setConfirmTarget({
                                           taskId: item.taskId,
                                           taskTitle: item.title,
                                           date: group.date,
                                           type: "weekly",
-                                          action: "decrement",
+                                          action: item.completed
+                                            ? "decrement"
+                                            : "increment",
                                         })
                                       }
                                     >
-                                      <Minus size={12} aria-hidden="true" />
+                                      {item.completed ? (
+                                        <CompletionSlots
+                                          compact
+                                          slots={item.completionSlots}
+                                        />
+                                      ) : (
+                                        <Check size={12} aria-hidden="true" />
+                                      )}
                                     </button>
                                   ) : (
                                     <CompletionSlots
