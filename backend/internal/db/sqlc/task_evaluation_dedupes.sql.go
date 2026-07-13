@@ -143,3 +143,34 @@ func (q *Queries) SumWeeklyPenaltyForClose(ctx context.Context, arg SumWeeklyPen
 	err := row.Scan(&total_penalty)
 	return total_penalty, err
 }
+
+const sumWeeklyPenaltyForWeek = `-- name: SumWeeklyPenaltyForWeek :one
+SELECT COALESCE(SUM(t.penalty_points), 0)::bigint AS total_penalty
+FROM tasks t
+LEFT JOIN (
+  SELECT task_id, week_start, COUNT(*)::integer AS completion_count
+  FROM task_completion_weekly_entries
+  WHERE week_start = $2
+  GROUP BY task_id, week_start
+) w
+  ON w.task_id = t.id
+ AND w.week_start = $2
+WHERE t.team_id = $1
+  AND t.type = 'weekly'
+  AND t.created_at < $3
+  AND (t.deleted_at IS NULL OR t.deleted_at >= $3)
+  AND COALESCE(w.completion_count, 0) < t.required_completions_per_week
+`
+
+type SumWeeklyPenaltyForWeekParams struct {
+	TeamID    string             `json:"team_id"`
+	WeekStart pgtype.Date        `json:"week_start"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) SumWeeklyPenaltyForWeek(ctx context.Context, arg SumWeeklyPenaltyForWeekParams) (int64, error) {
+	row := q.db.QueryRow(ctx, sumWeeklyPenaltyForWeek, arg.TeamID, arg.WeekStart, arg.CreatedAt)
+	var total_penalty int64
+	err := row.Scan(&total_penalty)
+	return total_penalty, err
+}

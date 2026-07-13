@@ -67,3 +67,20 @@ deduped AS (
 SELECT COALESCE(SUM(c.penalty_points), 0)::bigint AS total_penalty
 FROM candidates c
 JOIN deduped d ON d.task_id = c.task_id;
+
+-- name: SumWeeklyPenaltyForWeek :one
+SELECT COALESCE(SUM(t.penalty_points), 0)::bigint AS total_penalty
+FROM tasks t
+LEFT JOIN (
+  SELECT task_id, week_start, COUNT(*)::integer AS completion_count
+  FROM task_completion_weekly_entries
+  WHERE week_start = $2
+  GROUP BY task_id, week_start
+) w
+  ON w.task_id = t.id
+ AND w.week_start = $2
+WHERE t.team_id = $1
+  AND t.type = 'weekly'
+  AND t.created_at < $3
+  AND (t.deleted_at IS NULL OR t.deleted_at >= $3)
+  AND COALESCE(w.completion_count, 0) < t.required_completions_per_week;
