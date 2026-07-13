@@ -481,12 +481,12 @@ type TeamMembershipRole string
 
 // ToggleTaskCompletionRequest defines model for ToggleTaskCompletionRequest.
 type ToggleTaskCompletionRequest struct {
-	// Action For daily tasks, `toggle` is only for today and `complete` is only for past days in the current open month. For weekly tasks, `increment` is available in the current week and for completed past weeks whose week end is in the current open month.
+	// Action For daily tasks, `toggle` is only for today, while `complete` and `decrement` are available for past days in the current open month. For weekly tasks, `increment` and `decrement` are available in the current week and for completed past weeks whose week end is in the current open month.
 	Action     *ToggleTaskCompletionRequestAction `json:"action,omitempty"`
 	TargetDate openapi_types.Date                 `json:"targetDate"`
 }
 
-// ToggleTaskCompletionRequestAction For daily tasks, `toggle` is only for today and `complete` is only for past days in the current open month. For weekly tasks, `increment` is available in the current week and for completed past weeks whose week end is in the current open month.
+// ToggleTaskCompletionRequestAction For daily tasks, `toggle` is only for today, while `complete` and `decrement` are available for past days in the current open month. For weekly tasks, `increment` and `decrement` are available in the current week and for completed past weeks whose week end is in the current open month.
 type ToggleTaskCompletionRequestAction string
 
 // UpdateColorRequest defines model for UpdateColorRequest.

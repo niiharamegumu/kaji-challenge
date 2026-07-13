@@ -348,7 +348,7 @@ export interface ReorderTasksRequest {
 }
 
 /**
- * For daily tasks, `toggle` is only for today and `complete` is only for past days in the current open month. For weekly tasks, `increment` is available in the current week and for completed past weeks whose week end is in the current open month.
+ * For daily tasks, `toggle` is only for today, while `complete` and `decrement` are available for past days in the current open month. For weekly tasks, `increment` and `decrement` are available in the current week and for completed past weeks whose week end is in the current open month.
  */
 export type ToggleTaskCompletionRequestAction = typeof ToggleTaskCompletionRequestAction[keyof typeof ToggleTaskCompletionRequestAction];
 
@@ -362,7 +362,7 @@ export const ToggleTaskCompletionRequestAction = {
 
 export interface ToggleTaskCompletionRequest {
   targetDate: string;
-  /** For daily tasks, `toggle` is only for today and `complete` is only for past days in the current open month. For weekly tasks, `increment` is available in the current week and for completed past weeks whose week end is in the current open month. */
+  /** For daily tasks, `toggle` is only for today, while `complete` and `decrement` are available for past days in the current open month. For weekly tasks, `increment` and `decrement` are available in the current week and for completed past weeks whose week end is in the current open month. */
   action?: ToggleTaskCompletionRequestAction;
 }
 

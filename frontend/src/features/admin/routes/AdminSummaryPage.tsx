@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Circle,
+  Minus,
   TriangleAlert,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
@@ -24,6 +25,8 @@ import { PAGE_SECTION_CHROMELESS_CLASS_NAME } from "../../../shared/styles/pageS
 import { dateStringInJST, formatError } from "../../../shared/utils/errors";
 import {
   completePastDailyTask as completePastDailyTaskRequest,
+  decrementPastDailyTask as decrementPastDailyTaskRequest,
+  decrementPastWeeklyTask as decrementPastWeeklyTaskRequest,
   getMonthlyPenaltySummary,
   incrementPastWeeklyTask as incrementPastWeeklyTaskRequest,
   listPenaltyRulesWithDeleted,
@@ -98,6 +101,7 @@ export function AdminSummaryPage() {
     taskTitle: string;
     date: string;
     type: "daily" | "weekly";
+    action: "complete" | "increment" | "decrement";
   } | null>(null);
   const monthFromUrl = searchParams.get("month");
   const month =
@@ -156,19 +160,25 @@ export function AdminSummaryPage() {
   const currentDateKey = useMemo(() => dateStringInJST(), []);
   const currentMonthKey = currentDateKey.slice(0, 7);
 
-  const completePastDailyTask = useMutation({
+  const updatePastTaskCompletion = useMutation({
     mutationFn: async ({
       taskId,
       targetDate,
       type,
+      action,
     }: {
       taskId: string;
       targetDate: string;
       type: "daily" | "weekly";
+      action: "complete" | "increment" | "decrement";
     }) =>
       type === "daily"
-        ? completePastDailyTaskRequest(taskId, targetDate)
-        : incrementPastWeeklyTaskRequest(taskId, targetDate),
+        ? action === "complete"
+          ? completePastDailyTaskRequest(taskId, targetDate)
+          : decrementPastDailyTaskRequest(taskId, targetDate)
+        : action === "increment"
+          ? incrementPastWeeklyTaskRequest(taskId, targetDate)
+          : decrementPastWeeklyTaskRequest(taskId, targetDate),
     onSuccess: async () => {
       setStatus("過去分のタスクを更新しました");
       setConfirmTarget(null);
@@ -470,12 +480,24 @@ export function AdminSummaryPage() {
                           group.date < currentDateKey &&
                           item.type === "daily" &&
                           !item.completed;
+                        const canDecrementPastDaily =
+                          !summaryData.isClosed &&
+                          month === currentMonthKey &&
+                          group.date < currentDateKey &&
+                          item.type === "daily" &&
+                          item.completed;
                         const canIncrementPastWeekly =
                           !summaryData.isClosed &&
                           month === currentMonthKey &&
                           item.type === "weekly" &&
                           weekEndDateKey(group.date) < currentDateKey &&
                           !item.completed;
+                        const canDecrementPastWeekly =
+                          !summaryData.isClosed &&
+                          month === currentMonthKey &&
+                          item.type === "weekly" &&
+                          weekEndDateKey(group.date) < currentDateKey &&
+                          item.completed;
                         return (
                           <li
                             key={`${group.date}-${item.taskId}`}
@@ -551,10 +573,29 @@ export function AdminSummaryPage() {
                                           taskTitle: item.title,
                                           date: group.date,
                                           type: "daily",
+                                          action: "complete",
                                         })
                                       }
                                     >
                                       <Check size={12} aria-hidden="true" />
+                                    </button>
+                                  ) : canDecrementPastDaily ? (
+                                    <button
+                                      type="button"
+                                      aria-label="過去日タスクを未完了に戻す"
+                                      title="未完了に戻す"
+                                      className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-rose-300 bg-white text-rose-700 transition-colors hover:bg-rose-50"
+                                      onClick={() =>
+                                        setConfirmTarget({
+                                          taskId: item.taskId,
+                                          taskTitle: item.title,
+                                          date: group.date,
+                                          type: "daily",
+                                          action: "decrement",
+                                        })
+                                      }
+                                    >
+                                      <Minus size={12} aria-hidden="true" />
                                     </button>
                                   ) : canIncrementPastWeekly ? (
                                     <button
@@ -568,10 +609,29 @@ export function AdminSummaryPage() {
                                           taskTitle: item.title,
                                           date: group.date,
                                           type: "weekly",
+                                          action: "increment",
                                         })
                                       }
                                     >
                                       <Check size={12} aria-hidden="true" />
+                                    </button>
+                                  ) : canDecrementPastWeekly ? (
+                                    <button
+                                      type="button"
+                                      aria-label="過去週タスクを1回減らす"
+                                      title="1回減らす"
+                                      className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-rose-300 bg-white text-rose-700 transition-colors hover:bg-rose-50"
+                                      onClick={() =>
+                                        setConfirmTarget({
+                                          taskId: item.taskId,
+                                          taskTitle: item.title,
+                                          date: group.date,
+                                          type: "weekly",
+                                          action: "decrement",
+                                        })
+                                      }
+                                    >
+                                      <Minus size={12} aria-hidden="true" />
                                     </button>
                                   ) : (
                                     <CompletionSlots
@@ -597,29 +657,44 @@ export function AdminSummaryPage() {
       <ConfirmModal
         isOpen={confirmTarget != null}
         title={
-          confirmTarget?.type === "weekly"
+          confirmTarget?.action === "increment"
             ? "過去週のタスクに1回分を追加しますか？"
-            : "過去日のタスクを完了に変更しますか？"
+            : confirmTarget?.action === "decrement"
+              ? confirmTarget.type === "weekly"
+                ? "過去週のタスクを1回分取り消しますか？"
+                : "過去日のタスクを未完了に戻しますか？"
+              : "過去日のタスクを完了に変更しますか？"
         }
         message={
           confirmTarget == null
             ? ""
-            : confirmTarget.type === "weekly"
+            : confirmTarget.action === "increment"
               ? `${confirmTarget.date} の週の「${confirmTarget.taskTitle}」に1回分を追加します。当月中の終了済み週だけ操作できます。`
-              : `${confirmTarget.date} の「${confirmTarget.taskTitle}」を完了済みに変更します。当月中の過去分だけ操作でき、この操作は確定後に未完了へ戻せません。`
+              : confirmTarget.action === "decrement"
+                ? confirmTarget.type === "weekly"
+                  ? `${confirmTarget.date} の週の「${confirmTarget.taskTitle}」から1回分を取り消します。当月中の終了済み週だけ操作できます。`
+                  : `${confirmTarget.date} の「${confirmTarget.taskTitle}」を未完了に戻します。当月中の過去分だけ操作できます。`
+                : `${confirmTarget.date} の「${confirmTarget.taskTitle}」を完了済みに変更します。当月中の過去分だけ操作できます。`
         }
         confirmLabel={
-          confirmTarget?.type === "weekly" ? "1回追加" : "完了にする"
+          confirmTarget?.action === "increment"
+            ? "1回追加"
+            : confirmTarget?.action === "decrement"
+              ? confirmTarget.type === "weekly"
+                ? "1回減らす"
+                : "未完了に戻す"
+              : "完了にする"
         }
         onCancel={() => setConfirmTarget(null)}
         onConfirm={() => {
-          if (confirmTarget == null || completePastDailyTask.isPending) {
+          if (confirmTarget == null || updatePastTaskCompletion.isPending) {
             return;
           }
-          void completePastDailyTask.mutateAsync({
+          void updatePastTaskCompletion.mutateAsync({
             taskId: confirmTarget.taskId,
             targetDate: confirmTarget.date,
             type: confirmTarget.type,
+            action: confirmTarget.action,
           });
         }}
       />

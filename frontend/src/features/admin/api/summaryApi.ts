@@ -31,3 +31,23 @@ export async function incrementPastWeeklyTask(
     action: "increment",
   });
 }
+
+export async function decrementPastDailyTask(
+  taskId: string,
+  targetDate: string,
+) {
+  await postTaskCompletionToggle(taskId, {
+    targetDate,
+    action: "decrement",
+  });
+}
+
+export async function decrementPastWeeklyTask(
+  taskId: string,
+  targetDate: string,
+) {
+  await postTaskCompletionToggle(taskId, {
+    targetDate,
+    action: "decrement",
+  });
+}
