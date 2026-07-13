@@ -178,6 +178,15 @@ describe("AdminSummaryPage", () => {
                 isDeleted: false,
                 completionSlots: [{ slot: 1 }],
               },
+              {
+                taskId: "daily-past-completed",
+                title: "片付け",
+                type: "daily",
+                penaltyPoints: 2,
+                completed: true,
+                isDeleted: false,
+                completionSlots: [{ slot: 1 }],
+              },
             ],
           },
           {
@@ -189,6 +198,15 @@ describe("AdminSummaryPage", () => {
                 type: "weekly",
                 penaltyPoints: 2,
                 completed: false,
+                isDeleted: false,
+                completionSlots: [{ slot: 1 }],
+              },
+              {
+                taskId: "weekly-past-completed",
+                title: "買い物",
+                type: "weekly",
+                penaltyPoints: 2,
+                completed: true,
                 isDeleted: false,
                 completionSlots: [{ slot: 1 }],
               },
@@ -223,6 +241,12 @@ describe("AdminSummaryPage", () => {
     expect(
       screen.getByRole("button", { name: "過去週タスクに1回追加" }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "過去日タスクを未完了に戻す" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "過去週タスクを1回減らす" }),
+    ).toBeInTheDocument();
 
     await user.click(
       screen.getAllByRole("button", { name: "過去日タスクを完了にする" })[0],
@@ -231,8 +255,8 @@ describe("AdminSummaryPage", () => {
       await screen.findByText("過去日のタスクを完了に変更しますか？"),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/この操作は確定後に未完了へ戻せません。/),
-    ).toBeInTheDocument();
+      screen.queryByText(/この操作は確定後に未完了へ戻せません。/),
+    ).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "完了にする" }));
 
@@ -255,6 +279,34 @@ describe("AdminSummaryPage", () => {
         targetDate: pastWeekKey,
         action: "increment",
       });
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: "過去日タスクを未完了に戻す" }),
+    );
+    expect(
+      await screen.findByText("過去日のタスクを未完了に戻しますか？"),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "未完了に戻す" }));
+    await waitFor(() => {
+      expect(mockPostTaskCompletionToggle).toHaveBeenCalledWith(
+        "daily-past-completed",
+        { targetDate: yesterdayKey, action: "decrement" },
+      );
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: "過去週タスクを1回減らす" }),
+    );
+    expect(
+      await screen.findByText("過去週のタスクを1回分取り消しますか？"),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "1回減らす" }));
+    await waitFor(() => {
+      expect(mockPostTaskCompletionToggle).toHaveBeenCalledWith(
+        "weekly-past-completed",
+        { targetDate: pastWeekKey, action: "decrement" },
+      );
     });
   });
 

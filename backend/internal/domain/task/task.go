@@ -86,8 +86,8 @@ func ValidateWeeklyAction(targetDate, today, weekStart, weekEnd time.Time, targe
 	if monthClosed {
 		return false, errors.New("weekly completion cannot be changed for closed month")
 	}
-	if mode != ActionIncrement {
-		return false, errors.New("past weekly completion only supports increment action")
+	if mode != ActionIncrement && mode != ActionDecrement {
+		return false, errors.New("past weekly completion only supports increment or decrement action")
 	}
 	return true, nil
 }
@@ -108,21 +108,33 @@ func ValidateDailyAction(targetDate, today time.Time, targetMonth, currentMonth 
 	if monthClosed {
 		return errors.New("daily completion cannot be changed for closed month")
 	}
-	if mode != ActionComplete {
-		return errors.New("past daily completion only supports complete action")
+	if mode != ActionComplete && mode != ActionDecrement {
+		return errors.New("past daily completion only supports complete or decrement action")
 	}
 	return nil
 }
 
 func NextWeeklyCompletionCount(currentCount int64, required int, mode CompletionAction) (int64, bool, error) {
 	if required <= 1 {
-		if mode != ActionToggle && mode != ActionIncrement {
-			return currentCount, false, errors.New("weekly tasks with required completions of 1 only support toggle or increment action")
-		}
-		if currentCount > 0 {
+		switch mode {
+		case ActionToggle:
+			if currentCount > 0 {
+				return currentCount - 1, true, nil
+			}
+			return 1, true, nil
+		case ActionIncrement:
+			if currentCount > 0 {
+				return currentCount, false, nil
+			}
+			return 1, true, nil
+		case ActionDecrement:
+			if currentCount <= 0 {
+				return 0, false, nil
+			}
 			return currentCount - 1, true, nil
+		default:
+			return currentCount, false, errors.New("invalid completion action")
 		}
-		return 1, true, nil
 	}
 
 	switch mode {

@@ -471,7 +471,21 @@ func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string,
 					}); err != nil {
 						return err
 					}
+					if !isToday && mode == model.Decrement {
+						if err := s.recalculateOpenMonthDailyPenaltyLocked(txCtx, teamID, targetMonth); err != nil {
+							return err
+						}
+					}
 				} else {
+					if !isToday && mode == model.Decrement {
+						res = model.TaskCompletionResponse{
+							TaskId:               taskID,
+							TargetDate:           toDate(targetDate),
+							Completed:            false,
+							WeeklyCompletedCount: 0,
+						}
+						return nil
+					}
 					if err := q.CreateTaskCompletionDaily(txCtx, dbsqlc.CreateTaskCompletionDailyParams{
 						TaskID:            taskID,
 						TargetDate:        targetPg,
@@ -563,7 +577,7 @@ func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string,
 			res = model.TaskCompletionResponse{
 				TaskId:               taskID,
 				TargetDate:           toDate(targetDate),
-				Completed:            nextCount > 0,
+				Completed:            nextCount >= int64(task.Required),
 				WeeklyCompletedCount: int(nextCount),
 			}
 			if pastWeeklyCompletion && shouldMutate {

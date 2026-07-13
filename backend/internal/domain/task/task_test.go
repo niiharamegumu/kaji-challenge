@@ -29,6 +29,9 @@ func TestValidateDailyAction(t *testing.T) {
 	if err := ValidateDailyAction(past, today, "2026-03", "2026-03", false, ActionComplete); err != nil {
 		t.Fatalf("past current month complete failed: %v", err)
 	}
+	if err := ValidateDailyAction(past, today, "2026-03", "2026-03", false, ActionDecrement); err != nil {
+		t.Fatalf("past current month decrement failed: %v", err)
+	}
 	if err := ValidateDailyAction(past, today, "2026-03", "2026-03", true, ActionComplete); err == nil {
 		t.Fatal("expected closed month to fail")
 	}
@@ -47,6 +50,8 @@ func TestNextWeeklyCompletionCount(t *testing.T) {
 		{name: "single toggles on", current: 0, required: 1, action: ActionToggle, wantNext: 1, wantMutate: true},
 		{name: "single toggles off", current: 1, required: 1, action: ActionToggle, wantNext: 0, wantMutate: true},
 		{name: "single increments", current: 0, required: 1, action: ActionIncrement, wantNext: 1, wantMutate: true},
+		{name: "single increment caps", current: 1, required: 1, action: ActionIncrement, wantNext: 1},
+		{name: "single decrements", current: 1, required: 1, action: ActionDecrement, wantMutate: true},
 		{name: "multi increments", current: 1, required: 3, action: ActionIncrement, wantNext: 2, wantMutate: true},
 		{name: "multi caps", current: 3, required: 3, action: ActionIncrement, wantNext: 3},
 		{name: "multi decrements", current: 2, required: 3, action: ActionDecrement, wantNext: 1, wantMutate: true},
@@ -84,6 +89,7 @@ func TestValidateWeeklyAction(t *testing.T) {
 	}{
 		{name: "current week allows toggle", weekStart: currentWeekStart, weekEnd: currentWeekStart.AddDate(0, 0, 6), targetMonth: "2026-03", action: ActionToggle},
 		{name: "past current month allows increment", weekStart: pastWeekStart, weekEnd: pastWeekStart.AddDate(0, 0, 6), targetMonth: "2026-03", action: ActionIncrement, wantPast: true},
+		{name: "past current month allows decrement", weekStart: pastWeekStart, weekEnd: pastWeekStart.AddDate(0, 0, 6), targetMonth: "2026-03", action: ActionDecrement, wantPast: true},
 		{name: "past current month rejects toggle", weekStart: pastWeekStart, weekEnd: pastWeekStart.AddDate(0, 0, 6), targetMonth: "2026-03", action: ActionToggle, wantErr: true},
 		{name: "past closed month rejected", weekStart: pastWeekStart, weekEnd: pastWeekStart.AddDate(0, 0, 6), targetMonth: "2026-03", closed: true, action: ActionIncrement, wantErr: true},
 		{name: "past previous month rejected", weekStart: time.Date(2026, 2, 16, 0, 0, 0, 0, loc), weekEnd: time.Date(2026, 2, 22, 0, 0, 0, 0, loc), targetMonth: "2026-02", action: ActionIncrement, wantErr: true},

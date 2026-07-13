@@ -137,6 +137,46 @@ func TestToggleTaskCompletionCompletesPastDailyTaskInOpenMonthAndRecalculatesPen
 	}
 }
 
+func TestToggleTaskCompletionDecrementsPastDailyTaskInOpenMonthAndRecalculatesPenalty(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	now := time.Date(2026, 3, 17, 9, 0, 0, 0, s.loc)
+	s.now = func() time.Time { return now }
+
+	createdAt := dateOnly(now, s.loc).AddDate(0, 0, -2).Add(10 * time.Hour)
+	teamID, userID := createTeamWithMember(t, s, "past-daily-decrement@example.com", createdAt)
+	taskID := createTaskWithIDAt(t, s, teamID, model.TaskTypeDaily, 4, 1, createdAt)
+	targetDate := dateOnly(now, s.loc).AddDate(0, 0, -1)
+	if err := s.q.CreateTaskCompletionDaily(ctx, dbsqlc.CreateTaskCompletionDailyParams{
+		TaskID:            taskID,
+		TargetDate:        toPgDate(targetDate),
+		CompletedByUserID: userID,
+	}); err != nil {
+		t.Fatalf("failed to seed daily completion: %v", err)
+	}
+	if _, err := s.closeDayForTargetLocked(ctx, targetDate, teamID); err != nil {
+		t.Fatalf("closeDayForTargetLocked failed: %v", err)
+	}
+
+	before := getMonthSummary(t, s, teamID, monthKeyFromTime(targetDate, s.loc))
+	if before.DailyPenaltyTotal != 0 {
+		t.Fatalf("expected daily penalty total=0 before decrement, got %d", before.DailyPenaltyTotal)
+	}
+	action := model.Decrement
+	res, err := s.ToggleTaskCompletion(withLatestIfMatchForUser(t, s, ctx, userID), userID, taskID, targetDate, &action)
+	if err != nil {
+		t.Fatalf("ToggleTaskCompletion failed: %v", err)
+	}
+	if res.Completed {
+		t.Fatalf("expected completion response to be incomplete")
+	}
+
+	after := getMonthSummary(t, s, teamID, monthKeyFromTime(targetDate, s.loc))
+	if after.DailyPenaltyTotal != 4 {
+		t.Fatalf("expected daily penalty total=4 after decrement, got %d", after.DailyPenaltyTotal)
+	}
+}
+
 func TestToggleTaskCompletionIncrementsPastWeeklyTaskInOpenMonthAndRecalculatesPenalty(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
@@ -175,6 +215,45 @@ func TestToggleTaskCompletionIncrementsPastWeeklyTaskInOpenMonthAndRecalculatesP
 	after := getMonthSummary(t, s, teamID, "2026-03")
 	if after.WeeklyPenaltyTotal != 0 {
 		t.Fatalf("expected weekly penalty total=0 after completion, got %d", after.WeeklyPenaltyTotal)
+	}
+}
+
+func TestToggleTaskCompletionDecrementsPastWeeklyTaskInOpenMonthAndRecalculatesPenalty(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	now := time.Date(2026, 3, 17, 9, 0, 0, 0, s.loc)
+	s.now = func() time.Time { return now }
+
+	weekStart := time.Date(2026, 3, 9, 0, 0, 0, 0, s.loc)
+	createdAt := weekStart.AddDate(0, 0, -2).Add(10 * time.Hour)
+	teamID, userID := createTeamWithMember(t, s, "past-weekly-decrement@example.com", createdAt)
+	taskID := createTaskWithIDAt(t, s, teamID, model.TaskTypeWeekly, 4, 2, createdAt)
+	for range 2 {
+		if err := s.q.InsertTaskCompletionWeeklyEntry(ctx, dbsqlc.InsertTaskCompletionWeeklyEntryParams{
+			ID:                s.nextID("twce"),
+			TaskID:            taskID,
+			WeekStart:         toPgDate(weekStart),
+			CompletedByUserID: userID,
+		}); err != nil {
+			t.Fatalf("failed to seed weekly completion: %v", err)
+		}
+	}
+	if _, err := s.closeWeekForTargetLocked(ctx, weekStart, teamID); err != nil {
+		t.Fatalf("closeWeekForTargetLocked failed: %v", err)
+	}
+
+	action := model.Decrement
+	res, err := s.ToggleTaskCompletion(withLatestIfMatchForUser(t, s, ctx, userID), userID, taskID, weekStart, &action)
+	if err != nil {
+		t.Fatalf("ToggleTaskCompletion failed: %v", err)
+	}
+	if res.WeeklyCompletedCount != 1 || res.Completed {
+		t.Fatalf("unexpected completion response: %+v", res)
+	}
+
+	after := getMonthSummary(t, s, teamID, "2026-03")
+	if after.WeeklyPenaltyTotal != 4 {
+		t.Fatalf("expected weekly penalty total=4 after decrement, got %d", after.WeeklyPenaltyTotal)
 	}
 }
 
