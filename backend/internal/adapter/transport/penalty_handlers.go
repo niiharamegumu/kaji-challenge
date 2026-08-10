@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/megu/kaji-challenge/backend/internal/application/model"
 	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 )
 
@@ -36,10 +35,7 @@ func (h *Handler) PostPenaltyRule(c *gin.Context) {
 	if !ok {
 		return
 	}
-	appReq, ok := convertTransportModel[model.CreatePenaltyRuleRequest](c, req)
-	if !ok {
-		return
-	}
+	appReq := createPenaltyRuleRequestFromAPI(req)
 	rule, err := h.services.Penalty.CreatePenaltyRule(c.Request.Context(), userID, appReq)
 	if err != nil {
 		writeAppError(c, err, http.StatusBadRequest)
@@ -58,10 +54,7 @@ func (h *Handler) PatchPenaltyRule(c *gin.Context, ruleID string) {
 	if !ok {
 		return
 	}
-	appReq, ok := convertTransportModel[model.UpdatePenaltyRuleRequest](c, req)
-	if !ok {
-		return
-	}
+	appReq := updatePenaltyRuleRequestFromAPI(req)
 	rule, err := h.services.Penalty.PatchPenaltyRule(c.Request.Context(), userID, ruleID, appReq)
 	if err != nil {
 		writeAppError(c, err, http.StatusBadRequest)

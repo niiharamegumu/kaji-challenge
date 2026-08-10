@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/megu/kaji-challenge/backend/internal/application/model"
 	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 )
 
@@ -17,10 +16,7 @@ func (h *Handler) PostPushSubscription(c *gin.Context) {
 	if !ok {
 		return
 	}
-	appReq, ok := convertTransportModel[model.UpsertPushSubscriptionRequest](c, req)
-	if !ok {
-		return
-	}
+	appReq := upsertPushSubscriptionRequestFromAPI(req)
 	subscription, err := h.services.Push.UpsertPushSubscription(c.Request.Context(), userID, appReq)
 	if err != nil {
 		writeAppError(c, err, http.StatusBadRequest)

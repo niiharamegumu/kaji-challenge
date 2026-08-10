@@ -1,11 +1,13 @@
 import {
+  queryOptions,
   useMutation,
   useQueryClient,
-  useSuspenseQuery,
+  useSuspenseQueries,
 } from "@tanstack/react-query";
 
 import {
   getTaskOverview,
+  listShoppingItems,
   postTaskCompletionToggle,
 } from "../../../lib/api/generated/client";
 import { queryKeys } from "../../../shared/query/queryKeys";
@@ -14,11 +16,22 @@ import { formatError, todayString } from "../../../shared/utils/errors";
 
 type CompletionAction = "toggle" | "increment" | "decrement";
 
-export function useHomeQuery() {
-  return useSuspenseQuery({
-    queryKey: queryKeys.home,
-    queryFn: async () => (await getTaskOverview()).data,
+export const homeQueryOptions = queryOptions({
+  queryKey: queryKeys.home,
+  queryFn: async () => (await getTaskOverview()).data,
+});
+
+export const homeShoppingItemsQueryOptions = queryOptions({
+  queryKey: queryKeys.shoppingItems,
+  queryFn: async () => (await listShoppingItems()).data.items ?? [],
+});
+
+export function useHomePageQueries() {
+  const [homeQuery, shoppingItemsQuery] = useSuspenseQueries({
+    queries: [homeQueryOptions, homeShoppingItemsQueryOptions],
   });
+
+  return { homeQuery, shoppingItemsQuery };
 }
 
 export function useToggleCompletionMutation(

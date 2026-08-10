@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/url"
 	"strings"
+	"sync"
 	"testing"
 
 	"golang.org/x/oauth2"
@@ -96,4 +97,27 @@ func TestProviderAuthorizationURLReturnsConfigurationError(t *testing.T) {
 	if _, err := provider.AuthorizationURL(context.Background(), "state", "nonce", "verifier"); err == nil {
 		t.Fatal("expected configuration error")
 	}
+}
+
+func TestProviderEnsureClientSupportsConcurrentCachedReads(t *testing.T) {
+	want := &Client{}
+	provider := &Provider{client: want}
+	const goroutines = 32
+
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for range goroutines {
+		go func() {
+			defer wg.Done()
+			got, err := provider.ensureClient(context.Background())
+			if err != nil {
+				t.Errorf("ensureClient error: %v", err)
+				return
+			}
+			if got != want {
+				t.Errorf("ensureClient returned %p, want %p", got, want)
+			}
+		}()
+	}
+	wg.Wait()
 }

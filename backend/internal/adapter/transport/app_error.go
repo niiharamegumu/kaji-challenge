@@ -10,8 +10,9 @@ import (
 )
 
 const (
-	AuthUserIDKey = authctx.UserIDKey
-	AuthTokenKey  = authctx.TokenKey
+	AuthUserIDKey        = authctx.UserIDKey
+	AuthTokenKey         = authctx.TokenKey
+	internalErrorMessage = "internal server error"
 )
 
 type AppError struct {
@@ -55,10 +56,21 @@ func writeAppError(c *gin.Context, err error, defaultStatus int) {
 	}
 	var appErr *AppError
 	if errors.As(err, &appErr) {
+		if appErr.Status >= http.StatusInternalServerError {
+			_ = c.Error(err)
+			writeError(c, appErr.Status, internalErrorMessage)
+			return
+		}
 		writeError(c, appErr.Status, appErr.Message)
 		return
 	}
-	writeError(c, mapErrorStatus(err, defaultStatus), err.Error())
+	status := mapErrorStatus(err, defaultStatus)
+	if status >= http.StatusInternalServerError {
+		_ = c.Error(err)
+		writeError(c, status, internalErrorMessage)
+		return
+	}
+	writeError(c, status, err.Error())
 }
 
 func mapErrorStatus(err error, defaultStatus int) int {

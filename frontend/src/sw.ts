@@ -9,6 +9,8 @@ import {
 import { NavigationRoute, registerRoute } from "workbox-routing";
 import { StaleWhileRevalidate } from "workbox-strategies";
 
+import { resolveSameOriginURL } from "./shared/utils/navigation";
+
 declare let self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<unknown>;
 };
@@ -119,17 +121,10 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  let targetUrl = self.location.origin;
-  try {
-    targetUrl = new URL(
-      typeof event.notification.data?.url === "string"
-        ? event.notification.data.url
-        : "/",
-      self.location.origin,
-    ).toString();
-  } catch {
-    targetUrl = self.location.origin;
-  }
+  const targetUrl = resolveSameOriginURL(
+    event.notification.data?.url,
+    self.location.origin,
+  );
 
   event.waitUntil(
     self.clients

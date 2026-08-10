@@ -9,10 +9,7 @@ import {
   useInviteMutations,
   useProfileMutations,
 } from "../hooks/useAdminMutations";
-import {
-  useCurrentInviteQuery,
-  useCurrentTeamMembersQuery,
-} from "../hooks/useAdminQueries";
+import { useTeamSettingsQueries } from "../hooks/useAdminQueries";
 import type { InviteState } from "../state/ui";
 
 type SaveProfileActionState = {
@@ -32,8 +29,8 @@ export function AdminInvitesPage() {
   const { createInvite, joinTeam, leaveTeam } = useInviteMutations(setStatus);
   const { updateNickname, updateColor, updateTeamName } =
     useProfileMutations(setStatus);
-  const membersQuery = useCurrentTeamMembersQuery(currentUserId);
-  const currentInviteQuery = useCurrentInviteQuery(currentUserId);
+  const { membersQuery, currentInviteQuery } =
+    useTeamSettingsQueries(currentUserId);
 
   const [nicknameDraft, setNicknameDraft] = useState("");
   const [colorHexDraft, setColorHexDraft] = useState("");

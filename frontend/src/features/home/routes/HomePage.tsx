@@ -3,17 +3,14 @@ import { ChevronRight } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { statusMessageAtom } from "../../../shared/state/status";
-import {
-  useShoppingItemMutations,
-  useShoppingItemsQuery,
-} from "../../shopping-list";
+import { useShoppingItemMutations } from "../../shopping-list";
 import { DailyTasksPanel } from "../components/DailyTasksPanel";
 import { HomeShoppingListPanel } from "../components/HomeShoppingListPanel";
 import { HOME_PANEL_SKELETON_CLASS_NAME } from "../components/panelStyles";
 import { WeeklyRemindersPanel } from "../components/WeeklyRemindersPanel";
 import { WeeklyTasksPanel } from "../components/WeeklyTasksPanel";
 import {
-  useHomeQuery,
+  useHomePageQueries,
   useToggleCompletionMutation,
 } from "../hooks/useHomeQueries";
 
@@ -73,8 +70,7 @@ export function HomePageSkeleton() {
 
 export function HomePage() {
   const [, setStatus] = useAtom(statusMessageAtom);
-  const homeQuery = useHomeQuery();
-  const shoppingItemsQuery = useShoppingItemsQuery();
+  const { homeQuery, shoppingItemsQuery } = useHomePageQueries();
   const toggleMutation = useToggleCompletionMutation(setStatus);
   const { updateItem, removeItem, reorderItems } =
     useShoppingItemMutations(setStatus);

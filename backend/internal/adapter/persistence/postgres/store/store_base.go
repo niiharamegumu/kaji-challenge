@@ -70,6 +70,14 @@ func NewStore() *Store {
 	return newStore()
 }
 
+// Close releases the PostgreSQL connection pool owned by the store.
+func (s *Store) Close() {
+	if s == nil || s.db == nil {
+		return
+	}
+	s.db.Close()
+}
+
 func (s *Store) initPersistence() error {
 	databaseURL := strings.TrimSpace(os.Getenv("DATABASE_URL"))
 	if databaseURL == "" {

@@ -32,10 +32,7 @@ func (h *Handler) PatchMeNickname(c *gin.Context) {
 	if !ok {
 		return
 	}
-	appReq, ok := convertTransportModel[model.UpdateNicknameRequest](c, req)
-	if !ok {
-		return
-	}
+	appReq := updateNicknameRequestFromAPI(req)
 	res, err := h.services.Team.PatchMeNickname(c.Request.Context(), userID, appReq)
 	if err != nil {
 		writeAppError(c, err, http.StatusBadRequest)
@@ -54,10 +51,7 @@ func (h *Handler) PatchMeColor(c *gin.Context) {
 	if !ok {
 		return
 	}
-	appReq, ok := convertTransportModel[model.UpdateColorRequest](c, req)
-	if !ok {
-		return
-	}
+	appReq := updateColorRequestFromAPI(req)
 	res, err := h.services.Team.PatchMeColor(c.Request.Context(), userID, appReq)
 	if err != nil {
 		writeAppError(c, err, http.StatusBadRequest)
@@ -78,11 +72,7 @@ func (h *Handler) PostTeamInvite(c *gin.Context) {
 		if !ok {
 			return
 		}
-		appReq, ok := convertTransportModel[model.CreateInviteRequest](c, v)
-		if !ok {
-			return
-		}
-		req = appReq
+		req = createInviteRequestFromAPI(v)
 	}
 	invite, err := h.services.Team.CreateInvite(c.Request.Context(), userID, req)
 	if err != nil {
@@ -116,10 +106,7 @@ func (h *Handler) PatchTeamCurrent(c *gin.Context) {
 	if !ok {
 		return
 	}
-	appReq, ok := convertTransportModel[model.UpdateCurrentTeamRequest](c, req)
-	if !ok {
-		return
-	}
+	appReq := updateCurrentTeamRequestFromAPI(req)
 	res, err := h.services.Team.PatchTeamCurrent(c.Request.Context(), userID, appReq)
 	if err != nil {
 		writeAppError(c, err, http.StatusBadRequest)
