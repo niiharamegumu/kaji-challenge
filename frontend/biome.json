@@ -6,6 +6,7 @@
       "!**/.vite",
       "!**/dist",
       "!**/src/lib/api/generated",
+      "!**/worker-configuration.d.ts",
       "!**/*.config.js",
       "!**/*.config.d.ts",
       "!**/*.tsbuildinfo"

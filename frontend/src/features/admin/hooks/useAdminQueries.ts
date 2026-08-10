@@ -1,4 +1,4 @@
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useSuspenseQueries, useSuspenseQuery } from "@tanstack/react-query";
 
 import {
   getTeamCurrentInvite,
@@ -23,8 +23,8 @@ export function usePenaltyRulesQuery() {
   });
 }
 
-export function useCurrentTeamMembersQuery(currentUserId: string | null) {
-  return useSuspenseQuery({
+function currentTeamMembersQueryOptions(currentUserId: string | null) {
+  return {
     queryKey: [...queryKeys.teamMembers, currentUserId ?? "none"],
     queryFn: async () => {
       if (currentUserId == null) {
@@ -32,11 +32,11 @@ export function useCurrentTeamMembersQuery(currentUserId: string | null) {
       }
       return (await getTeamCurrentMembers()).data.items;
     },
-  });
+  } as const;
 }
 
-export function useCurrentInviteQuery(currentUserId: string | null) {
-  return useSuspenseQuery({
+function currentInviteQueryOptions(currentUserId: string | null) {
+  return {
     queryKey: [...queryKeys.currentInvite, currentUserId ?? "none"],
     queryFn: async () => {
       if (currentUserId == null) {
@@ -51,5 +51,16 @@ export function useCurrentInviteQuery(currentUserId: string | null) {
         throw error;
       }
     },
+  } as const;
+}
+
+export function useTeamSettingsQueries(currentUserId: string | null) {
+  const [membersQuery, currentInviteQuery] = useSuspenseQueries({
+    queries: [
+      currentTeamMembersQueryOptions(currentUserId),
+      currentInviteQueryOptions(currentUserId),
+    ],
   });
+
+  return { membersQuery, currentInviteQuery };
 }

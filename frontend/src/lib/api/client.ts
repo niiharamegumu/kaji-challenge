@@ -41,16 +41,14 @@ export const customFetch = async <T>(
     method !== "GET" && method !== "HEAD" && method !== "OPTIONS";
   const requiresTeamPrecondition =
     isMutating && !url.startsWith("/v1/auth/") && !url.startsWith("/v1/push/");
-  const headers: Record<string, string> = {
-    ...(options?.headers as Record<string, string> | undefined),
-  };
-  if (options?.body != null && headers["Content-Type"] == null) {
-    headers["Content-Type"] = "application/json";
+  const headers = new Headers(options?.headers);
+  if (options?.body != null && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
   }
   if (
     requiresTeamPrecondition &&
     latestTeamEtag === "" &&
-    headers["If-Match"] == null
+    !headers.has("If-Match")
   ) {
     throw {
       name: "ApiRequestError",
@@ -62,9 +60,9 @@ export const customFetch = async <T>(
   if (
     requiresTeamPrecondition &&
     latestTeamEtag !== "" &&
-    headers["If-Match"] == null
+    !headers.has("If-Match")
   ) {
-    headers["If-Match"] = latestTeamEtag;
+    headers.set("If-Match", latestTeamEtag);
   }
 
   const response = await fetch(`${apiBaseUrl}${url}`, {

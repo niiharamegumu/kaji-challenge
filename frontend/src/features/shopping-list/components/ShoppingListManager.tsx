@@ -262,40 +262,38 @@ function SortableShoppingItem({
           </div>
         </div>
       ) : (
-        <>
-          <div className="flex items-start gap-3 pr-10">
-            <div className="min-w-0 flex-1">
-              <div className="font-medium text-stone-900">{item.name}</div>
-              {item.notes != null && item.notes !== "" ? (
-                <div className="mt-1 whitespace-pre-wrap break-words text-xs text-stone-600">
-                  {renderNotesWithLinks(item.notes)}
-                </div>
-              ) : null}
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    className="flex h-9 cursor-pointer items-center gap-1 rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 text-xs text-stone-700 transition-colors hover:bg-stone-100"
-                    onClick={() => onStartEdit(item)}
-                    aria-label="編集"
-                    onPointerDown={(event) => event.stopPropagation()}
-                  >
-                    <Pencil size={14} aria-hidden="true" />
-                  </button>
-                  <button
-                    type="button"
-                    className="flex h-9 cursor-pointer items-center gap-1 rounded-lg border border-[color:var(--color-matcha-300)] bg-[color:var(--color-matcha-50)] px-2.5 py-1.5 text-xs text-[color:var(--color-matcha-700)] transition-colors hover:bg-[color:var(--color-matcha-100)]"
-                    onClick={onComplete}
-                    onPointerDown={(event) => event.stopPropagation()}
-                  >
-                    <ShoppingBasket size={14} aria-hidden="true" />
-                    <span>購入済みにする</span>
-                  </button>
-                </div>
+        <div className="flex items-start gap-3 pr-10">
+          <div className="min-w-0 flex-1">
+            <div className="font-medium text-stone-900">{item.name}</div>
+            {item.notes != null && item.notes !== "" ? (
+              <div className="mt-1 whitespace-pre-wrap break-words text-xs text-stone-600">
+                {renderNotesWithLinks(item.notes)}
+              </div>
+            ) : null}
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  className="flex h-9 cursor-pointer items-center gap-1 rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 text-xs text-stone-700 transition-colors hover:bg-stone-100"
+                  onClick={() => onStartEdit(item)}
+                  aria-label="編集"
+                  onPointerDown={(event) => event.stopPropagation()}
+                >
+                  <Pencil size={14} aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  className="flex h-9 cursor-pointer items-center gap-1 rounded-lg border border-[color:var(--color-matcha-300)] bg-[color:var(--color-matcha-50)] px-2.5 py-1.5 text-xs text-[color:var(--color-matcha-700)] transition-colors hover:bg-[color:var(--color-matcha-100)]"
+                  onClick={onComplete}
+                  onPointerDown={(event) => event.stopPropagation()}
+                >
+                  <ShoppingBasket size={14} aria-hidden="true" />
+                  <span>購入済みにする</span>
+                </button>
               </div>
             </div>
           </div>
-        </>
+        </div>
       )}
       {!isEditing ? (
         <button
