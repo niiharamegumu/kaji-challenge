@@ -46,10 +46,7 @@ func (h *Handler) PostReminder(c *gin.Context) {
 	if !ok {
 		return
 	}
-	appReq, ok := convertTransportModel[model.CreateReminderRequest](c, req)
-	if !ok {
-		return
-	}
+	appReq := createReminderRequestFromAPI(req)
 	item, err := h.services.Reminder.CreateReminder(c.Request.Context(), userID, appReq)
 	if err != nil {
 		writeAppError(c, err, http.StatusBadRequest)
@@ -69,10 +66,7 @@ func (h *Handler) PatchReminder(c *gin.Context, reminderID string) {
 	if !ok {
 		return
 	}
-	appReq, ok := convertTransportModel[model.UpdateReminderRequest](c, req)
-	if !ok {
-		return
-	}
+	appReq := updateReminderRequestFromAPI(req)
 	item, err := h.services.Reminder.PatchReminder(c.Request.Context(), userID, reminderID, appReq)
 	if err != nil {
 		writeAppError(c, err, http.StatusBadRequest)

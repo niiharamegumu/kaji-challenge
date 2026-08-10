@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/megu/kaji-challenge/backend/internal/application/model"
 	api "github.com/megu/kaji-challenge/backend/internal/openapi/generated"
 )
 
@@ -13,10 +12,7 @@ func (h *Handler) ListTasks(c *gin.Context, params api.ListTasksParams) {
 	if !ok {
 		return
 	}
-	filter, ok := convertTransportModel[*model.TaskType](c, params.Type)
-	if !ok {
-		return
-	}
+	filter := taskTypeFromAPI(params.Type)
 	items, err := h.services.Task.ListTasks(c.Request.Context(), userID, filter)
 	if err != nil {
 		writeAppError(c, err, http.StatusBadRequest)
@@ -36,10 +32,7 @@ func (h *Handler) PostTask(c *gin.Context) {
 	if !ok {
 		return
 	}
-	appReq, ok := convertTransportModel[model.CreateTaskRequest](c, req)
-	if !ok {
-		return
-	}
+	appReq := createTaskRequestFromAPI(req)
 	task, err := h.services.Task.CreateTask(c.Request.Context(), userID, appReq)
 	if err != nil {
 		writeAppError(c, err, http.StatusBadRequest)
@@ -59,10 +52,7 @@ func (h *Handler) PatchTask(c *gin.Context, taskID string) {
 	if !ok {
 		return
 	}
-	appReq, ok := convertTransportModel[model.UpdateTaskRequest](c, req)
-	if !ok {
-		return
-	}
+	appReq := updateTaskRequestFromAPI(req)
 	task, err := h.services.Task.PatchTask(c.Request.Context(), userID, taskID, appReq)
 	if err != nil {
 		writeAppError(c, err, http.StatusBadRequest)
@@ -96,10 +86,7 @@ func (h *Handler) PostTasksReorder(c *gin.Context) {
 	if !ok {
 		return
 	}
-	appReq, ok := convertTransportModel[model.ReorderTasksRequest](c, req)
-	if !ok {
-		return
-	}
+	appReq := reorderTasksRequestFromAPI(req)
 	items, err := h.services.Task.ReorderTasks(c.Request.Context(), userID, appReq)
 	if err != nil {
 		writeAppError(c, err, http.StatusBadRequest)
@@ -119,10 +106,7 @@ func (h *Handler) PostTaskCompletionToggle(c *gin.Context, taskID string) {
 	if !ok {
 		return
 	}
-	appAction, ok := convertTransportModel[*model.ToggleTaskCompletionRequestAction](c, req.Action)
-	if !ok {
-		return
-	}
+	appAction := completionActionFromAPI(req.Action)
 	res, err := h.services.Task.ToggleTaskCompletion(c.Request.Context(), userID, taskID, req.TargetDate.Time, appAction)
 	if err != nil {
 		writeAppError(c, err, http.StatusBadRequest)

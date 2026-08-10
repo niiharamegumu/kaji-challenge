@@ -12,6 +12,7 @@ func NewRouter(svcs *ports.Services, syncProvider syncProvider) *gin.Engine {
 		panic(err)
 	}
 	r := gin.Default()
+	r.Use(middleware.SecurityHeaders())
 	r.Use(middleware.CORS())
 	r.Use(middleware.Auth(svcs.Auth))
 	r.Use(middleware.CSRFSameOrigin())

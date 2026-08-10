@@ -116,3 +116,26 @@ func TestCSRFSameOriginAllowsConfiguredOrigin(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
 }
+
+func TestSecurityHeaders(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.Use(SecurityHeaders())
+	router.GET("/resource", func(c *gin.Context) { c.Status(http.StatusOK) })
+
+	req := httptest.NewRequest(http.MethodGet, "/resource", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	want := map[string]string{
+		"X-Content-Type-Options": "nosniff",
+		"X-Frame-Options":        "DENY",
+		"Referrer-Policy":        "no-referrer",
+		"Permissions-Policy":     "camera=(), microphone=(), geolocation=()",
+	}
+	for name, value := range want {
+		if got := rec.Header().Get(name); got != value {
+			t.Errorf("%s = %q, want %q", name, got, value)
+		}
+	}
+}

@@ -10,6 +10,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
 
 	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
@@ -32,7 +33,8 @@ type Claims struct {
 }
 
 type Provider struct {
-	client *Client
+	clientMu sync.RWMutex
+	client   *Client
 }
 
 func NewProvider() *Provider {
@@ -82,6 +84,15 @@ func (p *Provider) ExchangeAndVerify(ctx context.Context, code, verifier string)
 }
 
 func (p *Provider) ensureClient(ctx context.Context) (*Client, error) {
+	p.clientMu.RLock()
+	client := p.client
+	p.clientMu.RUnlock()
+	if client != nil {
+		return client, nil
+	}
+
+	p.clientMu.Lock()
+	defer p.clientMu.Unlock()
 	if p.client != nil {
 		return p.client, nil
 	}
