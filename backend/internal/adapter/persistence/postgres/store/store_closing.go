@@ -7,6 +7,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	model "github.com/megu/kaji-challenge/backend/internal/application/model"
 	dbsqlc "github.com/megu/kaji-challenge/backend/internal/db/sqlc"
 	domainpenalty "github.com/megu/kaji-challenge/backend/internal/domain/penalty"
 )
@@ -40,20 +42,24 @@ func (s *Store) NextWeekCloseTarget(ctx context.Context, teamID string) (time.Ti
 	return s.nextWeekTargetLocked(ctx, teamID)
 }
 
-func (s *Store) NextMonthCloseTarget(ctx context.Context, teamID string) (time.Time, bool, error) {
-	return s.nextMonthTargetLocked(ctx, teamID)
-}
-
 func (s *Store) CloseDayTarget(ctx context.Context, teamID string, targetDate time.Time) (bool, error) {
-	return s.closeDayForTargetLocked(ctx, targetDate, teamID)
+	var didRun bool
+	err := s.runInTransaction(ctx, func(txCtx context.Context) error {
+		var err error
+		didRun, err = s.closeDayForTargetLocked(txCtx, targetDate, teamID)
+		return err
+	})
+	return didRun, err
 }
 
 func (s *Store) CloseWeekTarget(ctx context.Context, teamID string, weekStart time.Time) (bool, error) {
-	return s.closeWeekForTargetLocked(ctx, weekStart, teamID)
-}
-
-func (s *Store) CloseMonthTarget(ctx context.Context, teamID string, monthStart time.Time) (bool, string, error) {
-	return s.closeMonthForTargetLocked(ctx, monthStart, teamID)
+	var didRun bool
+	err := s.runInTransaction(ctx, func(txCtx context.Context) error {
+		var err error
+		didRun, err = s.closeWeekForTargetLocked(txCtx, weekStart, teamID)
+		return err
+	})
+	return didRun, err
 }
 
 func (s *Store) closeDayForTargetLocked(ctx context.Context, targetDate time.Time, teamID string) (bool, error) {
@@ -119,6 +125,18 @@ func (s *Store) closeDayForTargetLocked(ctx context.Context, targetDate time.Tim
 }
 
 func (s *Store) recalculateOpenMonthDailyPenaltyLocked(ctx context.Context, teamID, month string) error {
+	return s.recalculateMonthLocked(ctx, teamID, month, s.isPastMonth(month))
+}
+
+func (s *Store) recalculateOpenMonthWeeklyPenaltyLocked(ctx context.Context, teamID, month string) error {
+	return s.recalculateMonthLocked(ctx, teamID, month, s.isPastMonth(month))
+}
+
+func (s *Store) isPastMonth(month string) bool {
+	return month < monthKeyFromTime(s.now(), s.loc)
+}
+
+func (s *Store) recalculateMonthLocked(ctx context.Context, teamID, month string, ensureCoverage bool) error {
 	monthStart, err := monthStartFromKey(month, s.loc)
 	if err != nil {
 		return err
@@ -127,97 +145,61 @@ func (s *Store) recalculateOpenMonthDailyPenaltyLocked(ctx context.Context, team
 	if err != nil {
 		return err
 	}
-	if summary.IsClosed {
-		return errMonthAlreadyClosed
-	}
-
 	monthEnd := monthStart.AddDate(0, 1, 0)
-	targets, err := s.queries(ctx).ListCloseRunTargetDatesInRange(ctx, dbsqlc.ListCloseRunTargetDatesInRangeParams{
+	q := s.queries(ctx)
+	if ensureCoverage {
+		if err := q.InsertDayCloseRunsForMonth(ctx, dbsqlc.InsertDayCloseRunsForMonthParams{
+			TeamID:     teamID,
+			MonthStart: toPgDate(monthStart),
+			MonthEnd:   toPgDate(monthEnd),
+		}); err != nil {
+			return err
+		}
+		if err := q.InsertWeekCloseRunsForMonth(ctx, dbsqlc.InsertWeekCloseRunsForMonthParams{
+			TeamID:         teamID,
+			FirstWeekStart: toPgDate(startOfWeek(monthStart, s.loc)),
+			MonthEnd:       toPgDate(monthEnd),
+			MonthStart:     toPgDate(monthStart),
+		}); err != nil {
+			return err
+		}
+	}
+	daily, err := q.SumDailyPenaltyForMonth(ctx, dbsqlc.SumDailyPenaltyForMonthParams{
 		TeamID:       teamID,
-		Scope:        "close_day",
 		TargetDate:   toPgDate(monthStart),
 		TargetDate_2: toPgDate(monthEnd),
 	})
 	if err != nil {
 		return err
 	}
-
-	var totalPenalty int64
-	for _, target := range targets {
-		targetDate := dateOnly(target.Time, s.loc)
-		cutoff := targetDate.AddDate(0, 0, 1)
-		dayPenalty, err := s.queries(ctx).SumDailyPenaltyForDate(ctx, dbsqlc.SumDailyPenaltyForDateParams{
-			TeamID:     teamID,
-			TargetDate: toPgDate(targetDate),
-			CreatedAt:  toPgTimestamptz(cutoff),
-		})
-		if err != nil {
-			return err
-		}
-		totalPenalty += dayPenalty
-	}
-
-	penalty32, err := safeInt64ToInt32(totalPenalty, "daily penalty")
-	if err != nil {
-		return err
-	}
-	return s.queries(ctx).SetDailyPenaltyTotal(ctx, dbsqlc.SetDailyPenaltyTotalParams{
-		TeamID:            teamID,
-		MonthStart:        toPgDate(monthStart),
-		DailyPenaltyTotal: penalty32,
-	})
-}
-
-func (s *Store) recalculateOpenMonthWeeklyPenaltyLocked(ctx context.Context, teamID, month string) error {
-	monthStart, err := monthStartFromKey(month, s.loc)
-	if err != nil {
-		return err
-	}
-	summary, err := s.ensureMonthSummaryLocked(ctx, teamID, month)
-	if err != nil {
-		return err
-	}
-	if summary.IsClosed {
-		return errMonthAlreadyClosed
-	}
-
-	monthEnd := monthStart.AddDate(0, 1, 0)
-	targets, err := s.queries(ctx).ListCloseRunTargetDatesInRange(ctx, dbsqlc.ListCloseRunTargetDatesInRangeParams{
+	weekly, err := q.SumWeeklyPenaltyForMonth(ctx, dbsqlc.SumWeeklyPenaltyForMonthParams{
 		TeamID:       teamID,
-		Scope:        "close_week",
-		TargetDate:   toPgDate(startOfWeek(monthStart, s.loc)),
+		TargetDate:   toPgDate(monthStart),
 		TargetDate_2: toPgDate(monthEnd),
 	})
 	if err != nil {
 		return err
 	}
-
-	var totalPenalty int64
-	for _, target := range targets {
-		weekStart := dateOnly(target.Time, s.loc)
-		if monthKeyFromTime(weekStart.AddDate(0, 0, 6), s.loc) != month {
-			continue
-		}
-		weekPenalty, err := s.queries(ctx).SumWeeklyPenaltyForWeek(ctx, dbsqlc.SumWeeklyPenaltyForWeekParams{
-			TeamID:    teamID,
-			WeekStart: toPgDate(weekStart),
-			CreatedAt: toPgTimestamptz(weekStart.AddDate(0, 0, 7)),
-		})
-		if err != nil {
-			return err
-		}
-		totalPenalty += weekPenalty
-	}
-
-	penalty32, err := safeInt64ToInt32(totalPenalty, "weekly penalty")
+	daily32, err := safeInt64ToInt32(daily, "daily penalty")
 	if err != nil {
 		return err
 	}
-	return s.queries(ctx).SetWeeklyPenaltyTotal(ctx, dbsqlc.SetWeeklyPenaltyTotalParams{
+	weekly32, err := safeInt64ToInt32(weekly, "weekly penalty")
+	if err != nil {
+		return err
+	}
+	if err := q.SetMonthPenaltyTotals(ctx, dbsqlc.SetMonthPenaltyTotalsParams{
 		TeamID:             teamID,
 		MonthStart:         toPgDate(monthStart),
-		WeeklyPenaltyTotal: penalty32,
-	})
+		DailyPenaltyTotal:  daily32,
+		WeeklyPenaltyTotal: weekly32,
+	}); err != nil {
+		return err
+	}
+	if summary.IsClosed {
+		return s.replaceTriggeredRulesLocked(ctx, teamID, monthStart, int(daily32+weekly32))
+	}
+	return nil
 }
 
 func (s *Store) closeWeekForTargetLocked(ctx context.Context, previousWeekStart time.Time, teamID string) (bool, error) {
@@ -283,65 +265,95 @@ func (s *Store) closeWeekForTargetLocked(ctx context.Context, previousWeekStart 
 	return true, nil
 }
 
-func (s *Store) closeMonthForTargetLocked(ctx context.Context, monthStart time.Time, teamID string) (bool, string, error) {
-	month := monthKeyFromTime(monthStart, s.loc)
-	rows, err := s.queries(ctx).InsertCloseRun(ctx, dbsqlc.InsertCloseRunParams{
-		TeamID:     teamID,
-		Scope:      "close_month",
-		TargetDate: toPgDate(monthStart),
+func (s *Store) GetMonthCloseCandidate(ctx context.Context, teamID string) (model.MonthCloseCandidateResponse, error) {
+	currentMonthStart := time.Date(s.now().In(s.loc).Year(), s.now().In(s.loc).Month(), 1, 0, 0, 0, 0, s.loc)
+	row, err := s.queries(ctx).FindOldestMonthCloseCandidate(ctx, dbsqlc.FindOldestMonthCloseCandidateParams{
+		TeamID:            teamID,
+		CurrentMonthStart: toPgDate(currentMonthStart),
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return model.MonthCloseCandidateResponse{Candidate: nil, PendingMonthCount: 0}, nil
+	}
 	if err != nil {
-		return false, "", err
+		return model.MonthCloseCandidateResponse{}, err
 	}
-	if rows == 0 {
-		return false, month, nil
-	}
+	monthStart := dateOnly(row.MonthStart.Time, s.loc)
+	monthEnd := monthStart.AddDate(0, 1, 0)
+	lastDay := monthEnd.AddDate(0, 0, -1)
+	weeklyThrough := lastDay.AddDate(0, 0, -int(lastDay.Weekday()))
+	return model.MonthCloseCandidateResponse{
+		Candidate: &model.MonthCloseCandidate{
+			Month:             monthKeyFromTime(monthStart, s.loc),
+			DailyThroughDate:  toDate(lastDay),
+			WeeklyThroughDate: toDate(weeklyThrough),
+		},
+		PendingMonthCount: int(row.PendingMonthCount),
+	}, nil
+}
 
+func (s *Store) IsMonthClosed(ctx context.Context, teamID, month string) (bool, error) {
+	monthStart, err := monthStartFromKey(month, s.loc)
+	if err != nil {
+		return false, err
+	}
+	closed, err := s.queries(ctx).GetMonthCloseState(ctx, dbsqlc.GetMonthCloseStateParams{
+		TeamID:     teamID,
+		MonthStart: toPgDate(monthStart),
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	return closed, err
+}
+
+func (s *Store) FinalizeMonth(ctx context.Context, teamID, month string) error {
+	monthStart, err := monthStartFromKey(month, s.loc)
+	if err != nil {
+		return err
+	}
+	if err := s.recalculateMonthLocked(ctx, teamID, month, true); err != nil {
+		return err
+	}
 	summary, err := s.ensureMonthSummaryLocked(ctx, teamID, month)
 	if err != nil {
-		return false, "", err
+		return err
 	}
-	if summary.IsClosed {
-		return true, month, nil
+	if err := s.replaceTriggeredRulesLocked(ctx, teamID, monthStart, int(summary.DailyPenaltyTotal+summary.WeeklyPenaltyTotal)); err != nil {
+		return err
 	}
-
-	asOf := monthStart.AddDate(0, 1, 0)
-	effectiveRules, err := s.queries(ctx).ListPenaltyRulesEffectiveAtByTeamID(ctx, dbsqlc.ListPenaltyRulesEffectiveAtByTeamIDParams{
-		TeamID: teamID,
-		AsOf:   toPgTimestamptz(asOf),
+	return s.queries(ctx).CloseMonthlyPenaltySummary(ctx, dbsqlc.CloseMonthlyPenaltySummaryParams{
+		TeamID:     teamID,
+		MonthStart: toPgDate(monthStart),
 	})
+}
+
+func (s *Store) replaceTriggeredRulesLocked(ctx context.Context, teamID string, monthStart time.Time, total int) error {
+	q := s.queries(ctx)
+	effectiveRules, err := q.ListUndeletedPenaltyRulesByTeamID(ctx, teamID)
 	if err != nil {
-		return false, "", err
+		return err
 	}
 	rules := make([]ruleRecord, 0, len(effectiveRules))
 	for _, row := range effectiveRules {
 		rules = append(rules, ruleFromDB(row, s.loc))
 	}
 	sort.Slice(rules, func(i, j int) bool { return rules[i].Threshold < rules[j].Threshold })
-	total := int(summary.DailyPenaltyTotal + summary.WeeklyPenaltyTotal)
-	triggered := domainpenalty.TriggeredRuleIDs(total, domainPenaltyRules(rules))
-	if err := s.queries(ctx).CloseMonthlyPenaltySummary(ctx, dbsqlc.CloseMonthlyPenaltySummaryParams{
+	if err := q.DeleteTriggeredRulesByMonth(ctx, dbsqlc.DeleteTriggeredRulesByMonthParams{
 		TeamID:     teamID,
 		MonthStart: toPgDate(monthStart),
 	}); err != nil {
-		return false, "", err
+		return err
 	}
-	if err := s.queries(ctx).DeleteTriggeredRulesByMonth(ctx, dbsqlc.DeleteTriggeredRulesByMonthParams{
-		TeamID:     teamID,
-		MonthStart: toPgDate(monthStart),
-	}); err != nil {
-		return false, "", err
-	}
-	for _, ruleID := range triggered {
-		if err := s.queries(ctx).AddTriggeredRuleForMonth(ctx, dbsqlc.AddTriggeredRuleForMonthParams{
+	for _, ruleID := range domainpenalty.TriggeredRuleIDs(total, domainPenaltyRules(rules)) {
+		if err := q.AddTriggeredRuleForMonth(ctx, dbsqlc.AddTriggeredRuleForMonthParams{
 			TeamID:     teamID,
 			MonthStart: toPgDate(monthStart),
 			RuleID:     ruleID,
 		}); err != nil {
-			return false, "", err
+			return err
 		}
 	}
-	return true, month, nil
+	return nil
 }
 
 func domainPenaltyRules(rules []ruleRecord) []domainpenalty.Rule {
@@ -395,28 +407,6 @@ func (s *Store) nextWeekTargetLocked(ctx context.Context, teamID string) (time.T
 		return time.Time{}, false, nil
 	}
 	return startOfWeek(seed, s.loc), true, nil
-}
-
-func (s *Store) nextMonthTargetLocked(ctx context.Context, teamID string) (time.Time, bool, error) {
-	latest, err := s.queries(ctx).GetLatestCloseRunTargetDate(ctx, dbsqlc.GetLatestCloseRunTargetDateParams{
-		TeamID: teamID,
-		Scope:  "close_month",
-	})
-	if err != nil {
-		return time.Time{}, false, err
-	}
-	if latest.Valid {
-		latestMonth := dateOnly(latest.Time, s.loc)
-		return time.Date(latestMonth.Year(), latestMonth.Month(), 1, 0, 0, 0, 0, s.loc).AddDate(0, 1, 0), true, nil
-	}
-	seed, ok, err := s.seedTargetDateLocked(ctx, teamID)
-	if err != nil {
-		return time.Time{}, false, err
-	}
-	if !ok {
-		return time.Time{}, false, nil
-	}
-	return time.Date(seed.Year(), seed.Month(), 1, 0, 0, 0, 0, s.loc), true, nil
 }
 
 func (s *Store) seedTargetDateLocked(ctx context.Context, teamID string) (time.Time, bool, error) {

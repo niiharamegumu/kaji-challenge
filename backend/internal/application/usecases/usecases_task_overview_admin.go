@@ -7,6 +7,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/megu/kaji-challenge/backend/internal/application"
 	model "github.com/megu/kaji-challenge/backend/internal/application/model"
 	"github.com/megu/kaji-challenge/backend/internal/application/ports"
 	domainpenalty "github.com/megu/kaji-challenge/backend/internal/domain/penalty"
@@ -195,28 +196,49 @@ func (u adminUsecase) ListClosableTeamIDs(ctx context.Context) ([]string, error)
 	return u.repo.ListClosableTeamIDs(ctx)
 }
 
-func (u adminUsecase) CloseDayForUser(ctx context.Context, userID string) (model.CloseResponse, error) {
+func (u adminUsecase) GetMonthCloseCandidate(ctx context.Context, userID string) (model.MonthCloseCandidateResponse, error) {
 	teamID, err := u.repo.PrimaryTeamID(ctx, userID)
 	if err != nil {
-		return model.CloseResponse{}, err
+		return model.MonthCloseCandidateResponse{}, err
 	}
-	return u.closeDay(ctx, teamID, true)
+	return u.repo.GetMonthCloseCandidate(ctx, teamID)
 }
 
-func (u adminUsecase) CloseWeekForUser(ctx context.Context, userID string) (model.CloseResponse, error) {
+func (u adminUsecase) CloseMonthForUserTarget(ctx context.Context, userID, month string) (model.CloseResponse, error) {
 	teamID, err := u.repo.PrimaryTeamID(ctx, userID)
 	if err != nil {
 		return model.CloseResponse{}, err
 	}
-	return u.closeWeek(ctx, teamID, true)
-}
-
-func (u adminUsecase) CloseMonthForUser(ctx context.Context, userID string) (model.CloseResponse, error) {
-	teamID, err := u.repo.PrimaryTeamID(ctx, userID)
+	now := u.repo.Now()
+	monthStart, err := monthStartFromKey(month, now.Location())
+	if err != nil {
+		return model.CloseResponse{}, fmt.Errorf("%w: invalid month", application.ErrInvalid)
+	}
+	currentMonthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	if !monthStart.Before(currentMonthStart) {
+		return model.CloseResponse{}, fmt.Errorf("%w: only past months can be closed", application.ErrConflict)
+	}
+	err = u.repo.RunTeamRevisionCAS(ctx, teamID, "month_close", map[string]string{"month": month}, func(txCtx context.Context) error {
+		closed, err := u.repo.IsMonthClosed(txCtx, teamID, month)
+		if err != nil {
+			return err
+		}
+		if closed {
+			return errNoCloseStateChange
+		}
+		candidate, err := u.repo.GetMonthCloseCandidate(txCtx, teamID)
+		if err != nil {
+			return err
+		}
+		if candidate.Candidate == nil || candidate.Candidate.Month != month {
+			return fmt.Errorf("%w: month is not the oldest eligible open month", application.ErrConflict)
+		}
+		return u.repo.FinalizeMonth(txCtx, teamID, month)
+	})
 	if err != nil {
 		return model.CloseResponse{}, err
 	}
-	return u.closeMonth(ctx, teamID, true)
+	return model.CloseResponse{ClosedAt: now, Month: month}, nil
 }
 
 func (u adminUsecase) CloseDayForTeam(ctx context.Context, teamID string) (model.CloseResponse, error) {
@@ -225,10 +247,6 @@ func (u adminUsecase) CloseDayForTeam(ctx context.Context, teamID string) (model
 
 func (u adminUsecase) CloseWeekForTeam(ctx context.Context, teamID string) (model.CloseResponse, error) {
 	return u.closeWeek(ctx, teamID, false)
-}
-
-func (u adminUsecase) CloseMonthForTeam(ctx context.Context, teamID string) (model.CloseResponse, error) {
-	return u.closeMonth(ctx, teamID, false)
 }
 
 func (u adminUsecase) closeDay(ctx context.Context, teamID string, useCAS bool) (model.CloseResponse, error) {
@@ -265,26 +283,6 @@ func (u adminUsecase) closeWeek(ctx context.Context, teamID string, useCAS bool)
 		return model.CloseResponse{}, err
 	}
 	return model.CloseResponse{ClosedAt: now, Month: monthKeyFromTime(now)}, nil
-}
-
-func (u adminUsecase) closeMonth(ctx context.Context, teamID string, useCAS bool) (model.CloseResponse, error) {
-	now := u.repo.Now()
-	closedMonth := monthKeyFromTime(now)
-	run := func(runCtx context.Context) error {
-		processed, month, err := u.catchUpMonth(runCtx, now, teamID)
-		if err != nil {
-			return err
-		}
-		closedMonth = month
-		if processed == 0 && useCAS {
-			return errNoCloseStateChange
-		}
-		return nil
-	}
-	if err := u.runClose(ctx, teamID, "close_run", map[string]string{"scope": "month"}, useCAS, run); err != nil {
-		return model.CloseResponse{}, err
-	}
-	return model.CloseResponse{ClosedAt: now, Month: closedMonth}, nil
 }
 
 func (u adminUsecase) runClose(
@@ -344,31 +342,6 @@ func (u adminUsecase) catchUpWeek(ctx context.Context, now time.Time, teamID str
 		}
 	}
 	return processed, nil
-}
-
-func (u adminUsecase) catchUpMonth(ctx context.Context, now time.Time, teamID string) (int, string, error) {
-	monthStartCurrent := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
-	end := monthStartCurrent.AddDate(0, -1, 0)
-	start, ok, err := u.repo.NextMonthCloseTarget(ctx, teamID)
-	if err != nil {
-		return 0, "", err
-	}
-	lastMonth := monthKeyFromTime(end)
-	if !ok || start.After(end) {
-		return 0, lastMonth, nil
-	}
-	processed := 0
-	for target := start; !target.After(end); target = target.AddDate(0, 1, 0) {
-		didRun, month, err := u.repo.CloseMonthTarget(ctx, teamID, target)
-		if err != nil {
-			return processed, "", err
-		}
-		lastMonth = month
-		if didRun {
-			processed++
-		}
-	}
-	return processed, lastMonth, nil
 }
 
 func monthKeyFromTime(t time.Time) string {

@@ -11,55 +11,17 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const insertTaskEvaluationDedupe = `-- name: InsertTaskEvaluationDedupe :execrows
-INSERT INTO task_evaluation_dedupes (team_id, scope, target_date, task_id, created_at)
-VALUES ($1, $2, $3, $4, NOW())
-ON CONFLICT (team_id, scope, target_date, task_id) DO NOTHING
-`
-
-type InsertTaskEvaluationDedupeParams struct {
-	TeamID     string      `json:"team_id"`
-	Scope      string      `json:"scope"`
-	TargetDate pgtype.Date `json:"target_date"`
-	TaskID     string      `json:"task_id"`
-}
-
-func (q *Queries) InsertTaskEvaluationDedupe(ctx context.Context, arg InsertTaskEvaluationDedupeParams) (int64, error) {
-	result, err := q.db.Exec(ctx, insertTaskEvaluationDedupe,
-		arg.TeamID,
-		arg.Scope,
-		arg.TargetDate,
-		arg.TaskID,
-	)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const sumDailyPenaltyForClose = `-- name: SumDailyPenaltyForClose :one
-WITH candidates AS (
-  SELECT t.id AS task_id, t.penalty_points
-  FROM tasks t
-  LEFT JOIN task_completion_daily d
-    ON d.task_id = t.id
-   AND d.target_date = $2
-  WHERE t.team_id = $1
-    AND t.type = 'daily'
-    AND t.created_at < $3
-    AND (t.deleted_at IS NULL OR t.deleted_at >= $3)
-    AND d.task_id IS NULL
-),
-deduped AS (
-  INSERT INTO task_evaluation_dedupes (team_id, scope, target_date, task_id, created_at)
-  SELECT $1, 'penalty_day', $2, c.task_id, NOW()
-  FROM candidates c
-  ON CONFLICT (team_id, scope, target_date, task_id) DO NOTHING
-  RETURNING task_id
-)
-SELECT COALESCE(SUM(c.penalty_points), 0)::bigint AS total_penalty
-FROM candidates c
-JOIN deduped d ON d.task_id = c.task_id
+SELECT COALESCE(SUM(t.penalty_points), 0)::bigint AS total_penalty
+FROM tasks t
+LEFT JOIN task_completion_daily d
+  ON d.task_id = t.id
+ AND d.target_date = $2
+WHERE t.team_id = $1
+  AND t.type = 'daily'
+  AND t.created_at < $3
+  AND (t.deleted_at IS NULL OR t.deleted_at >= $3)
+  AND d.task_id IS NULL
 `
 
 type SumDailyPenaltyForCloseParams struct {
@@ -101,34 +63,53 @@ func (q *Queries) SumDailyPenaltyForDate(ctx context.Context, arg SumDailyPenalt
 	return total_penalty, err
 }
 
+const sumDailyPenaltyForMonth = `-- name: SumDailyPenaltyForMonth :one
+SELECT COALESCE(SUM(t.penalty_points), 0)::bigint AS total_penalty
+FROM close_runs r
+JOIN tasks t
+  ON t.team_id = r.team_id
+ AND t.type = 'daily'
+ AND t.created_at < (((r.target_date + 1)::date)::timestamp AT TIME ZONE 'Asia/Tokyo')
+ AND (t.deleted_at IS NULL OR t.deleted_at >= (((r.target_date + 1)::date)::timestamp AT TIME ZONE 'Asia/Tokyo'))
+LEFT JOIN task_completion_daily d
+  ON d.task_id = t.id
+ AND d.target_date = r.target_date
+WHERE r.team_id = $1
+  AND r.scope = 'close_day'
+  AND r.target_date >= $2
+  AND r.target_date < $3
+  AND d.task_id IS NULL
+`
+
+type SumDailyPenaltyForMonthParams struct {
+	TeamID       string      `json:"team_id"`
+	TargetDate   pgtype.Date `json:"target_date"`
+	TargetDate_2 pgtype.Date `json:"target_date_2"`
+}
+
+func (q *Queries) SumDailyPenaltyForMonth(ctx context.Context, arg SumDailyPenaltyForMonthParams) (int64, error) {
+	row := q.db.QueryRow(ctx, sumDailyPenaltyForMonth, arg.TeamID, arg.TargetDate, arg.TargetDate_2)
+	var total_penalty int64
+	err := row.Scan(&total_penalty)
+	return total_penalty, err
+}
+
 const sumWeeklyPenaltyForClose = `-- name: SumWeeklyPenaltyForClose :one
-WITH candidates AS (
-  SELECT t.id AS task_id, t.penalty_points
-  FROM tasks t
-  LEFT JOIN (
-    SELECT task_id, week_start, COUNT(*)::integer AS completion_count
-    FROM task_completion_weekly_entries
-    WHERE week_start = $2
-    GROUP BY task_id, week_start
-  ) w
-    ON w.task_id = t.id
-   AND w.week_start = $2
-  WHERE t.team_id = $1
-    AND t.type = 'weekly'
-    AND t.created_at < $3
-    AND (t.deleted_at IS NULL OR t.deleted_at >= $3)
-    AND COALESCE(w.completion_count, 0) < t.required_completions_per_week
-),
-deduped AS (
-  INSERT INTO task_evaluation_dedupes (team_id, scope, target_date, task_id, created_at)
-  SELECT $1, 'penalty_week', $2, c.task_id, NOW()
-  FROM candidates c
-  ON CONFLICT (team_id, scope, target_date, task_id) DO NOTHING
-  RETURNING task_id
-)
-SELECT COALESCE(SUM(c.penalty_points), 0)::bigint AS total_penalty
-FROM candidates c
-JOIN deduped d ON d.task_id = c.task_id
+SELECT COALESCE(SUM(t.penalty_points), 0)::bigint AS total_penalty
+FROM tasks t
+LEFT JOIN (
+  SELECT task_id, week_start, COUNT(*)::integer AS completion_count
+  FROM task_completion_weekly_entries
+  WHERE week_start = $2
+  GROUP BY task_id, week_start
+) w
+  ON w.task_id = t.id
+ AND w.week_start = $2
+WHERE t.team_id = $1
+  AND t.type = 'weekly'
+  AND t.created_at < $3
+  AND (t.deleted_at IS NULL OR t.deleted_at >= $3)
+  AND COALESCE(w.completion_count, 0) < t.required_completions_per_week
 `
 
 type SumWeeklyPenaltyForCloseParams struct {
@@ -139,6 +120,40 @@ type SumWeeklyPenaltyForCloseParams struct {
 
 func (q *Queries) SumWeeklyPenaltyForClose(ctx context.Context, arg SumWeeklyPenaltyForCloseParams) (int64, error) {
 	row := q.db.QueryRow(ctx, sumWeeklyPenaltyForClose, arg.TeamID, arg.WeekStart, arg.CreatedAt)
+	var total_penalty int64
+	err := row.Scan(&total_penalty)
+	return total_penalty, err
+}
+
+const sumWeeklyPenaltyForMonth = `-- name: SumWeeklyPenaltyForMonth :one
+SELECT COALESCE(SUM(t.penalty_points), 0)::bigint AS total_penalty
+FROM close_runs r
+JOIN tasks t
+  ON t.team_id = r.team_id
+ AND t.type = 'weekly'
+ AND t.created_at < (((r.target_date + 7)::date)::timestamp AT TIME ZONE 'Asia/Tokyo')
+ AND (t.deleted_at IS NULL OR t.deleted_at >= (((r.target_date + 7)::date)::timestamp AT TIME ZONE 'Asia/Tokyo'))
+LEFT JOIN LATERAL (
+  SELECT COUNT(*)::integer AS completion_count
+  FROM task_completion_weekly_entries e
+  WHERE e.task_id = t.id
+    AND e.week_start = r.target_date
+) w ON TRUE
+WHERE r.team_id = $1
+  AND r.scope = 'close_week'
+  AND (r.target_date + 6) >= $2
+  AND (r.target_date + 6) < $3
+  AND COALESCE(w.completion_count, 0) < t.required_completions_per_week
+`
+
+type SumWeeklyPenaltyForMonthParams struct {
+	TeamID       string      `json:"team_id"`
+	TargetDate   pgtype.Date `json:"target_date"`
+	TargetDate_2 pgtype.Date `json:"target_date_2"`
+}
+
+func (q *Queries) SumWeeklyPenaltyForMonth(ctx context.Context, arg SumWeeklyPenaltyForMonthParams) (int64, error) {
+	row := q.db.QueryRow(ctx, sumWeeklyPenaltyForMonth, arg.TeamID, arg.TargetDate, arg.TargetDate_2)
 	var total_penalty int64
 	err := row.Scan(&total_penalty)
 	return total_penalty, err

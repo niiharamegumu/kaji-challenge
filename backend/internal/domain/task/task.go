@@ -72,7 +72,7 @@ func ValidateWeeklyTarget(targetDate, today, weekStart, weekEnd time.Time) error
 	return nil
 }
 
-func ValidateWeeklyAction(targetDate, today, weekStart, weekEnd time.Time, targetMonth, currentMonth string, monthClosed bool, mode CompletionAction) (bool, error) {
+func ValidateWeeklyAction(targetDate, today, weekStart, weekEnd time.Time, mode CompletionAction) (bool, error) {
 	currentWeekStart := startOfWeek(today)
 	if sameDate(weekStart, currentWeekStart) {
 		return false, nil
@@ -80,19 +80,13 @@ func ValidateWeeklyAction(targetDate, today, weekStart, weekEnd time.Time, targe
 	if !weekEnd.Before(today) {
 		return false, errors.New("weekly completion can only be changed for the current week or completed past weeks")
 	}
-	if targetMonth != currentMonth {
-		return false, errors.New("weekly completion can only be incremented for past weeks ending in current month")
-	}
-	if monthClosed {
-		return false, errors.New("weekly completion cannot be changed for closed month")
-	}
 	if mode != ActionIncrement && mode != ActionDecrement {
 		return false, errors.New("past weekly completion only supports increment or decrement action")
 	}
 	return true, nil
 }
 
-func ValidateDailyAction(targetDate, today time.Time, targetMonth, currentMonth string, monthClosed bool, mode CompletionAction) error {
+func ValidateDailyAction(targetDate, today time.Time, mode CompletionAction) error {
 	if sameDate(targetDate, today) {
 		if mode != ActionToggle {
 			return errors.New("daily tasks only support toggle action for today")
@@ -101,12 +95,6 @@ func ValidateDailyAction(targetDate, today time.Time, targetMonth, currentMonth 
 	}
 	if targetDate.After(today) {
 		return errors.New("daily completion cannot be changed for future dates")
-	}
-	if targetMonth != currentMonth {
-		return errors.New("daily completion can only be completed for past days in current month")
-	}
-	if monthClosed {
-		return errors.New("daily completion cannot be changed for closed month")
 	}
 	if mode != ActionComplete && mode != ActionDecrement {
 		return errors.New("past daily completion only supports complete or decrement action")

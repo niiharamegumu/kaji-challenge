@@ -107,7 +107,7 @@ func TestAdminLogoutCORSAndCSRFHTTPRoutes(t *testing.T) {
 		t.Fatalf("expected missing origin 403, got %d: %s", csrfRes.Code, csrfRes.Body.String())
 	}
 
-	adminReq := httptest.NewRequest(http.MethodPost, "/v1/admin/close-day", nil)
+	adminReq := httptest.NewRequest(http.MethodPost, "/v1/admin/months/2026-01/close", nil)
 	adminReq.Header.Set("Origin", "http://localhost:5173")
 	adminReq.AddCookie(&http.Cookie{Name: "kaji_session", Value: token})
 	adminRes := httptest.NewRecorder()

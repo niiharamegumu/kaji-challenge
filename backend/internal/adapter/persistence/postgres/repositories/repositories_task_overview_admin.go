@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	model "github.com/megu/kaji-challenge/backend/internal/application/model"
 	"github.com/megu/kaji-challenge/backend/internal/application/ports"
 )
 
@@ -94,6 +95,20 @@ func (r adminRepo) RunTeamRevisionCAS(ctx context.Context, teamID, entity string
 	return mapInfraErr(r.store.RunTeamRevisionCAS(ctx, teamID, entity, hints, fn))
 }
 
+func (r adminRepo) GetMonthCloseCandidate(ctx context.Context, teamID string) (model.MonthCloseCandidateResponse, error) {
+	res, err := r.store.GetMonthCloseCandidate(ctx, teamID)
+	return res, mapInfraErr(err)
+}
+
+func (r adminRepo) IsMonthClosed(ctx context.Context, teamID, month string) (bool, error) {
+	res, err := r.store.IsMonthClosed(ctx, teamID, month)
+	return res, mapInfraErr(err)
+}
+
+func (r adminRepo) FinalizeMonth(ctx context.Context, teamID, month string) error {
+	return mapInfraErr(r.store.FinalizeMonth(ctx, teamID, month))
+}
+
 func (r adminRepo) NextDayCloseTarget(ctx context.Context, teamID string) (time.Time, bool, error) {
 	res, ok, err := r.store.NextDayCloseTarget(ctx, teamID)
 	return res, ok, mapInfraErr(err)
@@ -101,11 +116,6 @@ func (r adminRepo) NextDayCloseTarget(ctx context.Context, teamID string) (time.
 
 func (r adminRepo) NextWeekCloseTarget(ctx context.Context, teamID string) (time.Time, bool, error) {
 	res, ok, err := r.store.NextWeekCloseTarget(ctx, teamID)
-	return res, ok, mapInfraErr(err)
-}
-
-func (r adminRepo) NextMonthCloseTarget(ctx context.Context, teamID string) (time.Time, bool, error) {
-	res, ok, err := r.store.NextMonthCloseTarget(ctx, teamID)
 	return res, ok, mapInfraErr(err)
 }
 
@@ -117,11 +127,6 @@ func (r adminRepo) CloseDayTarget(ctx context.Context, teamID string, targetDate
 func (r adminRepo) CloseWeekTarget(ctx context.Context, teamID string, weekStart time.Time) (bool, error) {
 	res, err := r.store.CloseWeekTarget(ctx, teamID, weekStart)
 	return res, mapInfraErr(err)
-}
-
-func (r adminRepo) CloseMonthTarget(ctx context.Context, teamID string, monthStart time.Time) (bool, string, error) {
-	res, month, err := r.store.CloseMonthTarget(ctx, teamID, monthStart)
-	return res, month, mapInfraErr(err)
 }
 
 func (r adminRepo) Now() time.Time {

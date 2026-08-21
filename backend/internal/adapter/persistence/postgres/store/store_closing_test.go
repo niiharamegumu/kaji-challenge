@@ -60,7 +60,7 @@ func TestCloseDayForTeamIsIdempotent(t *testing.T) {
 	}
 }
 
-func TestCloseWeekAndMonthForTeam(t *testing.T) {
+func TestCloseWeekForTeamIsIdempotent(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 	admin := repositories.NewServices(s).Admin
@@ -69,7 +69,7 @@ func TestCloseWeekAndMonthForTeam(t *testing.T) {
 	s.now = func() time.Time { return now }
 	thisWeekStart := startOfWeek(dateOnly(now, s.loc), s.loc)
 	base := thisWeekStart.AddDate(0, 0, -6)
-	teamID, userID := createTeamWithMember(t, s, "weekly@example.com", base)
+	teamID, _ := createTeamWithMember(t, s, "weekly@example.com", base)
 	createTaskAt(t, s, teamID, model.TaskTypeWeekly, 5, 2, base)
 
 	weekResA, err := admin.CloseWeekForTeam(ctx, teamID)
@@ -84,19 +84,7 @@ func TestCloseWeekAndMonthForTeam(t *testing.T) {
 		t.Fatalf("expected same week close month, got %s and %s", weekResA.Month, weekResB.Month)
 	}
 
-	monthResTeam, err := admin.CloseMonthForTeam(ctx, teamID)
-	if err != nil {
-		t.Fatalf("CloseMonthForTeam failed: %v", err)
-	}
-	monthResUser, err := admin.CloseMonthForUser(withLatestIfMatchForUser(t, s, ctx, userID), userID)
-	if err != nil {
-		t.Fatalf("CloseMonthForUser failed: %v", err)
-	}
-	if monthResTeam.Month != monthResUser.Month {
-		t.Fatalf("team/user close month mismatch: team=%s user=%s", monthResTeam.Month, monthResUser.Month)
-	}
-
-	row := getMonthSummary(t, s, teamID, monthResTeam.Month)
+	row := getMonthSummary(t, s, teamID, monthKeyFromTime(thisWeekStart.AddDate(0, 0, -1), s.loc))
 	if row.WeeklyPenaltyTotal != 5 {
 		t.Fatalf("expected weekly penalty total=5, got %d", row.WeeklyPenaltyTotal)
 	}
@@ -333,7 +321,7 @@ func TestToggleTaskCompletionRejectsPastDailyToggleAction(t *testing.T) {
 	}
 }
 
-func TestToggleTaskCompletionRejectsPastDailyCompleteForClosedMonth(t *testing.T) {
+func TestToggleTaskCompletionAllowsPastDailyCompleteForClosedMonth(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 	now := time.Date(2026, 3, 17, 9, 0, 0, 0, s.loc)
@@ -358,8 +346,11 @@ func TestToggleTaskCompletionRejectsPastDailyCompleteForClosedMonth(t *testing.T
 	}
 
 	action := model.Complete
-	if _, err := s.ToggleTaskCompletion(withLatestIfMatchForUser(t, s, ctx, userID), userID, taskID, targetDate, &action); err == nil {
-		t.Fatalf("expected ToggleTaskCompletion to reject complete action for closed month")
+	if _, err := s.ToggleTaskCompletion(withLatestIfMatchForUser(t, s, ctx, userID), userID, taskID, targetDate, &action); err != nil {
+		t.Fatalf("expected closed-month correction to succeed: %v", err)
+	}
+	if row := getMonthSummary(t, s, teamID, monthKeyFromTime(targetDate, s.loc)); !row.IsClosed {
+		t.Fatalf("expected corrected month to remain closed")
 	}
 }
 
@@ -411,7 +402,7 @@ func TestToggleTaskCompletionRejectsFutureDailyComplete(t *testing.T) {
 	}
 }
 
-func TestToggleTaskCompletionRejectsPreviousMonthDailyComplete(t *testing.T) {
+func TestToggleTaskCompletionAllowsPreviousMonthDailyComplete(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 	now := time.Date(2026, 3, 17, 9, 0, 0, 0, s.loc)
@@ -423,8 +414,8 @@ func TestToggleTaskCompletionRejectsPreviousMonthDailyComplete(t *testing.T) {
 	targetDate := time.Date(2026, 2, 28, 0, 0, 0, 0, s.loc)
 	action := model.Complete
 
-	if _, err := s.ToggleTaskCompletion(withLatestIfMatchForUser(t, s, ctx, userID), userID, taskID, targetDate, &action); err == nil {
-		t.Fatalf("expected ToggleTaskCompletion to reject previous-month daily task completion")
+	if _, err := s.ToggleTaskCompletion(withLatestIfMatchForUser(t, s, ctx, userID), userID, taskID, targetDate, &action); err != nil {
+		t.Fatalf("expected previous-month daily completion to succeed: %v", err)
 	}
 }
 
@@ -565,8 +556,10 @@ func TestCloseDayForTargetLockedFailsWhenMonthAlreadyClosed(t *testing.T) {
 	teamID, _ := createTeamWithMember(t, s, "closed-month-day@example.com", createdAt)
 	createTaskAt(t, s, teamID, model.TaskTypeDaily, 2, 1, createdAt)
 
-	if _, _, err := s.closeMonthForTargetLocked(ctx, time.Date(2025, 12, 1, 0, 0, 0, 0, s.loc), teamID); err != nil {
-		t.Fatalf("closeMonthForTargetLocked failed: %v", err)
+	if err := s.q.UpsertMonthlyPenaltySummary(ctx, dbsqlc.UpsertMonthlyPenaltySummaryParams{
+		TeamID: teamID, MonthStart: toPgDate(time.Date(2025, 12, 1, 0, 0, 0, 0, s.loc)), IsClosed: true,
+	}); err != nil {
+		t.Fatalf("failed to seed closed month: %v", err)
 	}
 
 	_, err := s.closeDayForTargetLocked(ctx, time.Date(2025, 12, 31, 0, 0, 0, 0, s.loc), teamID)
@@ -594,8 +587,10 @@ func TestCloseWeekForTargetLockedFailsWhenTargetMonthAlreadyClosed(t *testing.T)
 	teamID, _ := createTeamWithMember(t, s, "closed-month-week@example.com", createdAt)
 	createTaskAt(t, s, teamID, model.TaskTypeWeekly, 3, 1, createdAt)
 
-	if _, _, err := s.closeMonthForTargetLocked(ctx, time.Date(2026, 1, 1, 0, 0, 0, 0, s.loc), teamID); err != nil {
-		t.Fatalf("closeMonthForTargetLocked failed: %v", err)
+	if err := s.q.UpsertMonthlyPenaltySummary(ctx, dbsqlc.UpsertMonthlyPenaltySummaryParams{
+		TeamID: teamID, MonthStart: toPgDate(time.Date(2026, 1, 1, 0, 0, 0, 0, s.loc)), IsClosed: true,
+	}); err != nil {
+		t.Fatalf("failed to seed closed month: %v", err)
 	}
 
 	_, err := s.closeWeekForTargetLocked(ctx, time.Date(2025, 12, 29, 0, 0, 0, 0, s.loc), teamID)
@@ -615,7 +610,7 @@ func TestCloseWeekForTargetLockedFailsWhenTargetMonthAlreadyClosed(t *testing.T)
 	}
 }
 
-func TestCloseMonthForTargetLockedUsesRuleSnapshotAtMonthEnd(t *testing.T) {
+func TestReplaceTriggeredRulesUsesCurrentRules(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 
@@ -637,15 +632,8 @@ func TestCloseMonthForTargetLockedUsesRuleSnapshotAtMonthEnd(t *testing.T) {
 	softDeletePenaltyRuleAt(t, s, ruleDeletedBeforeMonthEnd, time.Date(2026, 1, 20, 0, 0, 0, 0, s.loc))
 	ruleActiveAtMonthEnd := createPenaltyRuleAt(t, s, teamID, 8, "有効ルール", createdAt)
 
-	didRun, gotMonth, err := s.closeMonthForTargetLocked(ctx, monthStart, teamID)
-	if err != nil {
-		t.Fatalf("closeMonthForTargetLocked failed: %v", err)
-	}
-	if !didRun {
-		t.Fatalf("expected closeMonthForTargetLocked to run")
-	}
-	if gotMonth != "2026-01" {
-		t.Fatalf("expected month 2026-01, got %s", gotMonth)
+	if err := s.replaceTriggeredRulesLocked(ctx, teamID, monthStart, 10); err != nil {
+		t.Fatalf("replaceTriggeredRulesLocked failed: %v", err)
 	}
 
 	triggered, err := s.q.ListTriggeredRuleIDsByMonth(ctx, dbsqlc.ListTriggeredRuleIDsByMonthParams{
@@ -694,27 +682,33 @@ func TestGetMonthlySummaryUsesAsOfSnapshotForUnclosedMonth(t *testing.T) {
 	}
 }
 
-func TestCatchUpMonthLockedProcessesMissingMonths(t *testing.T) {
+func TestMonthCloseCandidateAdvancesOneMonthAtATime(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
-	admin := repositories.NewServices(s).Admin
 
 	teamID, _ := createTeamWithMember(t, s, "catchup-month@example.com", time.Date(2025, 11, 15, 10, 0, 0, 0, s.loc))
 	createTaskAt(t, s, teamID, model.TaskTypeDaily, 1, 1, time.Date(2025, 11, 15, 10, 0, 0, 0, s.loc))
 
 	s.now = func() time.Time { return time.Date(2026, 2, 10, 9, 0, 0, 0, s.loc) }
-	res, err := admin.CloseMonthForTeam(ctx, teamID)
-	if err != nil {
-		t.Fatalf("CloseMonthForTeam failed: %v", err)
-	}
-	if res.Month != "2026-01" {
-		t.Fatalf("expected closed month=2026-01, got %s", res.Month)
-	}
-
-	for _, month := range []string{"2025-11", "2025-12", "2026-01"} {
-		row := getMonthSummary(t, s, teamID, month)
-		if !row.IsClosed {
-			t.Fatalf("expected month %s to be closed", month)
+	for index, month := range []string{"2025-11", "2025-12", "2026-01"} {
+		candidate, err := s.GetMonthCloseCandidate(ctx, teamID)
+		if err != nil {
+			t.Fatalf("GetMonthCloseCandidate failed: %v", err)
 		}
+		if candidate.Candidate == nil || candidate.Candidate.Month != month {
+			t.Fatalf("expected candidate %s, got %+v", month, candidate.Candidate)
+		}
+		if candidate.PendingMonthCount != 3-index {
+			t.Fatalf("expected %d pending months, got %d", 3-index, candidate.PendingMonthCount)
+		}
+		if err := s.runInTransaction(ctx, func(txCtx context.Context) error {
+			return s.FinalizeMonth(txCtx, teamID, month)
+		}); err != nil {
+			t.Fatalf("FinalizeMonth(%s) failed: %v", month, err)
+		}
+	}
+	candidate, err := s.GetMonthCloseCandidate(ctx, teamID)
+	if err != nil || candidate.Candidate != nil || candidate.PendingMonthCount != 0 {
+		t.Fatalf("expected no candidate after closing all months, got %+v err=%v", candidate, err)
 	}
 }

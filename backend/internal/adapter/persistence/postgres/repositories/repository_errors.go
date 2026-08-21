@@ -12,6 +12,14 @@ func mapInfraErr(err error) error {
 	if err == nil {
 		return nil
 	}
+	if errors.Is(err, application.ErrUnauthorized) ||
+		errors.Is(err, application.ErrForbidden) ||
+		errors.Is(err, application.ErrNotFound) ||
+		errors.Is(err, application.ErrInvalid) ||
+		errors.Is(err, application.ErrConflict) ||
+		errors.Is(err, application.ErrInternal) {
+		return err
+	}
 	var preconditionErr *application.PreconditionError
 	if errors.As(err, &preconditionErr) {
 		return err

@@ -59,6 +59,79 @@ func (q *Queries) DeleteTriggeredRulesByMonth(ctx context.Context, arg DeleteTri
 	return err
 }
 
+const findOldestMonthCloseCandidate = `-- name: FindOldestMonthCloseCandidate :one
+WITH bounds AS (
+  SELECT date_trunc('month', MIN(t.created_at AT TIME ZONE 'Asia/Tokyo'))::date AS first_month
+  FROM tasks t
+  WHERE t.team_id = $1
+), months AS (
+  SELECT month_start::date
+  FROM bounds b
+  CROSS JOIN LATERAL generate_series(
+    b.first_month,
+    $2::date - INTERVAL '1 month',
+    INTERVAL '1 month'
+  ) AS month_start
+  WHERE b.first_month IS NOT NULL
+), eligible AS (
+  SELECT m.month_start
+  FROM months m
+  WHERE EXISTS (
+    SELECT 1
+    FROM tasks t
+    WHERE t.team_id = $1
+      AND t.created_at < ((m.month_start + INTERVAL '1 month')::timestamp AT TIME ZONE 'Asia/Tokyo')
+      AND (t.deleted_at IS NULL OR t.deleted_at >= (m.month_start::timestamp AT TIME ZONE 'Asia/Tokyo'))
+  )
+    AND NOT EXISTS (
+      SELECT 1
+      FROM monthly_penalty_summaries s
+      WHERE s.team_id = $1
+        AND s.month_start = m.month_start
+        AND s.is_closed = TRUE
+    )
+)
+SELECT month_start, COUNT(*) OVER ()::integer AS pending_month_count
+FROM eligible
+ORDER BY month_start
+LIMIT 1
+`
+
+type FindOldestMonthCloseCandidateParams struct {
+	TeamID            string      `json:"team_id"`
+	CurrentMonthStart pgtype.Date `json:"current_month_start"`
+}
+
+type FindOldestMonthCloseCandidateRow struct {
+	MonthStart        pgtype.Date `json:"month_start"`
+	PendingMonthCount int32       `json:"pending_month_count"`
+}
+
+func (q *Queries) FindOldestMonthCloseCandidate(ctx context.Context, arg FindOldestMonthCloseCandidateParams) (FindOldestMonthCloseCandidateRow, error) {
+	row := q.db.QueryRow(ctx, findOldestMonthCloseCandidate, arg.TeamID, arg.CurrentMonthStart)
+	var i FindOldestMonthCloseCandidateRow
+	err := row.Scan(&i.MonthStart, &i.PendingMonthCount)
+	return i, err
+}
+
+const getMonthCloseState = `-- name: GetMonthCloseState :one
+SELECT is_closed
+FROM monthly_penalty_summaries
+WHERE team_id = $1 AND month_start = $2
+`
+
+type GetMonthCloseStateParams struct {
+	TeamID     string      `json:"team_id"`
+	MonthStart pgtype.Date `json:"month_start"`
+}
+
+func (q *Queries) GetMonthCloseState(ctx context.Context, arg GetMonthCloseStateParams) (bool, error) {
+	row := q.db.QueryRow(ctx, getMonthCloseState, arg.TeamID, arg.MonthStart)
+	var is_closed bool
+	err := row.Scan(&is_closed)
+	return is_closed, err
+}
+
 const getMonthlyPenaltySummary = `-- name: GetMonthlyPenaltySummary :one
 SELECT team_id, month_start, daily_penalty_total, weekly_penalty_total, is_closed
 FROM monthly_penalty_summaries
@@ -163,6 +236,30 @@ type SetDailyPenaltyTotalParams struct {
 
 func (q *Queries) SetDailyPenaltyTotal(ctx context.Context, arg SetDailyPenaltyTotalParams) error {
 	_, err := q.db.Exec(ctx, setDailyPenaltyTotal, arg.TeamID, arg.MonthStart, arg.DailyPenaltyTotal)
+	return err
+}
+
+const setMonthPenaltyTotals = `-- name: SetMonthPenaltyTotals :exec
+UPDATE monthly_penalty_summaries
+SET daily_penalty_total = $3,
+    weekly_penalty_total = $4
+WHERE team_id = $1 AND month_start = $2
+`
+
+type SetMonthPenaltyTotalsParams struct {
+	TeamID             string      `json:"team_id"`
+	MonthStart         pgtype.Date `json:"month_start"`
+	DailyPenaltyTotal  int32       `json:"daily_penalty_total"`
+	WeeklyPenaltyTotal int32       `json:"weekly_penalty_total"`
+}
+
+func (q *Queries) SetMonthPenaltyTotals(ctx context.Context, arg SetMonthPenaltyTotalsParams) error {
+	_, err := q.db.Exec(ctx, setMonthPenaltyTotals,
+		arg.TeamID,
+		arg.MonthStart,
+		arg.DailyPenaltyTotal,
+		arg.WeeklyPenaltyTotal,
+	)
 	return err
 }
 
