@@ -74,7 +74,7 @@ describe("useAuthGate", () => {
     rerender(errorParams);
 
     await waitFor(() => {
-      expect(errorParams.queryClient.removeQueries).toHaveBeenCalledTimes(9);
+      expect(errorParams.queryClient.removeQueries).toHaveBeenCalledTimes(10);
       expect(errorParams.navigate).toHaveBeenCalledWith("/", { replace: true });
       expect(errorParams.setStatus).toHaveBeenCalledWith(
         "アカウント情報が無効になったため、トップページへ戻りました。再ログインしてください。",
