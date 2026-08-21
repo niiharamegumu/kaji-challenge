@@ -44,7 +44,7 @@
 - `make check`: `gen + lint + test`
 - `make diff-gen`: 生成差分チェック
 - `make seed-monthly-dummy month=YYYY-MM email=user@example.com`: ダミータスク/完了記録を投入（集計は行わない）
-- `make ops-close scope=day|week|month [team_id=<uuid>]`: close処理をCLI実行（既定は全チーム対象）
+- `make ops-close scope=day|week [team_id=<uuid>]`: 日次・週次close処理をCLI実行（既定は全チーム対象）
 - `make vapid-keys [subject=mailto:you@example.com]`: Web Push 用 VAPID 鍵を再生成して表示する
 
 backend の Critical 判定は `backend/security/critical_goids.txt` の GO-ID allowlist で管理します。
@@ -77,16 +77,14 @@ Cloud Run Job運用推奨（3分割）:
 
 - `close-day`: command=`/app/ops`, args=`close --scope day --all-teams`
 - `close-week`: command=`/app/ops`, args=`close --scope week --all-teams`
-- `close-month`: command=`/app/ops`, args=`close --scope month --all-teams`
 
-実行順序は `close-day` → `close-week` → `close-month` の直列実行を推奨します（同時実行しない）。
-`close-month` は月跨ぎ週の集計を取りこぼさないため、毎月6日実行を推奨します。
+日次・週次Jobは対象期間ごとにトランザクションで処理します。月次締めは翌月1日以降にアプリの案内からユーザーが実行し、月またぎ週は終了日の日曜日を含む月へ計上します。
 
 `ops close` は catch-up モードで動作し、未処理期間を連続で補完します（例: day 実行時は未処理の全日を昨日まで処理）。
 過去期間の判定対象タスクは `created_at` / `deleted_at` を使って対象時点で有効だったものを再現します。
 `seed-monthly-dummy` は月次サマリーを直接作成せず、集計は `ops close` に委譲します。
 いずれも終了コードで成否を返します。対象の一部で失敗した場合も他対象は継続し、最後に非0終了となります（監視しやすい設計）。
-内部実装として、冪等キー管理は `close_executions` から `close_runs` / `task_evaluation_dedupes` に責務分離されています。
+日次・週次Jobの冪等キーは `close_runs` で管理します。
 
 ## Web Push通知CLI実行（Cloud Run Job向け）
 
