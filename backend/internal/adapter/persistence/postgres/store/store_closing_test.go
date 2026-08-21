@@ -419,6 +419,26 @@ func TestToggleTaskCompletionAllowsPreviousMonthDailyComplete(t *testing.T) {
 	}
 }
 
+func TestToggleTaskCompletionAllowsDeletedTaskEffectiveOnTargetDate(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	now := time.Date(2026, 3, 17, 9, 0, 0, 0, s.loc)
+	s.now = func() time.Time { return now }
+
+	createdAt := time.Date(2026, 3, 15, 10, 0, 0, 0, s.loc)
+	teamID, userID := createTeamWithMember(t, s, "past-daily-deleted@example.com", createdAt)
+	taskID := createTaskWithIDAt(t, s, teamID, model.TaskTypeDaily, 2, 1, createdAt)
+	if err := s.q.DeleteTask(ctx, taskID); err != nil {
+		t.Fatalf("DeleteTask failed: %v", err)
+	}
+
+	action := model.Complete
+	targetDate := time.Date(2026, 3, 16, 0, 0, 0, 0, s.loc)
+	if _, err := s.ToggleTaskCompletion(withLatestIfMatchForUser(t, s, ctx, userID), userID, taskID, targetDate, &action); err != nil {
+		t.Fatalf("expected historically effective deleted task correction to succeed: %v", err)
+	}
+}
+
 func TestCatchUpDayLockedProcessesMissingDays(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()

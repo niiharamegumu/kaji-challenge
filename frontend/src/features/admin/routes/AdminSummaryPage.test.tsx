@@ -116,6 +116,33 @@ describe("AdminSummaryPage", () => {
     ).toBeInTheDocument();
   });
 
+  it("confirms the candidate period before manually closing a month", async () => {
+    mockGetMonthCloseCandidate.mockResolvedValue({
+      data: {
+        candidate: {
+          month: "2026-02",
+          dailyThroughDate: "2026-02-28",
+          weeklyThroughDate: "2026-02-22",
+        },
+        pendingMonthCount: 1,
+      },
+    });
+    renderPage();
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: "この月を締める" }),
+    );
+    expect(
+      await screen.findByText(/月またぎ週は終了日を含む月へ計上/),
+    ).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: "再計算して締める" }),
+    );
+    await waitFor(() => {
+      expect(mockPostMonthClose).toHaveBeenCalledWith("2026-02");
+    });
+  });
+
   it("shows boundary error when summary query fails", async () => {
     await withExpectedConsoleError(async () => {
       mockGetPenaltySummaryMonthly.mockRejectedValue(

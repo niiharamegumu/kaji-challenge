@@ -24,10 +24,22 @@ export function useMonthCloseCandidate() {
   const refetch = query.refetch;
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void refetch();
-    }, millisecondsUntilNextJSTDay());
-    return () => window.clearTimeout(timer);
+    let timer = 0;
+    let active = true;
+    const schedule = () => {
+      timer = window.setTimeout(() => {
+        void refetch().finally(() => {
+          if (active) {
+            schedule();
+          }
+        });
+      }, millisecondsUntilNextJSTDay());
+    };
+    schedule();
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
   }, [refetch]);
 
   return query;

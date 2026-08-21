@@ -149,7 +149,7 @@ func (s *Store) PatchTask(ctx context.Context, userID, taskID string, req model.
 				return errors.New("task not found")
 			}
 			task = taskFromGetRow(row, s.loc)
-			if task.TeamID != teamID {
+			if task.TeamID != teamID || task.DeletedAt != nil {
 				return errors.New("task not found")
 			}
 			if req.Title != nil {
@@ -219,7 +219,7 @@ func (s *Store) DeleteTask(ctx context.Context, userID, taskID string) error {
 				return errors.New("task not found")
 			}
 			task := taskFromGetRow(row, s.loc)
-			if task.TeamID != teamID {
+			if task.TeamID != teamID || task.DeletedAt != nil {
 				return errors.New("task not found")
 			}
 			if err := qtx.DeleteTask(ctx, taskID); err != nil {
@@ -406,7 +406,7 @@ func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string,
 				return errors.New("task not found")
 			}
 			task := taskFromGetRow(row, s.loc)
-			if task.TeamID != teamID || task.DeletedAt != nil {
+			if task.TeamID != teamID {
 				return errors.New("task not found")
 			}
 			today := dateOnly(s.now(), s.loc)

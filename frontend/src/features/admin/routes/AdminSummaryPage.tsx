@@ -36,10 +36,7 @@ import {
 
 const monthPattern = /^\d{4}-\d{2}$/;
 
-const initialMonth = () => {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-};
+const initialMonth = () => dateStringInJST().slice(0, 7);
 
 const addMonth = (month: string, delta: number) => {
   const [yearPart, monthPart] = month.split("-");
