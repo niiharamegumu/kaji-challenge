@@ -10,9 +10,18 @@ import {
   listShoppingItems,
   postTaskCompletionToggle,
 } from "../../../lib/api/generated/client";
+import {
+  monthlyPenaltySummaryQueryOptions,
+  penaltyRulesWithDeletedQueryOptions,
+} from "../../../shared/query/monthlyPenaltyQueries";
 import { queryKeys } from "../../../shared/query/queryKeys";
 import { handleTeamStatePreconditionFailure } from "../../../shared/query/teamStateRefresh";
-import { formatError, todayString } from "../../../shared/utils/errors";
+import {
+  dateStringInJST,
+  formatError,
+  todayString,
+} from "../../../shared/utils/errors";
+import { previousMonthKey } from "../utils/month";
 
 type CompletionAction = "toggle" | "increment" | "decrement";
 
@@ -26,12 +35,34 @@ export const homeShoppingItemsQueryOptions = queryOptions({
   queryFn: async () => (await listShoppingItems()).data.items ?? [],
 });
 
+export const previousMonthPenaltySummaryQueryOptions = () =>
+  monthlyPenaltySummaryQueryOptions(
+    previousMonthKey(dateStringInJST().slice(0, 7)),
+  );
+
 export function useHomePageQueries() {
-  const [homeQuery, shoppingItemsQuery] = useSuspenseQueries({
-    queries: [homeQueryOptions, homeShoppingItemsQueryOptions],
+  const previousMonth = previousMonthKey(dateStringInJST().slice(0, 7));
+  const [
+    homeQuery,
+    shoppingItemsQuery,
+    previousMonthPenaltySummaryQuery,
+    penaltyRulesQuery,
+  ] = useSuspenseQueries({
+    queries: [
+      homeQueryOptions,
+      homeShoppingItemsQueryOptions,
+      monthlyPenaltySummaryQueryOptions(previousMonth),
+      penaltyRulesWithDeletedQueryOptions,
+    ],
   });
 
-  return { homeQuery, shoppingItemsQuery };
+  return {
+    homeQuery,
+    shoppingItemsQuery,
+    previousMonth,
+    previousMonthPenaltySummaryQuery,
+    penaltyRulesQuery,
+  };
 }
 
 export function useToggleCompletionMutation(
