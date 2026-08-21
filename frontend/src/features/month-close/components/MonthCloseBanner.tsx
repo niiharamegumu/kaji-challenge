@@ -62,7 +62,7 @@ export function MonthCloseBanner() {
         </div>
         <Link
           to={`/admin/summary?month=${candidate.month}&close=1`}
-          className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border border-stone-300 bg-white px-2.5 py-1.5 text-sm font-medium text-stone-700 transition-colors hover:bg-stone-50 hover:text-stone-900"
+          className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border border-amber-500 bg-amber-100 px-2.5 py-1.5 text-sm font-medium text-amber-950 transition-colors hover:bg-amber-200"
         >
           <ChartColumn size={16} aria-hidden="true" />
           <span>サマリーへ</span>
