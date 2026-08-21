@@ -20,11 +20,11 @@
 
 ## 本番ロールアウト
 
-1. API/UI のデプロイ前に `kaji-backend-close-month-scheduler-trigger` を一時停止する。
+1. migration と API/UI のデプロイ中に旧 Job が廃止テーブルへアクセスしないよう、日次・週次・月次の close Scheduler（`kaji-backend-close-month-scheduler-trigger` を含む）を一時停止する。
 2. migration `000023_manual_month_close_cleanup`、backend、frontend をデプロイする。
 3. 未締め月バナー、候補月サマリー、手動締め、次候補への遷移を本番で確認する。
 4. 問題がなければ Scheduler `kaji-backend-close-month-scheduler-trigger` と Cloud Run Job `kaji-backend-close-month` を削除する。
-5. 日次・週次・通知 Jobs と `/app/ops` の稼働を確認する。
+5. 日次・週次 Scheduler を再開し、日次・週次・通知 Jobs と `/app/ops` の稼働を確認する。
 
 外部 GCP リソースの停止・削除は、この実装作業では実行していない。
 
