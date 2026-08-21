@@ -128,7 +128,7 @@ backend-cmd-seeder:
 ops-close: backend-cmd-ops-close
 
 backend-cmd-ops-close:
-	@test -n "$(scope)" || (echo "usage: make ops-close scope=day|week|month [team_id=<uuid>]" && exit 1)
+	@test -n "$(scope)" || (echo "usage: make ops-close scope=day|week [team_id=<uuid>]" && exit 1)
 	@if [ -n "$(team_id)" ]; then \
 		$(BACKEND_RUN) go -C /app/backend run ./cmd/ops close --scope "$(scope)" --all-teams=false --team-id "$(team_id)"; \
 	else \

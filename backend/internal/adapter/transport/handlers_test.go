@@ -143,22 +143,16 @@ type mockAdminService struct{}
 func (m mockAdminService) ListClosableTeamIDs(context.Context) ([]string, error) {
 	return nil, nil
 }
-func (m mockAdminService) CloseDayForUser(context.Context, string) (model.CloseResponse, error) {
-	return model.CloseResponse{}, nil
+func (m mockAdminService) GetMonthCloseCandidate(context.Context, string) (model.MonthCloseCandidateResponse, error) {
+	return model.MonthCloseCandidateResponse{}, nil
 }
-func (m mockAdminService) CloseWeekForUser(context.Context, string) (model.CloseResponse, error) {
-	return model.CloseResponse{}, nil
-}
-func (m mockAdminService) CloseMonthForUser(context.Context, string) (model.CloseResponse, error) {
+func (m mockAdminService) CloseMonthForUserTarget(context.Context, string, string) (model.CloseResponse, error) {
 	return model.CloseResponse{}, nil
 }
 func (m mockAdminService) CloseDayForTeam(context.Context, string) (model.CloseResponse, error) {
 	return model.CloseResponse{}, nil
 }
 func (m mockAdminService) CloseWeekForTeam(context.Context, string) (model.CloseResponse, error) {
-	return model.CloseResponse{}, nil
-}
-func (m mockAdminService) CloseMonthForTeam(context.Context, string) (model.CloseResponse, error) {
 	return model.CloseResponse{}, nil
 }
 

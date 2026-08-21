@@ -5,6 +5,7 @@ type ConfirmModalProps = {
   title: string;
   message: string;
   confirmLabel: string;
+  tone?: "default" | "warning";
   onCancel: () => void;
   onConfirm: () => void;
 };
@@ -14,6 +15,7 @@ export function ConfirmModal({
   title,
   message,
   confirmLabel,
+  tone = "default",
   onCancel,
   onConfirm,
 }: ConfirmModalProps) {
@@ -33,7 +35,7 @@ export function ConfirmModal({
         <dialog
           open
           aria-labelledby="confirm-modal-title"
-          className="mx-auto w-full max-w-[calc(100vw-3rem)] rounded-xl border border-stone-200 bg-white p-4 shadow-lg sm:max-w-md"
+          className={`mx-auto w-full max-w-[calc(100vw-3rem)] rounded-xl border bg-white p-4 shadow-lg sm:max-w-md ${tone === "warning" ? "border-amber-300" : "border-stone-200"}`}
         >
           <div className="text-left">
             <h3
@@ -54,7 +56,7 @@ export function ConfirmModal({
             </button>
             <button
               type="button"
-              className="h-9 rounded-md border border-[color:var(--color-matcha-400)] bg-[color:var(--color-matcha-50)] px-3 text-sm text-[color:var(--color-matcha-700)] transition-colors hover:bg-[color:var(--color-matcha-100)]"
+              className={`h-9 rounded-md border px-3 text-sm transition-colors ${tone === "warning" ? "border-amber-500 bg-amber-50 font-semibold text-amber-900 hover:bg-amber-100" : "border-[color:var(--color-matcha-400)] bg-[color:var(--color-matcha-50)] text-[color:var(--color-matcha-700)] hover:bg-[color:var(--color-matcha-100)]"}`}
               onClick={onConfirm}
             >
               {confirmLabel}

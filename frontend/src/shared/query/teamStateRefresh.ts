@@ -21,6 +21,7 @@ const teamStateRefreshQueryKeys = [
   queryKeys.reminders,
   queryKeys.reminderDefinitions,
   queryKeys.monthlySummary,
+  queryKeys.monthCloseCandidate,
 ] as const;
 
 export async function refreshTeamState(queryClient: QueryInvalidator) {

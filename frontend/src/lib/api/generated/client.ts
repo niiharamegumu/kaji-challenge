@@ -348,7 +348,7 @@ export interface ReorderTasksRequest {
 }
 
 /**
- * For daily tasks, `toggle` is only for today, while `complete` and `decrement` are available for past days in the current open month. For weekly tasks, `increment` and `decrement` are available in the current week and for completed past weeks whose week end is in the current open month.
+ * For daily tasks, `toggle` is only for today, while `complete` and `decrement` are available for any past day on which the task was effective. For weekly tasks, `increment` and `decrement` are available for any completed past week on which the task was effective. Updating a past period recalculates its month using current task and penalty-rule settings.
  */
 export type ToggleTaskCompletionRequestAction = typeof ToggleTaskCompletionRequestAction[keyof typeof ToggleTaskCompletionRequestAction];
 
@@ -362,7 +362,7 @@ export const ToggleTaskCompletionRequestAction = {
 
 export interface ToggleTaskCompletionRequest {
   targetDate: string;
-  /** For daily tasks, `toggle` is only for today, while `complete` and `decrement` are available for past days in the current open month. For weekly tasks, `increment` and `decrement` are available in the current week and for completed past weeks whose week end is in the current open month. */
+  /** For daily tasks, `toggle` is only for today, while `complete` and `decrement` are available for any past day on which the task was effective. For weekly tasks, `increment` and `decrement` are available for any completed past week on which the task was effective. Updating a past period recalculates its month using current task and penalty-rule settings. */
   action?: ToggleTaskCompletionRequestAction;
 }
 
@@ -520,6 +520,19 @@ export interface MonthlyPenaltySummary {
 export interface CloseResponse {
   closedAt: string;
   month: string;
+}
+
+export interface MonthCloseCandidate {
+  /** @pattern ^\\d{4}-\\d{2}$ */
+  month: string;
+  dailyThroughDate: string;
+  weeklyThroughDate: string;
+}
+
+export interface MonthCloseCandidateResponse {
+  candidate: MonthCloseCandidate | null;
+  /** @minimum 0 */
+  pendingMonthCount: number;
 }
 
 export type GetAuthGoogleCallbackParams = {
@@ -2128,35 +2141,35 @@ export const getPenaltySummaryMonthly = async (params?: GetPenaltySummaryMonthly
 
 
 
-export type postAdminCloseDayResponse200 = {
-  data: CloseResponse
+export type getAdminMonthCloseCandidateResponse200 = {
+  data: MonthCloseCandidateResponse
   status: 200
 }
 
-export type postAdminCloseDayResponseSuccess = (postAdminCloseDayResponse200) & {
+export type getAdminMonthCloseCandidateResponseSuccess = (getAdminMonthCloseCandidateResponse200) & {
   headers: Headers;
 };
 ;
 
-export type postAdminCloseDayResponse = (postAdminCloseDayResponseSuccess)
+export type getAdminMonthCloseCandidateResponse = (getAdminMonthCloseCandidateResponseSuccess)
 
-export const getPostAdminCloseDayUrl = () => {
-
-
+export const getGetAdminMonthCloseCandidateUrl = () => {
 
 
-  return `/v1/admin/close-day`
+
+
+  return `/v1/admin/month-close-candidate`
 }
 
 /**
- * @summary Run day close now
+ * @summary Get the oldest month awaiting manual close
  */
-export const postAdminCloseDay = async ( options?: Parameters<typeof customFetch>[1]): Promise<postAdminCloseDayResponse> => {
+export const getAdminMonthCloseCandidate = async ( options?: Parameters<typeof customFetch>[1]): Promise<getAdminMonthCloseCandidateResponse> => {
 
-  return customFetch<postAdminCloseDayResponse>(getPostAdminCloseDayUrl(),
+  return customFetch<getAdminMonthCloseCandidateResponse>(getGetAdminMonthCloseCandidateUrl(),
   {
     ...options,
-    method: 'POST'
+    method: 'GET'
 
 
   }
@@ -2164,68 +2177,50 @@ export const postAdminCloseDay = async ( options?: Parameters<typeof customFetch
 
 
 
-export type postAdminCloseWeekResponse200 = {
+export type postAdminMonthCloseResponse200 = {
   data: CloseResponse
   status: 200
 }
 
-export type postAdminCloseWeekResponseSuccess = (postAdminCloseWeekResponse200) & {
+export type postAdminMonthCloseResponse409 = {
+  data: void
+  status: 409
+}
+
+export type postAdminMonthCloseResponse412 = {
+  data: void
+  status: 412
+}
+
+export type postAdminMonthCloseResponse428 = {
+  data: void
+  status: 428
+}
+
+export type postAdminMonthCloseResponseSuccess = (postAdminMonthCloseResponse200) & {
   headers: Headers;
 };
-;
+export type postAdminMonthCloseResponseError = (postAdminMonthCloseResponse409 | postAdminMonthCloseResponse412 | postAdminMonthCloseResponse428) & {
+  headers: Headers;
+};
 
-export type postAdminCloseWeekResponse = (postAdminCloseWeekResponseSuccess)
+export type postAdminMonthCloseResponse = (postAdminMonthCloseResponseSuccess | postAdminMonthCloseResponseError)
 
-export const getPostAdminCloseWeekUrl = () => {
-
-
+export const getPostAdminMonthCloseUrl = (month: string,) => {
 
 
-  return `/v1/admin/close-week`
+
+
+  return `/v1/admin/months/${month}/close`
 }
 
 /**
- * @summary Run week close now
+ * Requires the latest team revision via the If-Match header. Only the oldest eligible open month can be closed.
+ * @summary Close a specific past month
  */
-export const postAdminCloseWeek = async ( options?: Parameters<typeof customFetch>[1]): Promise<postAdminCloseWeekResponse> => {
+export const postAdminMonthClose = async (month: string, options?: Parameters<typeof customFetch>[1]): Promise<postAdminMonthCloseResponse> => {
 
-  return customFetch<postAdminCloseWeekResponse>(getPostAdminCloseWeekUrl(),
-  {
-    ...options,
-    method: 'POST'
-
-
-  }
-);}
-
-
-
-export type postAdminCloseMonthResponse200 = {
-  data: CloseResponse
-  status: 200
-}
-
-export type postAdminCloseMonthResponseSuccess = (postAdminCloseMonthResponse200) & {
-  headers: Headers;
-};
-;
-
-export type postAdminCloseMonthResponse = (postAdminCloseMonthResponseSuccess)
-
-export const getPostAdminCloseMonthUrl = () => {
-
-
-
-
-  return `/v1/admin/close-month`
-}
-
-/**
- * @summary Run month close now
- */
-export const postAdminCloseMonth = async ( options?: Parameters<typeof customFetch>[1]): Promise<postAdminCloseMonthResponse> => {
-
-  return customFetch<postAdminCloseMonthResponse>(getPostAdminCloseMonthUrl(),
+  return customFetch<postAdminMonthCloseResponse>(getPostAdminMonthCloseUrl(month),
   {
     ...options,
     method: 'POST'

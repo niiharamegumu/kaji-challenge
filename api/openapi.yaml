@@ -791,41 +791,53 @@ paths:
               schema:
                 $ref: '#/components/schemas/MonthlyPenaltySummary'
 
-  /v1/admin/close-day:
-    post:
-      operationId: postAdminCloseDay
-      summary: Run day close now
+  /v1/admin/month-close-candidate:
+    get:
+      operationId: getAdminMonthCloseCandidate
+      summary: Get the oldest month awaiting manual close
       responses:
         '200':
-          description: Closed
+          description: Month close candidate
+          headers:
+            ETag:
+              description: Current team revision ETag
+              schema:
+                type: string
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CloseResponse'
+                $ref: '#/components/schemas/MonthCloseCandidateResponse'
 
-  /v1/admin/close-week:
+  /v1/admin/months/{month}/close:
     post:
-      operationId: postAdminCloseWeek
-      summary: Run week close now
+      operationId: postAdminMonthClose
+      summary: Close a specific past month
+      description: Requires the latest team revision via the If-Match header. Only the oldest eligible open month can be closed.
+      parameters:
+        - in: path
+          name: month
+          required: true
+          schema:
+            type: string
+            pattern: '^\\d{4}-\\d{2}$'
       responses:
         '200':
-          description: Closed
+          description: Month closed, or the already-closed result returned idempotently
+          headers:
+            ETag:
+              description: Updated team revision ETag
+              schema:
+                type: string
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CloseResponse'
-
-  /v1/admin/close-month:
-    post:
-      operationId: postAdminCloseMonth
-      summary: Run month close now
-      responses:
-        '200':
-          description: Closed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CloseResponse'
+        '409':
+          description: Month is not the oldest eligible open month, or is not in the past
+        '412':
+          description: Team revision mismatch
+        '428':
+          description: Missing If-Match header
 
 components:
   securitySchemes:
@@ -1358,7 +1370,7 @@ components:
           format: date
         action:
           type: string
-          description: For daily tasks, `toggle` is only for today, while `complete` and `decrement` are available for past days in the current open month. For weekly tasks, `increment` and `decrement` are available in the current week and for completed past weeks whose week end is in the current open month.
+          description: For daily tasks, `toggle` is only for today, while `complete` and `decrement` are available for any past day on which the task was effective. For weekly tasks, `increment` and `decrement` are available for any completed past week on which the task was effective. Updating a past period recalculates its month using current task and penalty-rule settings.
           enum: [toggle, increment, decrement, complete]
           default: toggle
 
@@ -1640,3 +1652,29 @@ components:
           format: date-time
         month:
           type: string
+
+    MonthCloseCandidate:
+      type: object
+      required: [month, dailyThroughDate, weeklyThroughDate]
+      properties:
+        month:
+          type: string
+          pattern: '^\\d{4}-\\d{2}$'
+        dailyThroughDate:
+          type: string
+          format: date
+        weeklyThroughDate:
+          type: string
+          format: date
+
+    MonthCloseCandidateResponse:
+      type: object
+      required: [candidate, pendingMonthCount]
+      properties:
+        candidate:
+          allOf:
+            - $ref: '#/components/schemas/MonthCloseCandidate'
+          nullable: true
+        pendingMonthCount:
+          type: integer
+          minimum: 0

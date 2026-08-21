@@ -152,6 +152,24 @@ func (s *Store) runWithTeamRevisionCAS(
 	return revision, nil
 }
 
+func (s *Store) runInTransaction(ctx context.Context, fn func(context.Context) error) error {
+	if s.queries(ctx) != s.q {
+		return fn(ctx)
+	}
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+	txCtx := withTxQueries(ctx, s.q.WithTx(tx))
+	if err := fn(txCtx); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
 func (s *Store) bumpTeamRevisionBestEffort(ctx context.Context, teamID, entity string, hints map[string]string) (int64, error) {
 	var lastErr error
 	for i := 0; i < 3; i++ {

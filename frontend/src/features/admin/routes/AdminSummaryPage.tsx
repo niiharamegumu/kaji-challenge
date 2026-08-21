@@ -15,13 +15,16 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useSearchParams } from "react-router-dom";
-
 import { CompletionSlots } from "../../../shared/components/CompletionSlots";
 import { ConfirmModal } from "../../../shared/components/ConfirmModal";
 import { queryKeys } from "../../../shared/query/queryKeys";
 import { handleTeamStatePreconditionFailure } from "../../../shared/query/teamStateRefresh";
 import { PAGE_SECTION_CHROMELESS_CLASS_NAME } from "../../../shared/styles/pageSection";
 import { dateStringInJST, formatError } from "../../../shared/utils/errors";
+import {
+  closeMonth as closeMonthRequest,
+  useMonthCloseCandidate,
+} from "../../month-close";
 import {
   completePastDailyTask as completePastDailyTaskRequest,
   decrementPastDailyTask as decrementPastDailyTaskRequest,
@@ -33,10 +36,7 @@ import {
 
 const monthPattern = /^\d{4}-\d{2}$/;
 
-const initialMonth = () => {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-};
+const initialMonth = () => dateStringInJST().slice(0, 7);
 
 const addMonth = (month: string, delta: number) => {
   const [yearPart, monthPart] = month.split("-");
@@ -122,6 +122,8 @@ export function AdminSummaryPage() {
   });
 
   const summaryData = summary.data;
+  const monthCloseCandidate = useMonthCloseCandidate();
+  const closeCandidate = monthCloseCandidate.data?.candidate;
   const rulesData = asArray(rules.data);
   const triggeredPenaltyRuleIds = asArray(summaryData.triggeredPenaltyRuleIds);
   const monthlyTaskStatusGroups = asArray(summaryData.taskStatusByDate);
@@ -157,7 +159,43 @@ export function AdminSummaryPage() {
       });
   }, [triggeredPenaltyRuleIds, ruleMap]);
   const currentDateKey = useMemo(() => dateStringInJST(), []);
-  const currentMonthKey = currentDateKey.slice(0, 7);
+
+  const closeRequested =
+    searchParams.get("close") === "1" && closeCandidate?.month === month;
+  const clearCloseRequest = () => {
+    setSearchParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        next.delete("close");
+        return next;
+      },
+      { replace: true },
+    );
+  };
+
+  const closeMonthMutation = useMutation({
+    mutationFn: () => closeMonthRequest(month),
+    onSuccess: async () => {
+      setStatus(`${formatMonthLabel(month)}を締めました`);
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.monthCloseCandidate,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: [...queryKeys.monthlySummary, month],
+        }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.home }),
+      ]);
+    },
+    onError: async (error) => {
+      if (
+        await handleTeamStatePreconditionFailure(error, queryClient, setStatus)
+      ) {
+        return;
+      }
+      setStatus(`月次締め失敗: ${formatError(error)}`);
+    },
+  });
 
   const updatePastTaskCompletion = useMutation({
     mutationFn: async ({
@@ -474,13 +512,8 @@ export function AdminSummaryPage() {
                         const showCrossMonthBadge =
                           isWeekly && isCrossMonthWeek;
                         const canAdjustPastDaily =
-                          !summaryData.isClosed &&
-                          month === currentMonthKey &&
-                          group.date < currentDateKey &&
-                          item.type === "daily";
+                          group.date < currentDateKey && item.type === "daily";
                         const canAdjustPastWeekly =
-                          !summaryData.isClosed &&
-                          month === currentMonthKey &&
                           item.type === "weekly" &&
                           weekEndDateKey(group.date) < currentDateKey;
                         return (
@@ -628,6 +661,7 @@ export function AdminSummaryPage() {
       </article>
       <ConfirmModal
         isOpen={confirmTarget != null}
+        tone={summaryData.isClosed ? "warning" : "default"}
         title={
           confirmTarget?.action === "increment"
             ? "過去週のタスクに1回分を追加しますか？"
@@ -641,21 +675,23 @@ export function AdminSummaryPage() {
           confirmTarget == null
             ? ""
             : confirmTarget.action === "increment"
-              ? `${confirmTarget.date} の週の「${confirmTarget.taskTitle}」に1回分を追加します。当月中の終了済み週だけ操作できます。`
+              ? `${confirmTarget.date} の週の「${confirmTarget.taskTitle}」に1回分を追加します。終了済みの週を操作できます。${summaryData.isClosed ? " 操作対象外を含め、現在設定で月全体の合計減点と発動ペナルティを再計算します。" : ""}`
               : confirmTarget.action === "decrement"
                 ? confirmTarget.type === "weekly"
-                  ? `${confirmTarget.date} の週の「${confirmTarget.taskTitle}」から1回分を取り消します。当月中の終了済み週だけ操作できます。`
-                  : `${confirmTarget.date} の「${confirmTarget.taskTitle}」を未完了に戻します。当月中の過去分だけ操作できます。`
-                : `${confirmTarget.date} の「${confirmTarget.taskTitle}」を完了済みに変更します。当月中の過去分だけ操作できます。`
+                  ? `${confirmTarget.date} の週の「${confirmTarget.taskTitle}」から1回分を取り消します。終了済みの週を操作できます。${summaryData.isClosed ? " 操作対象外を含め、現在設定で月全体の合計減点と発動ペナルティを再計算します。" : ""}`
+                  : `${confirmTarget.date} の「${confirmTarget.taskTitle}」を未完了に戻します。過去日を操作できます。${summaryData.isClosed ? " 操作対象外を含め、現在設定で月全体の合計減点と発動ペナルティを再計算します。" : ""}`
+                : `${confirmTarget.date} の「${confirmTarget.taskTitle}」を完了済みに変更します。過去日を操作できます。${summaryData.isClosed ? " 操作対象外を含め、現在設定で月全体の合計減点と発動ペナルティを再計算します。" : ""}`
         }
         confirmLabel={
-          confirmTarget?.action === "increment"
-            ? "1回追加"
-            : confirmTarget?.action === "decrement"
-              ? confirmTarget.type === "weekly"
-                ? "1回減らす"
-                : "未完了に戻す"
-              : "完了にする"
+          summaryData.isClosed
+            ? "再計算して変更"
+            : confirmTarget?.action === "increment"
+              ? "1回追加"
+              : confirmTarget?.action === "decrement"
+                ? confirmTarget.type === "weekly"
+                  ? "1回減らす"
+                  : "未完了に戻す"
+                : "完了にする"
         }
         onCancel={() => setConfirmTarget(null)}
         onConfirm={() => {
@@ -668,6 +704,26 @@ export function AdminSummaryPage() {
             type: confirmTarget.type,
             action: confirmTarget.action,
           });
+        }}
+      />
+      <ConfirmModal
+        isOpen={closeRequested}
+        tone="warning"
+        title={`${formatMonthLabel(month)}を締めますか？`}
+        message={
+          closeCandidate == null
+            ? ""
+            : `${closeCandidate.dailyThroughDate}までの日次と、終了日の日曜日が${formatMonthLabel(month)}に属する${closeCandidate.weeklyThroughDate}までの週次を対象にします。月またぎ週は終了日を含む月へ計上し、現在のタスク設定とルールで月全体を再計算します。`
+        }
+        confirmLabel="再計算して締める"
+        onCancel={() => {
+          clearCloseRequest();
+        }}
+        onConfirm={() => {
+          if (!closeMonthMutation.isPending) {
+            clearCloseRequest();
+            void closeMonthMutation.mutateAsync();
+          }
         }}
       />
     </section>

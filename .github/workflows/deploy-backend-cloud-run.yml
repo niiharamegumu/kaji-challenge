@@ -83,7 +83,6 @@ jobs:
           cat <<'EOF' > "$jobs_file"
           close:day:kaji-backend-close-day
           close:week:kaji-backend-close-week
-          close:month:kaji-backend-close-month
           notify:daily_2100:kaji-backend-notify-daily-2100
           notify:weekly_prev_sat_1900:kaji-backend-notify-weekly-prev-sat-1900
           notify:weekly_due_sun_1000:kaji-backend-notify-weekly-due-sun-1000
@@ -152,7 +151,6 @@ jobs:
           cat <<'EOF' > "$jobs_file"
           kaji-backend-close-day
           kaji-backend-close-week
-          kaji-backend-close-month
           kaji-backend-notify-daily-2100
           kaji-backend-notify-weekly-prev-sat-1900
           kaji-backend-notify-weekly-due-sun-1000

@@ -247,6 +247,19 @@ type MeResponse struct {
 	User        User             `json:"user"`
 }
 
+// MonthCloseCandidate defines model for MonthCloseCandidate.
+type MonthCloseCandidate struct {
+	DailyThroughDate  openapi_types.Date `json:"dailyThroughDate"`
+	Month             string             `json:"month"`
+	WeeklyThroughDate openapi_types.Date `json:"weeklyThroughDate"`
+}
+
+// MonthCloseCandidateResponse defines model for MonthCloseCandidateResponse.
+type MonthCloseCandidateResponse struct {
+	Candidate         *MonthCloseCandidate `json:"candidate"`
+	PendingMonthCount int                  `json:"pendingMonthCount"`
+}
+
 // MonthlyPenaltySummary defines model for MonthlyPenaltySummary.
 type MonthlyPenaltySummary struct {
 	DailyPenaltyTotal       int                      `json:"dailyPenaltyTotal"`
@@ -481,12 +494,12 @@ type TeamMembershipRole string
 
 // ToggleTaskCompletionRequest defines model for ToggleTaskCompletionRequest.
 type ToggleTaskCompletionRequest struct {
-	// Action For daily tasks, `toggle` is only for today, while `complete` and `decrement` are available for past days in the current open month. For weekly tasks, `increment` and `decrement` are available in the current week and for completed past weeks whose week end is in the current open month.
+	// Action For daily tasks, `toggle` is only for today, while `complete` and `decrement` are available for any past day on which the task was effective. For weekly tasks, `increment` and `decrement` are available for any completed past week on which the task was effective. Updating a past period recalculates its month using current task and penalty-rule settings.
 	Action     *ToggleTaskCompletionRequestAction `json:"action,omitempty"`
 	TargetDate openapi_types.Date                 `json:"targetDate"`
 }
 
-// ToggleTaskCompletionRequestAction For daily tasks, `toggle` is only for today, while `complete` and `decrement` are available for past days in the current open month. For weekly tasks, `increment` and `decrement` are available in the current week and for completed past weeks whose week end is in the current open month.
+// ToggleTaskCompletionRequestAction For daily tasks, `toggle` is only for today, while `complete` and `decrement` are available for any past day on which the task was effective. For weekly tasks, `increment` and `decrement` are available for any completed past week on which the task was effective. Updating a past period recalculates its month using current task and penalty-rule settings.
 type ToggleTaskCompletionRequestAction string
 
 // UpdateColorRequest defines model for UpdateColorRequest.
@@ -673,15 +686,12 @@ type ServerInterface interface {
 	// Health check
 	// (GET /health)
 	Health(c *gin.Context)
-	// Run day close now
-	// (POST /v1/admin/close-day)
-	PostAdminCloseDay(c *gin.Context)
-	// Run month close now
-	// (POST /v1/admin/close-month)
-	PostAdminCloseMonth(c *gin.Context)
-	// Run week close now
-	// (POST /v1/admin/close-week)
-	PostAdminCloseWeek(c *gin.Context)
+	// Get the oldest month awaiting manual close
+	// (GET /v1/admin/month-close-candidate)
+	GetAdminMonthCloseCandidate(c *gin.Context)
+	// Close a specific past month
+	// (POST /v1/admin/months/{month}/close)
+	PostAdminMonthClose(c *gin.Context, month string)
 	// Handle Google OIDC callback and issue one-time exchange code
 	// (GET /v1/auth/google/callback)
 	GetAuthGoogleCallback(c *gin.Context, params GetAuthGoogleCallbackParams)
@@ -820,8 +830,8 @@ func (siw *ServerInterfaceWrapper) Health(c *gin.Context) {
 	siw.Handler.Health(c)
 }
 
-// PostAdminCloseDay operation middleware
-func (siw *ServerInterfaceWrapper) PostAdminCloseDay(c *gin.Context) {
+// GetAdminMonthCloseCandidate operation middleware
+func (siw *ServerInterfaceWrapper) GetAdminMonthCloseCandidate(c *gin.Context) {
 
 	c.Set(string(CookieAuthScopes), []string{})
 
@@ -832,11 +842,23 @@ func (siw *ServerInterfaceWrapper) PostAdminCloseDay(c *gin.Context) {
 		}
 	}
 
-	siw.Handler.PostAdminCloseDay(c)
+	siw.Handler.GetAdminMonthCloseCandidate(c)
 }
 
-// PostAdminCloseMonth operation middleware
-func (siw *ServerInterfaceWrapper) PostAdminCloseMonth(c *gin.Context) {
+// PostAdminMonthClose operation middleware
+func (siw *ServerInterfaceWrapper) PostAdminMonthClose(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "month" -------------
+	var month string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "month", c.Param("month"), &month, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter month: %w", err), http.StatusBadRequest)
+		return
+	}
 
 	c.Set(string(CookieAuthScopes), []string{})
 
@@ -847,22 +869,7 @@ func (siw *ServerInterfaceWrapper) PostAdminCloseMonth(c *gin.Context) {
 		}
 	}
 
-	siw.Handler.PostAdminCloseMonth(c)
-}
-
-// PostAdminCloseWeek operation middleware
-func (siw *ServerInterfaceWrapper) PostAdminCloseWeek(c *gin.Context) {
-
-	c.Set(string(CookieAuthScopes), []string{})
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		middleware(c)
-		if c.IsAborted() {
-			return
-		}
-	}
-
-	siw.Handler.PostAdminCloseWeek(c)
+	siw.Handler.PostAdminMonthClose(c, month)
 }
 
 // GetAuthGoogleCallback operation middleware
@@ -1777,9 +1784,8 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	}
 
 	router.GET(options.BaseURL+"/health", wrapper.Health)
-	router.POST(options.BaseURL+"/v1/admin/close-day", wrapper.PostAdminCloseDay)
-	router.POST(options.BaseURL+"/v1/admin/close-month", wrapper.PostAdminCloseMonth)
-	router.POST(options.BaseURL+"/v1/admin/close-week", wrapper.PostAdminCloseWeek)
+	router.GET(options.BaseURL+"/v1/admin/month-close-candidate", wrapper.GetAdminMonthCloseCandidate)
+	router.POST(options.BaseURL+"/v1/admin/months/:month/close", wrapper.PostAdminMonthClose)
 	router.GET(options.BaseURL+"/v1/auth/google/callback", wrapper.GetAuthGoogleCallback)
 	router.GET(options.BaseURL+"/v1/auth/google/start", wrapper.GetAuthGoogleStart)
 	router.POST(options.BaseURL+"/v1/auth/logout", wrapper.PostAuthLogout)

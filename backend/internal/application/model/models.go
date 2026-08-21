@@ -80,6 +80,17 @@ type CloseResponse struct {
 	Month    string    `json:"month"`
 }
 
+type MonthCloseCandidate struct {
+	Month             string `json:"month"`
+	DailyThroughDate  Date   `json:"dailyThroughDate"`
+	WeeklyThroughDate Date   `json:"weeklyThroughDate"`
+}
+
+type MonthCloseCandidateResponse struct {
+	Candidate         *MonthCloseCandidate `json:"candidate"`
+	PendingMonthCount int                  `json:"pendingMonthCount"`
+}
+
 type CreateInviteRequest struct {
 	ExpiresInHours *int `json:"expiresInHours,omitempty"`
 }

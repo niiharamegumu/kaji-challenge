@@ -16,6 +16,7 @@ const protectedQueryKeys = [
   queryKeys.reminders,
   queryKeys.reminderDefinitions,
   queryKeys.monthlySummary,
+  queryKeys.monthCloseCandidate,
 ] as const;
 
 type UseAuthGateParams = {

@@ -91,10 +91,8 @@ type TaskOverviewService interface {
 
 type AdminService interface {
 	ListClosableTeamIDs(ctx context.Context) ([]string, error)
-	CloseDayForUser(ctx context.Context, userID string) (model.CloseResponse, error)
-	CloseWeekForUser(ctx context.Context, userID string) (model.CloseResponse, error)
-	CloseMonthForUser(ctx context.Context, userID string) (model.CloseResponse, error)
+	GetMonthCloseCandidate(ctx context.Context, userID string) (model.MonthCloseCandidateResponse, error)
+	CloseMonthForUserTarget(ctx context.Context, userID, month string) (model.CloseResponse, error)
 	CloseDayForTeam(ctx context.Context, teamID string) (model.CloseResponse, error)
 	CloseWeekForTeam(ctx context.Context, teamID string) (model.CloseResponse, error)
-	CloseMonthForTeam(ctx context.Context, teamID string) (model.CloseResponse, error)
 }

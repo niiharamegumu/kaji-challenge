@@ -406,7 +406,7 @@ func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string,
 				return errors.New("task not found")
 			}
 			task := taskFromGetRow(row, s.loc)
-			if task.TeamID != teamID || task.DeletedAt != nil {
+			if task.TeamID != teamID {
 				return errors.New("task not found")
 			}
 			today := dateOnly(s.now(), s.loc)
@@ -415,18 +415,12 @@ func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string,
 			if task.Type == model.TaskTypeWeekly {
 				targetWeekStart := startOfWeek(targetDate, s.loc)
 				targetWeekEnd := targetWeekStart.AddDate(0, 0, 6)
-				targetMonth := monthKeyFromTime(targetWeekEnd, s.loc)
-				currentMonth := monthKeyFromTime(today, s.loc)
-				monthClosed := false
-				if targetWeekEnd.Before(today) && targetMonth == currentMonth {
-					summary, err := s.ensureMonthSummaryLocked(txCtx, teamID, targetMonth)
-					if err != nil {
-						return err
-					}
-					monthClosed = summary.IsClosed
+				cutoff := targetWeekStart.AddDate(0, 0, 7)
+				if !task.CreatedAt.Before(cutoff) || (task.DeletedAt != nil && task.DeletedAt.Before(cutoff)) {
+					return errors.New("task was not effective in target week")
 				}
 				var err error
-				pastWeeklyCompletion, err = domaintask.ValidateWeeklyAction(targetDate, today, targetWeekStart, targetWeekEnd, targetMonth, currentMonth, monthClosed, domainAction)
+				pastWeeklyCompletion, err = domaintask.ValidateWeeklyAction(targetDate, today, targetWeekStart, targetWeekEnd, domainAction)
 				if err != nil {
 					return err
 				}
@@ -435,16 +429,11 @@ func (s *Store) ToggleTaskCompletion(ctx context.Context, userID, taskID string,
 			targetPg := toPgDate(targetDate)
 			if task.Type == model.TaskTypeDaily {
 				targetMonth := monthKeyFromTime(targetDate, s.loc)
-				currentMonth := monthKeyFromTime(today, s.loc)
-				monthClosed := false
-				if !sameDate(targetDate, today) && !targetDate.After(today) && targetMonth == currentMonth {
-					summary, err := s.ensureMonthSummaryLocked(txCtx, teamID, targetMonth)
-					if err != nil {
-						return err
-					}
-					monthClosed = summary.IsClosed
+				cutoff := targetDate.AddDate(0, 0, 1)
+				if !task.CreatedAt.Before(cutoff) || (task.DeletedAt != nil && task.DeletedAt.Before(cutoff)) {
+					return errors.New("task was not effective on target date")
 				}
-				if err := domaintask.ValidateDailyAction(targetDate, today, targetMonth, currentMonth, monthClosed, domainAction); err != nil {
+				if err := domaintask.ValidateDailyAction(targetDate, today, domainAction); err != nil {
 					return err
 				}
 				isToday := sameDate(targetDate, today)

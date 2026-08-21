@@ -41,6 +41,9 @@ describe("teamStateRefresh", () => {
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.monthlySummary,
     });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.monthCloseCandidate,
+    });
   });
 
   it("refreshes and sets status when precondition fails", async () => {

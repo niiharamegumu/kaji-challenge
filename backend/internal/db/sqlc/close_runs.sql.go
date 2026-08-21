@@ -50,6 +50,50 @@ func (q *Queries) InsertCloseRun(ctx context.Context, arg InsertCloseRunParams) 
 	return result.RowsAffected(), nil
 }
 
+const insertDayCloseRunsForMonth = `-- name: InsertDayCloseRunsForMonth :exec
+INSERT INTO close_runs (team_id, scope, target_date, created_at)
+SELECT $1, 'close_day', day::date, NOW()
+FROM generate_series($2::date, $3::date - 1, INTERVAL '1 day') AS day
+ON CONFLICT (team_id, scope, target_date) DO NOTHING
+`
+
+type InsertDayCloseRunsForMonthParams struct {
+	TeamID     string      `json:"team_id"`
+	MonthStart pgtype.Date `json:"month_start"`
+	MonthEnd   pgtype.Date `json:"month_end"`
+}
+
+func (q *Queries) InsertDayCloseRunsForMonth(ctx context.Context, arg InsertDayCloseRunsForMonthParams) error {
+	_, err := q.db.Exec(ctx, insertDayCloseRunsForMonth, arg.TeamID, arg.MonthStart, arg.MonthEnd)
+	return err
+}
+
+const insertWeekCloseRunsForMonth = `-- name: InsertWeekCloseRunsForMonth :exec
+INSERT INTO close_runs (team_id, scope, target_date, created_at)
+SELECT $1, 'close_week', week_start::date, NOW()
+FROM generate_series($2::date, $3::date - 1, INTERVAL '7 days') AS week_start
+WHERE (week_start::date + 6) >= $4::date
+  AND (week_start::date + 6) < $3::date
+ON CONFLICT (team_id, scope, target_date) DO NOTHING
+`
+
+type InsertWeekCloseRunsForMonthParams struct {
+	TeamID         string      `json:"team_id"`
+	FirstWeekStart pgtype.Date `json:"first_week_start"`
+	MonthEnd       pgtype.Date `json:"month_end"`
+	MonthStart     pgtype.Date `json:"month_start"`
+}
+
+func (q *Queries) InsertWeekCloseRunsForMonth(ctx context.Context, arg InsertWeekCloseRunsForMonthParams) error {
+	_, err := q.db.Exec(ctx, insertWeekCloseRunsForMonth,
+		arg.TeamID,
+		arg.FirstWeekStart,
+		arg.MonthEnd,
+		arg.MonthStart,
+	)
+	return err
+}
+
 const listCloseRunTargetDatesInRange = `-- name: ListCloseRunTargetDatesInRange :many
 SELECT target_date
 FROM close_runs

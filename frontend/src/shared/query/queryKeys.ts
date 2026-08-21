@@ -10,4 +10,5 @@ export const queryKeys = {
   reminders: ["reminders"] as const,
   reminderDefinitions: ["reminder-definitions"] as const,
   monthlySummary: ["monthly-summary"] as const,
+  monthCloseCandidate: ["month-close-candidate"] as const,
 };

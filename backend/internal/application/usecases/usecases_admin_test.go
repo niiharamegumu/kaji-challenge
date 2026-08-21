@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	model "github.com/megu/kaji-challenge/backend/internal/application/model"
 )
 
 type fakeAdminRepository struct {
@@ -12,6 +14,9 @@ type fakeAdminRepository struct {
 	primaryTeamID string
 	casCalls      int
 	casHints      map[string]string
+	candidate     model.MonthCloseCandidateResponse
+	monthClosed   bool
+	finalized     []string
 
 	nextDayTarget   time.Time
 	nextDayOK       bool
@@ -19,9 +24,6 @@ type fakeAdminRepository struct {
 	nextWeekTarget  time.Time
 	nextWeekOK      bool
 	closedWeekDates []time.Time
-	nextMonthTarget time.Time
-	nextMonthOK     bool
-	closedMonths    []time.Time
 }
 
 func (f *fakeAdminRepository) ListClosableTeamIDs(context.Context) ([]string, error) {
@@ -38,16 +40,25 @@ func (f *fakeAdminRepository) RunTeamRevisionCAS(ctx context.Context, _ string, 
 	return fn(ctx)
 }
 
+func (f *fakeAdminRepository) GetMonthCloseCandidate(context.Context, string) (model.MonthCloseCandidateResponse, error) {
+	return f.candidate, nil
+}
+
+func (f *fakeAdminRepository) IsMonthClosed(context.Context, string, string) (bool, error) {
+	return f.monthClosed, nil
+}
+
+func (f *fakeAdminRepository) FinalizeMonth(_ context.Context, _ string, month string) error {
+	f.finalized = append(f.finalized, month)
+	return nil
+}
+
 func (f *fakeAdminRepository) NextDayCloseTarget(context.Context, string) (time.Time, bool, error) {
 	return f.nextDayTarget, f.nextDayOK, nil
 }
 
 func (f *fakeAdminRepository) NextWeekCloseTarget(context.Context, string) (time.Time, bool, error) {
 	return f.nextWeekTarget, f.nextWeekOK, nil
-}
-
-func (f *fakeAdminRepository) NextMonthCloseTarget(context.Context, string) (time.Time, bool, error) {
-	return f.nextMonthTarget, f.nextMonthOK, nil
 }
 
 func (f *fakeAdminRepository) CloseDayTarget(_ context.Context, _ string, target time.Time) (bool, error) {
@@ -60,41 +71,8 @@ func (f *fakeAdminRepository) CloseWeekTarget(_ context.Context, _ string, targe
 	return true, nil
 }
 
-func (f *fakeAdminRepository) CloseMonthTarget(_ context.Context, _ string, target time.Time) (bool, string, error) {
-	f.closedMonths = append(f.closedMonths, target)
-	return true, monthKeyFromTime(target), nil
-}
-
 func (f *fakeAdminRepository) Now() time.Time {
 	return f.now
-}
-
-func TestAdminCloseDayForUserRunsCASAndProcessesMissingDays(t *testing.T) {
-	loc := time.FixedZone("JST", 9*60*60)
-	repo := &fakeAdminRepository{
-		now:           time.Date(2026, 3, 17, 9, 0, 0, 0, loc),
-		primaryTeamID: "team-1",
-		nextDayTarget: time.Date(2026, 3, 14, 0, 0, 0, 0, loc),
-		nextDayOK:     true,
-	}
-	uc := adminUsecase{repo: repo}
-
-	res, err := uc.CloseDayForUser(context.Background(), "user-1")
-	if err != nil {
-		t.Fatalf("CloseDayForUser failed: %v", err)
-	}
-	if repo.casCalls != 1 {
-		t.Fatalf("expected CAS once, got %d", repo.casCalls)
-	}
-	if repo.casHints["scope"] != "day" {
-		t.Fatalf("expected day CAS scope, got %v", repo.casHints)
-	}
-	if got := len(repo.closedDayDates); got != 3 {
-		t.Fatalf("expected 3 day close targets, got %d (%v)", got, repo.closedDayDates)
-	}
-	if res.Month != "2026-03" {
-		t.Fatalf("expected response month 2026-03, got %s", res.Month)
-	}
 }
 
 func TestAdminCloseWeekForTeamProcessesCompletedWeeksWithoutCAS(t *testing.T) {
@@ -117,23 +95,35 @@ func TestAdminCloseWeekForTeamProcessesCompletedWeeksWithoutCAS(t *testing.T) {
 	}
 }
 
-func TestAdminCloseMonthForTeamReturnsLastProcessedMonth(t *testing.T) {
+func TestAdminCloseMonthForUserTargetClosesOldestCandidate(t *testing.T) {
 	loc := time.FixedZone("JST", 9*60*60)
 	repo := &fakeAdminRepository{
-		now:             time.Date(2026, 4, 2, 9, 0, 0, 0, loc),
-		nextMonthTarget: time.Date(2026, 1, 1, 0, 0, 0, 0, loc),
-		nextMonthOK:     true,
+		now:           time.Date(2026, 3, 1, 9, 0, 0, 0, loc),
+		primaryTeamID: "team-1",
+		candidate: model.MonthCloseCandidateResponse{Candidate: &model.MonthCloseCandidate{
+			Month: "2026-02",
+		}},
 	}
 	uc := adminUsecase{repo: repo}
 
-	res, err := uc.CloseMonthForTeam(context.Background(), "team-1")
+	res, err := uc.CloseMonthForUserTarget(context.Background(), "user-1", "2026-02")
 	if err != nil {
-		t.Fatalf("CloseMonthForTeam failed: %v", err)
+		t.Fatalf("CloseMonthForUserTarget failed: %v", err)
 	}
-	if got := len(repo.closedMonths); got != 3 {
-		t.Fatalf("expected 3 month close targets, got %d (%v)", got, repo.closedMonths)
+	if repo.casCalls != 1 || len(repo.finalized) != 1 || repo.finalized[0] != "2026-02" {
+		t.Fatalf("expected one atomic finalize, cas=%d finalized=%v", repo.casCalls, repo.finalized)
 	}
-	if res.Month != "2026-03" {
-		t.Fatalf("expected last processed month 2026-03, got %s", res.Month)
+	if res.Month != "2026-02" {
+		t.Fatalf("expected response month 2026-02, got %s", res.Month)
+	}
+}
+
+func TestAdminCloseMonthForUserTargetRejectsCurrentMonth(t *testing.T) {
+	loc := time.FixedZone("JST", 9*60*60)
+	repo := &fakeAdminRepository{now: time.Date(2026, 3, 1, 9, 0, 0, 0, loc), primaryTeamID: "team-1"}
+	uc := adminUsecase{repo: repo}
+
+	if _, err := uc.CloseMonthForUserTarget(context.Background(), "user-1", "2026-03"); err == nil {
+		t.Fatal("expected current month close to be rejected")
 	}
 }

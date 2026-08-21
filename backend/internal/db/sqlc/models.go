@@ -139,14 +139,6 @@ type TaskCompletionWeeklyEntry struct {
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 }
 
-type TaskEvaluationDedupe struct {
-	TeamID     string             `json:"team_id"`
-	Scope      string             `json:"scope"`
-	TargetDate pgtype.Date        `json:"target_date"`
-	TaskID     string             `json:"task_id"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-}
-
 type Team struct {
 	ID            string             `json:"id"`
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`

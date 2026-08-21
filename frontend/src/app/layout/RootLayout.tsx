@@ -20,6 +20,7 @@ import {
   useMeQuery,
 } from "../../features/auth";
 import { prefetchHomeData } from "../../features/home/preload";
+import { MonthCloseBanner } from "../../features/month-close";
 import { listCurrentTeamMembers } from "../../features/shell/api/teamMembersApi";
 import { StatusToast } from "../../features/shell/components/StatusToast";
 import { useAuthGate } from "../../features/shell/hooks/useAuthGate";
@@ -276,6 +277,8 @@ export function RootLayout() {
             </div>
           </div>
         </header>
+
+        <MonthCloseBanner />
 
         <Outlet context={outletContext} />
       </div>

@@ -18,9 +18,8 @@ type fakeCloseRunner struct {
 
 	listErr error
 
-	dayErrByTeam   map[string]error
-	weekErrByTeam  map[string]error
-	monthErrByTeam map[string]error
+	dayErrByTeam  map[string]error
+	weekErrByTeam map[string]error
 
 	closedTeams []string
 }
@@ -49,14 +48,6 @@ func (f *fakeCloseRunner) CloseDayForTeam(_ context.Context, teamID string) (mod
 func (f *fakeCloseRunner) CloseWeekForTeam(_ context.Context, teamID string) (model.CloseResponse, error) {
 	f.closedTeams = append(f.closedTeams, "week:"+teamID)
 	if err := f.weekErrByTeam[teamID]; err != nil {
-		return model.CloseResponse{}, err
-	}
-	return okResp(), nil
-}
-
-func (f *fakeCloseRunner) CloseMonthForTeam(_ context.Context, teamID string) (model.CloseResponse, error) {
-	f.closedTeams = append(f.closedTeams, "month:"+teamID)
-	if err := f.monthErrByTeam[teamID]; err != nil {
 		return model.CloseResponse{}, err
 	}
 	return okResp(), nil
@@ -132,17 +123,15 @@ func TestRunAllTeamsContinuesOnFailure(t *testing.T) {
 }
 
 func TestRunTeamIDOnly(t *testing.T) {
-	runner := &fakeCloseRunner{
-		monthErrByTeam: map[string]error{},
-	}
+	runner := &fakeCloseRunner{weekErrByTeam: map[string]error{}}
 	var out bytes.Buffer
 	logger := log.New(&out, "", 0)
 
-	code := run([]string{"close", "--scope=month", "--team-id=team-9", "--all-teams=false"}, logger, runner, &fakeNotifyRunner{})
+	code := run([]string{"close", "--scope=week", "--team-id=team-9", "--all-teams=false"}, logger, runner, &fakeNotifyRunner{})
 	if code != 0 {
 		t.Fatalf("expected exit code 0, got %d", code)
 	}
-	if got := strings.Join(runner.closedTeams, ","); got != "month:team-9" {
+	if got := strings.Join(runner.closedTeams, ","); got != "week:team-9" {
 		t.Fatalf("unexpected closed team calls: %s", got)
 	}
 }

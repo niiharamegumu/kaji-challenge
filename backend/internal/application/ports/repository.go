@@ -94,12 +94,13 @@ type AdminRepository interface {
 	ListClosableTeamIDs(ctx context.Context) ([]string, error)
 	PrimaryTeamID(ctx context.Context, userID string) (string, error)
 	RunTeamRevisionCAS(ctx context.Context, teamID, entity string, hints map[string]string, fn func(context.Context) error) error
+	GetMonthCloseCandidate(ctx context.Context, teamID string) (model.MonthCloseCandidateResponse, error)
+	IsMonthClosed(ctx context.Context, teamID, month string) (bool, error)
+	FinalizeMonth(ctx context.Context, teamID, month string) error
 	NextDayCloseTarget(ctx context.Context, teamID string) (time.Time, bool, error)
 	NextWeekCloseTarget(ctx context.Context, teamID string) (time.Time, bool, error)
-	NextMonthCloseTarget(ctx context.Context, teamID string) (time.Time, bool, error)
 	CloseDayTarget(ctx context.Context, teamID string, targetDate time.Time) (bool, error)
 	CloseWeekTarget(ctx context.Context, teamID string, weekStart time.Time) (bool, error)
-	CloseMonthTarget(ctx context.Context, teamID string, monthStart time.Time) (bool, string, error)
 	Now() time.Time
 }
 

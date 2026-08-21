@@ -19,7 +19,6 @@ type closeRunner interface {
 	ListClosableTeamIDs(ctx context.Context) ([]string, error)
 	CloseDayForTeam(ctx context.Context, teamID string) (model.CloseResponse, error)
 	CloseWeekForTeam(ctx context.Context, teamID string) (model.CloseResponse, error)
-	CloseMonthForTeam(ctx context.Context, teamID string) (model.CloseResponse, error)
 }
 
 type notifyRunner interface {
@@ -53,7 +52,7 @@ func runClose(args []string, logger *log.Logger, runner closeRunner) int {
 	fs := flag.NewFlagSet("ops close", flag.ContinueOnError)
 	fs.SetOutput(logger.Writer())
 
-	scope := fs.String("scope", "", "close scope: day|week|month")
+	scope := fs.String("scope", "", "close scope: day|week")
 	allTeams := fs.Bool("all-teams", true, "run close for all teams")
 	teamID := fs.String("team-id", "", "target team id (optional)")
 
@@ -61,8 +60,8 @@ func runClose(args []string, logger *log.Logger, runner closeRunner) int {
 		logger.Printf("failed to parse close flags: %v", err)
 		return 1
 	}
-	if *scope != "day" && *scope != "week" && *scope != "month" {
-		logger.Printf("invalid --scope %q (expected: day|week|month)", *scope)
+	if *scope != "day" && *scope != "week" {
+		logger.Printf("invalid --scope %q (expected: day|week)", *scope)
 		return 1
 	}
 
@@ -124,8 +123,6 @@ func runScope(ctx context.Context, runner closeRunner, scope, teamID string) (mo
 		return runner.CloseDayForTeam(ctx, teamID)
 	case "week":
 		return runner.CloseWeekForTeam(ctx, teamID)
-	case "month":
-		return runner.CloseMonthForTeam(ctx, teamID)
 	default:
 		return model.CloseResponse{}, fmt.Errorf("unsupported scope: %s", scope)
 	}
