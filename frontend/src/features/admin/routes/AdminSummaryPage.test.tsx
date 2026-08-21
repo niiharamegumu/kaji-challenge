@@ -13,6 +13,8 @@ import { AdminSummaryPage } from "./AdminSummaryPage";
 const mockGetPenaltySummaryMonthly = vi.fn();
 const mockListPenaltyRules = vi.fn();
 const mockPostTaskCompletionToggle = vi.fn();
+const mockGetMonthCloseCandidate = vi.fn();
+const mockPostMonthClose = vi.fn();
 const mockDateStringInJST = vi.fn();
 
 const formatJstDate = (date: Date) => {
@@ -38,6 +40,9 @@ vi.mock("../../../lib/api/generated/client", async () => {
     listPenaltyRules: (...args: unknown[]) => mockListPenaltyRules(...args),
     postTaskCompletionToggle: (...args: unknown[]) =>
       mockPostTaskCompletionToggle(...args),
+    getAdminMonthCloseCandidate: (...args: unknown[]) =>
+      mockGetMonthCloseCandidate(...args),
+    postAdminMonthClose: (...args: unknown[]) => mockPostMonthClose(...args),
   };
 });
 
@@ -55,6 +60,8 @@ describe("AdminSummaryPage", () => {
     mockGetPenaltySummaryMonthly.mockReset();
     mockListPenaltyRules.mockReset();
     mockPostTaskCompletionToggle.mockReset();
+    mockGetMonthCloseCandidate.mockReset();
+    mockPostMonthClose.mockReset();
     mockDateStringInJST.mockReset();
     mockDateStringInJST.mockImplementation((date?: Date) => {
       if (date == null) {
@@ -75,6 +82,10 @@ describe("AdminSummaryPage", () => {
     });
     mockListPenaltyRules.mockResolvedValue({ data: { items: [] } });
     mockPostTaskCompletionToggle.mockResolvedValue({ data: {} });
+    mockGetMonthCloseCandidate.mockResolvedValue({
+      data: { candidate: null, pendingMonthCount: 0 },
+    });
+    mockPostMonthClose.mockResolvedValue({ data: { status: "closed" } });
   });
 
   afterEach(() => {
@@ -362,7 +373,7 @@ describe("AdminSummaryPage", () => {
     });
   });
 
-  it("hides complete action for closed month and non-past daily items", async () => {
+  it("allows a closed past month correction with a recalculation warning", async () => {
     mockGetPenaltySummaryMonthly.mockResolvedValue({
       data: {
         totalPenalty: 2,
@@ -406,8 +417,14 @@ describe("AdminSummaryPage", () => {
     renderPage("/admin/summary?month=2026-03");
 
     await screen.findByRole("heading", { name: "月次サマリー" });
+    await userEvent.click(
+      screen.getByRole("button", { name: "過去日タスクを完了にする" }),
+    );
     expect(
-      screen.queryByRole("button", { name: "過去日タスクを完了にする" }),
-    ).not.toBeInTheDocument();
+      await screen.findByText(/操作対象外を含め、現在設定で月全体/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "再計算して変更" }),
+    ).toBeInTheDocument();
   });
 });
