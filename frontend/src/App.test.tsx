@@ -301,13 +301,13 @@ describe("App", () => {
 
     expect(
       await screen.findByRole("heading", {
-        name: "今月対応するペナルティ",
+        name: "今月のペナルティ",
       }),
     ).toBeInTheDocument();
     expect(screen.getByText("おやつ抜き")).toBeInTheDocument();
     expect(screen.getByText("発動しきい値: 5")).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "前月のサマリーへ" }),
+      screen.getByRole("link", { name: "前月サマリー" }),
     ).toBeInTheDocument();
   });
 

@@ -21,11 +21,12 @@ describe("TriggeredPenaltiesPanel", () => {
     );
 
     expect(
-      screen.getByRole("heading", { name: "今月対応するペナルティ" }),
+      screen.getByRole("heading", { name: "今月のペナルティ" }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: "前月のサマリーへ" }),
-    ).toHaveAttribute("href", "/admin/summary?month=2026-07");
+    expect(screen.getByRole("link", { name: "前月サマリー" })).toHaveAttribute(
+      "href",
+      "/admin/summary?month=2026-07",
+    );
     expect(
       screen.getByText("前月に発動したペナルティはありません。"),
     ).toBeInTheDocument();
