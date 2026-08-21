@@ -4,19 +4,22 @@ import {
   useSuspenseQueries,
 } from "@tanstack/react-query";
 import {
-  AlertTriangle,
   Check,
   CheckCircle2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   Circle,
-  TriangleAlert,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useSearchParams } from "react-router-dom";
 import { CompletionSlots } from "../../../shared/components/CompletionSlots";
 import { ConfirmModal } from "../../../shared/components/ConfirmModal";
+import { TriggeredPenaltiesList } from "../../../shared/components/TriggeredPenaltiesList";
+import {
+  monthlyPenaltySummaryQueryOptions,
+  penaltyRulesWithDeletedQueryOptions,
+} from "../../../shared/query/monthlyPenaltyQueries";
 import { queryKeys } from "../../../shared/query/queryKeys";
 import { handleTeamStatePreconditionFailure } from "../../../shared/query/teamStateRefresh";
 import { PAGE_SECTION_CHROMELESS_CLASS_NAME } from "../../../shared/styles/pageSection";
@@ -29,9 +32,7 @@ import {
   completePastDailyTask as completePastDailyTaskRequest,
   decrementPastDailyTask as decrementPastDailyTaskRequest,
   decrementPastWeeklyTask as decrementPastWeeklyTaskRequest,
-  getMonthlyPenaltySummary,
   incrementPastWeeklyTask as incrementPastWeeklyTaskRequest,
-  listPenaltyRulesWithDeleted,
 } from "../api/summaryApi";
 
 const monthPattern = /^\d{4}-\d{2}$/;
@@ -110,54 +111,15 @@ export function AdminSummaryPage() {
 
   const [summary, rules] = useSuspenseQueries({
     queries: [
-      {
-        queryKey: [...queryKeys.monthlySummary, month],
-        queryFn: async () => getMonthlyPenaltySummary(month),
-      },
-      {
-        queryKey: [...queryKeys.rules, "withDeleted"],
-        queryFn: listPenaltyRulesWithDeleted,
-      },
+      monthlyPenaltySummaryQueryOptions(month),
+      penaltyRulesWithDeletedQueryOptions,
     ],
   });
 
   const summaryData = summary.data;
   const monthCloseCandidate = useMonthCloseCandidate();
   const closeCandidate = monthCloseCandidate.data?.candidate;
-  const rulesData = asArray(rules.data);
-  const triggeredPenaltyRuleIds = asArray(summaryData.triggeredPenaltyRuleIds);
   const monthlyTaskStatusGroups = asArray(summaryData.taskStatusByDate);
-
-  const ruleMap = useMemo(() => {
-    return new Map(rulesData.map((rule) => [rule.id, rule]));
-  }, [rulesData]);
-
-  const triggeredPenalties = useMemo(() => {
-    return triggeredPenaltyRuleIds
-      .map((id) => {
-        const rule = ruleMap.get(id);
-        if (rule == null) {
-          return {
-            id,
-            name: `不明なルール (${id})`,
-            threshold: -1,
-            isUnknown: true,
-          };
-        }
-        return {
-          id,
-          name: rule.name,
-          threshold: rule.threshold,
-          isUnknown: false,
-        };
-      })
-      .sort((a, b) => {
-        if (a.threshold !== b.threshold) {
-          return b.threshold - a.threshold;
-        }
-        return a.name.localeCompare(b.name, "ja");
-      });
-  }, [triggeredPenaltyRuleIds, ruleMap]);
   const currentDateKey = useMemo(() => dateStringInJST(), []);
 
   const closeRequested =
@@ -434,42 +396,10 @@ export function AdminSummaryPage() {
             発生しているペナルティ
           </h3>
 
-          {triggeredPenalties.length === 0 ? (
-            <p className="mt-3 px-2 text-sm text-stone-500 md:px-0">
-              発動ペナルティはありません。
-            </p>
-          ) : (
-            <ul className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
-              {triggeredPenalties.map((penalty) => (
-                <li
-                  key={penalty.id}
-                  className={`rounded-xl border p-2.5 ${penalty.isUnknown ? "border-amber-300 bg-amber-100/70" : "border-amber-300 bg-amber-50"}`}
-                >
-                  <div className="flex items-center gap-2 text-amber-800">
-                    {penalty.isUnknown ? (
-                      <TriangleAlert
-                        size={16}
-                        className="text-amber-700"
-                        aria-hidden="true"
-                      />
-                    ) : (
-                      <AlertTriangle
-                        size={16}
-                        className="text-amber-700"
-                        aria-hidden="true"
-                      />
-                    )}
-                    <p className="font-medium text-amber-900">{penalty.name}</p>
-                  </div>
-                  <p className="mt-2 text-xs text-amber-800">
-                    {penalty.isUnknown
-                      ? "ルール詳細を確認できません"
-                      : `発動しきい値: ${penalty.threshold}`}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          )}
+          <TriggeredPenaltiesList
+            triggeredPenaltyRuleIds={summaryData.triggeredPenaltyRuleIds}
+            rules={rules.data}
+          />
         </div>
 
         <div className="mt-4 border-t border-stone-200 pt-3">

@@ -8,13 +8,30 @@ type Props = {
 };
 
 export function DailyTasksPanel({ items, onToggle }: Props) {
+  const completedCount = items.filter((item) => item.completedToday).length;
+  const incompleteCount = items.length - completedCount;
+
   return (
     <article className={HOME_PANEL_CLASS_NAME}>
-      <h2 className="px-2 text-lg font-semibold md:px-0">毎日タスク</h2>
+      <h2 className="px-2 text-lg font-semibold md:px-0">日間タスク</h2>
+      <dl className="mt-2 flex flex-wrap items-center gap-1.5 px-2 text-xs md:px-0">
+        <div className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-stone-700">
+          <dt className="text-[11px] text-stone-500">件数</dt>
+          <dd className="font-medium">{items.length}件</dd>
+        </div>
+        <div className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-stone-700">
+          <dt className="text-[11px] text-stone-500">完了</dt>
+          <dd className="font-medium">{completedCount}件</dd>
+        </div>
+        <div className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-stone-700">
+          <dt className="text-[11px] text-stone-500">未完了</dt>
+          <dd className="font-medium">{incompleteCount}件</dd>
+        </div>
+      </dl>
       <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
         {items.length === 0 ? (
           <p className="px-2 text-sm text-stone-500 md:px-0">
-            毎日タスクはありません。
+            日間タスクはありません。
           </p>
         ) : (
           items.map((item) => (

@@ -1,16 +1,4 @@
-import {
-  getPenaltySummaryMonthly,
-  listPenaltyRules,
-  postTaskCompletionToggle,
-} from "../../../lib/api/generated/client";
-
-export async function getMonthlyPenaltySummary(month: string) {
-  return (await getPenaltySummaryMonthly({ month })).data;
-}
-
-export async function listPenaltyRulesWithDeleted() {
-  return (await listPenaltyRules({ includeDeleted: true })).data.items;
-}
+import { postTaskCompletionToggle } from "../../../lib/api/generated/client";
 
 export async function completePastDailyTask(
   taskId: string,

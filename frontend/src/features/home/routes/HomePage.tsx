@@ -1,12 +1,11 @@
 import { useAtom } from "jotai";
-import { ChevronRight } from "lucide-react";
-import { Link } from "react-router-dom";
 
 import { statusMessageAtom } from "../../../shared/state/status";
 import { useShoppingItemMutations } from "../../shopping-list";
 import { DailyTasksPanel } from "../components/DailyTasksPanel";
 import { HomeShoppingListPanel } from "../components/HomeShoppingListPanel";
 import { HOME_PANEL_SKELETON_CLASS_NAME } from "../components/panelStyles";
+import { TriggeredPenaltiesPanel } from "../components/TriggeredPenaltiesPanel";
 import { WeeklyRemindersPanel } from "../components/WeeklyRemindersPanel";
 import { WeeklyTasksPanel } from "../components/WeeklyTasksPanel";
 import {
@@ -61,29 +60,42 @@ export function HomePageSkeleton() {
         ))}
       </section>
 
-      <div className="px-1">
-        <div className="h-4 w-36 rounded bg-stone-200" />
-      </div>
+      <article className={HOME_PANEL_SKELETON_CLASS_NAME}>
+        <div className="mx-2 h-6 w-48 rounded bg-stone-200 md:mx-0" />
+        <div className="mx-2 mt-3 grid gap-2 md:mx-0 md:grid-cols-2 xl:grid-cols-3">
+          {[0, 1].map((row) => (
+            <div
+              key={`penalty-${row}`}
+              className="h-16 rounded-xl border border-stone-100 bg-stone-50"
+            />
+          ))}
+        </div>
+      </article>
     </output>
   );
 }
 
 export function HomePage() {
   const [, setStatus] = useAtom(statusMessageAtom);
-  const { homeQuery, shoppingItemsQuery } = useHomePageQueries();
+  const {
+    homeQuery,
+    shoppingItemsQuery,
+    previousMonth,
+    previousMonthPenaltySummaryQuery,
+    penaltyRulesQuery,
+  } = useHomePageQueries();
   const toggleMutation = useToggleCompletionMutation(setStatus);
   const { updateItem, removeItem, reorderItems } =
     useShoppingItemMutations(setStatus);
 
   const home = homeQuery.data;
   const shoppingItems = shoppingItemsQuery.data;
+  const previousMonthPenaltySummary = previousMonthPenaltySummaryQuery.data;
 
   const weeklyProgress =
     home == null
       ? "0/0"
       : `${home.weeklyTasks.filter((item) => item.weekCompletedCount >= item.requiredCompletionsPerWeek).length}/${home.weeklyTasks.length}`;
-  const now = new Date();
-  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
   return (
     <div className="mt-2 space-y-1.5 md:mt-4 md:space-y-3">
@@ -127,15 +139,13 @@ export function HomePage() {
         />
       </section>
 
-      <div className="px-1">
-        <Link
-          to={`/admin/summary?month=${currentMonth}`}
-          className="inline-flex items-center gap-1 text-sm font-medium text-stone-700 underline underline-offset-4 transition-colors hover:text-stone-900"
-        >
-          <span>今月のサマリーを見る</span>
-          <ChevronRight size={14} aria-hidden="true" />
-        </Link>
-      </div>
+      <TriggeredPenaltiesPanel
+        triggeredPenaltyRuleIds={
+          previousMonthPenaltySummary.triggeredPenaltyRuleIds
+        }
+        rules={penaltyRulesQuery.data}
+        summaryMonth={previousMonth}
+      />
     </div>
   );
 }
