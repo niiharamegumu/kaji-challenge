@@ -1,5 +1,5 @@
-import { AlertTriangle, RotateCw } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { AlertTriangle, ChartColumn, RotateCw } from "lucide-react";
+import { Link } from "react-router-dom";
 
 import { useMonthCloseCandidate } from "../hooks/useMonthCloseCandidate";
 
@@ -9,7 +9,6 @@ const formatMonth = (month: string) => {
 };
 
 export function MonthCloseBanner() {
-  const navigate = useNavigate();
   const candidateQuery = useMonthCloseCandidate();
 
   if (candidateQuery.isPending) {
@@ -61,15 +60,13 @@ export function MonthCloseBanner() {
             </p>
           </div>
         </div>
-        <button
-          type="button"
-          className="min-h-10 shrink-0 rounded-lg border border-amber-500 bg-white px-4 text-sm font-semibold text-amber-900 hover:bg-amber-100"
-          onClick={() =>
-            navigate(`/admin/summary?month=${candidate.month}&close=1`)
-          }
+        <Link
+          to={`/admin/summary?month=${candidate.month}&close=1`}
+          className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border border-stone-300 bg-white px-2.5 py-1.5 text-sm font-medium text-stone-700 transition-colors hover:bg-stone-50 hover:text-stone-900"
         >
-          サマリーで確認
-        </button>
+          <ChartColumn size={16} aria-hidden="true" />
+          <span>サマリーへ</span>
+        </Link>
       </div>
     </aside>
   );

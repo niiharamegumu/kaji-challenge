@@ -40,9 +40,10 @@ describe("MonthCloseBanner", () => {
       screen.getByText("2026年1月の月次締めが必要です"),
     ).toBeInTheDocument();
     expect(screen.getByText(/ほか2か月/)).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "サマリーで確認" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "サマリーへ" })).toHaveAttribute(
+      "href",
+      "/admin/summary?month=2026-01&close=1",
+    );
   });
 
   it("keeps the page usable and retries after a fetch error", async () => {
