@@ -1,4 +1,4 @@
-import { AlertTriangle, ChartColumn, RotateCw } from "lucide-react";
+import { AlertTriangle, RotateCw } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { useMonthCloseCandidate } from "../hooks/useMonthCloseCandidate";
@@ -62,10 +62,9 @@ export function MonthCloseBanner() {
         </div>
         <Link
           to={`/admin/summary?month=${candidate.month}&close=1`}
-          className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border border-amber-500 bg-amber-100 px-2.5 py-1.5 text-sm font-medium text-amber-950 transition-colors hover:bg-amber-200"
+          className="inline-flex min-h-10 shrink-0 items-center rounded-lg border border-amber-500 bg-amber-50 px-4 text-sm font-semibold text-amber-900 transition-colors hover:bg-amber-100"
         >
-          <ChartColumn size={16} aria-hidden="true" />
-          <span>サマリーへ</span>
+          この月を締める
         </Link>
       </div>
     </aside>

@@ -127,11 +127,8 @@ describe("AdminSummaryPage", () => {
         pendingMonthCount: 1,
       },
     });
-    renderPage();
+    renderPage("/admin/summary?month=2026-02&close=1");
 
-    await userEvent.click(
-      await screen.findByRole("button", { name: "この月を締める" }),
-    );
     expect(
       await screen.findByText(/月またぎ週は終了日を含む月へ計上/),
     ).toBeInTheDocument();

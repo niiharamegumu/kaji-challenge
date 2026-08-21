@@ -95,7 +95,6 @@ export function AdminSummaryPage() {
   const monthPickerRef = useRef<HTMLDivElement>(null);
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
   const [status, setStatus] = useState("");
-  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
   const [confirmTarget, setConfirmTarget] = useState<{
     taskId: string;
     taskTitle: string;
@@ -177,7 +176,6 @@ export function AdminSummaryPage() {
   const closeMonthMutation = useMutation({
     mutationFn: () => closeMonthRequest(month),
     onSuccess: async () => {
-      setCloseConfirmOpen(false);
       setStatus(`${formatMonthLabel(month)}を締めました`);
       await Promise.all([
         queryClient.invalidateQueries({
@@ -193,7 +191,6 @@ export function AdminSummaryPage() {
       if (
         await handleTeamStatePreconditionFailure(error, queryClient, setStatus)
       ) {
-        setCloseConfirmOpen(false);
         return;
       }
       setStatus(`月次締め失敗: ${formatError(error)}`);
@@ -406,18 +403,6 @@ export function AdminSummaryPage() {
             </div>
           </div>
         </div>
-
-        {closeCandidate?.month === month ? (
-          <div className="mt-3 flex justify-end px-2 md:px-0">
-            <button
-              type="button"
-              className="min-h-10 rounded-lg border border-amber-500 bg-amber-50 px-4 text-sm font-semibold text-amber-900 hover:bg-amber-100"
-              onClick={() => setCloseConfirmOpen(true)}
-            >
-              この月を締める
-            </button>
-          </div>
-        ) : null}
 
         <div className="mt-3">
           <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-stone-200 bg-white">
@@ -722,7 +707,7 @@ export function AdminSummaryPage() {
         }}
       />
       <ConfirmModal
-        isOpen={closeConfirmOpen || closeRequested}
+        isOpen={closeRequested}
         tone="warning"
         title={`${formatMonthLabel(month)}を締めますか？`}
         message={
@@ -732,7 +717,6 @@ export function AdminSummaryPage() {
         }
         confirmLabel="再計算して締める"
         onCancel={() => {
-          setCloseConfirmOpen(false);
           clearCloseRequest();
         }}
         onConfirm={() => {
