@@ -272,6 +272,45 @@ describe("App", () => {
     });
   });
 
+  it("shows previous-month penalties to handle this month", async () => {
+    mockGetMe.mockResolvedValue({
+      data: { user: { id: "u1", displayName: "Owner" }, memberships: [] },
+    });
+    mockSummary.mockResolvedValue({
+      data: {
+        totalPenalty: 5,
+        triggeredPenaltyRuleIds: ["rule-1"],
+      },
+    });
+    mockListRules.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: "rule-1",
+            teamId: "team-1",
+            name: "おやつ抜き",
+            threshold: 5,
+            createdAt: "2026-08-01T00:00:00Z",
+            updatedAt: "2026-08-01T00:00:00Z",
+          },
+        ],
+      },
+    });
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "今月対応するペナルティ",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("おやつ抜き")).toBeInTheDocument();
+    expect(screen.getByText("発動しきい値: 5")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "前月のサマリーへ" }),
+    ).toBeInTheDocument();
+  });
+
   it("keeps logged-out state when getMe returns 401", async () => {
     render(<App />);
 
