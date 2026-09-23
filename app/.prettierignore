@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.alchemy/
+.tanstack/
+.vite/
+.wrangler/
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
