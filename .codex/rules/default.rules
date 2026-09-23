@@ -4,30 +4,6 @@
 # 開発規約は AGENTS.md、docs、skills に置く。
 
 prefix_rule(
-    pattern = ["make", "test-backend"],
-    decision = "allow",
-    justification = "backend 変更の検証として backend tests の実行を許可する。",
-    match = [
-        "make test-backend",
-    ],
-    not_match = [
-        "make test",
-    ],
-)
-
-prefix_rule(
-    pattern = ["make", "test-frontend"],
-    decision = "allow",
-    justification = "frontend 変更の検証として frontend tests の実行を許可する。",
-    match = [
-        "make test-frontend",
-    ],
-    not_match = [
-        "make test",
-    ],
-)
-
-prefix_rule(
     pattern = ["make", "architecture-check"],
     decision = "allow",
     justification = "構造変更の検証として architecture check の実行を許可する。",
@@ -36,19 +12,6 @@ prefix_rule(
     ],
     not_match = [
         "make check",
-    ],
-)
-
-prefix_rule(
-    pattern = ["make", ["gen-backend", "gen-frontend"]],
-    decision = "allow",
-    justification = "OpenAPI 変更後の狭い code generation target 実行を許可する。",
-    match = [
-        "make gen-backend",
-        "make gen-frontend",
-    ],
-    not_match = [
-        "make gen",
     ],
 )
 

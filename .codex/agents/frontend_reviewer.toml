@@ -16,7 +16,6 @@ source of truth:
 - vercel-react-best-practices
 - vitest
 - workers-best-practices
-- openapi-spec-generation
 - api-security-best-practices
 - auth-implementation-patterns
 
@@ -27,7 +26,7 @@ source of truth:
 - Testability: Vitest/Testing Library、route/component/hook tests、mock boundary、regression coverage。
 - Security: cookie/session 前提、auth flow、CORS/CSRF 影響、XSS/unsafe rendering、secret/env handling。
 - Operations: Cloudflare Workers runtime fit、wrangler/env config、PWA/push/SW 影響、deploy/runtime failure mode。
-- Spec: api/openapi.yaml と frontend adapter/hook/generated client の整合性。
+- Spec: app/src/contracts とfeature adapter/hookの整合性。
 
 出力:
 - findings は重大度順。
