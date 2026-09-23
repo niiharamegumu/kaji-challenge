@@ -1,0 +1,95 @@
+name: Deploy production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Do not interrupt an in-flight migration/deployment. Pending runs may be replaced.
+concurrency:
+  group: production-deployment
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    needs: verify
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: production
+      url: ${{ vars.APP_ORIGIN }}
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Skip superseded commits
+        id: current
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          latest_sha=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')
+          if [ "$latest_sha" = "$GITHUB_SHA" ]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            echo "Skipped: main has a newer commit. Deploy the latest main instead." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/setup-node@v6
+        if: steps.current.outputs.deploy == 'true'
+        with:
+          node-version: 24
+      - uses: oven-sh/setup-bun@v2
+        if: steps.current.outputs.deploy == 'true'
+        with:
+          bun-version: 1.4.2
+      - name: Install dependencies
+        if: steps.current.outputs.deploy == 'true'
+        run: bun install --frozen-lockfile
+      - name: Validate settings, plan and deploy
+        if: steps.current.outputs.deploy == 'true'
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          APP_ORIGIN: ${{ vars.APP_ORIGIN }}
+          APP_RELEASE: ${{ github.sha }}
+          JOBS_ENABLED: ${{ vars.JOBS_ENABLED || 'false' }}
+          MAINTENANCE_MODE: ${{ vars.MAINTENANCE_MODE || 'false' }}
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          SIGNUP_ALLOWED_EMAILS: ${{ secrets.SIGNUP_ALLOWED_EMAILS }}
+          VAPID_PUBLIC_KEY: ${{ vars.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          VAPID_SUBJECT: ${{ vars.VAPID_SUBJECT }}
+          ALCHEMY_TELEMETRY_DISABLED: '1'
+        run: |
+          bun -e '
+            import { deploymentSchema } from "./infra/config";
+            const required = ["CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_TOKEN", "APP_ORIGIN", "APP_RELEASE", "BETTER_AUTH_SECRET", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "SIGNUP_ALLOWED_EMAILS", "VAPID_PUBLIC_KEY", "VAPID_PRIVATE_KEY", "VAPID_SUBJECT"];
+            const missing = required.filter((key) => !process.env[key]?.trim());
+            if (missing.length) throw new Error("Missing production settings: " + missing.join(", "));
+            if (process.env.BETTER_AUTH_SECRET.length < 32) throw new Error("BETTER_AUTH_SECRET must contain at least 32 characters");
+            const result = deploymentSchema.safeParse({ stage: "production", origin: process.env.APP_ORIGIN, release: process.env.APP_RELEASE, jobs: process.env.JOBS_ENABLED, maintenance: process.env.MAINTENANCE_MODE });
+            if (!result.success) throw new Error("Invalid production origin, release, or boolean setting");
+          '
+          bun run infra:plan --stage production --no-input
+          bun run deploy --stage production --yes --no-input
+      - name: Verify deployed release
+        if: steps.current.outputs.deploy == 'true'
+        env:
+          APP_ORIGIN: ${{ vars.APP_ORIGIN }}
+          APP_RELEASE: ${{ github.sha }}
+        run: |
+          bun scripts/check-deployment.ts
+          echo "Production health verified for release $GITHUB_SHA." >> "$GITHUB_STEP_SUMMARY"
