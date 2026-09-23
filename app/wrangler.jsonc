@@ -1,0 +1,39 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "kaji-app",
+  "main": "src/server-entry.ts",
+  "compatibility_date": "2026-09-14",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "binding": "ASSETS",
+    "directory": "dist/client",
+    "run_worker_first": ["/api/*", "/_serverFn/*", "/health"],
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "kaji-local",
+      "database_id": "00000000-0000-0000-0000-000000000001",
+      "migrations_dir": "migrations",
+    },
+  ],
+  "vars": {
+    "APP_ORIGIN": "http://localhost:5174",
+    "JOBS_ENABLED": "false",
+    "MAINTENANCE_MODE": "false",
+    "APP_RELEASE": "cloudflare-v1",
+    "VAPID_PUBLIC_KEY": "",
+    "VAPID_SUBJECT": "mailto:admin@example.com",
+  },
+  "secrets": {
+    "required": [
+      "BETTER_AUTH_SECRET",
+      "GOOGLE_CLIENT_ID",
+      "GOOGLE_CLIENT_SECRET",
+      "SIGNUP_ALLOWED_EMAILS",
+      "VAPID_PRIVATE_KEY",
+    ],
+  },
+  "observability": { "enabled": true },
+  "triggers": { "crons": [] },
+}

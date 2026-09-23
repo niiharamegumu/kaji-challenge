@@ -1,0 +1,10 @@
+FROM oven/bun:1.4.2 AS bun
+FROM node:24.14.0-bookworm-slim
+# workerd uses the system trust store for outbound HTTPS, including Google OAuth.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
+WORKDIR /app/app
+ENV WRANGLER_SEND_METRICS=false
+CMD ["sh", "scripts/dev-container.sh"]
