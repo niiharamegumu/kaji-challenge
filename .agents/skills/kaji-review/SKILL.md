@@ -12,36 +12,38 @@ KajiChalle の変更レビュー用 skill です。レビュー依頼時に差�
 - ファイル編集はしない。レビューと取りまとめに徹する。
 - `AGENTS.md`、`docs/architecture.md`、`docs/testing.md`、`docs/codex-workflow.md` を source of truth とする。
 - 言語・フレームワークの best practices もレビュー対象に含める。
-- subagent は、ユーザーがレビューや並列確認を依頼した場合に使う。
+- subagent は、ユーザーが並列作業やagentへの委譲を明示した場合だけ使う。それ以外は自分で対象を確認する。
 
 ## 差分分類
 
 まず `git status --short` と必要な diff を確認し、変更ファイルを分類する。
 
 - Backend:
-  - `backend/**/*.go`
-  - `backend/**/*.sql`
-  - `backend/migrations/**`
-  - `backend/Dockerfile`
+  - `app/src/server/**`
+  - `app/migrations/**`
+  - `app/infra/**`
+  - `app/alchemy.run.ts`
   - backend の config / generated / test 変更
 - Frontend:
-  - `frontend/**/*.{js,jsx,ts,tsx,mjs,cjs}`
-  - `frontend/package.json`
-  - `frontend/vite.config.*`
-  - `frontend/vitest.config.*`
-  - `frontend/wrangler.toml`
+  - `app/src/{app,features,shared,lib,routes}/**`
+  - `app/package.json`
+  - `app/vite.config.*`
+  - `app/vitest.config.*`
+  - `app/wrangler.jsonc`
   - frontend の config / generated / test 変更
 - スペック:
-  - `api/openapi.yaml`
-  - generated API client/server types
+  - `app/src/contracts/**`
+  - Zod入力・出力schemaとDTO
   - `docs/**`
-  - `.codex/specs/**`
+  - `local-notes/records/**`（手元の作業記録）
 - セキュリティ:
   - auth/session/cookie/OIDC/CORS/CSRF/authorization/input validation/secrets に影響する変更
 - 運用:
-  - deploy、Cloud Run、Cloudflare Workers、DB migration、jobs、通知、Makefile、CI、runtime config に影響する変更
+  - deploy、Cloudflare Workers、DB migration、jobs、通知、Makefile、CI、runtime config に影響する変更
 
 ## Reviewer 起動方針
+
+以下はユーザーが並列作業・agentへの委譲を明示した場合だけ適用する。
 
 - Backend 対象がある場合は `.codex/agents/backend_reviewer.toml` の reviewer を使う。
 - Frontend 対象がある場合は `.codex/agents/frontend_reviewer.toml` の reviewer を使う。
@@ -52,19 +54,17 @@ KajiChalle の変更レビュー用 skill です。レビュー依頼時に差�
 
 backend review では以下の repo skills の観点を使う。
 
-- `golang-http-frameworks`
-- `golang-testing`
-- `openapi-spec-generation`
+- `vitest`
+- `workers-best-practices`
 - `api-security-best-practices`
 - `auth-implementation-patterns`
 - `database-schema-designer`
-- `gcp-cloud-run`
 
 重点観点:
 
-- Go idiom、error handling、context propagation、time/date handling、transaction handling、concurrency
-- Gin/OpenAPI transport boundary、status code、cookie/header、request/response mapping
-- Clean Architecture、usecase orchestration、ports/adapters、sqlc/PostgreSQL boundary
+- TypeScript error handling、JST日付境界、transaction、concurrency、revisionの精度
+- Start Server Functions/Zod transport boundary、status code、cookie/header、request/response mapping
+- Application/Domainの外部依存禁止、ports/adapters、Drizzle/D1境界
 - DB constraint、migration safety、index、team scoping、authorization、idempotency
 - testability、table-driven tests、DB integration tests、regression coverage
 
@@ -75,7 +75,6 @@ frontend review では以下の repo skills の観点を使う。
 - `vercel-react-best-practices`
 - `vitest`
 - `workers-best-practices`
-- `openapi-spec-generation`
 - `api-security-best-practices`
 - `auth-implementation-patterns`
 
@@ -83,14 +82,14 @@ frontend review では以下の repo skills の観点を使う。
 
 - React component 設計、hooks、state/query 管理、render performance、side effects
 - TypeScript 型設計、null/undefined handling、API response handling
-- Feature-Based Architecture、feature public API、shared placement、generated client boundary
+- Feature-Based Architecture、feature public API、shared placement、API adapter boundary
 - loading/empty/error/success state、user-visible behavior、accessibility の基本
 - Vitest/Testing Library の testability、regression coverage
 - Cloudflare Workers runtime、environment variables、fetch/proxy/config、PWA/push 影響
 
 ## 出力形式
 
-最終回答では、起動した reviewer と対象分類を短く述べたうえで、必ず以下の5テーブルを出す。
+最終回答では、確認した対象と重要なfindings、検証結果を述べる。必要に応じて以下のカテゴリ別テーブルを使う。委譲した場合だけreviewerを記載する。
 
 ### Backend 観点
 
