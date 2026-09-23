@@ -1,3 +1,0 @@
-# Critical vulnerabilities that must fail CI when reachable in govulncheck findings.
-# One GO-ID per line.
-GO-2026-4337
