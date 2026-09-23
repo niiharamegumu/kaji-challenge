@@ -1,207 +1,198 @@
 # KajiChalle
 
-家事管理アプリのモノレポひな形です。
+家事をチームで分担し、毎日・毎週の達成状況を記録するPWAです。買い物リスト、カレンダーの予定、月次ペナルティ集計、Push通知をまとめて利用できます。
 
-- frontend: React + Vite + TypeScript（Cloudflare Workers 配備前提）
-- backend: Go + Gin（Cloud Run 配備前提）
-- api: OpenAPI SSOT
+## 構成
 
-## ディレクトリ構成
+| 領域 | 使用技術 |
+| --- | --- |
+| 画面 | React・Tailwind CSS・TanStack Router / Query・Jotai |
+| アプリ | TanStack Start（SPA + Server Functions） |
+| 実行環境 | Cloudflare Workers |
+| データベース | Cloudflare D1（SQLite） |
+| 認証 | Better Auth・Google OAuth・Drizzle D1 adapter |
+| DBアクセス | Drizzle ORM（認証・業務・Push配信記録） |
+| 定期処理 | Workers Cron Triggers |
+| インフラ | Alchemy（Worker・D1・SQL適用・ドメイン・Secrets・Cron） |
+| 開発 | mise（Node.js 24・Bun）・Vite+・Vitest・Playwright |
 
-- `frontend/`: SPA
-- `backend/`: API
-- `api/`: OpenAPI と codegen 設定
+ブラウザーはServer Functions経由で業務処理を呼び出します。ユーザー情報はBetter Authの `auth_user` に一元化し、チーム・家事などの業務データも同じD1に保存します。外部PostgreSQLやDBサーバー用コンテナは不要です。全員、新しいGoogleログインからユーザーと初期チームを作成します。
 
-## アーキテクチャ
+## 日付・タイムゾーン
 
-- backend は Clean Architecture、frontend は Feature-Based Architecture として整理します。
-- 詳細な責務、依存方向、禁止 import は `docs/architecture.md` に記載しています。
-- 境界チェックは `make architecture-check` または frontend の `npm run architecture:check` で実行できます。
+業務上の「今日」・月・週・締め・通知と日時表示は日本時間（`Asia/Tokyo` / UTC+09:00）を基準にします。端末のタイムゾーンが日本以外でも同じ日付を扱います。
 
-## Codex / Agent 運用
+- Worker・D1・Docker・GitHubに `TZ` を追加する設定は不要です。アプリが明示的に日本時間を使用します。`ja-JP` は表示言語であり、タイムゾーン指定とは別です。
+- 認証・業務・Push・レート制限の日時はすべてUTCのISO 8601文字列（例: `2026-09-23T06:56:17.439Z`）で保存します。D1 ExplorerでUTCの値が見えるのは正常です。対象日・対象月は `YYYY-MM-DD` / `YYYY-MM` の日付文字列です。
+- カレンダーの予定は日付のみで管理します。FullCalendar内部の日付計算をUTCに固定し、「今日」は日本時間の日付を渡すことで端末時差によるずれを防ぎます。
+- CronはUTCで指定済みです。日次締め00:05 JST、週次締め月曜00:10 JST、通知21:00／土曜19:00／日曜10:00 JSTに対応します。初回は `JOBS_ENABLED=true` にして再配備し、実行を確認してください。
 
-- Codex のリポジトリ規約は root `AGENTS.md` に記載しています。
-- テスト設計方針は `docs/testing.md` に記載しています。
-- Codex の skill / rule / subagent / spec の使い分けは `docs/codex-workflow.md` に記載しています。
+## ローカル起動
 
-## 前提ツール
+Docker Compose、またはmiseで管理したホストのNode.js・Bunを使用します。
 
-- Docker / Docker Compose
-- Node.js 22+
-- Go 1.24+
-- GNU Make
+### ホストのツール準備（mise）
 
-## 開発コマンド
+Node.js・Bunのバージョンはリポジトリ直下の [mise.toml](mise.toml) で管理します。macOSでは次の手順で準備できます。
 
-- `make up`: PostgreSQL 起動
-- `make down`: コンテナ停止（volumeは保持）
-- `make down-reset`: コンテナ停止 + volume削除（DB初期化）
-- `make dev`: frontend/backend/postgres を Compose で起動（ログ追従）
-- `make gen`: OpenAPI から frontend/backend 生成
-- `make lint`: frontend/backend lint
-- `make test`: frontend/backend test
-- `make security`: backend/frontend の脆弱性チェック（Critical fail）
-- `make check`: `gen + lint + test`
-- `make diff-gen`: 生成差分チェック
-- `make seed-monthly-dummy month=YYYY-MM email=user@example.com`: ダミータスク/完了記録を投入（集計は行わない）
-- `make ops-close scope=day|week [team_id=<uuid>]`: 日次・週次close処理をCLI実行（既定は全チーム対象）
-- `make vapid-keys [subject=mailto:you@example.com]`: Web Push 用 VAPID 鍵を再生成して表示する
+```sh
+# miseが未インストールの場合
+brew install mise
 
-backend の Critical 判定は `backend/security/critical_goids.txt` の GO-ID allowlist で管理します。
-
-backend の統合テストは `TEST_DATABASE_URL` を利用して隔離DBを作成して実行します。  
-未指定時は `postgres://kaji:kaji@postgres:5432/postgres?sslmode=disable` を既定値として使用します。
-
-## OpenAPI SSOT
-
-- 仕様: `api/openapi.yaml`
-- frontend 生成: `orval` (`frontend/src/lib/api/generated/client.ts`)
-- backend 生成: `oapi-codegen` (`backend/internal/openapi/generated/openapi.gen.go`)
-
-APIを変更する場合は、必ず `api/openapi.yaml` を先に更新してから `make gen` を実行してください。
-
-## ローカル開発（Compose）
-
-- `make up`: バックグラウンド起動
-- `make dev`: フォアグラウンド起動（ログ確認用）
-- frontend: `http://localhost:5173`
-- backend: `http://localhost:8080`
-- postgres: `localhost:5432`
-
-backend は `air` で起動され、`backend/` 配下の変更を自動リロードします。
-`DATABASE_URL` は全環境で必須です（未設定時は backend 起動失敗）。
-
-## 定期closeのCLI実行（Cloud Run Job向け）
-
-Cloud Run Job運用推奨（3分割）:
-
-- `close-day`: command=`/app/ops`, args=`close --scope day --all-teams`
-- `close-week`: command=`/app/ops`, args=`close --scope week --all-teams`
-
-日次・週次Jobは対象期間ごとにトランザクションで処理します。月次締めは翌月1日以降にアプリの案内からユーザーが実行し、月またぎ週は終了日の日曜日を含む月へ計上します。
-
-`ops close` は catch-up モードで動作し、未処理期間を連続で補完します（例: day 実行時は未処理の全日を昨日まで処理）。
-過去期間の判定対象タスクは `created_at` / `deleted_at` を使って対象時点で有効だったものを再現します。
-`seed-monthly-dummy` は月次サマリーを直接作成せず、集計は `ops close` に委譲します。
-いずれも終了コードで成否を返します。対象の一部で失敗した場合も他対象は継続し、最後に非0終了となります（監視しやすい設計）。
-日次・週次Jobの冪等キーは `close_runs` で管理します。
-
-## Web Push通知CLI実行（Cloud Run Job向け）
-
-Cloud Run Job運用推奨（3分割）:
-
-- `notify-daily-2100`: command=`/app/ops`, args=`notify --slot daily_2100`
-- `notify-weekly-prev-sat-1900`: command=`/app/ops`, args=`notify --slot weekly_prev_sat_1900`
-- `notify-weekly-due-sun-1000`: command=`/app/ops`, args=`notify --slot weekly_due_sun_1000`
-
-JST固定の想定時刻:
-
-- 日間: `21:00`
-- 週間事前: `土曜 19:00`
-- 週間当日: `日曜 10:00`
-
-`ops notify` は active な Push購読を持つ team のみ対象にし、`push_dispatch_state` の最新 fingerprint で同一スロットの二重送信を防ぎます。
-404 / 410 を返した subscription は自動で `is_active=false` に更新されます。
-
-VAPID鍵の再生成:
-
-- `make vapid-keys` を実行すると `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` を stdout に出力します
-- `subject` を省略した場合は `VAPID_SUBJECT` 環境変数、さらに未設定なら `mailto:your-email@example.com` を使います
-- `VAPID_PRIVATE_KEY` は backend の secret にだけ入れてください
-
-## Frontend (Cloudflare Workers)
-
-- デプロイ: `cd frontend && npm run deploy`
-- 設定: `frontend/wrangler.toml`
-
-PWA対応:
-
-- `frontend/public/manifest.webmanifest` を配信し、ホーム画面への追加に対応
-- ホーム追加時のアプリ名は `KajiChalle`
-- テーマ色・背景色は `#f6f4ef` を使用
-- 更新トーストは「既存SW制御下で新SWが `waiting` になった場合」に表示
-- 再インストール直後は更新対象がないため、更新トーストが表示されない場合あり
-- Push通知は Safari でホーム画面に追加した iPhone PWA のみを v1 対象とする
-
-チーム状態同期:
-
-- 競合防止は `ETag + If-Match` で行います。
-- 通常時の同期はナビ内の更新導線から手動で最新状態を再取得します。
-- 他メンバー更新済みの古い画面から更新系APIを実行した場合は `412 precondition_failed` または `428 precondition_required` を返し、クライアント側で最新状態を再取得して再操作を促します。
-
-PWAアイコン再生成:
-
-- 元画像: `frontend/public/app.png`（1024x1024）
-- 実行: `cd frontend && npm run pwa:assets`
-- 生成先: `frontend/public/icons/`, `frontend/public/favicon.ico`
-
-必要な環境変数:
-
-- `VITE_API_BASE_URL`: APIベースURL（推奨: `/api`）
-- `API_ORIGIN`: Workerが転送するbackend APIのオリジン（例: `https://kaji-backend-xxxx.run.app`）
-
-GitHub Actions デプロイで必要な secrets:
-
-- `CLOUDFLARE_API_TOKEN`
-- `CLOUDFLARE_ACCOUNT_ID`
-
-## Backend (Cloud Run)
-
-- Docker build: `docker build -t kaji-backend ./backend`
-
-GitHub Actions デプロイで必要な secrets:
-
-- `GCP_PROJECT_ID`
-- `GCP_WORKLOAD_IDENTITY_PROVIDER`
-- `GCP_SERVICE_ACCOUNT`
-- `DATABASE_URL`（migration実行用）
-
-Cloud Run の初期設定:
-
-- Region: `asia-northeast1`
-- Service: `kaji-backend`
-- Deploy mode: `--allow-unauthenticated`（アプリ層で認証）
-
-OIDC厳格運用（推奨）:
-
-- `OIDC_STRICT_MODE=true` を設定すると、`OIDC_ISSUER_URL` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` / `OIDC_REDIRECT_URL` が未設定の場合にbackendは起動失敗します。
-- `OIDC_STRICT_MODE=true` ではローカルモック認証分岐は無効化されます。
-
-Cookieセッション認証:
-
-- 認証は `HttpOnly` Cookie (`kaji_session`) で管理します（Bearer tokenは非対応）。
-- backend は `FRONTEND_ORIGIN` を許可オリジンとして使用します。
-- `COOKIE_SECURE=true` で `Secure` Cookie を強制します（ローカルHTTP開発時は `false`）。
-
-初回リリース向け新規アカウント作成ガード:
-
-- `SIGNUP_GUARD_ENABLED=true` で新規アカウント作成を許可メール制にします。
-- `SIGNUP_ALLOWED_EMAILS` にカンマ区切りで許可メールを設定します（例: `me@example.com,wife@example.com`）。
-- 既存ユーザーは allowlist から外れてもログイン可能です。
-- `SIGNUP_GUARD_ENABLED=true` かつ `SIGNUP_ALLOWED_EMAILS` が空の場合、backend は起動失敗します（fail-fast）。
-
-## 初回リリースの推奨設定（クローズド運用）
-
-- backend:
-  - `SIGNUP_GUARD_ENABLED=true`
-  - `SIGNUP_ALLOWED_EMAILS=<あなたのGoogleメール>,<奥様のGoogleメール>`
-
-緊急時に公開制限を解除する場合:
-
-- backend 側: `SIGNUP_GUARD_ENABLED=false`
-
-## Git Hooks
-
-- 設定: `lefthook.yml`
-- pre-commit で `make lint` を実行
-- pre-push で `make check`（`gen + lint + typecheck + test`）を実行
-
-初回セットアップ:
-
-```bash
-cd frontend && npm ci
-cd ..
-lefthook install
+# リポジトリ直下で実行
+mise trust
+mise install
+mise exec -- node --version
+mise exec -- bun --version
 ```
 
-`lefthook` 未インストールの場合は、先にインストールしてください（例: `brew install lefthook`）。
+普段のターミナルで `node` / `bun` を直接使うには、`~/.zshrc` に以下を一度だけ追加し、ターミナルを開き直してください。既に設定済みなら追加不要です。
+
+```sh
+eval "$(mise activate zsh)"
+```
+
+シェル設定を変更しない場合は、各コマンドの先頭に `mise exec --` を付けます。例えば `cd app && mise exec -- bun run typecheck` です。詳細は [miseのセットアップ](https://mise.jdx.dev/getting-started) を参照してください。
+
+現在の設定はNode.js `24`・Bun `latest` です。動作確認時はNode.js `24.21.0`・Bun `1.4.2` が選択されました。CIはNode.js 24・Bun 1.4.2、DockerはNode.js 24.14.0・Bun 1.4.2を使用し、miseの設定とは独立しています。Bunを更新する際は、`app/package.json` の `packageManager`・`app/Dockerfile.dev`・`.github/workflows/ci.yml`・`.github/workflows/deploy-production.yml` のバージョンも揃えて検証してください。
+
+### アプリの設定と起動
+
+1. `cp app/.dev.vars.example app/.dev.vars` を実行し、後述の認証設定を記入します。
+2. GoogleのOAuthクライアント（種類: ウェブアプリケーション）に以下を登録します。
+   - JavaScript生成元: `http://localhost:5174`
+   - リダイレクトURI: `http://localhost:5174/api/auth/callback/google`
+   - 同意画面がテスト中の場合は、ログインするGoogleアカウントをテストユーザーに追加します。
+3. リポジトリ直下で `make dev` を実行します。バックグラウンド起動は `make up`、停止は `make down` です。
+4. `http://localhost:5174` を開き、Googleでログインします。
+
+Composeのサービス名は `app` です。起動時に依存関係とローカルD1のSQLを適用します。DBは `app/.wrangler/` に保存され、コンテナを再作成しても残ります。設定変更後は `docker compose restart app` を実行します。旧サービスが残っている場合は `docker compose down --remove-orphans` で停止してから起動してください。
+
+ホストで動かす場合:
+
+```sh
+cd app
+mise exec -- bun install --frozen-lockfile
+mise exec -- bun run db:migrate
+mise exec -- bun run dev
+```
+
+Composeとホストの開発サーバーは同時起動しないでください。ローカル用の `wrangler.jsonc` のDB IDはローカル保存先の識別子で、本番のD1 IDに差し替える必要はありません。
+
+Git hookを有効にする場合、依存関係をインストール後に `cd app && mise exec -- bun x --no-install vp hooks enable` を実行します。`vp` のグローバルインストールは不要です。pre-commitは `make lint` を実行します。
+
+ローカルD1は [Local Explorer](http://localhost:5174/cdn-cgi/local/explorer) で閲覧できます。app起動中に、macOSのホストで `cd app && mise exec -- bun run db:studio` を実行するとブラウザーで開きます。
+
+## 設定値
+
+開発時の秘密値は `app/.dev.vars`、公開設定は `app/wrangler.jsonc` の `vars` に置きます。配備時はGitHub Environment `production` のSecrets/VariablesをAlchemyへ渡します。初回bootstrap・例外的な手動配備では `app/.env.example` を `.env.production` にコピーして使います。秘密値と実DBファイルはGit管理対象外です。ブラウザーへ渡す `VITE_*` に秘密値を置かないでください。
+
+| 設定 | 内容 |
+| --- | --- |
+| `BETTER_AUTH_SECRET` | 32文字以上のランダム値。`openssl rand -hex 32` などで生成。セッション署名とOAuthトークン暗号化に使うため、環境ごとに固定して安全に保管 |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | 環境ごとのGoogle OAuthクライアント |
+| `SIGNUP_ALLOWED_EMAILS` | 新規登録を許可するメールのカンマ区切り。空欄不可。登録済みユーザーの再ログインには適用しない |
+| `APP_ORIGIN` | 開発: `http://localhost:5174`。配備: パス・ポートを含まないHTTPS origin |
+| `APP_RELEASE` | リリース識別子（commit SHAなど） |
+| `JOBS_ENABLED` | 定期処理の有効化。初回は `false`、動作確認後に `true` |
+| `MAINTENANCE_MODE` | `true` で認証・業務リクエストを停止。Cronも配備設定から外れる |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | Push用鍵ペア。`cd app && bunx --no-install web-push generate-vapid-keys` で生成。公開鍵はvars、秘密鍵は.dev.varsに設定 |
+| `VAPID_SUBJECT` | 運用担当の `mailto:` アドレスまたはHTTPS URL |
+| `CLOUDFLARE_ACCOUNT_ID` / `CLOUDFLARE_API_TOKEN` | Alchemy配備用。Workerの実行時設定には含めない |
+
+新規登録はlocal・productionとも許可リストが必須で、解除用フラグはありません。空欄・未設定ならログイン処理を503で停止します。Googleで確認済みのメールがリストと一致する場合のみ登録できます（大文字小文字とリスト前後の空白は正規化）。ログイン画面は公開されますが、業務データの利用には認証が必要です。登録済みユーザーを許可リストから外しても再ログインは可能です。これは新規登録の制限であり、既存ユーザーの利用停止機能ではありません。
+
+ローカルの定期処理は既定で無効です。Pushを使わないローカル開発ではVAPID鍵を空欄にできます。配備環境では設定してください。認証CookieはHttpOnly・SameSite=Lax、本番HTTPSではSecureです。セッションはD1保存・30日・最大5件で、Cookieキャッシュは使用しません。
+
+## 検証コマンド
+
+```sh
+cd app
+bun run typecheck
+bun run lint:all
+bun run test --run
+bun run test:server --run
+bunx --no-install playwright install chromium
+bun run test:local
+```
+
+`test:local` は一時ディレクトリへソースをコピーし、テスト専用の認証設定と使い捨てD1で、build・型・lint・UI・DB・ブラウザー・開発サーバーの検証を行います。普段の `.dev.vars` と `.wrangler` は使用しません。5194/5195ポートを空けて実行してください。結果は `app/test-results/` に保存します。Googleとの実OAuthとiPhone実機へのPushは別途確認します。
+
+## Cloudflareへの配備
+
+環境は **localとproductionのみ** です。localはWranglerのD1（`kaji-local`）、productionはAlchemy管理のD1（`kaji-production`）を使います。
+
+[Deploy production](.github/workflows/deploy-production.yml) が `main` へのpushで実行されます。**CI → 設定検証 → Alchemy plan → deploy（build・未適用SQL・Worker更新）→ 公開先health/release確認**を自動化しています。PRではCIだけを実行し、本番Secretsを渡しません。`APP_RELEASE` は対象commit SHAを自動設定します。
+
+### 初回だけ行うこと
+
+1. **Cloudflareを準備。** 対象アカウント、Activeなドメインのzone、Workers Paid、API tokenを用意します。tokenは対象アカウント/zoneに限定し、Workers Scripts Edit/Write・D1 Edit/Write・Secrets Store Edit・Account Settings Read・Zone Read・Workers Routes Edit/Writeを基準に設定します。実アカウントの権限はbootstrapで確認してください（[Workers権限](https://developers.cloudflare.com/workers/authorization/workers/)・[Secrets Store権限](https://developers.cloudflare.com/secrets-store/access-control/)）。月次締め等はFreeのクエリ上限を超える場合があります（[D1の制限](https://developers.cloudflare.com/d1/platform/limits/)）。
+2. **Google OAuthを準備。** 本番用のウェブアプリケーションクライアントを作成し、生成元 `https://<本番ホスト>`、redirect URI `https://<本番ホスト>/api/auth/callback/google` を登録します。同意画面の公開範囲も確認します。
+3. **本番の鍵を作成。** `BETTER_AUTH_SECRET` は `openssl rand -hex 32`、VAPID鍵は `app/` で `mise exec -- bun x --no-install web-push generate-vapid-keys` で生成します。安全に保管し、毎回生成し直しません。
+4. **状態保存先をbootstrap。** ローカルのツール・依存を準備後、`app/` で以下を実行します。ファイルを作成したらエディターでCloudflare設定を記入してからbootstrapへ進みます。
+
+```sh
+# app/ で実行。ファイルがある場合は上書きしない
+[ -f .env.production ] || cp .env.example .env.production
+chmod 600 .env.production
+# エディターで最低限CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_API_TOKENを記入
+mise exec -- bun run infra:bootstrap --env-file .env.production
+```
+
+bootstrapはアカウントの状態保存用Worker/DO/Secrets Storeを作る操作です。アプリ本体と業務D1はCDのdeployで作成します。通常の配備ではbootstrapを繰り返しません。CDはこの共有状態保存先を使い、ローカルの `.alchemy` や認証ファイルをアップロードしません（[AlchemyのCI状態管理](https://alchemy.run/state-store/)）。
+
+5. **GitHub Environmentを作成。** リポジトリの Settings → Environments → New environment で `production` を作ります。Deployment branches/tagsを選択制限し、branch `main` だけを許可します。完全自動にする場合はRequired reviewersを設定しません。設定する場合、CDはその承認待ちになります。
+6. **EnvironmentのSecrets/Variablesを登録。** 下表の名前で追加します。リポジトリに `.env.production` を追加せず、CDにはEnvironmentから渡します。
+
+| 種別 | 名前 | 値・用途 |
+| --- | --- | --- |
+| Secret | `CLOUDFLARE_API_TOKEN` | 配備・状態保存先への操作権限を持つtoken |
+| Secret | `BETTER_AUTH_SECRET` | 本番の固定キー。32文字以上 |
+| Secret | `GOOGLE_CLIENT_SECRET` | 本番OAuth client secret |
+| Secret | `SIGNUP_ALLOWED_EMAILS` | 許可メールをカンマ区切り。空欄不可 |
+| Secret | `VAPID_PRIVATE_KEY` | 本番Push秘密鍵 |
+| Variable | `CLOUDFLARE_ACCOUNT_ID` | 本番のアカウントID |
+| Variable | `GOOGLE_CLIENT_ID` | 本番OAuth client ID |
+| Variable | `APP_ORIGIN` | 本番HTTPS origin。パス・ポートなし |
+| Variable | `VAPID_PUBLIC_KEY` | 本番Push公開鍵 |
+| Variable | `VAPID_SUBJECT` | `mailto:` 連絡先またはHTTPS URL |
+| Variable | `JOBS_ENABLED` | 初回は `false`、初回動作確認後 `true` |
+| Variable | `MAINTENANCE_MODE` | 通常 `false`、停止時のみ `true` |
+
+`APP_RELEASE` の登録は不要です。Cloudflare tokenには、CDが状態保存先の資格情報を取得するためのSecrets Store Editも必要です。権限不足を解消するために全権限tokenへ置き換えるのではなく、失敗したAPIとscopeを確認します。
+
+7. **初回CDを実行。** 設定を済ませて `main` へ変更をpushするか、Actions → Deploy production → Run workflow → branch `main` を選びます。初回はジョブ無効で配備されます。下記のブラウザー確認後、`JOBS_ENABLED=true` にして同じworkflowを手動実行し、5本のCronを有効にします。
+
+### 毎回のリリース
+
+1. PRのCI成功を確認して `main` へマージします。mainへ直接pushした場合もCDで同じCIを実行します。
+2. Actionsの **Deploy production** を開き、`verify` → `deploy` の成功を確認します。planはログに出力され、その後deployを自動実行します。**plan確認の手動停止はありません。** SQLやIaCの意図しない変更はPRで確認してください。
+3. 公開先 `/health` の `status: ok` と `release: 対象SHA` はCDが確認します。伝播待ちのため最大12回・各5秒タイムアウトで再試行します。
+4. ブラウザーでログイン、家事・買い物・予定の保存と再読込、ログアウトを確認します。認証/PWA/Push変更時は新規登録許可・拒否、PWA更新、iPhone実機Pushも確認します。これはCDのhealth確認では代替しません。
+5. CloudflareのWorkerログでエラー・締め・通知結果を確認します。通常の更新では鍵の再作成・bootstrap・ジョブ無効化は不要です。
+
+同時に配備しないようworkflow全体を直列化し、開始済みの処理は新しいpushで中断しません。待機中の古いrunは新しいrunに置き換わる場合があります。CI後、mainに新しいcommitがあるrunは配備をスキップします。手動再実行も最新mainを対象にしてください。
+
+### 設定変更・障害時
+
+- **設定/Secret更新**：GitHub Environment `production` の値を変更し、ActionsからmainのDeploy productionを手動実行します。設定変更だけでは自動起動しません。
+- **schema変更**：新しい番号（現在は `app/migrations/0004_*.sql` 以降）のSQLを追加し、CIで検証してからマージ。Alchemyが未適用SQLを適用します。適用済みSQLを編集せず、本番へWranglerで重ねて適用しません。`db:migrate` はローカル専用です。 既存DBへの `0003_iso_timestamps.sql` 適用は旧コードと日時形式が非互換のため、この変更のマージ前に現行mainをメンテナンス状態で配備し、SQLと新Workerの配備完了後に解除します。詳細は [日時の保存形式](docs/database.md#日時の保存形式) を参照してください。
+- **停止が必要な作業**：Environmentの `MAINTENANCE_MODE=true` に変更してCD実行。受付停止とCron解除を確認して作業し、falseへ戻してCD実行・復帰確認します。
+- **配備失敗**：エラーログを確認して修正後、最新mainで再実行。health失敗では自動rollbackしません。SQL適用後にWorker更新だけ失敗する場合もあるため、古いコードへ戻す前にDB互換性を確認します。復元は別の操作です。
+- **手動配備が必要な場合**：本番設定を記入した `.env.production` を使い、`app/` で `mise exec -- bun run infra:plan --stage production --env-file .env.production` → `mise exec -- bun run deploy --stage production --env-file .env.production`。CDと同時実行せず、`APP_RELEASE` を対象コードに合わせて確認します。普段はGitHub Environmentを正としてください。
+
+実際のCloudflare/GitHub設定・配備は初回作業が必要です。ローカル検証はアカウント権限・Google実OAuth・本番D1の復元/性能・実機Pushを代替しません。業務API専用のレート制限と運用監視も配備時に確認します。
+
+日次締め00:05 JST、週次締め月曜00:10 JST、通知は毎日21:00・土曜19:00・日曜10:00 JST。正本は `app/src/server/application/jobs.ts` です。
+
+## コードを読む順番
+
+1. `app/src/routes/`・`app/src/features/`: 画面と操作。
+2. `app/src/contracts/operations.ts`・`app/src/lib/api/`: 入出力の契約と通信。
+3. `app/src/server/transport/` → `application/` → `domain/`: 認証・認可・業務手順と規則。
+4. `app/src/server/infrastructure/`: D1、Better Auth、Pushの実装。`schema.ts` / `auth-schema.ts` がDrizzleのテーブル定義、`repository.ts` が型付きクエリ。業務更新は `unit-of-work.ts` のDrizzle batchでまとめる。
+5. `app/migrations/`・`app/alchemy.run.ts`・`app/infra/config.ts`: SQLと配備構成。
+
+テーブルの責務は [database](docs/database.md)、詳しい境界は [architecture](docs/architecture.md)、検証方針は [testing](docs/testing.md) を参照してください。個人用資料・作業記録はGit管理外の `local-notes/` に保存します。
+
+画面の実装は `app/src/features/tasks`（家事）・`penalties`（ペナルティ）・`summary`（集計）・`settings`（設定）に分けています。各Pageを起点にhooksやapiを読むと取得・更新処理を追えます。
