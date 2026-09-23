@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "types": ["node", "@cloudflare/workers-types"]
+  },
+  "include": [
+    "alchemy.run.ts",
+    "vitest.server.config.ts",
+    "playwright.config.ts",
+    "playwright.dev.config.ts",
+    "tests/server",
+    "tests/e2e",
+    "tests/dev",
+    "worker-configuration.d.ts"
+  ]
+}
