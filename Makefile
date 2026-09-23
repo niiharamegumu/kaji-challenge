@@ -1,147 +1,46 @@
 SHELL := /bin/bash
-
-.PHONY: dev up down down-reset gen gen-backend gen-frontend lint lint-backend lint-frontend architecture-check typecheck typecheck-frontend test test-backend test-frontend security security-backend security-frontend check diff-gen openapi-serve db-migrate-up db-migrate-down db-migrate-create seed-monthly-dummy backend-cmd-seeder ops-close backend-cmd-ops-close ops-notify backend-cmd-ops-notify vapid-keys backend-cmd-vapid-keys
-
-ifneq (,$(wildcard .env))
-include .env
-endif
-
 DC := docker compose
-BACKEND_RUN := $(DC) run --rm backend
-FRONTEND_RUN := $(DC) run --rm frontend
-MIGRATE_RUN := $(BACKEND_RUN) go -C /app/backend run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.19.1
 
-# Execution mode:
-# - local dev: run inside Docker Compose
-# - CI=true   : run directly on runner toolchain
+# App tooling runs in Compose locally and on the host in CI.
 ifeq ($(CI),true)
-GEN_BACKEND = cd backend && go generate ./...
-GEN_FRONTEND = cd frontend && npm run gen
-LINT_BACKEND = cd backend && golangci-lint run ./...
-LINT_FRONTEND = cd frontend && npm run lint:all
-TYPECHECK_FRONTEND = cd frontend && npm run typecheck
-TEST_BACKEND = cd backend && TEST_DATABASE_URL=$${TEST_DATABASE_URL:-postgres://kaji:kaji@localhost:5432/postgres?sslmode=disable} go test ./...
-TEST_FRONTEND = cd frontend && npm run test -- --run
-SECURITY_BACKEND = cd backend && go run github.com/securego/gosec/v2/cmd/gosec@v2.27.1 -exclude-dir=internal/db/sqlc -exclude-dir=internal/openapi/generated ./... && go run golang.org/x/vuln/cmd/govulncheck@v1.3.0 -format json ./... | go run ./cmd/govulncheck-critical -critical-file ./security/critical_goids.txt
-SECURITY_FRONTEND = cd frontend && npm audit --omit=dev --audit-level=high
+APP_RUN = cd app &&
 else
-GEN_BACKEND = $(BACKEND_RUN) go -C /app/backend generate ./...
-GEN_FRONTEND = $(FRONTEND_RUN) npm run gen
-LINT_BACKEND = $(BACKEND_RUN) golangci-lint run ./...
-LINT_FRONTEND = $(FRONTEND_RUN) npm run lint:all
-TYPECHECK_FRONTEND = $(FRONTEND_RUN) npm run typecheck
-TEST_BACKEND = $(BACKEND_RUN) sh -c "TEST_DATABASE_URL=$${TEST_DATABASE_URL:-postgres://kaji:kaji@postgres:5432/postgres?sslmode=disable} go -C /app/backend test ./..."
-TEST_FRONTEND = $(FRONTEND_RUN) npm run test -- --run
-SECURITY_BACKEND = $(BACKEND_RUN) sh -c "cd /app/backend && go run github.com/securego/gosec/v2/cmd/gosec@v2.27.1 -exclude-dir=internal/db/sqlc -exclude-dir=internal/openapi/generated ./... && go run golang.org/x/vuln/cmd/govulncheck@v1.3.0 -format json ./... | go run ./cmd/govulncheck-critical -critical-file ./security/critical_goids.txt"
-SECURITY_FRONTEND = $(FRONTEND_RUN) npm audit --omit=dev --audit-level=high
+APP_RUN = $(DC) run --rm app
 endif
+
+.PHONY: dev dev-host up down build typecheck lint test security architecture-check check
 
 dev:
-	$(DC) up --build
+	$(DC) up --build app
+
+dev-host:
+	cd app && bun run db:migrate
+	cd app && bun run dev
 
 up:
-	$(DC) up -d --build
+	$(DC) up --build -d app
 
 down:
 	$(DC) down
 
-down-reset:
-	$(DC) down -v
-
-gen:
-	$(MAKE) gen-backend
-	$(MAKE) gen-frontend
-
-gen-backend:
-	$(GEN_BACKEND)
-
-gen-frontend:
-	$(GEN_FRONTEND)
-
-lint:
-	$(MAKE) lint-backend
-	$(MAKE) lint-frontend
-
-lint-backend:
-	$(LINT_BACKEND)
-
-lint-frontend:
-	$(LINT_FRONTEND)
-
-architecture-check:
-	node scripts/check-architecture.mjs
+build:
+	$(APP_RUN) bun run build
 
 typecheck:
-	$(MAKE) typecheck-frontend
+	$(APP_RUN) bun run typecheck
 
-typecheck-frontend:
-	$(TYPECHECK_FRONTEND)
+lint:
+	$(APP_RUN) bun run lint:all
 
 test:
-	$(MAKE) test-backend
-	$(MAKE) test-frontend
-
-test-backend:
-	$(TEST_BACKEND)
-
-test-frontend:
-	$(TEST_FRONTEND)
+	$(APP_RUN) bun run test --run
 
 security:
-	$(MAKE) security-backend
-	$(MAKE) security-frontend
+	$(APP_RUN) bun audit --audit-level high
 
-security-backend:
-	$(SECURITY_BACKEND)
+architecture-check:
+	$(APP_RUN) bun run architecture:check
 
-security-frontend:
-	$(SECURITY_FRONTEND)
-
-check: gen lint architecture-check typecheck test
-
-diff-gen: gen
-	git diff --exit-code
-
-openapi-serve:
-	node scripts/build-openapi-html.cjs
-	cd api && python3 -m http.server 8787
-
-db-migrate-up:
-	@test -n "$(DATABASE_URL)" || (echo "DATABASE_URL is empty. Set it in .env or env var." && exit 1)
-	$(MIGRATE_RUN) -path /app/backend/migrations -database "$(DATABASE_URL)" up
-
-db-migrate-down:
-	@test -n "$(DATABASE_URL)" || (echo "DATABASE_URL is empty. Set it in .env or env var." && exit 1)
-	$(MIGRATE_RUN) -path /app/backend/migrations -database "$(DATABASE_URL)" down 1
-
-db-migrate-create:
-	@test -n "$(name)" || (echo "usage: make db-migrate-create name=add_xxx" && exit 1)
-	$(MIGRATE_RUN) create -ext sql -dir /app/backend/migrations -seq $(name)
-
-seed-monthly-dummy: backend-cmd-seeder
-
-backend-cmd-seeder:
-	@test -n "$(month)" || (echo "usage: make seed-monthly-dummy month=YYYY-MM email=user@example.com" && exit 1)
-	@test -n "$(email)" || (echo "usage: make seed-monthly-dummy month=YYYY-MM email=user@example.com" && exit 1)
-	$(BACKEND_RUN) go -C /app/backend run ./cmd/seeder --month "$(month)" --email "$(email)"
-
-ops-close: backend-cmd-ops-close
-
-backend-cmd-ops-close:
-	@test -n "$(scope)" || (echo "usage: make ops-close scope=day|week [team_id=<uuid>]" && exit 1)
-	@if [ -n "$(team_id)" ]; then \
-		$(BACKEND_RUN) go -C /app/backend run ./cmd/ops close --scope "$(scope)" --all-teams=false --team-id "$(team_id)"; \
-	else \
-		$(BACKEND_RUN) go -C /app/backend run ./cmd/ops close --scope "$(scope)" --all-teams=true; \
-	fi
-
-ops-notify: backend-cmd-ops-notify
-
-backend-cmd-ops-notify:
-	@test -n "$(slot)" || (echo "usage: make ops-notify slot=daily_2100|weekly_prev_sat_1900|weekly_due_sun_1000" && exit 1)
-	$(BACKEND_RUN) go -C /app/backend run ./cmd/ops notify --slot "$(slot)"
-
-vapid-keys: backend-cmd-vapid-keys
-
-backend-cmd-vapid-keys:
-	$(BACKEND_RUN) go -C /app/backend run ./cmd/vapid --subject "$(subject)"
+# lint:all includes architecture; build includes application/infra typechecking.
+# Full database/browser verification: cd app && bun run test:local
+check: lint build test
