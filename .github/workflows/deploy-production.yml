@@ -51,6 +51,10 @@ jobs:
       - name: Install dependencies
         if: steps.current.outputs.deploy == 'true'
         run: bun install --frozen-lockfile
+      # buildはCloudflare公式Vite pluginで行う。配備用Secretsは渡さない。
+      - name: Build application
+        if: steps.current.outputs.deploy == 'true'
+        run: bun run build
       - name: Validate settings, ensure state store, plan and deploy
         if: steps.current.outputs.deploy == 'true'
         env:
