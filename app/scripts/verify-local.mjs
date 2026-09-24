@@ -1,3 +1,4 @@
+// `test:local` とPRのCIから実行し、使い捨て環境でアプリ全体を検証する。
 import { spawn } from "node:child_process";
 import { cp, mkdir, mkdtemp, rm, symlink, writeFile, copyFile } from "node:fs/promises";
 import { tmpdir } from "node:os";

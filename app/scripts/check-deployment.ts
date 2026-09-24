@@ -1,3 +1,4 @@
+// 本番CDの配備後に実行し、公開先の /health が対象releaseを返すことを確認する。
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { deploymentSchema } from "../infra/config";

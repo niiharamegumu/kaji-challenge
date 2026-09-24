@@ -1,3 +1,4 @@
+// `architecture:check` から実行し、src/ の層・feature間のimport規約違反を検出する。
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 
