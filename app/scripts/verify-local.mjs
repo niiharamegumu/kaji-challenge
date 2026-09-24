@@ -1,6 +1,17 @@
 // `test:local` とPRのCIから実行し、使い捨て環境でアプリ全体を検証する。
+import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { cp, mkdir, mkdtemp, rm, symlink, writeFile, copyFile } from "node:fs/promises";
+import {
+  cp,
+  mkdir,
+  mkdtemp,
+  rm,
+  symlink,
+  writeFile,
+  copyFile,
+  readFile,
+  access,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 
@@ -70,17 +81,6 @@ try {
   for (const args of [["provider", "cloudflare", "bootstrap"], ["plan"], ["deploy"]]) {
     await run(`Alchemy ${args.at(-1)} CLI`, "node_modules/.bin/alchemy", [...args, "--help"]);
   }
-  await writeFile(
-    join(appDirectory, ".dev.vars"),
-    [
-      "BETTER_AUTH_SECRET=kaji-e2e-only-secret-do-not-use-in-production",
-      "GOOGLE_CLIENT_ID=e2e-local-only",
-      "GOOGLE_CLIENT_SECRET=e2e-local-only",
-      "SIGNUP_ALLOWED_EMAILS=allowlisted@example.com",
-      "VAPID_PRIVATE_KEY=unused-local-test-key",
-      "",
-    ].join("\n"),
-  );
   for (const name of ["Initial D1 migration", "D1 migration replay"]) {
     await run(name, "node_modules/.bin/wrangler", [
       "d1",
@@ -93,6 +93,26 @@ try {
     ]);
   }
   await run("Workers build", "node_modules/.bin/vp", ["build"]);
+  // 配備に渡す生成物を確認する。Alchemyの内部APIや代替builderは使用しない。
+  const built = JSON.parse(await readFile(join(appDirectory, "dist/server/wrangler.json"), "utf8"));
+  assert.equal(built.main, "index.js", "Alchemy main must match the built Worker entry");
+  assert.equal(built.assets.directory, "../client", "Alchemy assets must match the build output");
+  await access(join(appDirectory, "dist/server/index.js"));
+  const shell = await readFile(join(appDirectory, "dist/client/_shell.html"), "utf8");
+  assert.match(shell, /<html\b/);
+  assert.match(shell, /<script\b/);
+  assert((await readFile(join(appDirectory, "dist/client/sw.js"), "utf8")).includes("_shell.html"));
+  await writeFile(
+    join(appDirectory, ".dev.vars"),
+    [
+      "BETTER_AUTH_SECRET=kaji-e2e-only-secret-do-not-use-in-production",
+      "GOOGLE_CLIENT_ID=e2e-local-only",
+      "GOOGLE_CLIENT_SECRET=e2e-local-only",
+      "SIGNUP_ALLOWED_EMAILS=allowlisted@example.com",
+      "VAPID_PRIVATE_KEY=unused-local-test-key",
+      "",
+    ].join("\n"),
+  );
   await run("TypeScript application", "node_modules/.bin/tsc", ["-b"]);
   await run("TypeScript infrastructure and tests", "node_modules/.bin/tsc", [
     "-p",
