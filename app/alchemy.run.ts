@@ -21,7 +21,7 @@ export default Alchemy.Stack(
       release: yield* Config.string("APP_RELEASE"),
     });
     const database = yield* Cloudflare.D1.Database("Database", resources.database);
-    const worker = yield* Cloudflare.Website.Vite("Application", {
+    const worker = yield* Cloudflare.Worker("Application", {
       ...resources.worker,
       env: {
         DB: database,
