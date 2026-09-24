@@ -119,5 +119,7 @@ export default defineConfig(({ mode, isPreview }) => {
       },
     },
     server: { port: 5174 },
+    // SPA生成時は待受先と接続先をIPv4に揃え、Docker内のlocalhostのIPv4/IPv6不一致を防ぐ。
+    preview: isSpaPrerender ? { host: "127.0.0.1" } : undefined,
   };
 });
