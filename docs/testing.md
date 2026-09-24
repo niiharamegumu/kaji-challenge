@@ -28,7 +28,7 @@
 
 Alchemyのbootstrap/plan/deployは `--help` でCLI起動を確認し、アプリのbuildだけでは検出できない実行時peer依存の欠落・RC版の不整合を検出する。`ALCHEMY_HOME` は一時ディレクトリへ向け、実資格情報の読み込みやクラウドへの配備を行わない。Effectとplatform-bun/platform-node、およびoverrideしたplatform-node-sharedは対応する同じRC版で更新する。
 
-PRのCIでは通常の `test:local` に加え、Alchemyと同じ注入フラグとinline Cloudflare pluginでBunからVite builderを起動する。SPA shell生成・preview終了・PWAへのshell登録を検証する。`test:local` は使い捨て環境で通常buildとブラウザー操作を別途確認する。実際のAlchemy plan/deployや本番binding・権限は別途確認する。
+PRのCIは `test:local` で、Cloudflare公式pluginによる `vp build` と `vp preview` を検証する。build時は実資格情報だけでなくテスト用 `.dev.vars` も用意せず、CD同様に秘密値なしでSPA shellを生成する。build後に入口・assetsディレクトリ・PWAのshell登録を確認し、テスト用認証設定を追加してD1/E2Eを行う。Alchemyの内部APIや別プラグインによる代替buildは使用しない。本番はAlchemyの公開 `Worker` APIでこの形式の生成物を再bundleせず配備する。本番binding・権限・公開ドメイン・リソース更新はCDで別途確認する。
 
 DB統合テストのfixtureはWranglerの `getPlatformProxy` で実際のD1 bindingを起動し、初期SQLを適用する。DB制約によるbatch全体のrollback、世代番号の競合による再実行、同時更新、未commitの変更を含む読み取りを確認する。D1に未対応の対話的transactionや、DBをmockしたテストで代替しない。
 
