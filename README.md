@@ -118,11 +118,21 @@ bun run test:local
 
 `test:local` は一時ディレクトリへソースをコピーし、テスト専用の認証設定と使い捨てD1で、build・型・lint・UI・DB・ブラウザー・開発サーバーの検証を行います。普段の `.dev.vars` と `.wrangler` は使用しません。5194/5195ポートを空けて実行してください。結果は `app/test-results/` に保存します。Googleとの実OAuthとiPhone実機へのPushは別途確認します。
 
+buildとpreviewはCloudflare公式Viteプラグインを使用します。
+
+```sh
+cd app
+bun run build                   # vp build + 型検査
+bun run preview                 # build済みWorkerをローカルで確認（先にdevを停止）
+```
+
+Alchemyはビルド済みの `dist/server/index.js` と `dist/client` を、公開APIの `Worker({ bundle: false })` で配備します。開発・build・previewを同じ方式に揃え、AlchemyはWorker・D1・Secrets・ドメイン・Cronを管理します。Alchemy内部APIや独自previewスクリプトは使用しません。
+
 ## Cloudflareへの配備
 
 環境は **localとproductionのみ** です。localはWranglerのD1（`kaji-local`）、productionはAlchemy管理のD1（`kaji-production`）を使います。
 
-[Deploy production](.github/workflows/deploy-production.yml) が `main` へのpushで実行されます。**設定検証 → Alchemy状態保存先の確保 → plan → deploy（build・未適用SQL・Worker更新）→ 公開先health/release確認**を自動化しています。CIはPR時に実行し、CDでは再実行しません。CIへ本番Secretsを渡しません。`APP_RELEASE` は対象commit SHAを自動設定します。
+[Deploy production](.github/workflows/deploy-production.yml) が `main` へのpushで実行されます。**build → 設定検証 → Alchemy状態保存先の確保 → plan → deploy（未適用SQL・Worker更新）→ 公開先health/release確認**を自動化しています。CIはPR時に実行し、CDでは再実行しません。CIへ本番Secretsを渡しません。`APP_RELEASE` は対象commit SHAを自動設定します。
 
 ### 初回だけ行うこと
 
@@ -169,7 +179,7 @@ bun run test:local
 - **schema変更**：新しい番号（現在は `app/migrations/0004_*.sql` 以降）のSQLを追加し、CIで検証してからマージ。Alchemyが未適用SQLを適用します。適用済みSQLを編集せず、本番へWranglerで重ねて適用しません。`db:migrate` はローカル専用です。 既存DBへの `0003_iso_timestamps.sql` 適用は旧コードと日時形式が非互換のため、この変更のマージ前に現行mainをメンテナンス状態で配備し、SQLと新Workerの配備完了後に解除します。詳細は [日時の保存形式](docs/database.md#日時の保存形式) を参照してください。
 - **停止が必要な作業**：Environmentの `MAINTENANCE_MODE=true` に変更してCD実行。受付停止とCron解除を確認して作業し、falseへ戻してCD実行・復帰確認します。
 - **配備失敗**：エラーログを確認して修正後、最新mainで再実行。health失敗では自動rollbackしません。SQL適用後にWorker更新だけ失敗する場合もあるため、古いコードへ戻す前にDB互換性を確認します。復元は別の操作です。
-- **手動配備が必要な場合**：本番設定を秘密管理先から実行シェルの環境変数へ読み込み、`app/` で `mise exec -- bun run infra:plan --stage production` → `mise exec -- bun run deploy --stage production`。CDと同時実行せず、`APP_RELEASE` を対象コードに合わせて確認します。普段はGitHub Environmentを正としてください。
+- **手動配備が必要な場合**：本番設定を秘密管理先から実行シェルの環境変数へ読み込み、`app/` で `mise exec -- bun run build` → `mise exec -- bun run infra:plan --stage production` → `mise exec -- bun run deploy --stage production`。CDと同時実行せず、`APP_RELEASE` を対象コードに合わせて確認します。普段はGitHub Environmentを正としてください。
 
 実際のCloudflare/GitHub設定・配備は初回作業が必要です。ローカル検証はアカウント権限・Google実OAuth・本番D1の復元/性能・実機Pushを代替しません。業務API専用のレート制限と運用監視も配備時に確認します。
 
