@@ -3,10 +3,11 @@ import { addDays, todayJST, weekStart } from "../domain/dates";
 import { closePeriod } from "./summary";
 export const crons = {
   day: "5 15 * * *",
-  week: "10 15 * * 0",
+  // Cloudflareの曜日指定はSUN/SATを使い、数字の曜日解釈の違いを避ける。
+  week: "10 15 * * SUN",
   daily_2100: "0 12 * * *",
-  weekly_prev_sat_1900: "0 10 * * 6",
-  weekly_due_sun_1000: "0 1 * * 0",
+  weekly_prev_sat_1900: "0 10 * * SAT",
+  weekly_due_sun_1000: "0 1 * * SUN",
 } as const;
 export type PushSlot = "daily_2100" | "weekly_prev_sat_1900" | "weekly_due_sun_1000";
 export interface PushPayload {

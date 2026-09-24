@@ -26,6 +26,14 @@ test.beforeAll(async () => {
     await connection.close();
   }
 });
+test("denied OAuth login shows an explanation and a way back to login", async ({ page }) => {
+  await page.goto("/auth/callback?error=signup_forbidden");
+  await expect(page.getByRole("heading", { name: "ログインできませんでした" })).toBeVisible();
+  await expect(page.getByText(/このアカウントは現在の利用対象に登録されていません/)).toBeVisible();
+  await expect(page.locator("#boot-splash")).toHaveCount(0);
+  await page.getByRole("link", { name: "ログイン画面に戻る" }).click();
+  await expect(page.getByRole("button", { name: "Googleでログイン" })).toBeVisible();
+});
 test("login screen and API paths never fall back to cached HTML", async ({
   page,
   request,

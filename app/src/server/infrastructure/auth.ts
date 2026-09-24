@@ -87,7 +87,10 @@ export function createAuth(db: Database, settings: AuthSettings) {
         create: {
           before: async (user) => {
             if (!allowed.has(user.email.toLowerCase()))
-              throw new APIError("FORBIDDEN", { message: "signup_forbidden" });
+              throw new APIError("FORBIDDEN", {
+                code: "signup_forbidden",
+                message: "signup_forbidden",
+              });
             return { data: user };
           },
         },

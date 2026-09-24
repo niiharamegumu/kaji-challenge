@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import { handleOAuthUserInfo } from "better-auth/oauth2";
-import { afterAll, beforeAll, expect, it } from "vitest";
+import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { createAuth } from "../../src/server/infrastructure/auth";
 import { createTestDatabase } from "../helpers/d1";
 
@@ -62,6 +62,47 @@ it.each(["denied@example.com", "allowed@example.com.attacker.test", "allowed+ali
     expect(await counts()).toEqual(before);
   },
 );
+it("redirects a denied Google callback to the app without creating an account", async () => {
+  const auth = createAuth(connection.db, settings);
+  const provider = (await auth.$context).socialProviders.find((p) => p.id === "google")!;
+  const subject = crypto.randomUUID();
+  vi.spyOn(provider, "validateAuthorizationCode").mockResolvedValue({ accessToken: "fixture" });
+  vi.spyOn(provider, "getUserInfo").mockResolvedValue({
+    user: { name: "Denied", email: "denied@example.com", emailVerified: true },
+    data: { sub: subject, email: "denied@example.com", email_verified: true },
+  });
+  const before = await counts();
+  const start = await auth.handler(
+    new Request(origin + "/api/auth/sign-in/social", {
+      method: "POST",
+      headers: { origin, "content-type": "application/json" },
+      body: JSON.stringify({
+        provider: "google",
+        callbackURL: origin + "/auth/callback",
+        errorCallbackURL: origin + "/auth/callback",
+      }),
+    }),
+  );
+  expect(start.status).toBe(200);
+  const authorize = new URL(((await start.json()) as { url: string }).url);
+  const state = authorize.searchParams.get("state");
+  expect(state).toBeTruthy();
+  const cookieHeader = start.headers
+    .getSetCookie()
+    .map((header) => header.split(";")[0])
+    .join("; ");
+  const callback = await auth.handler(
+    new Request(
+      origin + "/api/auth/callback/google?code=fixture&state=" + encodeURIComponent(state!),
+      { headers: { cookie: cookieHeader } },
+    ),
+  );
+  expect(callback.status).toBe(302);
+  const destination = new URL(callback.headers.get("location")!);
+  expect(destination.pathname).toBe("/auth/callback");
+  expect(destination.searchParams.get("error")).toBe("signup_forbidden");
+  expect(await counts()).toEqual(before);
+});
 it("normalizes the allowlist and preserves a registered Google identity after list removal", async () => {
   const subject = crypto.randomUUID();
   const first = await oauth(createAuth(connection.db, settings), "allowed@example.com", subject);
