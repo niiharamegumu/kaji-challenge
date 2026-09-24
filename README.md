@@ -126,7 +126,9 @@ bun run test:local
 
 ### 初回だけ行うこと
 
-1. **Cloudflareを準備。** 対象アカウント、Activeなドメインのzone、Workers Paid、API tokenを用意します。tokenは対象アカウント/zoneに限定し、Workers Scripts Edit/Write・D1 Edit/Write・Secrets Store Edit・Account Settings Read・Zone Read・Workers Routes Edit/Writeを基準に設定します。実アカウントの権限はbootstrapで確認してください（[Workers権限](https://developers.cloudflare.com/workers/authorization/workers/)・[Secrets Store権限](https://developers.cloudflare.com/secrets-store/access-control/)）。月次締め等はFreeのクエリ上限を超える場合があります（[D1の制限](https://developers.cloudflare.com/d1/platform/limits/)）。
+1. **Cloudflareを準備。** 対象アカウント、Activeなドメインのzone、API tokenを用意します。まずWorkers Freeで開始できます。
+   - tokenは対象account/zoneに限定し、Workers新規作成・D1 Edit/Write・Secrets Store Edit・Account Settings Read・Zone Read・Workers Routes Edit/Writeに必要な権限を設定します。Workersの新規作成には製品単位のAdmin権限が必要です。実アカウントの権限はbootstrapと初回deployで確認してください（[Workers権限](https://developers.cloudflare.com/workers/authorization/workers/)・[Secrets Store権限](https://developers.cloudflare.com/secrets-store/access-control/)）。
+   - Alchemyの状態保存先はSQLite型Durable Objectを使用し、Freeで利用できます。FreeではWorkerのHTTP・CronともCPU時間10ms、D1クエリは1回の呼び出しにつき50件、Cronはアカウント全体で5本までです。このアプリは有効化時に5本使うため、他のCronがある場合やCPU・D1上限に達した場合はPaidへの変更を検討してください（[Workers制限](https://developers.cloudflare.com/workers/platform/limits/)・[D1制限](https://developers.cloudflare.com/d1/platform/limits/)）。
 2. **Google OAuthを準備。** 本番用のウェブアプリケーションクライアントを作成し、生成元 `https://<本番ホスト>`、redirect URI `https://<本番ホスト>/api/auth/callback/google` を登録します。同意画面の公開範囲も確認します。
 3. **本番の鍵を作成。** `BETTER_AUTH_SECRET` は `openssl rand -hex 32`、VAPID鍵は `app/` で `mise exec -- bun x --no-install web-push generate-vapid-keys` で生成します。安全に保管し、毎回生成し直しません。
 4. **状態保存先をbootstrap。** ローカルのツール・依存を準備後、`app/` で以下を実行します。ファイルを作成したらエディターでCloudflare設定を記入してからbootstrapへ進みます。
