@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { unstable_readConfig } from "wrangler";
 import { deploymentResources } from "../../infra/config";
 const config = {
   stage: "production" as const,
@@ -8,6 +9,15 @@ const config = {
   release: "fixture",
 };
 describe("Alchemy deployment configuration", () => {
+  it("keeps the local and deployment Worker compatibility settings aligned", () => {
+    const local = unstable_readConfig({
+      config: new URL("../../wrangler.jsonc", import.meta.url).pathname,
+    });
+    expect(deploymentResources(config).worker.compatibility).toEqual({
+      date: local.compatibility_date,
+      flags: local.compatibility_flags,
+    });
+  });
   it("provisions production D1 with initial migrations and same-origin assets", () => {
     const result = deploymentResources(config);
     expect(result.database).toEqual({
@@ -17,12 +27,13 @@ describe("Alchemy deployment configuration", () => {
       migrations: "./migrations",
     });
     expect(result.worker).toMatchObject({
-      main: "src/server-entry.ts",
+      main: "dist/server/index.js",
+      bundle: false,
       domain: "kaji.example.com",
       workersDev: false,
       crons: [],
       observability: { enabled: true, headSamplingRate: 1 },
-      assets: { runWorkerFirst: ["/api/*", "/_serverFn/*", "/health"] },
+      assets: { directory: "dist/client", runWorkerFirst: ["/api/*", "/_serverFn/*", "/health"] },
     });
   });
   it("enables all five schedules only outside maintenance", () => {

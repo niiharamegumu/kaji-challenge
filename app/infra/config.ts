@@ -32,14 +32,16 @@ export function deploymentResources(input: unknown) {
       migrations: "./migrations",
     },
     worker: {
-      main: "src/server-entry.ts",
+      // Cloudflare公式Vite pluginが生成したWorkerを再bundleせず配備する。
+      main: "dist/server/index.js",
+      bundle: false,
       compatibility: { date: "2026-09-14", flags: ["nodejs_compat"] },
       domain: new URL(settings.origin).hostname,
       workersDev: false,
       crons:
         settings.jobs === "true" && settings.maintenance === "false" ? Object.values(crons) : [],
       observability: { enabled: true, headSamplingRate: 1 },
-      assets: { runWorkerFirst: ["/api/*", "/_serverFn/*", "/health"] },
+      assets: { directory: "dist/client", runWorkerFirst: ["/api/*", "/_serverFn/*", "/health"] },
     },
   };
 }
