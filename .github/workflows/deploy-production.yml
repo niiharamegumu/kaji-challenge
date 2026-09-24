@@ -56,7 +56,7 @@ jobs:
       - name: Install dependencies
         if: steps.current.outputs.deploy == 'true'
         run: bun install --frozen-lockfile
-      - name: Validate settings, plan and deploy
+      - name: Validate settings, ensure state store, plan and deploy
         if: steps.current.outputs.deploy == 'true'
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
@@ -83,6 +83,7 @@ jobs:
             const result = deploymentSchema.safeParse({ stage: "production", origin: process.env.APP_ORIGIN, release: process.env.APP_RELEASE, jobs: process.env.JOBS_ENABLED, maintenance: process.env.MAINTENANCE_MODE });
             if (!result.success) throw new Error("Invalid production origin, release, or boolean setting");
           '
+          bun run infra:bootstrap --no-input
           bun run infra:plan --stage production --no-input
           bun run deploy --stage production --yes --no-input
       - name: Verify deployed release
