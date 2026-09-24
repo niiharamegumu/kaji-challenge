@@ -1,68 +1,36 @@
 name: CI
-
 on:
   workflow_dispatch:
+  workflow_call:
   pull_request:
-
 permissions:
   contents: read
-  pull-requests: read
-
 jobs:
-  changes:
+  cloudflare-quality:
     runs-on: ubuntu-latest
-    outputs:
-      backend: ${{ steps.filter.outputs.backend }}
-      frontend: ${{ steps.filter.outputs.frontend }}
+    defaults:
+      run:
+        working-directory: app
     steps:
       - uses: actions/checkout@v7
-
-      - name: Detect changed paths
-        id: filter
-        uses: dorny/paths-filter@v3
         with:
-          filters: |
-            backend:
-              - 'backend/**'
-              - 'api/**'
-              - 'Makefile'
-              - '.github/workflows/ci.yml'
-            frontend:
-              - 'frontend/**'
-              - 'api/**'
-              - 'Makefile'
-              - '.github/workflows/ci.yml'
-
-  security-backend:
-    needs: changes
-    if: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.backend == 'true' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: backend/go.mod
-
-      - name: Run backend security gate (Critical only)
-        run: make security-backend
-
-  security-frontend:
-    needs: changes
-    if: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-
+          persist-credentials: false
+      - name: Validate GitHub Actions workflows
+        working-directory: .
+        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.11 -color
       - uses: actions/setup-node@v6
         with:
           node-version: 24
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Install frontend deps
-        run: npm ci
-        working-directory: frontend
-
-      - name: Run frontend security gate (Critical only)
-        run: make security-frontend
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - run: bun audit --audit-level moderate
+      - run: bunx playwright install --with-deps chromium
+      - name: Verify application, D1, and browser behavior
+        run: bun run test:local
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: local-verification-results
+          path: app/test-results

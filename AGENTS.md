@@ -3,10 +3,8 @@
 ## Scope
 このファイルは、Codex が自動で読み込むリポジトリ共通の作業規約を定義します。
 
-このリポジトリはモノレポです。
-- `frontend/`: React + Vite + TypeScript（Cloudflare Workers 配備前提）
-- `backend/`: Go + Gin（Cloud Run 配備前提）
-- `api/`: OpenAPI source of truth
+アプリの実装・SQL・インフラの正本は `app/` です。
+- `app/`: TanStack Start SPA + React + TypeScript（Cloudflare Workers）
 
 ## Instruction Priority
 1. チャットでのユーザー指示
@@ -23,26 +21,25 @@
 - 権限昇格や副作用のあるコマンドは、承認を求める前に内容を慎重に確認する。
 
 ## Required Project Rules
-- アーキテクチャ: backend は Clean Architecture、frontend は Feature-Based Architecture に従う。backend/frontend の構造変更、package 移動、import 境界変更の前に `docs/architecture.md` を読む。
-- API: `api/openapi.yaml` を source of truth とする。API 挙動を変える場合は OpenAPI を先に更新し、生成を実行してから backend/frontend を合わせる。
-- テスト: backend、frontend、統合テスト、API contract の設計は `docs/testing.md` に従う。
+- アーキテクチャ: app/src/server は Clean Architecture、UI は Feature-Based Architecture に従う。構造変更、package 移動、import 境界変更の前に `docs/architecture.md` を読む。
+- API: 内部通信の正本は `app/src/contracts/` の入力schema・DTO・出力schemaと契約テスト。SQLは `app/migrations/` で管理する。
+- テスト: server、UI、統合テスト、API contract の設計は `docs/testing.md` に従う。
 - ワークフロー: spec-first 作業、検証、PR準備、repo skill / subagent の使い分けは `docs/codex-workflow.md` に従う。
 
 ## Common Commands
 - ローカル起動: `make dev`
-- API client/server type 生成: `make gen`
 - lint: `make lint`
 - アーキテクチャチェック: `make architecture-check`
 - test: `make test`
-- フルチェック: `make check`
-- 生成差分チェック: `make diff-gen`
+- アプリのbuild・型・format・lint・UI検証: `make check`
+- DB・ブラウザーを含む一括検証: `cd app && bun run test:local`
 
 ## Definition of Done
 タスクは、該当する項目を満たしたときに完了とします。
 - 変更範囲の build/type/lint/test が通っている。
 - API/schema を変更した場合、生成ファイルが更新されている。
-- backend/frontend の構造や import を変更した場合、アーキテクチャチェックが通っている。
-- API/backend 変更では security/auth への影響を確認している。
+- app の構造や import を変更した場合、アーキテクチャチェックが通っている。
+- API/server 変更では security/auth への影響を確認している。
 - 最終報告に、変更ファイル、変更理由、検証コマンドと結果、既知のリスクや follow-up を含める。
 
 ## Repo Skills and Agents

@@ -1,36 +1,66 @@
 # Node
-frontend/node_modules/
-frontend/dist/
-
-# Go
-backend/bin/
+app/node_modules/
+app/dist/
 
 # Env
 .env
 .env.*
 !.env.example
+.dev.vars*
+!.dev.vars.example
+
+# Credentials and database exports (SQL migrations remain tracked)
+.secrets/
+credentials.json
+*service-account*.json
+*.key
+*.pem
+*.p12
+*.pfx
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+*.dump
+*.backup
+*.sql.gz
+*.sql.zip
+*.sql
+!app/migrations/*.sql
+*.sqlite3
+*.sqlite3-*
+*.har
+id_rsa
+id_ed25519
 
 # Codex
 .codex/specs/
 !.codex/config.toml
+
 .serena/
 
 # OS
 .DS_Store
 
 # Runtime artifacts
-backend/tmp/
-frontend/.vite/
-frontend/.wrangler/
-api/openapi.html
+app/.vite/
+.wrangler/
 *.log
 coverage/
 
 # TypeScript build artifacts
-frontend/*.tsbuildinfo
-frontend/vite.config.js
-frontend/vite.config.d.ts
-frontend/vitest.config.js
-frontend/vitest.config.d.ts
-DEPLOY_RUNBOOK_LOCAL.md
-push_backend_image_local.sh
+app/*.tsbuildinfo
+app/vite.config.js
+app/vite.config.d.ts
+app/vitest.config.js
+app/vitest.config.d.ts
+
+# Cloudflare local/runtime outputs
+.alchemy/
+app/test-results/
+app/playwright-report/
+app/.tanstack/
+.vite-hooks/_/
+
+# Personal reference documents and migration notes (not application inputs)
+/local-notes/

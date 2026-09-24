@@ -10,14 +10,18 @@
 - `.agents/skills/*/SKILL.md`: Codex が明示または暗黙に使える再利用ワークフロー。
 - `.codex/rules/*.rules`: command approval policy 専用。
 - `.codex/agents/*.toml`: 明示的に委譲する project-scoped custom subagent。
-- `.codex/specs/*`: タスク単位の調査、計画、結果の記録。
+- `local-notes/records/*`: タスク単位の調査、計画、結果の記録（Git管理外）。
 
 長い設計方針を `.codex/rules` に入れないでください。Rules は command approval decision のためのものです。
 
 ## Spec を作る基準
 
 複数ファイルにまたがる変更、API 挙動変更、アーキテクチャ境界への影響、データモデル挙動の変更、
-または実装前の承認が必要な非自明な作業では `.codex/specs/YYYYMMDD-short-title/` を使います。
+または実装前の承認が必要な非自明な作業では `local-notes/records/YYYY-MM-DD-short-title/` を使います。
+
+個人用資料は `local-notes/` に集約します。実装解説は `guides/`、起動・配備手順は
+`operations/`、作業記録は `records/`、ログ・画像などの検証証跡は `verification/` に保存します。アプリ・ビルド・CIの入力にはしません。
+リポジトリ共通の設計・テスト規約、README、実行に必要な設定例は引き続きGitで管理します。
 
 各 spec には以下を含めます。
 
@@ -31,12 +35,12 @@
 
 繰り返し使うワークフローには repo skill を使います。
 
-- `$kaji-api-change`: API contract と生成コード変更。
+- `$kaji-api-change`: Zod API contract とadapter変更。
 - `$kaji-test-design`: test strategy と regression coverage。
 - `$kaji-architecture-check`: dependency boundary と構造変更。
 - `$kaji-pr-prep`: 最終検証と PR 準備。
 
-OpenAPI、React/Vitest、Go testing、auth/security、Cloudflare Workers、Cloud Run などの外部専門知識が必要な場合は、インストール済みの汎用 skill も使います。
+TypeScript/Zod、React/Vitest、auth/security、Cloudflare Workers などの外部専門知識が必要な場合は、インストール済みの汎用 skill も使います。
 
 ## Subagent Usage
 

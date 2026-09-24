@@ -1,26 +1,16 @@
 ---
 name: kaji-api-change
-description: KajiChalle の API 挙動、request/response schema、生成 client、backend transport handler、frontend API adapter を変更するときに使う。OpenAPI first と生成コード検証を徹底する。
+description: KajiChalleのServer Functions・Zod契約・feature API adapterを変更するときに使う。TS契約と実装の整合性を検証する。
 ---
 
 # Kaji API Change
 
-API 挙動や schema を変更するときは、この手順に従います。
+`AGENTS.md`、`docs/architecture.md`、`docs/testing.md` に従う。
 
-1. `AGENTS.md`、`docs/architecture.md`、`docs/testing.md` を読む。
-2. backend/frontend を編集する前に、public API の変更点を `api/openapi.yaml` で特定する。
-3. 先に `api/openapi.yaml` を更新する。
-4. 必要最小限の生成 target を実行する。
-   - backend-only の generated server type 変更: `make gen-backend`
-   - frontend-only の generated client 変更: `make gen-frontend`
-   - cross-stack 変更: `make gen`
-5. Clean Architecture 境界に従って backend transport/usecase/persistence を更新する。
-6. Feature-Based Architecture 境界に従って frontend feature API adapter、hook、UI を更新する。
-7. テストを追加または更新する。
-   - status code、cookie/header、error mapping、response shape は backend transport tests で確認する。
-   - business rule や保存挙動が変わる場合は backend usecase/persistence tests を追加する。
-   - user-visible flow が変わる場合は frontend adapter/hook/component tests を追加する。
-8. 対象テストで検証し、生成結果の整合性が重要な場合は `make diff-gen` を実行する。
-9. 変更した API 挙動、生成ファイル、検証コマンド、残るリスクを報告する。
+- 現用の契約は `app/src/contracts/`。入力schema・DTO・出力schemaを先に確認して変更し、Server Function、Application、feature adapterの整合性を保つ。
+- session、origin、チーム所属/owner権限をサーバー側で検証する。業務更新と文字列revisionの更新は同じDB transactionで行う。
+- transportは入力・認証・エラー変換、Application/Domainは業務規則、infrastructureはDB/外部サービスを担当する。
+- 競合/前提不足、認証失効、越境拒否、入力不正、出力schemaを契約テスト・専用DBテストで確認する。画面に影響する変更はadapter/hook/componentで確認する。
+- 対象テストを選び、appの型・build・lint・境界を確認する。DB/ブラウザーを含む全体確認には `cd app && bun run test:local` を使う。
 
-生成ファイルは、確認目的を除き手編集しない。
+変更した契約・挙動、検証結果、未確認事項を報告する。

@@ -1,0 +1,7 @@
+# Local-only credentials. Copy to .dev.vars and fill a separate Google development client.
+# Generate once with: openssl rand -hex 32
+BETTER_AUTH_SECRET=
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+SIGNUP_ALLOWED_EMAILS=
+VAPID_PRIVATE_KEY=

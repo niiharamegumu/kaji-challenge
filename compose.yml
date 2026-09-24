@@ -1,70 +1,15 @@
 services:
-  postgres:
-    image: postgres:16
-    container_name: kaji-postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: kaji
-      POSTGRES_USER: kaji
-      POSTGRES_PASSWORD: kaji
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U kaji -d kaji"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  backend:
+  app:
     build:
-      context: .
-      dockerfile: backend/Dockerfile.dev
-    container_name: kaji-backend-dev
+      context: ./app
+      dockerfile: Dockerfile.dev
+    working_dir: /app/app
     restart: unless-stopped
-    working_dir: /app/backend
     ports:
-      - "8080:8080"
-    env_file:
-      - .env
-    environment:
-      PORT: "${PORT:-8080}"
-      DATABASE_URL: "${DATABASE_URL:-postgres://kaji:kaji@postgres:5432/kaji?sslmode=disable}"
-      FRONTEND_ORIGIN: "${FRONTEND_ORIGIN:-http://localhost:5173}"
-      COOKIE_SECURE: "${COOKIE_SECURE:-false}"
-    depends_on:
-      postgres:
-        condition: service_healthy
+      - "127.0.0.1:5174:5174"
     volumes:
-      - ./backend:/app/backend
-      - ./api:/app/api
-      - backend_go_pkg_mod:/go/pkg/mod
-      - backend_go_build_cache:/root/.cache/go-build
-      - backend_golangci_cache:/root/.cache/golangci-lint
-
-  frontend:
-    image: node:24
-    container_name: kaji-frontend-dev
-    restart: unless-stopped
-    working_dir: /app/frontend
-    ports:
-      - "5173:5173"
-    env_file:
-      - .env
-    environment:
-      VITE_API_BASE_URL: "${VITE_API_BASE_URL:-/api}"
-    depends_on:
-      - backend
-    command: sh -c "npm ci && npm run dev -- --host 0.0.0.0 --port 5173"
-    volumes:
-      - ./frontend:/app/frontend
-      - ./api:/app/api
-      - frontend_node_modules:/app/frontend/node_modules
+      - ./app:/app/app
+      - app_node_modules:/app/app/node_modules
 
 volumes:
-  postgres_data:
-  frontend_node_modules:
-  backend_go_pkg_mod:
-  backend_go_build_cache:
-  backend_golangci_cache:
+  app_node_modules:

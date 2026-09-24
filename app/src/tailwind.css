@@ -1,0 +1,50 @@
+/* Keep Workers runtime files outside Tailwind's source watcher, including in Compose. */
+@import "tailwindcss" source(".");
+
+html,
+body,
+#root {
+  min-height: 100%;
+  background-color: #f6f4ef;
+}
+
+@theme {
+  --font-sans: "Noto Sans JP", sans-serif;
+
+  --color-washi-50: #f6f4ef;
+  --color-kohaku-50: #fff8ef;
+  --color-kohaku-200: #f2d4a7;
+  --color-matcha-50: #eff8ef;
+  --color-matcha-100: #daf0da;
+  --color-matcha-200: #b9e0b9;
+  --color-matcha-300: #95c895;
+  --color-matcha-400: #6cad6c;
+  --color-matcha-500: #4f9859;
+  --color-matcha-600: #3e7f4a;
+  --color-matcha-700: #2f663b;
+}
+
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-enter {
+  animation: enter 220ms ease-out both;
+}
+
+.ios-safe-main {
+  padding-top: calc(env(safe-area-inset-top) + 12px);
+}
+
+@media (min-width: 768px) {
+  .ios-safe-main {
+    padding-top: calc(env(safe-area-inset-top) + 24px);
+  }
+}
