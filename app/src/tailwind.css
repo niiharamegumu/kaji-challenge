@@ -36,7 +36,8 @@ body,
 }
 
 .animate-enter {
-  animation: enter 220ms ease-out both;
+  /* 終了後の transform を保持せず、画面切替時に合成レイヤーを残さない。 */
+  animation: enter 220ms ease-out backwards;
 }
 
 .ios-safe-main {

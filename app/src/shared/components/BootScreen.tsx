@@ -2,7 +2,8 @@ type BootScreenProps = {
   mode?: "overlay" | "page";
 };
 
-const baseClassName = "flex items-center justify-center bg-white text-stone-700";
+const baseClassName =
+  "flex items-center justify-center bg-[color:var(--color-washi-50)] text-stone-700";
 
 export function BootScreen({ mode = "page" }: BootScreenProps) {
   return (

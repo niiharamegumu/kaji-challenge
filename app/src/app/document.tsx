@@ -26,7 +26,7 @@ export function Document() {
         <meta name="theme-color" content="#f6f4ef" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-title" content="KajiChalle" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <link rel="icon" href="/favicon.ico" sizes="any" />
         <link rel="icon" type="image/png" href="/icons/pwa-192x192.png" />
         <link rel="apple-touch-icon" href="/icons/apple-touch-icon-180x180.png" />
@@ -37,7 +37,7 @@ export function Document() {
           {`
       body {
         margin: 0;
-        background: #ffffff;
+        background: #f6f4ef;
       }
 
       .boot-splash {
@@ -47,7 +47,7 @@ export function Document() {
         display: flex;
         align-items: center;
         justify-content: center;
-        background: #ffffff;
+        background: #f6f4ef;
         opacity: 1;
         transition: opacity 180ms ease;
       }
