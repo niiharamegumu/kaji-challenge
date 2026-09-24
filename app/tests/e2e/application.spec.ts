@@ -144,6 +144,13 @@ test("PWA installs the generated SPA shell and excludes server functions", async
 }) => {
   await page.goto("/");
   await expect(page.getByRole("button", { name: "Googleでログイン" })).toBeVisible();
+  await expect(page.locator('meta[name="apple-mobile-web-app-status-bar-style"]')).toHaveAttribute(
+    "content",
+    "black-translucent",
+  );
+  expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe(
+    "rgb(246, 244, 239)",
+  );
   await page.evaluate(async () => {
     await navigator.serviceWorker.ready;
   });
@@ -232,6 +239,33 @@ test("creates tasks, reorders with real drag sensors, and preserves navigation",
   await expect(page).toHaveURL(/calendar/);
   await page.goBack();
   await expect(page.getByText("操作確認A", { exact: true })).toBeVisible();
+});
+
+test("completed home cards release their animation layer before opening shopping", async ({
+  page,
+  context,
+}) => {
+  await authenticate(context);
+  await page.goto("/tasks");
+  await page.getByRole("button", { name: "追加", exact: true }).click();
+  await page.getByLabel("タスク名", { exact: true }).fill("画面切替の描画確認");
+  await page.getByRole("button", { name: "追加する", exact: true }).click();
+  await page.getByRole("button", { name: "ホーム", exact: true }).click();
+
+  const dailyPanel = page.getByRole("article").filter({
+    has: page.getByRole("heading", { name: "日間タスク" }),
+  });
+  const card = dailyPanel.getByRole("button", { name: /画面切替の描画確認.*日間/ });
+  await card.click();
+  await expect(card).toContainText("完了");
+  await expect
+    .poll(() => dailyPanel.evaluate((element) => getComputedStyle(element).transform))
+    .toBe("none");
+
+  await page.getByRole("button", { name: "買い物", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "買い物リスト", exact: true })).toBeVisible();
+  await expect(dailyPanel).toHaveCount(0);
+  await expect(page.locator('main [class*="ring-[color:var(--color-matcha-400)]"]')).toHaveCount(0);
 });
 
 test("uses the same calendar form shell for creation and editing and persists both", async ({
