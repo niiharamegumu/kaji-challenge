@@ -1,7 +1,6 @@
 name: CI
 on:
   workflow_dispatch:
-  workflow_call:
   pull_request:
 permissions:
   contents: read
@@ -27,6 +26,32 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun audit --audit-level moderate
       - run: bunx playwright install --with-deps chromium
+      - name: Verify Alchemy-style build and SPA shell
+        env:
+          ALCHEMY_CLOUDFLARE_VITE_INJECTED: '1'
+          KAJI_D1_TEST_PATH: ${{ runner.temp }}/alchemy-build-d1
+          WRANGLER_LOG_PATH: ${{ runner.temp }}/wrangler-build.log
+        run: |
+          bun -e '
+            import assert from "node:assert/strict";
+            import { readFile } from "node:fs/promises";
+            import { cloudflare } from "@cloudflare/vite-plugin";
+            import { createBuilder } from "vite";
+
+            const builder = await createBuilder({
+              plugins: [cloudflare({
+                viteEnvironment: { name: "ssr" },
+                persistState: { path: process.env.KAJI_D1_TEST_PATH },
+              })],
+            }, null);
+            await builder.buildApp();
+
+            const shell = await readFile("dist/client/_shell.html", "utf8");
+            assert.match(shell, /<html\b/);
+            assert.match(shell, /<script\b/);
+            const sw = await readFile("dist/client/sw.js", "utf8");
+            assert(sw.includes("_shell.html"), "PWA must precache the SPA shell");
+          '
       - name: Verify application, D1, and browser behavior
         run: bun run test:local
       - uses: actions/upload-artifact@v4

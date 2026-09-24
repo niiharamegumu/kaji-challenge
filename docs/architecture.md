@@ -47,4 +47,4 @@ D1のread replicationは無効。すべてprimaryへ読み書きし、リクエ�
 
 `app/alchemy.run.ts` と `app/infra/` がWorker・D1・ドメイン・Secrets・Cronを管理する。配備時のSQL適用はAlchemyが管理する。ローカルはWranglerで同じSQLを適用する。環境はlocalとproductionだけとし、WranglerのローカルDBと本番D1を共有しない。本番のIaCはproduction以外のstageを拒否する。
 
-本番配備は `.github/workflows/deploy-production.yml` がmain更新時にCIを再利用し、成功後にproduction Environmentの設定でplan/deployを実行する。SecretsはCIへ渡さず、配備stepに限定する。配備を直列化し、公開先のhealthとcommit SHAを検証する。
+本番配備は `.github/workflows/deploy-production.yml` がmain更新時にproduction Environmentの設定でplan/deployを実行する。CIはPR時に実行し、CDでは再実行しない。mainの保護ルールでPRと `cloudflare-quality` の成功を必須にする。SecretsはCIへ渡さず、配備stepに限定する。配備を直列化し、公開先のhealthとcommit SHAを検証する。

@@ -14,12 +14,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  verify:
-    if: github.ref == 'refs/heads/main'
-    uses: ./.github/workflows/ci.yml
-
   deploy:
-    needs: verify
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 30
