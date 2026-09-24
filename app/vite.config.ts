@@ -1,5 +1,5 @@
 import { injectManifest } from "workbox-build";
-import { cloudflare, type PluginConfig } from "@cloudflare/vite-plugin";
+import { cloudflare } from "@cloudflare/vite-plugin";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import babel from "@rolldown/plugin-babel";
 import tailwindcss from "@tailwindcss/vite";
@@ -29,49 +29,22 @@ const tooling = {
   },
   staged: { "*.{ts,tsx,js,mjs}": "vp lint" },
 };
-export default defineConfig(({ mode, isPreview }) => {
-  // AlchemyがCloudflareプラグインをビルドに追加済みか。Alchemyが設定し、CIでも同じ状態を再現する。
-  const alchemyInjectsPlugin = process.env.ALCHEMY_CLOUDFLARE_VITE_INJECTED === "1";
-  // StartがSPA shellを生成するためのpreview実行か。isPreviewはVite、環境変数はStartが設定する。
-  const isSpaPrerender = isPreview === true && process.env.TSS_PRERENDERING === "true";
-  // Playwrightの開発起動テストか。playwright.dev.config.tsが --mode development-test を指定する。
-  const isDevStartupTest = mode === "development-test";
-  // 検証用D1の保存先。verify-local.mjsやCIが一時ディレクトリを指定し、通常起動では未設定。
+export default defineConfig(({ mode }) => {
+  // 検証時だけ普段のD1保存先とOriginを分離する。通常開発・build・previewは同じ公式pluginを使う。
   const testD1Path = process.env.KAJI_D1_TEST_PATH;
-
-  // Alchemy経由のビルドでは、Alchemyが追加するプラグインを使う。
-  // StartのSPA生成は別のpreviewサーバーでこの設定を読み直すため、こちらでも追加する。
-  const shouldAddCloudflarePlugin = !alchemyInjectsPlugin || isPreview === true;
-
-  const cloudflareOptions: PluginConfig = {
-    viteEnvironment: { name: "ssr" },
-  };
-
-  if (isSpaPrerender) {
-    // SPA生成にはworkerdが必要だが、デバッガーは不要。
-    // Bunでデバッガーの終了処理が失敗するため、このときだけ無効にする。
-    cloudflareOptions.inspectorPort = false;
-  }
-
-  if (testD1Path) {
-    // 検証用D1の保存先を分離し、普段のローカルDBに影響させない。
-    cloudflareOptions.persistState = { path: testD1Path };
-  }
-
-  if (testD1Path || isDevStartupTest) {
-    // 認証のOriginをテストサーバーに合わせる。開発起動テストは5195、ビルド後の検証は5194。
-    // 通常の開発・配備では上書きせず、WranglerやAlchemyの設定を使う。
-    cloudflareOptions.config = {
-      vars: {
-        APP_ORIGIN: isDevStartupTest ? "http://localhost:5195" : "http://localhost:5194",
-      },
-    };
-  }
+  const testOrigin =
+    mode === "development-test" ? "http://localhost:5195" : "http://localhost:5194";
 
   return {
     ...tooling,
     plugins: [
-      shouldAddCloudflarePlugin ? cloudflare(cloudflareOptions) : null,
+      cloudflare({
+        viteEnvironment: { name: "ssr" },
+        ...(testD1Path ? { persistState: { path: testD1Path } } : {}),
+        ...(testD1Path || mode === "development-test"
+          ? { config: { vars: { APP_ORIGIN: testOrigin } } }
+          : {}),
+      }),
       tanstackStart({ router: { enableRouteGeneration: true }, spa: { enabled: true } }),
       react(),
       babel({ presets: [reactCompilerPreset()] }),
@@ -109,6 +82,8 @@ export default defineConfig(({ mode, isPreview }) => {
     environments: {
       ssr: {
         build: {
+          // 現行のweb-push依存にはNode組込moduleへのrequireが残るため、nodejs_compatで解決する。
+          // Cloudflare pluginがplatformをneutralにするため、RolldownのNode自動生成には任せられない。
           rolldownOptions: {
             output: {
               banner:
@@ -119,7 +94,7 @@ export default defineConfig(({ mode, isPreview }) => {
       },
     },
     server: { port: 5174 },
-    // SPA生成時は待受先と接続先をIPv4に揃え、Docker内のlocalhostのIPv4/IPv6不一致を防ぐ。
-    preview: isSpaPrerender ? { host: "127.0.0.1" } : undefined,
+    // SPA生成・previewの待受先をIPv4に揃え、Docker内のlocalhostの名前解決差を防ぐ。
+    preview: { host: "127.0.0.1" },
   };
 });
