@@ -1,21 +1,3 @@
-// Persistence ports. SQL is isolated in infrastructure/repository.ts.
-
-export interface CreateTaskCompletionDailyParams {
-  TaskID: string;
-  TargetDate: string;
-  CompletedByUserID: string;
-}
-
-export interface DeleteLatestTaskCompletionWeeklyEntryParams {
-  TaskID: string;
-  WeekStart: string;
-}
-
-export interface DeleteTaskCompletionDailyParams {
-  TaskID: string;
-  TargetDate: string;
-}
-
 export interface GetTaskCompletionWeeklyEntryCountParams {
   TaskID: string;
   WeekStart: string;
@@ -26,17 +8,10 @@ export interface HasTaskCompletionDailyParams {
   TargetDate: string;
 }
 
-export interface InsertTaskCompletionWeeklyEntryParams {
-  ID: string;
-  TaskID: string;
-  WeekStart: string;
-  CompletedByUserID: string;
-}
-
 export interface ListTaskCompletionDailyByMonthAndTeamParams {
   TeamID: string;
   TargetDate: string;
-  TargetDate_2: string;
+  BeforeDate: string;
 }
 
 export interface ListTaskCompletionDailyByMonthAndTeamRow {
@@ -72,7 +47,7 @@ export interface ListTaskCompletionWeeklyCountsByTeamAndWeekRow {
 export interface ListTaskCompletionWeeklySlotsByMonthAndTeamParams {
   TeamID: string;
   WeekStart: string;
-  WeekStart_2: string;
+  BeforeWeekStart: string;
 }
 
 export interface ListTaskCompletionWeeklySlotsByMonthAndTeamRow {
@@ -97,24 +72,6 @@ export interface ListTaskCompletionWeeklySlotsByTeamAndWeekRow {
   CompletedByColorHex: string | null;
 }
 
-export interface AddTeamMemberParams {
-  TeamID: string;
-  UserID: string;
-  Role: string;
-  CreatedAt: string;
-}
-
-export interface CreateTeamParams {
-  ID: string;
-  Name: string;
-  CreatedAt: string;
-}
-
-export interface DeleteTeamMemberParams {
-  TeamID: string;
-  UserID: string;
-}
-
 export interface ListMembershipsByUserIDRow {
   TeamID: string;
   Role: string;
@@ -131,55 +88,15 @@ export interface ListTeamMembersByTeamIDRow {
   ColorHex: string | null;
 }
 
-export interface UpdateTeamMemberRoleParams {
-  TeamID: string;
-  UserID: string;
-  Role: string;
-}
-
 export interface UpdateTeamNameParams {
   ID: string;
   Name: string;
-}
-
-export interface UpdateTeamStateRevisionIfMatchParams {
-  ID: string;
-  StateRevision: string;
-}
-
-export interface SumDailyPenaltyForCloseParams {
-  TeamID: string;
-  TargetDate: string;
-  CreatedAt: string;
-}
-
-export interface SumDailyPenaltyForMonthParams {
-  TeamID: string;
-  TargetDate: string;
-  TargetDate_2: string;
-}
-
-export interface SumWeeklyPenaltyForCloseParams {
-  TeamID: string;
-  WeekStart: string;
-  CreatedAt: string;
-}
-
-export interface SumWeeklyPenaltyForMonthParams {
-  TeamID: string;
-  TargetDate: string;
-  TargetDate_2: string;
 }
 
 export interface CreateInviteCodeParams {
   Code: string;
   TeamID: string;
   ExpiresAt: string;
-}
-
-export interface ClearTaskAssigneeByTeamAndUserParams {
-  TeamID: string;
-  Column2: string;
 }
 
 export interface CreateTaskParams {
@@ -189,7 +106,7 @@ export interface CreateTaskParams {
   Notes: string | null;
   Type: string;
   PenaltyPoints: number;
-  Column7: string;
+  AssigneeUserID: string;
   RequiredCompletionsPerWeek: number;
   SortKey: number;
   CreatedAt: string;
@@ -267,17 +184,11 @@ export interface ListTasksForMonthlyStatusByTeamRow {
 
 export interface UpdateTaskParams {
   ID: string;
-  Title: string;
-  Notes: string | null;
-  PenaltyPoints: number;
-  Column5: string;
-  RequiredCompletionsPerWeek: number;
-  UpdatedAt: string;
-}
-
-export interface UpdateTaskSortKeyParams {
-  ID: string;
-  SortKey: number;
+  Title?: string;
+  Notes?: string | null;
+  PenaltyPoints?: number;
+  AssigneeUserID?: string;
+  RequiredCompletionsPerWeek?: number;
   UpdatedAt: string;
 }
 
@@ -329,7 +240,7 @@ export interface UpsertPushSubscriptionParams {
   Endpoint: string;
   P256dh: string;
   Auth: string;
-  Column7: string;
+  UserAgent: string;
   Platform: string;
   LastSeenAt: string;
   CreatedAt: string;
@@ -363,31 +274,9 @@ export interface CreateShoppingItemParams {
 
 export interface UpdateShoppingItemParams {
   ID: string;
-  Name: string;
-  Notes: string | null;
+  Name?: string;
+  Notes?: string | null;
   UpdatedAt: string;
-}
-
-export interface UpdateShoppingItemSortKeyParams {
-  ID: string;
-  SortKey: number;
-  UpdatedAt: string;
-}
-
-export interface AddTriggeredRuleForMonthParams {
-  TeamID: string;
-  MonthStart: string;
-  RuleID: string;
-}
-
-export interface CloseMonthlyPenaltySummaryParams {
-  TeamID: string;
-  MonthStart: string;
-}
-
-export interface DeleteTriggeredRulesByMonthParams {
-  TeamID: string;
-  MonthStart: string;
 }
 
 export interface FindOldestMonthCloseCandidateParams {
@@ -405,60 +294,14 @@ export interface GetMonthlyPenaltySummaryParams {
   MonthStart: string;
 }
 
-export interface IncrementDailyPenaltyParams {
-  TeamID: string;
-  MonthStart: string;
-  DailyPenaltyTotal: number;
-}
-
-export interface IncrementWeeklyPenaltyParams {
-  TeamID: string;
-  MonthStart: string;
-  WeeklyPenaltyTotal: number;
-}
-
 export interface ListTriggeredRuleIDsByMonthParams {
   TeamID: string;
   MonthStart: string;
 }
 
-export interface SetMonthPenaltyTotalsParams {
-  TeamID: string;
-  MonthStart: string;
-  DailyPenaltyTotal: number;
-  WeeklyPenaltyTotal: number;
-}
-
-export interface UpsertMonthlyPenaltySummaryParams {
-  TeamID: string;
-  MonthStart: string;
-  DailyPenaltyTotal: number;
-  WeeklyPenaltyTotal: number;
-  IsClosed: boolean;
-}
-
 export interface GetLatestCloseRunTargetDateParams {
   TeamID: string;
   Scope: string;
-}
-
-export interface InsertCloseRunParams {
-  TeamID: string;
-  Scope: string;
-  TargetDate: string;
-}
-
-export interface InsertDayCloseRunsForMonthParams {
-  TeamID: string;
-  MonthStart: string;
-  MonthEnd: string;
-}
-
-export interface InsertWeekCloseRunsForMonthParams {
-  TeamID: string;
-  FirstWeekStart: string;
-  MonthEnd: string;
-  MonthStart: string;
 }
 
 export interface CreateReminderParams {
@@ -481,12 +324,12 @@ export interface DeleteExpiredOneTimeRemindersByTeamParams {
 
 export interface UpdateReminderParams {
   ID: string;
-  Title: string;
-  Notes: string | null;
-  Kind: string;
-  ScheduleType: string | null;
-  StartDate: string;
-  EndDate: string | null;
+  Title?: string;
+  Notes?: string | null;
+  Kind?: string;
+  ScheduleType?: string | null;
+  StartDate?: string;
+  EndDate?: string | null;
   UpdatedAt: string;
 }
 
@@ -512,9 +355,9 @@ export interface SoftDeletePenaltyRuleParams {
 
 export interface UpdatePenaltyRuleParams {
   ID: string;
-  Threshold: number;
-  Name: string;
-  Description: string | null;
+  Threshold?: number;
+  Name?: string;
+  Description?: string | null;
   UpdatedAt: string;
 }
 
@@ -529,12 +372,12 @@ export interface GetUserByIDRow {
 
 export interface UpdateUserColorHexParams {
   ID: string;
-  Column2: string;
+  ColorHex: string;
 }
 
 export interface UpdateUserNicknameParams {
   ID: string;
-  Column2: string;
+  Nickname: string;
 }
 
 export interface InviteCode {
@@ -620,7 +463,6 @@ export interface Team {
   ID: string;
   CreatedAt: string;
   Name: string;
-  StateRevision: string;
 }
 
 export interface TeamMember {
@@ -639,15 +481,52 @@ export interface User {
   ColorHex: string | null;
 }
 
+export interface MoveMemberParams {
+  userId: string;
+  fromTeamId: string;
+  toTeamId: string;
+  now: string;
+  inviteCode?: string;
+  newTeamName?: string;
+}
+
+export type ReorderParams = {
+  teamId: string;
+  ids: string[];
+  now: string;
+} & ({ kind: "tasks"; type: string } | { kind: "shopping" });
+
+export interface SetCompletionParams {
+  teamId: string;
+  userId: string;
+  taskId: string;
+  type: "daily" | "weekly";
+  target: string;
+  action: "complete" | "incomplete" | "increment" | "decrement";
+  cutoff: string;
+  now: string;
+  recalculateMonth?: string;
+  ensureCoverage: boolean;
+}
+
+export interface RecalculateMonthParams {
+  teamId: string;
+  month: string;
+  ensureCoverage: boolean;
+  closeMonth?: boolean;
+}
+
 export interface Repository {
-  CreateTaskCompletionDaily(arg: CreateTaskCompletionDailyParams): Promise<void>;
-  DeleteLatestTaskCompletionWeeklyEntry(
-    arg: DeleteLatestTaskCompletionWeeklyEntryParams,
-  ): Promise<number>;
-  DeleteTaskCompletionDaily(arg: DeleteTaskCompletionDailyParams): Promise<void>;
+  forMember(teamId: string, userId: string): Repository;
+  ProvisionUser(userId: string, teamId: string, name: string, now: string): Promise<void>;
+  MoveMember(arg: MoveMemberParams): Promise<void>;
+  ReplaceInvite(arg: CreateInviteCodeParams, userId: string): Promise<void>;
+  Reorder(arg: ReorderParams): Promise<void>;
+  SetCompletion(arg: SetCompletionParams): Promise<number>;
+  ClosePeriod(teamId: string, scope: "day" | "week", date: string): Promise<boolean>;
+  RecalculateMonth(arg: RecalculateMonthParams): Promise<void>;
   GetTaskCompletionWeeklyEntryCount(arg: GetTaskCompletionWeeklyEntryCountParams): Promise<number>;
   HasTaskCompletionDaily(arg: HasTaskCompletionDailyParams): Promise<boolean>;
-  InsertTaskCompletionWeeklyEntry(arg: InsertTaskCompletionWeeklyEntryParams): Promise<void>;
   ListTaskCompletionDailyByMonthAndTeam(
     arg: ListTaskCompletionDailyByMonthAndTeamParams,
   ): Promise<ListTaskCompletionDailyByMonthAndTeamRow[]>;
@@ -663,26 +542,13 @@ export interface Repository {
   ListTaskCompletionWeeklySlotsByTeamAndWeek(
     arg: ListTaskCompletionWeeklySlotsByTeamAndWeekParams,
   ): Promise<ListTaskCompletionWeeklySlotsByTeamAndWeekRow[]>;
-  AddTeamMember(arg: AddTeamMemberParams): Promise<void>;
-  CreateTeam(arg: CreateTeamParams): Promise<void>;
   DeleteTeam(id: string): Promise<void>;
-  DeleteTeamMember(arg: DeleteTeamMemberParams): Promise<void>;
-  GetTeamStateRevision(id: string): Promise<string>;
   ListMembershipsByUserID(userID: string): Promise<ListMembershipsByUserIDRow[]>;
   ListTeamIDsForClose(): Promise<string[]>;
   ListTeamMembersByTeamID(teamID: string): Promise<ListTeamMembersByTeamIDRow[]>;
-  UpdateTeamMemberRole(arg: UpdateTeamMemberRoleParams): Promise<void>;
   UpdateTeamName(arg: UpdateTeamNameParams): Promise<void>;
-  UpdateTeamStateRevisionIfMatch(arg: UpdateTeamStateRevisionIfMatchParams): Promise<string>;
-  SumDailyPenaltyForClose(arg: SumDailyPenaltyForCloseParams): Promise<number>;
-  SumDailyPenaltyForMonth(arg: SumDailyPenaltyForMonthParams): Promise<number>;
-  SumWeeklyPenaltyForClose(arg: SumWeeklyPenaltyForCloseParams): Promise<number>;
-  SumWeeklyPenaltyForMonth(arg: SumWeeklyPenaltyForMonthParams): Promise<number>;
-  CreateInviteCode(arg: CreateInviteCodeParams): Promise<void>;
-  DeleteInviteCodesByTeamID(teamID: string): Promise<void>;
   GetInviteCode(code: string): Promise<InviteCode>;
   GetLatestInviteCodeByTeamID(teamID: string): Promise<InviteCode>;
-  ClearTaskAssigneeByTeamAndUser(arg: ClearTaskAssigneeByTeamAndUserParams): Promise<void>;
   CreateTask(arg: CreateTaskParams): Promise<void>;
   DeleteTask(id: string): Promise<void>;
   GetEarliestTaskCreatedAtByTeam(teamID: string): Promise<string>;
@@ -695,7 +561,6 @@ export interface Repository {
     arg: ListTasksForMonthlyStatusByTeamParams,
   ): Promise<ListTasksForMonthlyStatusByTeamRow[]>;
   UpdateTask(arg: UpdateTaskParams): Promise<void>;
-  UpdateTaskSortKey(arg: UpdateTaskSortKeyParams): Promise<void>;
   DeactivatePushSubscriptionByEndpoint(
     arg: DeactivatePushSubscriptionByEndpointParams,
   ): Promise<number>;
@@ -713,23 +578,12 @@ export interface Repository {
   GetShoppingItemByID(id: string): Promise<ShoppingItem>;
   ListShoppingItemsByTeamID(teamID: string): Promise<ShoppingItem[]>;
   UpdateShoppingItem(arg: UpdateShoppingItemParams): Promise<void>;
-  UpdateShoppingItemSortKey(arg: UpdateShoppingItemSortKeyParams): Promise<void>;
-  AddTriggeredRuleForMonth(arg: AddTriggeredRuleForMonthParams): Promise<void>;
-  CloseMonthlyPenaltySummary(arg: CloseMonthlyPenaltySummaryParams): Promise<void>;
-  DeleteTriggeredRulesByMonth(arg: DeleteTriggeredRulesByMonthParams): Promise<void>;
   FindOldestMonthCloseCandidate(
     arg: FindOldestMonthCloseCandidateParams,
   ): Promise<FindOldestMonthCloseCandidateRow>;
   GetMonthlyPenaltySummary(arg: GetMonthlyPenaltySummaryParams): Promise<MonthlyPenaltySummary>;
-  IncrementDailyPenalty(arg: IncrementDailyPenaltyParams): Promise<void>;
-  IncrementWeeklyPenalty(arg: IncrementWeeklyPenaltyParams): Promise<void>;
   ListTriggeredRuleIDsByMonth(arg: ListTriggeredRuleIDsByMonthParams): Promise<string[]>;
-  SetMonthPenaltyTotals(arg: SetMonthPenaltyTotalsParams): Promise<void>;
-  UpsertMonthlyPenaltySummary(arg: UpsertMonthlyPenaltySummaryParams): Promise<void>;
   GetLatestCloseRunTargetDate(arg: GetLatestCloseRunTargetDateParams): Promise<string>;
-  InsertCloseRun(arg: InsertCloseRunParams): Promise<number>;
-  InsertDayCloseRunsForMonth(arg: InsertDayCloseRunsForMonthParams): Promise<void>;
-  InsertWeekCloseRunsForMonth(arg: InsertWeekCloseRunsForMonthParams): Promise<void>;
   CreateReminder(arg: CreateReminderParams): Promise<void>;
   DeleteExpiredOneTimeRemindersByTeam(
     arg: DeleteExpiredOneTimeRemindersByTeamParams,
@@ -750,5 +604,4 @@ export interface Repository {
   GetUserByID(id: string): Promise<GetUserByIDRow>;
   UpdateUserColorHex(arg: UpdateUserColorHexParams): Promise<void>;
   UpdateUserNickname(arg: UpdateUserNicknameParams): Promise<void>;
-  transaction<T>(fn: (repo: Repository) => Promise<T>): Promise<T>;
 }
