@@ -78,7 +78,7 @@ export function TeamMembersSection({
               {member.role === "owner" ? "管理者" : "メンバー"}
             </span>
             <span
-              className="min-w-0 max-w-full justify-self-start rounded-full px-2 py-0.5 font-medium wrap-anywhere"
+              className="min-w-0 max-w-full justify-self-start rounded px-2 py-0.5 font-medium wrap-anywhere"
               style={{
                 backgroundColor: resolveUserColor(member.colorHex),
                 color: getReadableTextColor(resolveUserColor(member.colorHex)),
