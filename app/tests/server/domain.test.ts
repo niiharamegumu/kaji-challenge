@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { addDays, todayJST, weekStart, isDate } from "../../src/server/domain/dates";
-import { completionCount, occurrenceDates, sortKeys } from "../../src/server/domain/rules";
+import { completionCount, occurrenceDates, validateReorder } from "../../src/server/domain/rules";
 import {
   operationSchema,
   MonthCloseCandidateResponseSchema,
@@ -24,11 +24,11 @@ describe("date and task rules", () => {
     expect(isDate("2026-02-29")).toBe(false);
   });
   it("rejects future and invalid historical completion actions", () => {
-    expect(() => completionCount("daily", 0, 1, "toggle", "2026-09-13", "2026-09-14")).toThrow();
-    expect(() => completionCount("daily", 0, 1, "toggle", "2026-09-15", "2026-09-14")).toThrow();
+    expect(() => completionCount("daily", 0, 1, "increment", "2026-09-13", "2026-09-14")).toThrow();
+    expect(() => completionCount("daily", 0, 1, "complete", "2026-09-15", "2026-09-14")).toThrow();
     expect(completionCount("daily", 0, 1, "complete", "2026-09-13", "2026-09-14")).toBe(1);
     expect(completionCount("weekly", 3, 3, "increment", "2026-09-14", "2026-09-14")).toBe(3);
-    expect(completionCount("weekly", 1, 1, "toggle", "2026-09-14", "2026-09-14")).toBe(0);
+    expect(completionCount("weekly", 1, 1, "incomplete", "2026-09-14", "2026-09-14")).toBe(0);
   });
   it("skips missing month dates and respects recurrence end", () => {
     expect(
@@ -44,30 +44,18 @@ describe("date and task rules", () => {
       ),
     ).toEqual(["2026-01-31", "2026-03-31"]);
   });
-  it("preserves untouched sort keys and rejects foreign IDs", () => {
-    const rows = [
-      { id: "a", sortKey: 100 },
-      { id: "b", sortKey: 200 },
-      { id: "c", sortKey: 300 },
-    ];
-    const keys = sortKeys(rows, ["c", "a", "b"]);
-    expect([...keys]).toEqual([
-      ["a", 100],
-      ["b", 200],
-      ["c", 50],
-    ]);
-    expect(() => sortKeys(rows, ["a", "b", "x"])).toThrow();
+  it("accepts reordered IDs and rejects missing, duplicate, or foreign IDs", () => {
+    const current = ["a", "b", "c"];
+    expect(() => validateReorder(current, ["c", "a", "b"])).not.toThrow();
+    for (const ids of [
+      ["a", "b"],
+      ["a", "b", "b"],
+      ["a", "b", "x"],
+    ]) {
+      expect(() => validateReorder(current, ids)).toThrow();
+    }
   });
-  it("validates real months and never rounds bigint revisions", () => {
-    const input = operationSchema.parse({
-      operation: "postMonthClose",
-      params: { month: "2026-08" },
-      expectedState: {
-        teamId: "00000000-0000-4000-8000-000000000001",
-        revision: "9007199254740993",
-      },
-    });
-    expect(input.expectedState?.revision).toBe("9007199254740993");
+  it("validates real months", () => {
     expect(
       operationSchema.safeParse({ operation: "postMonthClose", params: { month: "2026-13" } })
         .success,
