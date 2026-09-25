@@ -40,26 +40,37 @@ export function PenaltiesPage() {
         form={ruleForm}
         rules={activeRules}
         isCreateOpen={false}
+        isCreating={createRule.isPending}
+        createFailed={createRule.isError}
+        isUpdating={updateRule.isPending}
         showCreateButton={false}
         onCloseCreate={() => setIsCreateOpen(false)}
         onFormChange={(updater) => setRuleForm((prev) => updater(prev))}
-        onOpenCreate={() => setIsCreateOpen(true)}
+        onOpenCreate={() => {
+          createRule.reset();
+          setIsCreateOpen(true);
+        }}
         onCreate={handleCreateRule}
         onDelete={(ruleId) => {
-          void removeRule.mutateAsync(ruleId);
+          removeRule.mutate(ruleId);
         }}
         onUpdate={handleUpdateRule}
       />
       <FooterQuickAction
         isOpen={isCreateOpen}
+        isSubmitting={createRule.isPending}
+        submitFailed={createRule.isError}
         title="ペナルティルールを追加"
         submitLabel="追加する"
         submitIcon={<Plus size={16} aria-hidden="true" />}
         submitDisabled={ruleForm.name.trim().length === 0 || Number(ruleForm.threshold) < 1}
-        onOpen={() => setIsCreateOpen(true)}
+        onOpen={() => {
+          createRule.reset();
+          setIsCreateOpen(true);
+        }}
         onClose={() => setIsCreateOpen(false)}
         onSubmit={() => {
-          void handleCreateRule().then(() => {
+          return handleCreateRule().then(() => {
             setIsCreateOpen(false);
           });
         }}
