@@ -34,9 +34,7 @@ export async function createTestDatabase(persistPath?: string, through?: string)
     const database = createDatabase(proxy.env.DB);
     const migrations = new URL("../../migrations/", import.meta.url);
     if (
-      !(await proxy.env.DB.prepare(
-        "SELECT name FROM sqlite_master WHERE name='app_revision'",
-      ).first())
+      !(await proxy.env.DB.prepare("SELECT name FROM sqlite_master WHERE name='teams'").first())
     ) {
       for (const file of (await readdir(migrations))
         .filter((name) => name.endsWith(".sql") && (!through || name <= through))
