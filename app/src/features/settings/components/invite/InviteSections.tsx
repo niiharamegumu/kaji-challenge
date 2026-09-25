@@ -96,11 +96,11 @@ export function TeamMembersSection({
       </ul>
 
       <div className="rounded-lg border border-rose-200 bg-rose-50/70 p-3">
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <p className="text-xs text-rose-700">離脱すると新しいチームを作成します。</p>
           <button
             type="button"
-            className="min-h-11 rounded-lg border border-rose-300 px-4 py-2 text-sm text-rose-700 transition-colors duration-200 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+            className="min-h-11 w-full rounded-lg border border-rose-300 px-4 py-2 text-sm text-rose-700 transition-colors duration-200 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60 md:w-auto md:shrink-0"
             onClick={onLeaveTeam}
             disabled={isLeavingTeam}
           >
