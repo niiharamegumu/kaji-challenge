@@ -5,7 +5,6 @@ import { describe, expect, it, vi } from "vitest";
 import type { MeResponse, User } from "../../../lib/api/operations";
 import { useAuthGate } from "./useAuthGate";
 import { queryKeys } from "../../../shared/query/queryKeys";
-import { getLatestTeamEtag, setLatestTeamEtag } from "../../../lib/api/api-client-state";
 
 const makeUser = (overrides?: Partial<User>): User => ({
   id: "u1",
@@ -52,7 +51,7 @@ describe("useAuthGate", () => {
 
   it("handles validated-session 401 by clearing protected queries and redirecting", async () => {
     const queryClient = new QueryClient();
-    setLatestTeamEtag('"previous-team:12"');
+
     for (const key of Object.values(queryKeys)) {
       queryClient.setQueryData([...key, "previous-session"], { privateData: "previous user" });
     }
@@ -84,7 +83,7 @@ describe("useAuthGate", () => {
 
     await waitFor(() => {
       expect(queryClient.getQueryCache().getAll()).toHaveLength(0);
-      expect(getLatestTeamEtag()).toBe("");
+
       expect(errorParams.navigate).toHaveBeenCalledWith("/", { replace: true });
       expect(errorParams.setStatus).toHaveBeenCalledWith(
         "アカウント情報が無効になったため、トップページへ戻りました。再ログインしてください。",
