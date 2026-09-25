@@ -21,10 +21,12 @@ export default Alchemy.Stack(
       release: yield* Config.string("APP_RELEASE"),
     });
     const database = yield* Cloudflare.D1.Database("Database", resources.database);
+    const realtime = Cloudflare.DurableObject("TeamRealtime", { className: "TeamRealtime" });
     const worker = yield* Cloudflare.Worker("Application", {
       ...resources.worker,
       env: {
         DB: database,
+        TEAM_REALTIME: realtime,
         APP_ORIGIN: origin,
         APP_RELEASE: resources.settings.release,
         JOBS_ENABLED: jobs,
