@@ -354,6 +354,7 @@ export function ReminderCalendarPage() {
   const definitionsQuery = useReminderDefinitionsQuery();
   const calendarQuery = useReminderCalendarQuery(visibleMonth);
   const { createReminder, updateReminder, removeReminder } = useReminderMutations(setStatus);
+  const isSavingReminder = createReminder.isPending || updateReminder.isPending;
 
   useEffect(() => {
     if (initialDateParam != null && initialDateParam !== initialSelectedDate) {
@@ -434,6 +435,8 @@ export function ReminderCalendarPage() {
   };
 
   const openCreateSheet = (dateKey: string) => {
+    if (isSavingReminder) return;
+    createReminder.reset();
     updateSelectedDate(dateKey);
     setEditingReminderId(null);
     setForm(buildInitialFormState(dateKey));
@@ -445,6 +448,8 @@ export function ReminderCalendarPage() {
   };
 
   const openEditSheet = (reminder: Reminder, dateKey: string) => {
+    if (isSavingReminder) return;
+    updateReminder.reset();
     updateSelectedDate(dateKey);
     setEditingReminderId(reminder.id);
     setForm(toFormState(reminder));
@@ -606,19 +611,18 @@ export function ReminderCalendarPage() {
     }
     if (sheetMode === "create") {
       const payload = buildCreateReminderRequest(form);
-      void createReminder.mutateAsync(payload).then(() => {
+      return createReminder.mutateAsync(payload).then(() => {
         setSheetMode(null);
         if (isMobile) {
           setMobileAgendaOpen(true);
         }
       });
-      return;
     }
     if (editingReminderId == null) {
       return;
     }
     const payload = buildUpdateReminderRequest(form);
-    void updateReminder.mutateAsync({ reminderId: editingReminderId, payload }).then(() => {
+    return updateReminder.mutateAsync({ reminderId: editingReminderId, payload }).then(() => {
       setSheetMode(null);
     });
   };
@@ -859,6 +863,8 @@ export function ReminderCalendarPage() {
 
       <FormSheet
         isOpen={sheetMode === "edit"}
+        isSubmitting={isSavingReminder}
+        submitFailed={updateReminder.isError}
         title="リマインダーを編集"
         submitLabel="更新する"
         submitDisabled={form.title.trim() === "" || form.startDate === ""}
@@ -882,6 +888,8 @@ export function ReminderCalendarPage() {
 
       <FooterQuickAction
         isOpen={sheetMode === "create"}
+        isSubmitting={isSavingReminder}
+        submitFailed={createReminder.isError}
         title="リマインダーを追加"
         submitLabel="追加する"
         submitDisabled={form.title.trim() === "" || form.startDate === ""}
