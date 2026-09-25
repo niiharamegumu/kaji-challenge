@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { LoaderCircle } from "lucide-react";
 import { createPortal } from "react-dom";
 
 type Props = {
@@ -7,10 +8,12 @@ type Props = {
   submitLabel: string;
   submitIcon?: ReactNode;
   submitDisabled?: boolean;
+  isSubmitting: boolean;
+  submitFailed?: boolean;
   children: ReactNode;
   footerStart?: ReactNode;
   onClose: () => void;
-  onSubmit: () => void;
+  onSubmit: () => void | Promise<void>;
 };
 
 export function FormSheet({
@@ -19,11 +22,21 @@ export function FormSheet({
   submitLabel,
   submitIcon,
   submitDisabled = false,
+  isSubmitting,
+  submitFailed = false,
   children,
   footerStart,
   onClose,
   onSubmit,
 }: Props) {
+  const submit = async () => {
+    if (isSubmitting || submitDisabled) return;
+    try {
+      await onSubmit();
+    } catch {
+      // 通信状態・エラーは呼出元のmutationが管理する。入力は成功するまで保持する。
+    }
+  };
   if (!isOpen || typeof document === "undefined") {
     return null;
   }
@@ -35,6 +48,7 @@ export function FormSheet({
         className="fixed inset-0 z-[72] bg-stone-500/18 backdrop-blur-[4px]"
         aria-label={`${title}を閉じる`}
         onClick={onClose}
+        disabled={isSubmitting}
       />
       <dialog
         open
@@ -55,21 +69,40 @@ export function FormSheet({
             type="button"
             className="rounded-full px-3 py-1.5 text-sm text-stone-600 transition-colors hover:bg-white/45"
             onClick={onClose}
+            disabled={isSubmitting}
           >
             閉じる
           </button>
         </div>
-        <div className="mt-4 min-h-0 overflow-y-auto">{children}</div>
+        <fieldset disabled={isSubmitting} className="mt-4 min-h-0 overflow-y-auto">
+          {children}
+        </fieldset>
+        {submitFailed && !isSubmitting ? (
+          <p role="alert" className="mt-2 text-sm text-rose-700">
+            保存できませんでした。もう一度お試しください。
+          </p>
+        ) : null}
         <div className="mt-5 flex shrink-0 items-center justify-between gap-3">
-          <div>{footerStart}</div>
+          <fieldset disabled={isSubmitting}>{footerStart}</fieldset>
           <button
             type="button"
             className="inline-flex h-11 items-center gap-2 rounded-xl bg-stone-900 px-4 text-sm font-medium text-white transition-colors hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-50"
-            onClick={onSubmit}
-            disabled={submitDisabled}
+            onClick={() => {
+              void submit();
+            }}
+            disabled={submitDisabled || isSubmitting}
+            aria-busy={isSubmitting}
           >
-            {submitIcon}
-            <span>{submitLabel}</span>
+            {isSubmitting ? (
+              <LoaderCircle
+                size={16}
+                className="animate-spin motion-reduce:animate-none"
+                aria-hidden="true"
+              />
+            ) : (
+              submitIcon
+            )}
+            <span>{isSubmitting ? "保存中…" : submitLabel}</span>
           </button>
         </div>
       </dialog>
