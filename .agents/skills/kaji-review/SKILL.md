@@ -62,7 +62,7 @@ backend review では以下の repo skills の観点を使う。
 
 重点観点:
 
-- TypeScript error handling、JST日付境界、transaction、concurrency、revisionの精度
+- TypeScript error handling、JST日付境界、D1 batch、同時更新、WebSocketの認可・切断・Hibernation attachment
 - Start Server Functions/Zod transport boundary、status code、cookie/header、request/response mapping
 - Application/Domainの外部依存禁止、ports/adapters、Drizzle/D1境界
 - DB constraint、migration safety、index、team scoping、authorization、idempotency
