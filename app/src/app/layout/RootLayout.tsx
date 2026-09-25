@@ -250,7 +250,7 @@ export function RootLayout() {
       />
 
       <div className="mx-auto max-w-6xl">
-        <header className="flex items-start justify-between gap-3 p-2.5 md:items-center md:p-4">
+        <header className="app-glass-header sticky top-[calc(env(safe-area-inset-top)+12px)] z-30 mb-3 flex items-start justify-between gap-3 rounded-3xl border border-white/40 p-2.5 md:items-center md:p-4">
           <div className="flex min-w-0 flex-1 flex-col gap-0.5 md:flex-row md:items-center md:justify-between md:gap-3">
             <h1
               title={currentTeamName}

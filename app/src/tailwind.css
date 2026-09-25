@@ -44,6 +44,30 @@ body,
   padding-top: calc(env(safe-area-inset-top) + 12px);
 }
 
+/* 固定ヘッダーにフォーカス先やページ内リンクの移動先が隠れない余白。 */
+html {
+  scroll-padding-top: calc(env(safe-area-inset-top) + 7rem);
+}
+
+.app-glass-header {
+  /* ぼかし非対応の環境でも文字の背後に本文が重ならないようにする。 */
+  background: var(--color-washi-50);
+  box-shadow:
+    0 18px 40px -26px rgba(68, 56, 36, 0.44),
+    0 8px 22px -18px rgba(34, 29, 21, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.62),
+    inset 0 0 0 1px rgba(158, 150, 138, 0.12);
+}
+
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .app-glass-header {
+    /* 下部ナビと同じ色・ぼかし・光沢で、スクロールする本文を透かす。 */
+    background: linear-gradient(180deg, rgba(244, 242, 238, 0.52), rgba(225, 221, 214, 0.22));
+    -webkit-backdrop-filter: blur(30px) saturate(220%) brightness(0.94) contrast(1.08);
+    backdrop-filter: blur(30px) saturate(220%) brightness(0.94) contrast(1.08);
+  }
+}
+
 @media (min-width: 768px) {
   .ios-safe-main {
     padding-top: calc(env(safe-area-inset-top) + 24px);
