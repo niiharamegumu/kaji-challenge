@@ -67,7 +67,7 @@ vi.mock("./lib/api/operations", () => ({
   postShoppingItemsReorder: vi.fn(),
   postTasksReorder: vi.fn(),
   postTask: vi.fn(),
-  postTaskCompletionToggle: vi.fn(),
+  postTaskCompletion: vi.fn(),
   patchTask: vi.fn(),
   deleteTask: vi.fn(),
   postPenaltyRule: vi.fn(),
