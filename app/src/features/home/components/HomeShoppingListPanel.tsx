@@ -8,6 +8,7 @@ import { HOME_PANEL_CLASS_NAME } from "./panelStyles";
 type Props = {
   items: ShoppingListItem[];
   isReordering: boolean;
+  isUpdating: boolean;
   onDelete: (itemId: string) => void;
   onReorder: (itemIds: string[]) => void;
   onUpdate: (itemId: string, payload: UpdateShoppingListItemRequest) => Promise<void>;
@@ -16,6 +17,7 @@ type Props = {
 export function HomeShoppingListPanel({
   items,
   isReordering,
+  isUpdating,
   onDelete,
   onReorder,
   onUpdate,
@@ -35,6 +37,7 @@ export function HomeShoppingListPanel({
       <ShoppingListItemsSection
         items={items}
         isReordering={isReordering}
+        isUpdating={isUpdating}
         onDelete={onDelete}
         onReorder={onReorder}
         onUpdate={onUpdate}
