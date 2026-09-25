@@ -1,4 +1,4 @@
-import { Check, Copy, RefreshCw, Users } from "lucide-react";
+import { Check, Copy, RefreshCw } from "lucide-react";
 
 import type { TeamMember } from "../../../../lib/api/operations";
 import { getReadableTextColor, resolveUserColor } from "../../../../shared/utils/userColor";
@@ -72,23 +72,19 @@ export function TeamMembersSection({
         {members.map((member) => (
           <li
             key={member.userId}
-            className="flex flex-wrap items-center gap-2 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm"
+            className="grid grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-2 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm"
           >
-            <Users size={14} aria-hidden="true" className="text-stone-500" />
+            <span className="rounded bg-white px-2 py-0.5 text-center text-xs text-stone-600">
+              {member.role === "owner" ? "管理者" : "メンバー"}
+            </span>
             <span
-              className="rounded-full px-2 py-0.5 font-medium"
+              className="min-w-0 max-w-full justify-self-start rounded px-2 py-0.5 font-medium wrap-anywhere"
               style={{
                 backgroundColor: resolveUserColor(member.colorHex),
                 color: getReadableTextColor(resolveUserColor(member.colorHex)),
               }}
             >
               {member.effectiveName}
-            </span>
-            <span className="rounded bg-white px-2 py-0.5 text-xs text-stone-600">
-              {member.role === "owner" ? "owner" : "member"}
-            </span>
-            <span className="text-xs text-stone-600">
-              参加日: {formatDateTime(member.joinedAt)}
             </span>
           </li>
         ))}
@@ -100,11 +96,11 @@ export function TeamMembersSection({
       </ul>
 
       <div className="rounded-lg border border-rose-200 bg-rose-50/70 p-3">
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <p className="text-xs text-rose-700">離脱すると新しいチームを作成します。</p>
           <button
             type="button"
-            className="min-h-11 rounded-lg border border-rose-300 px-4 py-2 text-sm text-rose-700 transition-colors duration-200 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+            className="min-h-11 w-full rounded-lg border border-rose-300 px-4 py-2 text-sm text-rose-700 transition-colors duration-200 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60 md:w-auto md:shrink-0"
             onClick={onLeaveTeam}
             disabled={isLeavingTeam}
           >
