@@ -40,7 +40,10 @@ type Props = {
   form: TaskFormState;
   tasks: Task[];
   isCreateOpen: boolean;
+  isCreating: boolean;
+  createFailed: boolean;
   isReordering: boolean;
+  isUpdating: boolean;
   showCreateButton?: boolean;
   onCloseCreate: () => void;
   onFormChange: (updater: (prev: TaskFormState) => TaskFormState) => void;
@@ -68,6 +71,7 @@ type TaskItemsSectionProps = {
   tasks: Task[];
   taskType: "daily" | "weekly";
   isReordering: boolean;
+  isUpdating: boolean;
   onDelete: (taskId: string) => void;
   onReorder: (payload: ReorderTasksRequest) => void;
   onUpdate: (taskId: string, payload: UpdateTaskRequest) => Promise<void>;
@@ -166,6 +170,7 @@ export function TaskCreateForm({
 function SortableTaskItem({
   task,
   isEditing,
+  isSaving,
   editState,
   onStartEdit,
   onChangeEditState,
@@ -175,6 +180,7 @@ function SortableTaskItem({
 }: {
   task: Task;
   isEditing: boolean;
+  isSaving: boolean;
   editState: EditTaskState;
   onStartEdit: (task: Task) => void;
   onChangeEditState: (next: EditTaskState) => void;
@@ -209,7 +215,7 @@ function SortableTaskItem({
       className={`relative rounded-xl border border-stone-200 bg-white p-3 shadow-sm ${isDragging ? "opacity-70 select-none" : ""}`}
     >
       {isEditing ? (
-        <div className="grid gap-2">
+        <fieldset disabled={isSaving} className="grid gap-2">
           <label className="text-xs text-stone-700" htmlFor={`task-edit-title-${task.id}`}>
             タイトル
           </label>
@@ -233,10 +239,11 @@ function SortableTaskItem({
               type="button"
               className="flex h-9 items-center gap-1 rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-xs text-emerald-700 transition-colors hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50 sm:h-10"
               onClick={() => onSaveEdit(task.id)}
-              disabled={!canSave}
+              disabled={!canSave || isSaving}
+              aria-busy={isSaving}
             >
               <Check size={14} aria-hidden="true" />
-              <span>保存</span>
+              <span>{isSaving ? "保存中…" : "保存"}</span>
             </button>
             <button
               type="button"
@@ -247,7 +254,7 @@ function SortableTaskItem({
               <span>キャンセル</span>
             </button>
           </div>
-        </div>
+        </fieldset>
       ) : (
         <>
           <div className="flex items-start gap-3 pr-10">
@@ -313,6 +320,7 @@ function TaskItemsSection({
   tasks,
   taskType,
   isReordering,
+  isUpdating,
   onDelete,
   onReorder,
   onUpdate,
@@ -391,6 +399,7 @@ function TaskItemsSection({
   };
 
   const startEdit = (task: Task) => {
+    if (isUpdating) return;
     setEditingTaskId(task.id);
     setEditState({
       title: task.title,
@@ -408,11 +417,16 @@ function TaskItemsSection({
     if (title.length === 0) {
       return;
     }
-    await onUpdate(taskId, {
-      title,
-      notes: editState.notes,
-    });
-    cancelEdit();
+    if (isUpdating) return;
+    try {
+      await onUpdate(taskId, {
+        title,
+        notes: editState.notes,
+      });
+      cancelEdit();
+    } catch {
+      // mutation側でエラーを通知する。編集内容を残して再操作できるようにする。
+    }
   };
 
   return (
@@ -457,6 +471,7 @@ function TaskItemsSection({
                     key={task.id}
                     task={task}
                     isEditing={editingTaskId === task.id}
+                    isSaving={isUpdating}
                     editState={editState}
                     onStartEdit={startEdit}
                     onChangeEditState={setEditState}
@@ -498,7 +513,10 @@ export function TaskManager({
   form,
   tasks,
   isCreateOpen,
+  isCreating,
+  createFailed,
   isReordering,
+  isUpdating,
   showCreateButton = true,
   onCloseCreate,
   onFormChange,
@@ -539,6 +557,7 @@ export function TaskManager({
         tasks={dailyTasks}
         taskType="daily"
         isReordering={isReordering}
+        isUpdating={isUpdating}
         onDelete={onDelete}
         onReorder={onReorder}
         onUpdate={onUpdate}
@@ -547,6 +566,7 @@ export function TaskManager({
         tasks={weeklyTasks}
         taskType="weekly"
         isReordering={isReordering}
+        isUpdating={isUpdating}
         onDelete={onDelete}
         onReorder={onReorder}
         onUpdate={onUpdate}
@@ -554,13 +574,15 @@ export function TaskManager({
 
       <FormSheet
         isOpen={isCreateOpen}
+        isSubmitting={isCreating}
+        submitFailed={createFailed}
         title="タスクを追加"
         submitLabel="追加する"
         submitIcon={<Plus size={16} aria-hidden="true" />}
         submitDisabled={!canCreate}
         onClose={onCloseCreate}
         onSubmit={() => {
-          void onCreate().then(onCloseCreate);
+          return onCreate().then(onCloseCreate);
         }}
       >
         <TaskCreateForm form={form} onFormChange={onFormChange} />
