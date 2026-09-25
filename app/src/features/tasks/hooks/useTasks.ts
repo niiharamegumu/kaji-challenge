@@ -25,10 +25,6 @@ type StatusSetter = (message: string) => void;
 
 export function useTaskMutations(setStatus: StatusSetter) {
   const queryClient = useQueryClient();
-  const hasTasks = (value: unknown): value is { items?: Task[] } =>
-    value != null && typeof value === "object" && "items" in value;
-  const hasTaskId = (value: unknown): value is Task =>
-    value != null && typeof value === "object" && "id" in value && typeof value.id === "string";
 
   const invalidate = async () => {
     await Promise.all([
@@ -41,11 +37,8 @@ export function useTaskMutations(setStatus: StatusSetter) {
   const createTask = useMutation({
     mutationFn: async (payload: CreateTaskRequest) => postTask(payload),
     onSuccess: async (response) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.tasks });
       setStatus("タスクを作成しました");
-      if (!hasTaskId(response.data)) {
-        await invalidate();
-        return;
-      }
       const createdTask = response.data;
       queryClient.setQueryData<Task[]>(queryKeys.tasks, (current) => {
         const tasks = (current ?? []).filter((task) => task.id !== createdTask.id);
@@ -59,7 +52,7 @@ export function useTaskMutations(setStatus: StatusSetter) {
         }
         return [...tasks.slice(0, insertIndex), createdTask, ...tasks.slice(insertIndex)];
       });
-      await Promise.all([
+      void Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.home }),
         queryClient.invalidateQueries({ queryKey: queryKeys.monthlySummary }),
       ]);
@@ -74,9 +67,13 @@ export function useTaskMutations(setStatus: StatusSetter) {
 
   const removeTask = useMutation({
     mutationFn: async (taskId: string) => deleteTask(taskId),
-    onSuccess: async () => {
+    onSuccess: async (_, taskId) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.tasks });
+      queryClient.setQueryData<Task[]>(queryKeys.tasks, (items) =>
+        items?.filter((item) => item.id !== taskId),
+      );
       setStatus("タスクを削除しました");
-      await invalidate();
+      void invalidate();
     },
     onError: async (error) => {
       if (await handleTeamStatePreconditionFailure(error, queryClient, setStatus)) {
@@ -89,9 +86,13 @@ export function useTaskMutations(setStatus: StatusSetter) {
   const updateTask = useMutation({
     mutationFn: async ({ taskId, payload }: { taskId: string; payload: UpdateTaskRequest }) =>
       patchTask(taskId, payload),
-    onSuccess: async () => {
+    onSuccess: async ({ data }) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.tasks });
+      queryClient.setQueryData<Task[]>(queryKeys.tasks, (items) =>
+        items?.map((item) => (item.id === data.id ? data : item)),
+      );
       setStatus("タスクを更新しました");
-      await invalidate();
+      void invalidate();
     },
     onError: async (error) => {
       if (await handleTeamStatePreconditionFailure(error, queryClient, setStatus)) {
@@ -104,10 +105,7 @@ export function useTaskMutations(setStatus: StatusSetter) {
   const reorderTasks = useMutation({
     mutationFn: async (payload: ReorderTasksRequest) => {
       const response = await postTasksReorder(payload);
-      if (!hasTasks(response.data)) {
-        throw new Error("unexpected task reorder response");
-      }
-      return response.data.items ?? [];
+      return response.data.items;
     },
     onSuccess: (items) => {
       queryClient.setQueryData<Task[]>(queryKeys.tasks, (current) => {
