@@ -61,7 +61,7 @@ export function ConnectedMembers({ members, userIds, connected }: Props) {
               aria-describedby={isOpen ? tooltipId : undefined}
               onFocus={() => setOpenPanel({ kind: "member", userId: member.userId })}
               onClick={() => setOpenPanel({ kind: "member", userId: member.userId })}
-              className="flex h-10 w-9 items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
+              className="flex h-10 w-9 items-start justify-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 md:items-center"
             >
               <MemberAvatar member={member} online={online} />
             </button>
@@ -85,7 +85,7 @@ export function ConnectedMembers({ members, userIds, connected }: Props) {
             aria-expanded={openPanel?.kind === "all"}
             aria-controls={`${panelId}-all`}
             onClick={() => setOpenPanel(openPanel?.kind === "all" ? null : { kind: "all" })}
-            className="flex h-10 w-9 items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
+            className="flex h-10 w-9 items-start justify-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 md:items-center"
           >
             <span className="flex h-7 min-w-7 items-center justify-center rounded-full border-2 border-white bg-stone-200 px-1 text-xs font-semibold text-stone-700">
               +{remainingCount}
