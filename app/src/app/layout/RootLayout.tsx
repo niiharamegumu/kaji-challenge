@@ -1,3 +1,5 @@
+import { ConnectedMembers } from "../../features/shell/components/ConnectedMembers";
+import { useTeamRealtime } from "../../features/shell/hooks/useTeamRealtime";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAtom, useAtomValue } from "jotai";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -80,7 +82,7 @@ export function RootLayout() {
   const cachedMembersQuery = useQuery({
     queryKey: queryKeys.teamMembers,
     queryFn: listCurrentTeamMembers,
-    enabled: false,
+    enabled: meQuery.isSuccess,
   });
   const login = useLoginAction(setStatus);
   const logoutAction = useLogoutAction(setStatus, setSession);
@@ -100,6 +102,10 @@ export function RootLayout() {
     setStatus,
     refetchMe: meQuery.refetch,
   });
+  const realtime = useTeamRealtime(
+    isAuthenticated ? meQuery.data?.memberships[0]?.teamId : undefined,
+    currentUserId,
+  );
   const refreshTeamState = useCallback(async () => {
     if (!isAuthenticated) {
       return;
@@ -257,6 +263,12 @@ export function RootLayout() {
               </span>
             </div>
           </div>
+          <ConnectedMembers
+            members={cachedMembersQuery.data ?? []}
+            userIds={realtime.userIds}
+            currentUserId={currentUserId}
+            connected={realtime.connected}
+          />
         </header>
 
         <MonthCloseBanner />
