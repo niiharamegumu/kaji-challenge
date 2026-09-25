@@ -5,6 +5,7 @@ import { HOME_PANEL_CLASS_NAME } from "./panelStyles";
 
 type Props = {
   items: TaskOverviewWeeklyTask[];
+  pendingTaskIds?: string[];
   elapsedDaysInWeek: number;
   weeklyProgress: string;
   onToggle: (taskId: string) => void;
@@ -14,6 +15,7 @@ type Props = {
 
 export function WeeklyTasksPanel({
   items,
+  pendingTaskIds = [],
   elapsedDaysInWeek,
   weeklyProgress,
   onToggle,
@@ -63,6 +65,8 @@ export function WeeklyTasksPanel({
                 <li key={item.task.id}>
                   <button
                     type="button"
+                    disabled={pendingTaskIds.includes(item.task.id)}
+                    aria-busy={pendingTaskIds.includes(item.task.id)}
                     className={`relative w-full overflow-hidden rounded-xl border p-2.5 text-left transition-colors duration-200 ${isDone ? "border-[color:var(--color-matcha-400)]" : "border-stone-300 bg-white"}`}
                     onClick={() => onToggle(item.task.id)}
                   >
@@ -144,14 +148,19 @@ export function WeeklyTasksPanel({
                     type="button"
                     className="absolute inset-y-0 left-0 z-20 w-1/2 touch-manipulation rounded-l-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-matcha-500)] focus-visible:ring-offset-2 disabled:cursor-not-allowed"
                     onClick={() => onDecrement(item.task.id)}
-                    disabled={item.weekCompletedCount <= 0}
+                    disabled={item.weekCompletedCount <= 0 || pendingTaskIds.includes(item.task.id)}
+                    aria-busy={pendingTaskIds.includes(item.task.id)}
                     aria-label={`${item.task.title} を1減らす`}
                   />
                   <button
                     type="button"
                     className="absolute inset-y-0 right-0 z-20 w-1/2 touch-manipulation rounded-r-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-matcha-500)] focus-visible:ring-offset-2 disabled:cursor-not-allowed"
                     onClick={() => onIncrement(item.task.id)}
-                    disabled={item.weekCompletedCount >= item.requiredCompletionsPerWeek}
+                    disabled={
+                      item.weekCompletedCount >= item.requiredCompletionsPerWeek ||
+                      pendingTaskIds.includes(item.task.id)
+                    }
+                    aria-busy={pendingTaskIds.includes(item.task.id)}
                     aria-label={`${item.task.title} を1増やす`}
                   />
                 </div>
