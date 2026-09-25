@@ -231,6 +231,7 @@ test("creates tasks, reorders with real drag sensors, and preserves navigation",
   const dailyButton = page.getByRole("button", { name: /操作確認A.*日間/ });
   await dailyButton.click();
   await expect(dailyButton.getByRole("img")).toHaveAttribute("aria-label", "1回目: テストユーザー");
+  await expect(dailyButton).toHaveAttribute("aria-busy", "false");
   await page.reload();
   await expect(dailyButton.getByRole("img")).toHaveAttribute("aria-label", "1回目: テストユーザー");
   await dailyButton.click();
@@ -332,6 +333,48 @@ test("uses the same calendar form shell for creation and editing and persists bo
   await expect(editDialog).not.toBeVisible();
 });
 
+test("completion responds before a delayed request and rolls back when it fails", async ({
+  page,
+  context,
+}) => {
+  await authenticate(context);
+  await page.goto("/tasks");
+  await page.getByRole("button", { name: "追加", exact: true }).click();
+  await page.getByLabel("タスク名", { exact: true }).fill("即時フィードバック確認");
+  await page.getByRole("button", { name: "追加する", exact: true }).click();
+  await expect(page.getByText("即時フィードバック確認", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "ホーム", exact: true }).click();
+  const card = page.getByRole("button", { name: /即時フィードバック確認.*日間/ });
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/_serverFn/**", async (route) => {
+    if (!route.request().postData()?.includes("postTaskCompletionToggle")) {
+      await route.continue();
+      return;
+    }
+    await held;
+    await route.abort("failed");
+  });
+  try {
+    await card.click();
+    // リクエストをまだ送っていない段階で、完了表示と保存中表示が出る。
+    await expect(card.getByRole("img")).toHaveAttribute("aria-label", "1回目: テストユーザー");
+    await expect(card).toBeDisabled();
+    await expect(page.getByText("保存中…", { exact: true })).toBeVisible();
+  } finally {
+    release();
+  }
+  await expect(card.getByRole("img")).toHaveAttribute("aria-label", "1回目: 未完了");
+  await expect(card).toBeEnabled();
+  await page.unrouteAll({ behavior: "wait" });
+  await card.click();
+  await expect(card).toHaveAttribute("aria-busy", "false");
+  await page.reload();
+  await expect(card.getByRole("img")).toHaveAttribute("aria-label", "1回目: テストユーザー");
+});
+
 test("retains three weekly completions after stale refetch, summary navigation and reload", async ({
   page,
   context,
@@ -361,6 +404,10 @@ test("retains three weekly completions after stale refetch, summary navigation a
     await expect(card.getByRole("button", { name: "週間3回の保持確認 を1増やす" })).toBeDisabled();
   };
   await expectComplete();
+  await expect(card.getByRole("button", { name: "週間3回の保持確認 を1増やす" })).toHaveAttribute(
+    "aria-busy",
+    "false",
+  );
   await page.clock.install();
   await page.evaluate(() => {
     Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
