@@ -16,7 +16,7 @@ export function effectiveAt(
   const end = midnightJST(cutoff);
   return task.createdAt < end && (!task.deletedAt || task.deletedAt >= end);
 }
-export type CompletionAction = "toggle" | "complete" | "increment" | "decrement";
+export type CompletionAction = "complete" | "incomplete" | "increment" | "decrement";
 export function completionCount(
   type: "daily" | "weekly",
   current: number,
@@ -27,27 +27,23 @@ export function completionCount(
 ) {
   if (type === "daily") {
     invariant(target <= today, "daily completion cannot be changed for future dates");
-    invariant(
-      target === today ? action === "toggle" : action === "complete" || action === "decrement",
-      "invalid daily completion action",
-    );
-    return action === "complete" ? 1 : action === "decrement" ? 0 : current ? 0 : 1;
+    invariant(action === "complete" || action === "incomplete", "invalid daily completion action");
+    return action === "complete" ? 1 : 0;
   }
   const start = weekStart(target);
-  if (start !== weekStart(today)) {
-    invariant(
-      addDays(start, 6) < today,
-      "weekly completion can only be changed for the current week or completed past weeks",
-    );
-    invariant(
-      action === "increment" || action === "decrement",
-      "past weekly completion only supports increment or decrement action",
-    );
-  }
-  invariant(action !== "complete", "invalid completion action");
-  if (action === "decrement" || (required <= 1 && action === "toggle" && current > 0))
-    return Math.max(0, current - 1);
-  return current >= required ? current : current + 1;
+  invariant(
+    start === weekStart(today) || addDays(start, 6) < today,
+    "weekly completion can only be changed for the current week or completed past weeks",
+  );
+  invariant(
+    action === "increment" ||
+      action === "decrement" ||
+      (required === 1 && (action === "complete" || action === "incomplete")),
+    "invalid weekly completion action",
+  );
+  if (action === "complete") return 1;
+  if (action === "incomplete") return 0;
+  return Math.max(0, Math.min(required, current + (action === "increment" ? 1 : -1)));
 }
 export function occurrenceDates(
   record: {
@@ -97,31 +93,13 @@ export function validateReminder(r: {
       "invalid recurring reminder schedule",
     );
 }
-export function sortKeys(
-  current: { id: string; sortKey: number }[],
-  requested: string[],
-): Map<string, number> {
+/** 並び替え対象の過不足・重複を検証する。sort_keyの採番はRepositoryで行う。 */
+export function validateReorder(currentIds: string[], requestedIds: string[]): void {
+  const current = new Set(currentIds);
   invariant(
-    requested.length === current.length &&
-      new Set(requested).size === current.length &&
-      requested.every((id) => current.some((row) => row.id === id)),
+    requestedIds.length === current.size &&
+      new Set(requestedIds).size === current.size &&
+      requestedIds.every((id) => current.has(id)),
     "item ids must match current items",
   );
-  const original = current.map((r) => r.id);
-  const keys = new Map(current.map((r) => [r.id, r.sortKey]));
-  if (original.every((id, i) => requested[i] === id)) return keys;
-  const moved = requested.find((id) =>
-    original.filter((x) => x !== id).every((x, i) => requested.filter((y) => y !== id)[i] === x),
-  );
-  if (moved) {
-    const index = requested.indexOf(moved),
-      left = keys.get(requested[index - 1]) ?? 0,
-      right = keys.get(requested[index + 1]);
-    const value = right === undefined ? left + 100 : Math.floor(left + (right - left) / 2);
-    if (value > left && (right === undefined || value < right) && value <= 2_147_483_647) {
-      keys.set(moved, value);
-      return keys;
-    }
-  }
-  return new Map(requested.map((id, i) => [id, (i + 1) * 100]));
 }
