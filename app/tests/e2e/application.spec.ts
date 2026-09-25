@@ -6,6 +6,8 @@ import { provisionUser } from "../../src/server/application/provision-user";
 const secret = "kaji-e2e-only-secret-do-not-use-in-production";
 const userId = crypto.randomUUID(),
   token = crypto.randomUUID();
+const peerToken = crypto.randomUUID(),
+  outsiderToken = crypto.randomUUID();
 test.beforeAll(async () => {
   const path = process.env.KAJI_D1_TEST_PATH;
   if (!path) throw new Error("Run browser tests via bun run test:local for isolated D1 storage");
@@ -21,6 +23,24 @@ test.beforeAll(async () => {
     await connection.query(
       sql`INSERT INTO auth_session(id,token,user_id,expires_at) VALUES (${crypto.randomUUID()},${token},${userId},strftime('%Y-%m-%dT%H:%M:%fZ','now','+30 days'))`,
     );
+    const team = (await connection.repository.ListMembershipsByUserID(userId))[0].TeamID;
+    for (const [name, accessToken] of [
+      ["同期メンバー", peerToken],
+      ["別チーム", outsiderToken],
+    ]) {
+      const id = crypto.randomUUID();
+      await connection.query(
+        sql`INSERT INTO auth_user(id,name,email) VALUES (${id},${name},${id + "@example.com"})`,
+      );
+      await provisionUser(connection.repository, id, new Date());
+      if (accessToken === peerToken)
+        await connection.query(
+          sql`UPDATE team_members SET team_id=${team},role='member' WHERE user_id=${id}`,
+        );
+      await connection.query(
+        sql`INSERT INTO auth_session(id,token,user_id,expires_at) VALUES (${crypto.randomUUID()},${accessToken},${id},strftime('%Y-%m-%dT%H:%M:%fZ','now','+30 days'))`,
+      );
+    }
   } finally {
     // The browser Worker must be the sole live owner of this persisted D1.
     await connection.close();
@@ -178,12 +198,12 @@ test("PWA installs the generated SPA shell and excludes server functions", async
   await context.setOffline(false);
 });
 
-async function authenticate(context: BrowserContext) {
-  const signature = createHmac("sha256", secret).update(token).digest("base64");
+async function authenticate(context: BrowserContext, accessToken = token) {
+  const signature = createHmac("sha256", secret).update(accessToken).digest("base64");
   await context.addCookies([
     {
       name: "better-auth.session_token",
-      value: encodeURIComponent(`${token}.${signature}`),
+      value: encodeURIComponent(`${accessToken}.${signature}`),
       url: "http://localhost:5194",
       httpOnly: true,
       sameSite: "Lax",
@@ -350,7 +370,7 @@ test("completion responds before a delayed request and rolls back when it fails"
     release = resolve;
   });
   await page.route("**/_serverFn/**", async (route) => {
-    if (!route.request().postData()?.includes("postTaskCompletionToggle")) {
+    if (!route.request().postData()?.includes("postTaskCompletion")) {
       await route.continue();
       return;
     }
@@ -433,4 +453,85 @@ test("retains three weekly completions after stale refetch, summary navigation a
   await expectComplete();
   await page.reload();
   await expectComplete();
+});
+
+test("real WebSockets synchronize two users, deduplicate tabs and isolate teams", async ({
+  browser,
+  page,
+  context,
+}, testInfo) => {
+  const peerContext = await browser.newContext({
+    baseURL: "http://localhost:5194",
+    viewport: { width: 390, height: 844 },
+  });
+  const outsiderContext = await browser.newContext({ baseURL: "http://localhost:5194" });
+  try {
+    await authenticate(context);
+    await authenticate(peerContext, peerToken);
+    await authenticate(outsiderContext, outsiderToken);
+    const peer = await peerContext.newPage(),
+      outsider = await outsiderContext.newPage();
+    let connections = 0;
+    page.on("websocket", () => connections++);
+    await page.goto("/");
+    await peer.goto("/");
+    await outsider.goto("/");
+    const peerIcon = page.getByRole("button", { name: "同期メンバー（接続中）", exact: true });
+    await expect(peerIcon).toBeVisible();
+    await expect(
+      peer.getByRole("button", { name: "テストユーザー（接続中）", exact: true }),
+    ).toBeVisible();
+    await expect(outsider.getByLabel("接続中のチームメンバー")).toHaveCount(0);
+    await peerIcon.focus();
+    await expect(page.getByText("同期メンバー（接続中）", { exact: true })).toBeVisible();
+    await peerIcon.click();
+    await expect(peerIcon).toHaveAttribute("aria-expanded", "true");
+    await peer.screenshot({ path: testInfo.outputPath("realtime-presence-mobile.png") });
+    const extra = await peerContext.newPage();
+    await extra.goto("/");
+    await expect(
+      extra.getByRole("button", { name: "テストユーザー（接続中）", exact: true }),
+    ).toBeVisible();
+    await expect(peerIcon).toHaveCount(1);
+    await extra.close();
+    await expect(peerIcon).toBeVisible();
+
+    await page.getByRole("button", { name: "買い物", exact: true }).click();
+    await peer.getByRole("button", { name: "買い物", exact: true }).click();
+    await page.getByRole("button", { name: "追加", exact: true }).click();
+    await page.getByPlaceholder("例: 牛乳", { exact: true }).fill("リアルタイムの買い物");
+    await page.getByRole("button", { name: "追加する", exact: true }).click();
+    await expect(peer.getByText("リアルタイムの買い物", { exact: true })).toBeVisible();
+    const item = peer.getByText("リアルタイムの買い物", { exact: true }).locator("..");
+    await item.getByRole("button", { name: "編集", exact: true }).click();
+    await peer.getByLabel("メモ", { exact: true }).fill("共有メモ");
+    await peer.getByRole("button", { name: "保存", exact: true }).click();
+    await expect(page.getByText("共有メモ", { exact: true })).toBeVisible();
+    await item.getByRole("button", { name: "購入済みにする" }).click();
+    await peer
+      .getByRole("dialog", { name: "購入済みにしますか？" })
+      .getByRole("button", { name: "購入済みにする", exact: true })
+      .click();
+    await expect(page.getByText("リアルタイムの買い物", { exact: true })).toHaveCount(0);
+    expect(connections).toBe(1);
+
+    await page.goto("/tasks");
+    await page.getByRole("button", { name: "追加", exact: true }).click();
+    await page.getByLabel("タスク名", { exact: true }).fill("リアルタイムの日間");
+    await page.getByRole("button", { name: "追加する", exact: true }).click();
+    await page.getByRole("button", { name: "ホーム", exact: true }).click();
+    await peer.getByRole("button", { name: "ホーム", exact: true }).click();
+    const taskA = page.getByRole("button", { name: /リアルタイムの日間.*日間/ });
+    const taskB = peer.getByRole("button", { name: /リアルタイムの日間.*日間/ });
+    await taskA.click();
+    await expect(taskB.getByRole("img")).toHaveAttribute("aria-label", "1回目: テストユーザー");
+    await taskB.click();
+    await expect(taskA.getByRole("img")).toHaveAttribute("aria-label", "1回目: 未完了");
+    await expect(outsider.getByText("リアルタイムの日間", { exact: true })).toHaveCount(0);
+    await peerContext.close();
+    await expect(peerIcon).toHaveCount(0);
+  } finally {
+    await peerContext.close();
+    await outsiderContext.close();
+  }
 });
