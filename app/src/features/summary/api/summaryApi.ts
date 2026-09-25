@@ -1,28 +1,28 @@
-import { postTaskCompletionToggle } from "../../../lib/api/operations";
+import { postTaskCompletion } from "../../../lib/api/operations";
 
 export async function completePastDailyTask(taskId: string, targetDate: string) {
-  await postTaskCompletionToggle(taskId, {
+  await postTaskCompletion(taskId, {
     targetDate,
     action: "complete",
   });
 }
 
 export async function incrementPastWeeklyTask(taskId: string, targetDate: string) {
-  await postTaskCompletionToggle(taskId, {
+  await postTaskCompletion(taskId, {
     targetDate,
     action: "increment",
   });
 }
 
 export async function decrementPastDailyTask(taskId: string, targetDate: string) {
-  await postTaskCompletionToggle(taskId, {
+  await postTaskCompletion(taskId, {
     targetDate,
-    action: "decrement",
+    action: "incomplete",
   });
 }
 
 export async function decrementPastWeeklyTask(taskId: string, targetDate: string) {
-  await postTaskCompletionToggle(taskId, {
+  await postTaskCompletion(taskId, {
     targetDate,
     action: "decrement",
   });
