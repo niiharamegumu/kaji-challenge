@@ -4,22 +4,21 @@ import { user } from "../../src/server/infrastructure/auth-schema";
 import { D1Repository } from "../../src/server/infrastructure/repository";
 import { provisionUser } from "../../src/server/application/provision-user";
 import { executeOperation } from "../../src/server/application/operations";
-import { operationSchema, responseSchemas, type TeamState } from "../../src/contracts/operations";
+import { operationSchema, responseSchemas } from "../../src/contracts/operations";
 
 let connection: Awaited<ReturnType<typeof createTestDatabase>>;
 const userId = crypto.randomUUID();
-let state: TeamState;
+
 let taskId: string;
 const initialTime = new Date("2026-09-23T03:00:00.000Z");
 async function run(operation: string, now: Date, body?: unknown, params = {}) {
-  const input = operationSchema.parse({ operation, body, params, expectedState: state });
+  const input = operationSchema.parse({ operation, body, params });
   // Every request constructs a fresh repository, as the Worker does.
   const result = await executeOperation(new D1Repository(connection.db), input, {
     userId,
     now,
     vapidPublicKey: "",
   });
-  state = result.state;
   return responseSchemas[input.operation].parse(result.data);
 }
 beforeAll(async () => {
@@ -40,7 +39,7 @@ beforeAll(async () => {
   taskId = task.id;
   for (let i = 0; i < 3; i++)
     await run(
-      "postTaskCompletionToggle",
+      "postTaskCompletion",
       new Date(initialTime.getTime() + i * 1000),
       { targetDate: "2026-09-23", action: "increment" },
       { taskId },
