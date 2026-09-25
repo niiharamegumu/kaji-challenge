@@ -38,30 +38,41 @@ export function TasksPage() {
         form={taskForm}
         tasks={tasksQuery.data}
         isCreateOpen={false}
+        isCreating={createTask.isPending}
+        createFailed={createTask.isError}
+        isUpdating={updateTask.isPending}
         isReordering={reorderTasks.isPending}
         showCreateButton={false}
         onCloseCreate={() => setIsCreateOpen(false)}
         onFormChange={(updater) => setTaskForm((prev) => updater(prev))}
-        onOpenCreate={() => setIsCreateOpen(true)}
+        onOpenCreate={() => {
+          createTask.reset();
+          setIsCreateOpen(true);
+        }}
         onCreate={handleCreateTask}
         onDelete={(taskId) => {
-          void removeTask.mutateAsync(taskId);
+          removeTask.mutate(taskId);
         }}
         onReorder={(payload) => {
-          void reorderTasks.mutateAsync(payload);
+          reorderTasks.mutate(payload);
         }}
         onUpdate={handleUpdateTask}
       />
       <FooterQuickAction
         isOpen={isCreateOpen}
+        isSubmitting={createTask.isPending}
+        submitFailed={createTask.isError}
         title="タスクを追加"
         submitLabel="追加する"
         submitIcon={<Plus size={16} aria-hidden="true" />}
         submitDisabled={!canSubmitTaskForm(taskForm)}
-        onOpen={() => setIsCreateOpen(true)}
+        onOpen={() => {
+          createTask.reset();
+          setIsCreateOpen(true);
+        }}
         onClose={() => setIsCreateOpen(false)}
         onSubmit={() => {
-          void handleCreateTask().then(() => {
+          return handleCreateTask().then(() => {
             setIsCreateOpen(false);
           });
         }}
