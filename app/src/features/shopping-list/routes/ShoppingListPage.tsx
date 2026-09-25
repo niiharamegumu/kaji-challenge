@@ -40,46 +40,49 @@ export function ShoppingListPage() {
     await updateItem.mutateAsync({ itemId, payload });
   };
 
-  const handleDelete = async (itemId: string) => {
-    await removeItem.mutateAsync(itemId);
-  };
-
-  const handleReorder = async (itemIds: string[]) => {
-    await reorderItems.mutateAsync({ itemIds });
-  };
-
   return (
     <section className="mt-2 w-full pb-1 md:mt-4">
       <ShoppingListManager
         form={form}
         items={shoppingItemsQuery.data}
         isCreateOpen={false}
+        isCreating={createItem.isPending}
+        createFailed={createItem.isError}
+        isUpdating={updateItem.isPending}
         isReordering={reorderItems.isPending}
         showCreateButton={false}
         onCloseCreate={() => setIsCreateOpen(false)}
         onFormChange={(updater) => {
           setForm((prev) => updater(prev));
         }}
-        onOpenCreate={() => setIsCreateOpen(true)}
+        onOpenCreate={() => {
+          createItem.reset();
+          setIsCreateOpen(true);
+        }}
         onCreate={handleCreate}
         onDelete={(itemId) => {
-          void handleDelete(itemId);
+          removeItem.mutate(itemId);
         }}
         onReorder={(itemIds) => {
-          void handleReorder(itemIds);
+          reorderItems.mutate({ itemIds });
         }}
         onUpdate={handleUpdate}
       />
       <FooterQuickAction
         isOpen={isCreateOpen}
+        isSubmitting={createItem.isPending}
+        submitFailed={createItem.isError}
         title="買い物項目を追加"
         submitLabel="追加する"
         submitIcon={<Plus size={16} aria-hidden="true" />}
         submitDisabled={form.name.trim().length === 0}
-        onOpen={() => setIsCreateOpen(true)}
+        onOpen={() => {
+          createItem.reset();
+          setIsCreateOpen(true);
+        }}
         onClose={() => setIsCreateOpen(false)}
         onSubmit={() => {
-          void handleCreate().then(() => {
+          return handleCreate().then(() => {
             setIsCreateOpen(false);
           });
         }}

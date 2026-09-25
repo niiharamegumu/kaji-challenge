@@ -4,10 +4,11 @@ import { HOME_PANEL_CLASS_NAME } from "./panelStyles";
 
 type Props = {
   items: TaskOverviewDailyTask[];
+  pendingTaskIds?: string[];
   onToggle: (taskId: string) => void;
 };
 
-export function DailyTasksPanel({ items, onToggle }: Props) {
+export function DailyTasksPanel({ items, onToggle, pendingTaskIds = [] }: Props) {
   const completedCount = items.filter((item) => item.completedToday).length;
   const incompleteCount = items.length - completedCount;
 
@@ -36,6 +37,8 @@ export function DailyTasksPanel({ items, onToggle }: Props) {
             <button
               key={item.task.id}
               type="button"
+              disabled={pendingTaskIds.includes(item.task.id)}
+              aria-busy={pendingTaskIds.includes(item.task.id)}
               className={`min-h-11 rounded-xl p-2.5 text-left ring-1 transition-colors duration-200 ${item.completedToday ? "bg-[color:var(--color-matcha-50)] ring-[color:var(--color-matcha-400)]" : "bg-white ring-stone-200"}`}
               onClick={() => onToggle(item.task.id)}
             >

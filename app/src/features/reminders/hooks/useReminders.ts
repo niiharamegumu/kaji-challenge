@@ -59,9 +59,13 @@ export function useReminderMutations(setStatus: StatusSetter) {
 
   const createReminder = useMutation({
     mutationFn: async (payload: CreateReminderRequest) => postReminder(payload),
-    onSuccess: async () => {
+    onSuccess: async ({ data }) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.reminderDefinitions });
+      queryClient.setQueryData<Reminder[]>(queryKeys.reminderDefinitions, (items) =>
+        sortRemindersByDate([...(items ?? []), data]),
+      );
       setStatus("リマインダーを追加しました");
-      await invalidate();
+      void invalidate();
     },
     onError: async (error) => {
       if (await handleTeamStatePreconditionFailure(error, queryClient, setStatus)) {
@@ -79,9 +83,15 @@ export function useReminderMutations(setStatus: StatusSetter) {
       reminderId: string;
       payload: UpdateReminderRequest;
     }) => patchReminder(reminderId, payload),
-    onSuccess: async () => {
+    onSuccess: async ({ data }) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.reminderDefinitions });
+      queryClient.setQueryData<Reminder[]>(
+        queryKeys.reminderDefinitions,
+        (items) =>
+          items && sortRemindersByDate(items.map((item) => (item.id === data.id ? data : item))),
+      );
       setStatus("リマインダーを更新しました");
-      await invalidate();
+      void invalidate();
     },
     onError: async (error) => {
       if (await handleTeamStatePreconditionFailure(error, queryClient, setStatus)) {
@@ -93,9 +103,13 @@ export function useReminderMutations(setStatus: StatusSetter) {
 
   const removeReminder = useMutation({
     mutationFn: async (reminderId: string) => deleteReminder(reminderId),
-    onSuccess: async () => {
+    onSuccess: async (_, reminderId) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.reminderDefinitions });
+      queryClient.setQueryData<Reminder[]>(queryKeys.reminderDefinitions, (items) =>
+        items?.filter((item) => item.id !== reminderId),
+      );
       setStatus("リマインダーを削除しました");
-      await invalidate();
+      void invalidate();
     },
     onError: async (error) => {
       if (await handleTeamStatePreconditionFailure(error, queryClient, setStatus)) {

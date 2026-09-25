@@ -148,7 +148,22 @@ describe("TasksPage", () => {
     );
 
   it("posts task from task manager", async () => {
-    mockPostTask.mockResolvedValue({ data: {} });
+    mockPostTask.mockImplementation((payload) =>
+      Promise.resolve({
+        data: {
+          id: "task-created",
+          teamId: "team-1",
+          title: "task",
+          type: "daily",
+          penaltyPoints: 1,
+          requiredCompletionsPerWeek: 1,
+          sortKey: 1,
+          createdAt: "2026-02-01T00:00:00Z",
+          updatedAt: "2026-02-01T00:00:00Z",
+          ...payload,
+        },
+      }),
+    );
     const user = userEvent.setup();
 
     renderPage();
@@ -219,7 +234,22 @@ describe("TasksPage", () => {
   });
 
   it("resets task form fields after creating task", async () => {
-    mockPostTask.mockResolvedValue({ data: {} });
+    mockPostTask.mockImplementation((payload) =>
+      Promise.resolve({
+        data: {
+          id: "task-created",
+          teamId: "team-1",
+          title: "task",
+          type: "daily",
+          penaltyPoints: 1,
+          requiredCompletionsPerWeek: 1,
+          sortKey: 1,
+          createdAt: "2026-02-01T00:00:00Z",
+          updatedAt: "2026-02-01T00:00:00Z",
+          ...payload,
+        },
+      }),
+    );
     const user = userEvent.setup();
 
     renderPage();
@@ -289,7 +319,22 @@ describe("TasksPage", () => {
         ],
       },
     });
-    mockPatchTask.mockResolvedValue({ data: {} });
+    mockPatchTask.mockImplementation((id, payload) =>
+      Promise.resolve({
+        data: {
+          teamId: "team-1",
+          title: "task",
+          type: "daily",
+          penaltyPoints: 1,
+          requiredCompletionsPerWeek: 1,
+          sortKey: 1,
+          createdAt: "2026-02-01T00:00:00Z",
+          updatedAt: "2026-02-01T00:00:00Z",
+          id,
+          ...payload,
+        },
+      }),
+    );
     const user = userEvent.setup();
 
     renderPage();
@@ -339,7 +384,22 @@ describe("TasksPage", () => {
         ],
       },
     });
-    mockPatchTask.mockResolvedValue({ data: {} });
+    mockPatchTask.mockImplementation((id, payload) =>
+      Promise.resolve({
+        data: {
+          teamId: "team-1",
+          title: "task",
+          type: "daily",
+          penaltyPoints: 1,
+          requiredCompletionsPerWeek: 1,
+          sortKey: 1,
+          createdAt: "2026-02-01T00:00:00Z",
+          updatedAt: "2026-02-01T00:00:00Z",
+          id,
+          ...payload,
+        },
+      }),
+    );
     const user = userEvent.setup();
 
     renderPage();

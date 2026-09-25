@@ -12,6 +12,9 @@ type Props = {
   form: RuleFormState;
   rules: PenaltyRule[];
   isCreateOpen: boolean;
+  isUpdating: boolean;
+  isCreating: boolean;
+  createFailed: boolean;
   showCreateButton?: boolean;
   onCloseCreate: () => void;
   onFormChange: (updater: (prev: RuleFormState) => RuleFormState) => void;
@@ -67,6 +70,9 @@ export function PenaltyRuleManager({
   form,
   rules,
   isCreateOpen,
+  isUpdating,
+  isCreating,
+  createFailed,
   showCreateButton = true,
   onCloseCreate,
   onFormChange,
@@ -82,6 +88,7 @@ export function PenaltyRuleManager({
   const sortedRules = useMemo(() => [...rules].sort((a, b) => b.threshold - a.threshold), [rules]);
 
   const startEdit = (rule: PenaltyRule) => {
+    if (isUpdating) return;
     setEditingRuleId(rule.id);
     setEditName(rule.name);
   };
@@ -96,8 +103,13 @@ export function PenaltyRuleManager({
     if (name.length === 0) {
       return;
     }
-    await onUpdate(ruleId, { name });
-    cancelEdit();
+    if (isUpdating) return;
+    try {
+      await onUpdate(ruleId, { name });
+      cancelEdit();
+    } catch {
+      // mutation側でエラーを通知する。入力を残して再操作できるようにする。
+    }
   };
 
   return (
@@ -140,6 +152,7 @@ export function PenaltyRuleManager({
                         id={`rule-edit-name-${rule.id}`}
                         className="h-10 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
                         value={editName}
+                        disabled={isUpdating}
                         onChange={(event) => setEditName(event.target.value)}
                       />
                     </div>
@@ -156,14 +169,16 @@ export function PenaltyRuleManager({
                           onClick={() => {
                             void saveEdit(rule.id);
                           }}
-                          disabled={!canSave}
+                          disabled={!canSave || isUpdating}
+                          aria-busy={isUpdating}
                         >
-                          <span>保存</span>
+                          <span>{isUpdating ? "保存中…" : "保存"}</span>
                         </button>
                         <button
                           type="button"
                           className="flex h-9 items-center gap-1 rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 text-xs text-stone-700 transition-colors duration-200 hover:bg-stone-100 sm:h-11 sm:px-3 sm:py-2"
                           onClick={cancelEdit}
+                          disabled={isUpdating}
                         >
                           <X size={14} aria-hidden="true" />
                           <span className="sr-only sm:not-sr-only">キャンセル</span>
@@ -207,13 +222,15 @@ export function PenaltyRuleManager({
 
       <FormSheet
         isOpen={isCreateOpen}
+        isSubmitting={isCreating}
+        submitFailed={createFailed}
         title="ペナルティルールを追加"
         submitLabel="追加する"
         submitIcon={<Plus size={16} aria-hidden="true" />}
         submitDisabled={form.name.trim() === "" || Number(form.threshold) < 1}
         onClose={onCloseCreate}
         onSubmit={() => {
-          void onCreate().then(onCloseCreate);
+          return onCreate().then(onCloseCreate);
         }}
       >
         <PenaltyRuleCreateForm form={form} onFormChange={onFormChange} />

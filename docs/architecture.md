@@ -27,6 +27,14 @@ feature adapter → 共通client → Server Function → Application → Reposit
 - 追加・編集フォームは `shared/components/FormSheet.tsx` の共通シェルを使います。`FooterQuickAction` は追加ボタンとそのシェルの組み立てを担当し、featureに端末別のシェルを複製しません。
 - `shared` は `features` に依存しません。画面はfeature adapterを通してServer Functionsを利用します。
 
+### 操作のフィードバック
+
+家事の完了・購入済みは、TanStack Queryの未完了mutationの入力を取得結果に重ねて即時表示する。保存済みキャッシュは成功応答で更新し、失敗時はそのmutationの表示だけが消える。他の操作やメンバーの完了を一括rollbackしない。同じ家事への保存中の連打は抑止し、別の家事は操作できる。追加・編集フォームはPromiseを返し、共通FormSheetとインライン編集は呼出元mutationの `isPending` / `isError` を表示に使う。別のref/stateへ保存状態を複製せず、保存中の入力・閉じる操作・重複送信を抑止する。失敗時は入力を保持し、再表示時にmutationをresetする。全体の保存中表示は `shared/components/MutationFeedback.tsx` が担当する。
+
+API応答の実行時検証は共通clientの出力schemaで行う。feature hookで再検証したり、不正なDTOを一覧再取得で隠したりしない。保存応答のDTOを一覧に反映し、派生データの再取得はバックグラウンドで行う。家事完了の一覧同期は最後のpending mutationが終了するときにまとめる。楽観表示をDB保存済みの証拠として扱わず、再読込の検証では保存応答も待つ。
+
+`lib/api/serverClient.ts` はrevisionが必要な書き込みをブラウザー内で直列化し、送信時に最新revisionを読む。読み取りは並列のまま。同一チームの遅れて届いた読み取り応答でrevisionを巻き戻さず、ログアウト・所属変更前の応答と待機中の操作は破棄する。書き込みキューもセッションの世代ごとに分け、古い通信が新しいログイン後の操作を待たせない。別端末との競合は従来どおり412/428相当で再取得・再操作を促し、成否不明の書き込みは自動再送しない。mutationは `networkMode: "always"` / `retry: false` とし、オフライン時も通信を試行して失敗を返す。TanStack Queryの接続待ちキューへ操作を残さず、再ログイン後の自動送信を防ぐ。
+
 ## D1の更新と競合制御
 
 認証・業務・Push配信記録は `infrastructure/database.ts` で作る同じDrizzle D1 handleを使用する。業務テーブルは `schema.ts`、認証テーブルは `auth-schema.ts` に定義し、Repositoryは型付きquery builderで読み書きする。複雑な再帰集計やSQLiteの日付・window関数はDrizzleの `sql` を使用する。SQL結果の列順による変換は行わない。

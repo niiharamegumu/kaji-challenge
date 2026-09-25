@@ -1,6 +1,8 @@
 import { useAtom } from "jotai";
 
 import { statusMessageAtom } from "../../../shared/state/status";
+import { useOutletContext } from "../../../shared/router/navigation";
+import type { RootLayoutOutletContext } from "../../../shared/router/rootLayoutContext";
 import { useShoppingItemMutations } from "../../shopping-list";
 import { DailyTasksPanel } from "../components/DailyTasksPanel";
 import { HomeShoppingListPanel } from "../components/HomeShoppingListPanel";
@@ -81,7 +83,11 @@ export function HomePage() {
     previousMonthPenaltySummaryQuery,
     penaltyRulesQuery,
   } = useHomePageQueries();
-  const toggleMutation = useToggleCompletionMutation(setStatus);
+  const { currentUserId, displayName, colorHex } = useOutletContext<RootLayoutOutletContext>();
+  const toggleMutation = useToggleCompletionMutation(
+    setStatus,
+    currentUserId ? { userId: currentUserId, effectiveName: displayName, colorHex } : undefined,
+  );
   const { updateItem, removeItem, reorderItems } = useShoppingItemMutations(setStatus);
 
   const home = homeQuery.data;
@@ -98,22 +104,24 @@ export function HomePage() {
       <section className="grid gap-2 md:grid-cols-2 md:gap-4">
         <DailyTasksPanel
           items={home.dailyTasks}
+          pendingTaskIds={toggleMutation.pendingTaskIds}
           onToggle={(taskId) => {
-            void toggleMutation.mutateAsync({ taskId, action: "toggle" });
+            toggleMutation.toggle({ taskId, action: "toggle" });
           }}
         />
         <WeeklyTasksPanel
           items={home.weeklyTasks}
+          pendingTaskIds={toggleMutation.pendingTaskIds}
           elapsedDaysInWeek={home.elapsedDaysInWeek}
           weeklyProgress={weeklyProgress}
           onToggle={(taskId) => {
-            void toggleMutation.mutateAsync({ taskId, action: "toggle" });
+            toggleMutation.toggle({ taskId, action: "toggle" });
           }}
           onIncrement={(taskId) => {
-            void toggleMutation.mutateAsync({ taskId, action: "increment" });
+            toggleMutation.toggle({ taskId, action: "increment" });
           }}
           onDecrement={(taskId) => {
-            void toggleMutation.mutateAsync({ taskId, action: "decrement" });
+            toggleMutation.toggle({ taskId, action: "decrement" });
           }}
         />
       </section>
@@ -123,11 +131,12 @@ export function HomePage() {
         <HomeShoppingListPanel
           items={shoppingItems}
           isReordering={reorderItems.isPending}
+          isUpdating={updateItem.isPending}
           onDelete={(itemId) => {
-            void removeItem.mutateAsync(itemId);
+            removeItem.mutate(itemId);
           }}
           onReorder={(itemIds) => {
-            void reorderItems.mutateAsync({ itemIds });
+            reorderItems.mutate({ itemIds });
           }}
           onUpdate={async (itemId, payload) => {
             await updateItem.mutateAsync({ itemId, payload });

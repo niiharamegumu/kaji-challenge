@@ -6,6 +6,7 @@ import {
   patchPenaltyRule,
   postPenaltyRule,
   type UpdatePenaltyRuleRequest,
+  type PenaltyRule,
 } from "../../../lib/api/operations";
 import { queryKeys } from "../../../shared/query/queryKeys";
 import { handleTeamStatePreconditionFailure } from "../../../shared/query/teamStateRefresh";
@@ -24,19 +25,19 @@ export function usePenaltyRuleMutations(setStatus: StatusSetter) {
   const queryClient = useQueryClient();
 
   const invalidate = async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.rules }),
-      queryClient.invalidateQueries({
-        queryKey: [...queryKeys.rules, "withDeleted"],
-      }),
-    ]);
+    await queryClient.invalidateQueries({ queryKey: queryKeys.rules });
   };
 
   const createRule = useMutation({
     mutationFn: async (payload: CreatePenaltyRuleRequest) => postPenaltyRule(payload),
-    onSuccess: async () => {
+    onSuccess: async ({ data }) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.rules });
+      queryClient.setQueryData<PenaltyRule[]>(
+        queryKeys.rules,
+        (items) => items && [...items, data].sort((a, b) => a.threshold - b.threshold),
+      );
       setStatus("ペナルティルールを作成しました");
-      await invalidate();
+      void invalidate();
     },
     onError: async (error) => {
       if (await handleTeamStatePreconditionFailure(error, queryClient, setStatus)) {
@@ -48,9 +49,13 @@ export function usePenaltyRuleMutations(setStatus: StatusSetter) {
 
   const removeRule = useMutation({
     mutationFn: async (ruleId: string) => deletePenaltyRule(ruleId),
-    onSuccess: async () => {
+    onSuccess: async (_, ruleId) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.rules });
+      queryClient.setQueryData<PenaltyRule[]>(queryKeys.rules, (items) =>
+        items?.filter((item) => item.id !== ruleId),
+      );
       setStatus("ルールを削除しました");
-      await invalidate();
+      void invalidate();
     },
     onError: async (error) => {
       if (await handleTeamStatePreconditionFailure(error, queryClient, setStatus)) {
@@ -68,9 +73,15 @@ export function usePenaltyRuleMutations(setStatus: StatusSetter) {
       ruleId: string;
       payload: UpdatePenaltyRuleRequest;
     }) => patchPenaltyRule(ruleId, payload),
-    onSuccess: async () => {
+    onSuccess: async ({ data }) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.rules });
+      queryClient.setQueriesData<PenaltyRule[]>({ queryKey: queryKeys.rules }, (items) =>
+        items
+          ?.map((item) => (item.id === data.id ? data : item))
+          .sort((a, b) => a.threshold - b.threshold),
+      );
       setStatus("ルールを更新しました");
-      await Promise.all([
+      void Promise.all([
         invalidate(),
         queryClient.invalidateQueries({ queryKey: queryKeys.monthlySummary }),
       ]);

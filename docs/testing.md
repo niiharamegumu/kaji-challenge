@@ -7,6 +7,7 @@
 - Application/DB: 認可、チーム越境、競合とrollback、締めの冪等性、認証失効・セッション数を使い捨てのローカルD1で検証します。
 - API契約: `app/src/contracts/` のZod入出力・DTOを正本とし、transportとfeature adapter/hookを確認します。412/428相当の再取得も対象です。
 - 通信・接続の失敗: キャンセル後の応答でクライアントのrevisionを更新しないこと、メンテナンス中に業務処理がD1へアクセスしないことを確認します。
+- 操作フィードバック: 遅延中の家事完了・購入済み表示、失敗した操作だけの復元、連打防止、フォームの保存中表示・入力保持を確認します。共通clientでは書き込み順序・最新revisionの引継ぎ・並列読取・ログアウト後の待機操作破棄・新セッションの送信開始、オフライン書き込みの即時失敗と再接続時の再送抑止を検証します。E2Eでも更新通信を止めた状態の即時表示と失敗時の復元を確認します。
 - Transport/DB: Server Functionの入力不正・未認証・異なるoriginを業務処理より前に拒否し、出力schemaの検証失敗時には業務更新とrevisionを同じトランザクションでrollbackします。登録APIとセッション取得をmockするテストと、実Workersで通信するE2Eを併用します。
 - ブラウザー: Workers previewとローカルD1を使い、desktop/mobileで画面遷移、保存、ドラッグ、戻る操作、PWA offline shellを確認します。
 - 秘密情報: `.gitignore` の実Git判定、認証ログの機密値抑止、短いsession secret・非ローカルHTTP originの拒否を検証します。依存関係はCIの `bun audit --audit-level moderate` で確認します。ignoreのテストは、既に追跡された秘密値の検出や履歴スキャンを代替しません。

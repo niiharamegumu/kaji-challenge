@@ -92,9 +92,9 @@ describe("ReminderCalendarPage", () => {
       isFetching: false,
     });
     mockUseReminderMutations.mockReturnValue({
-      createReminder: { mutateAsync: vi.fn() },
-      updateReminder: { mutateAsync: vi.fn() },
-      removeReminder: { mutateAsync: vi.fn() },
+      createReminder: { reset: vi.fn(), isPending: false, isError: false, mutateAsync: vi.fn() },
+      updateReminder: { reset: vi.fn(), isPending: false, isError: false, mutateAsync: vi.fn() },
+      removeReminder: { reset: vi.fn(), isPending: false, isError: false, mutateAsync: vi.fn() },
     });
   });
 
@@ -108,6 +108,26 @@ describe("ReminderCalendarPage", () => {
     const calls = mockFullCalendar.mock.calls;
     return calls[calls.length - 1]?.[0] as Record<string, unknown> | undefined;
   }
+
+  it("does not switch to creation or reset a mutation while an edit is saving", () => {
+    setViewport(1280);
+    const reset = vi.fn();
+    mockUseReminderMutations.mockReturnValue({
+      createReminder: { reset, isPending: false, isError: false, mutateAsync: vi.fn() },
+      updateReminder: { reset, isPending: true, isError: false, mutateAsync: vi.fn() },
+      removeReminder: { isPending: false, mutateAsync: vi.fn() },
+    });
+    render(
+      <MemoryRouter initialEntries={["/calendar"]}>
+        <ReminderCalendarPage />
+      </MemoryRouter>,
+    );
+    const add = screen.getByRole("button", { name: "追加" });
+    expect(add).toBeDisabled();
+    fireEvent.click(add);
+    expect(screen.queryByRole("dialog", { name: "リマインダーを追加" })).not.toBeInTheDocument();
+    expect(reset).not.toHaveBeenCalled();
+  });
 
   it("shows mobile-specific description and does not pass events to FullCalendar on mobile", () => {
     setViewport(390);
@@ -138,9 +158,14 @@ describe("ReminderCalendarPage", () => {
     setViewport(390);
     const createReminder = vi.fn().mockResolvedValue(undefined);
     mockUseReminderMutations.mockReturnValue({
-      createReminder: { mutateAsync: createReminder },
-      updateReminder: { mutateAsync: vi.fn() },
-      removeReminder: { mutateAsync: vi.fn() },
+      createReminder: {
+        reset: vi.fn(),
+        isPending: false,
+        isError: false,
+        mutateAsync: createReminder,
+      },
+      updateReminder: { reset: vi.fn(), isPending: false, isError: false, mutateAsync: vi.fn() },
+      removeReminder: { reset: vi.fn(), isPending: false, isError: false, mutateAsync: vi.fn() },
     });
 
     render(
@@ -257,9 +282,14 @@ describe("ReminderCalendarPage", () => {
       setViewport(width);
       const updateReminder = vi.fn().mockResolvedValue(undefined);
       mockUseReminderMutations.mockReturnValue({
-        createReminder: { mutateAsync: vi.fn() },
-        updateReminder: { mutateAsync: updateReminder },
-        removeReminder: { mutateAsync: vi.fn() },
+        createReminder: { reset: vi.fn(), isPending: false, isError: false, mutateAsync: vi.fn() },
+        updateReminder: {
+          reset: vi.fn(),
+          isPending: false,
+          isError: false,
+          mutateAsync: updateReminder,
+        },
+        removeReminder: { reset: vi.fn(), isPending: false, isError: false, mutateAsync: vi.fn() },
       });
       render(
         <MemoryRouter initialEntries={["/calendar?date=2026-04-02"]}>
@@ -304,9 +334,14 @@ describe("ReminderCalendarPage", () => {
       setViewport(width);
       const removeReminder = vi.fn().mockResolvedValue(undefined);
       mockUseReminderMutations.mockReturnValue({
-        createReminder: { mutateAsync: vi.fn() },
-        updateReminder: { mutateAsync: vi.fn() },
-        removeReminder: { mutateAsync: removeReminder },
+        createReminder: { reset: vi.fn(), isPending: false, isError: false, mutateAsync: vi.fn() },
+        updateReminder: { reset: vi.fn(), isPending: false, isError: false, mutateAsync: vi.fn() },
+        removeReminder: {
+          reset: vi.fn(),
+          isPending: false,
+          isError: false,
+          mutateAsync: removeReminder,
+        },
       });
       render(
         <MemoryRouter initialEntries={["/calendar?date=2026-04-02"]}>

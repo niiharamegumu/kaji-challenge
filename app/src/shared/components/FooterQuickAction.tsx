@@ -8,10 +8,12 @@ type Props = {
   submitLabel: string;
   submitIcon?: ReactNode;
   submitDisabled?: boolean;
+  isSubmitting: boolean;
+  submitFailed?: boolean;
   children: ReactNode;
   onClose: () => void;
   onOpen: () => void;
-  onSubmit: () => void;
+  onSubmit: () => void | Promise<void>;
 };
 
 export function FooterQuickAction({
@@ -20,6 +22,8 @@ export function FooterQuickAction({
   submitLabel,
   submitIcon,
   submitDisabled = false,
+  isSubmitting,
+  submitFailed,
   children,
   onClose,
   onOpen,
@@ -37,6 +41,8 @@ export function FooterQuickAction({
         submitLabel={submitLabel}
         submitIcon={submitIcon}
         submitDisabled={submitDisabled}
+        isSubmitting={isSubmitting}
+        submitFailed={submitFailed}
         onClose={onClose}
         onSubmit={onSubmit}
       >
@@ -51,6 +57,7 @@ export function FooterQuickAction({
           WebkitBackdropFilter: "blur(26px) saturate(220%) brightness(0.94) contrast(1.08)",
         }}
         onClick={isOpen ? onClose : onOpen}
+        disabled={isSubmitting}
         aria-expanded={isOpen}
         aria-haspopup="dialog"
         aria-label="追加"

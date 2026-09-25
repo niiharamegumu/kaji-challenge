@@ -1,4 +1,9 @@
-import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import {
+  useMutation,
+  useMutationState,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
 
 import {
   type CreateShoppingListItemRequest,
@@ -16,18 +21,22 @@ import { handleTeamStatePreconditionFailure } from "../../../shared/query/teamSt
 import { formatError } from "../../../shared/utils/errors";
 
 type StatusSetter = (message: string) => void;
+const removeMutationKey = ["shopping-remove"];
 
-const hasShoppingItems = (value: unknown): value is { items?: ShoppingListItem[] } =>
-  value != null && typeof value === "object" && "items" in value;
-
-const hasShoppingItemId = (value: unknown): value is ShoppingListItem =>
-  value != null && typeof value === "object" && "id" in value && typeof value.id === "string";
+export function usePendingShoppingRemovals() {
+  return useMutationState({
+    filters: { mutationKey: removeMutationKey, status: "pending" },
+    select: (mutation) => mutation.state.variables as string,
+  });
+}
 
 export function useShoppingItemsQuery() {
-  return useSuspenseQuery({
+  const pendingIds = usePendingShoppingRemovals();
+  const query = useSuspenseQuery({
     queryKey: queryKeys.shoppingItems,
-    queryFn: async () => (await listShoppingItems()).data.items ?? [],
+    queryFn: async ({ signal }) => (await listShoppingItems({ signal })).data.items ?? [],
   });
+  return { ...query, data: query.data.filter((item) => !pendingIds.includes(item.id)) };
 }
 
 export function useShoppingItemMutations(setStatus: StatusSetter) {
@@ -41,10 +50,7 @@ export function useShoppingItemMutations(setStatus: StatusSetter) {
     mutationFn: async (payload: CreateShoppingListItemRequest) => postShoppingItem(payload),
     onSuccess: async (response) => {
       setStatus("買い物項目を追加しました");
-      if (!hasShoppingItemId(response.data)) {
-        await invalidate();
-        return;
-      }
+      await queryClient.cancelQueries({ queryKey: queryKeys.shoppingItems });
       const createdItem = response.data;
       queryClient.setQueryData<ShoppingListItem[]>(queryKeys.shoppingItems, (current) => [
         createdItem,
@@ -67,9 +73,12 @@ export function useShoppingItemMutations(setStatus: StatusSetter) {
       itemId: string;
       payload: UpdateShoppingListItemRequest;
     }) => patchShoppingItem(itemId, payload),
-    onSuccess: async () => {
+    onSuccess: async ({ data }) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.shoppingItems });
+      queryClient.setQueryData<ShoppingListItem[]>(queryKeys.shoppingItems, (items) =>
+        items?.map((item) => (item.id === data.id ? data : item)),
+      );
       setStatus("買い物項目を更新しました");
-      await invalidate();
     },
     onError: async (error) => {
       if (await handleTeamStatePreconditionFailure(error, queryClient, setStatus)) {
@@ -80,10 +89,14 @@ export function useShoppingItemMutations(setStatus: StatusSetter) {
   });
 
   const removeItem = useMutation({
+    mutationKey: removeMutationKey,
     mutationFn: async (itemId: string) => deleteShoppingItem(itemId),
-    onSuccess: async () => {
+    onSuccess: async (_, itemId) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.shoppingItems });
+      queryClient.setQueryData<ShoppingListItem[]>(queryKeys.shoppingItems, (items) =>
+        items?.filter((item) => item.id !== itemId),
+      );
       setStatus("買い物項目を削除しました");
-      await invalidate();
     },
     onError: async (error) => {
       if (await handleTeamStatePreconditionFailure(error, queryClient, setStatus)) {
@@ -91,14 +104,14 @@ export function useShoppingItemMutations(setStatus: StatusSetter) {
       }
       setStatus(`買い物項目の削除に失敗しました: ${formatError(error)}`);
     },
+    onSettled: () => {
+      if (queryClient.isMutating({ mutationKey: removeMutationKey }) === 1) void invalidate();
+    },
   });
 
   const reorderItems = useMutation({
     mutationFn: async (payload: ReorderShoppingListItemsRequest) => {
       const response = await postShoppingItemsReorder(payload);
-      if (!hasShoppingItems(response.data)) {
-        throw new Error("unexpected shopping reorder response");
-      }
       return response.data.items ?? [];
     },
     onSuccess: (items) => {
