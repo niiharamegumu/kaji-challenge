@@ -19,7 +19,7 @@ description: KajiChalle のテスト設計、追加、レビュー、修正で�
 4. regression では、修正前または修正と同時に bug を証明する failing scenario を書く。
 5. backend DB tests では`tests/helpers/d1.ts` の使い捨てD1 fixture を使う。
 6. frontend tests では Testing Library を通して visible behavior と user interaction を検証する。
-7. auth、team scoping、stale revision、invalid input、date boundary など重要な negative path を対象に含める。
+7. auth、team scoping、revoked session、同時加減算、WebSocket再接続、invalid input、date boundary など重要な negative path を対象に含める。
 8. 検証コマンドを選ぶ。
    - UI: `make test`
    - TS server/DB: `cd app && bun run test:server --run`（fixtureがD1を自動作成・破棄。skipを成功扱いしない）
