@@ -39,7 +39,10 @@ type Props = {
   form: ShoppingItemFormState;
   items: ShoppingListItem[];
   isCreateOpen: boolean;
+  isCreating: boolean;
+  createFailed: boolean;
   isReordering: boolean;
+  isUpdating: boolean;
   showCreateButton?: boolean;
   onCloseCreate: () => void;
   onFormChange: (updater: (prev: ShoppingItemFormState) => ShoppingItemFormState) => void;
@@ -53,6 +56,7 @@ type Props = {
 type ShoppingListItemsSectionProps = {
   items: ShoppingListItem[];
   isReordering: boolean;
+  isUpdating: boolean;
   onDelete: (itemId: string) => void;
   onReorder: (itemIds: string[]) => void;
   onUpdate: (itemId: string, payload: UpdateShoppingListItemRequest) => Promise<void>;
@@ -144,6 +148,7 @@ function renderNotesWithLinks(value: string): ReactNode {
 function SortableShoppingItem({
   item,
   isEditing,
+  isSaving,
   editState,
   onStartEdit,
   onChangeEditState,
@@ -153,6 +158,7 @@ function SortableShoppingItem({
 }: {
   item: ShoppingListItem;
   isEditing: boolean;
+  isSaving: boolean;
   editState: EditState;
   onStartEdit: (item: ShoppingListItem) => void;
   onChangeEditState: (next: EditState) => void;
@@ -187,7 +193,7 @@ function SortableShoppingItem({
       className={`relative rounded-xl border border-stone-200 bg-white p-3 shadow-sm ${isDragging ? "opacity-70 select-none" : ""}`}
     >
       {isEditing ? (
-        <div className="grid gap-2">
+        <fieldset disabled={isSaving} className="grid gap-2">
           <label className="text-xs text-stone-700" htmlFor={`shopping-name-${item.id}`}>
             名前
           </label>
@@ -211,10 +217,11 @@ function SortableShoppingItem({
               type="button"
               className="flex h-9 items-center gap-1 rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-xs text-emerald-700 transition-colors hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50 sm:h-10"
               onClick={() => onSaveEdit(item.id)}
-              disabled={!canSave}
+              disabled={!canSave || isSaving}
+              aria-busy={isSaving}
             >
               <Check size={14} aria-hidden="true" />
-              <span>保存</span>
+              <span>{isSaving ? "保存中…" : "保存"}</span>
             </button>
             <button
               type="button"
@@ -225,7 +232,7 @@ function SortableShoppingItem({
               <span>キャンセル</span>
             </button>
           </div>
-        </div>
+        </fieldset>
       ) : (
         <div className="flex items-start gap-3 pr-10">
           <div className="min-w-0 flex-1">
@@ -315,6 +322,7 @@ export function ShoppingItemForm({
 export function ShoppingListItemsSection({
   items,
   isReordering,
+  isUpdating,
   onDelete,
   onReorder,
   onUpdate,
@@ -395,6 +403,7 @@ export function ShoppingListItemsSection({
   };
 
   const startEdit = (item: ShoppingListItem) => {
+    if (isUpdating) return;
     setEditingItemId(item.id);
     setEditState({
       name: item.name,
@@ -412,8 +421,13 @@ export function ShoppingListItemsSection({
       name: editState.name.trim(),
       notes: editState.notes.trim() === "" ? null : editState.notes.trim(),
     };
-    await onUpdate(itemId, payload);
-    cancelEdit();
+    if (isUpdating) return;
+    try {
+      await onUpdate(itemId, payload);
+      cancelEdit();
+    } catch {
+      // mutation側でエラーを通知する。編集内容を残して再操作できるようにする。
+    }
   };
 
   return (
@@ -454,6 +468,7 @@ export function ShoppingListItemsSection({
                     key={item.id}
                     item={item}
                     isEditing={editingItemId === item.id}
+                    isSaving={isUpdating}
                     editState={editState}
                     onStartEdit={startEdit}
                     onChangeEditState={setEditState}
@@ -496,7 +511,10 @@ export function ShoppingListManager({
   form,
   items,
   isCreateOpen,
+  isCreating,
+  createFailed,
   isReordering,
+  isUpdating,
   showCreateButton = true,
   onCloseCreate,
   onFormChange,
@@ -530,6 +548,7 @@ export function ShoppingListManager({
           <ShoppingListItemsSection
             items={items}
             isReordering={isReordering}
+            isUpdating={isUpdating}
             onDelete={onDelete}
             onReorder={onReorder}
             onUpdate={onUpdate}
@@ -548,13 +567,15 @@ export function ShoppingListManager({
 
       <FormSheet
         isOpen={isCreateOpen}
+        isSubmitting={isCreating}
+        submitFailed={createFailed}
         title="買い物項目を追加"
         submitLabel="追加する"
         submitIcon={<Plus size={16} aria-hidden="true" />}
         submitDisabled={!canCreate}
         onClose={onCloseCreate}
         onSubmit={() => {
-          void onCreate().then(onCloseCreate);
+          return onCreate().then(onCloseCreate);
         }}
       >
         <ShoppingItemForm form={form} onFormChange={onFormChange} />
