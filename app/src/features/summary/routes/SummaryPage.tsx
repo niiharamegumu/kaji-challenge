@@ -10,7 +10,6 @@ import {
   penaltyRulesWithDeletedQueryOptions,
 } from "../../../shared/query/monthlyPenaltyQueries";
 import { queryKeys } from "../../../shared/query/queryKeys";
-import { handleTeamStatePreconditionFailure } from "../../../shared/query/teamStateRefresh";
 import { PAGE_SECTION_CHROMELESS_CLASS_NAME } from "../../../shared/styles/pageSection";
 import { dateStringInJST, formatError } from "../../../shared/utils/errors";
 import { closeMonth as closeMonthRequest, useMonthCloseCandidate } from "../../month-close";
@@ -130,9 +129,6 @@ export function SummaryPage() {
       ]);
     },
     onError: async (error) => {
-      if (await handleTeamStatePreconditionFailure(error, queryClient, setStatus)) {
-        return;
-      }
       setStatus(`月次締め失敗: ${formatError(error)}`);
     },
   });
@@ -165,10 +161,6 @@ export function SummaryPage() {
       ]);
     },
     onError: async (error) => {
-      if (await handleTeamStatePreconditionFailure(error, queryClient, setStatus)) {
-        setConfirmTarget(null);
-        return;
-      }
       setStatus(`更新失敗: ${formatError(error)}`);
     },
   });
