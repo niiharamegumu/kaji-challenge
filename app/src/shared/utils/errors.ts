@@ -43,8 +43,3 @@ export const formatError = (error: unknown) => {
   }
   return "通信エラー";
 };
-
-export const isPreconditionFailure = (error: unknown) => {
-  const status = extractHttpStatus(error);
-  return status === 412 || status === 428;
-};

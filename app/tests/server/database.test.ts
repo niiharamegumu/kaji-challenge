@@ -4,7 +4,7 @@ import { sql } from "drizzle-orm";
 import { createTestDatabase } from "../helpers/d1";
 import { provisionUser } from "../../src/server/application/provision-user";
 import { executeOperation } from "../../src/server/application/operations";
-import { operationSchema, responseSchemas, type TeamState } from "../../src/contracts/operations";
+import { operationSchema, responseSchemas } from "../../src/contracts/operations";
 import { closeOutstanding } from "../../src/server/application/jobs";
 import { createAuth } from "../../src/server/infrastructure/auth";
 describe("D1 and business operations", () => {
@@ -12,22 +12,17 @@ describe("D1 and business operations", () => {
   const id = crypto.randomUUID(),
     secondId = crypto.randomUUID();
   const now = new Date("2026-09-14T03:00:00Z");
-  let state: TeamState;
+  let teamId: string;
   let taskId: string;
-  async function run(
-    operation: string,
-    body?: unknown,
-    params = {},
-    expectedState: TeamState | undefined = state,
-  ) {
-    const input = operationSchema.parse({ operation, body, params, expectedState });
+  async function run(operation: string, body?: unknown, params = {}) {
+    const input = operationSchema.parse({ operation, body, params });
     const result = await executeOperation(connection.repository, input, {
       userId: id,
       now,
       vapidPublicKey: "test",
     });
     responseSchemas[input.operation].parse(result.data);
-    state = result.state;
+    teamId = (await connection.repository.ListMembershipsByUserID(id))[0].TeamID;
     return result.data;
   }
   beforeAll(async () => {
@@ -57,92 +52,18 @@ describe("D1 and business operations", () => {
     await provisionUser(connection.repository, id, now);
     expect(await connection.repository.ListMembershipsByUserID(id)).toHaveLength(1);
   });
-  it("returns 428 before writes, and rejects stale or foreign team revisions", async () => {
-    const input = operationSchema.parse({
-      operation: "postTask",
-      body: { title: "掃除", type: "daily", penaltyPoints: 2 },
-    });
-    await expect(
-      executeOperation(connection.repository, input, { userId: id, now, vapidPublicKey: "" }),
-    ).rejects.toMatchObject({ status: 428 });
-    await expect(
-      run(
-        "postTask",
-        { title: "掃除", type: "daily", penaltyPoints: 2 },
-        {},
-        { ...state, revision: "999" },
-      ),
-    ).rejects.toMatchObject({ status: 412 });
-    await expect(
-      run(
-        "postTask",
-        { title: "掃除", type: "daily", penaltyPoints: 2 },
-        {},
-        { ...state, teamId: secondId },
-      ),
-    ).rejects.toMatchObject({ status: 412 });
-    expect(await connection.repository.ListTasksByTeamID(state.teamId)).toHaveLength(0);
-  });
   it("creates, completes, updates and preserves task DTO shapes", async () => {
     const task = (await run("postTask", { title: "掃除", type: "daily", penaltyPoints: 2 })) as {
       id: string;
     };
     taskId = task.id;
     expect(
-      await run("postTaskCompletionToggle", { targetDate: "2026-09-14" }, { taskId }),
+      await run("postTaskCompletion", { targetDate: "2026-09-14", action: "complete" }, { taskId }),
     ).toMatchObject({ completed: true });
     await run("patchTask", { title: "台所掃除", notes: "台所" }, { taskId });
     await run("listTasks");
     await run("getTaskOverview");
     await run("getPenaltySummaryMonthly", undefined, { month: "2026-09" });
-  });
-  it("rolls back both business writes and revision on failure", async () => {
-    const before = state.revision;
-    await expect(
-      connection.repository.transaction(async (repo) => {
-        await repo.UpdateTask({
-          ID: taskId,
-          Title: "rollback",
-          Notes: null,
-          PenaltyPoints: 1,
-          Column5: "",
-          RequiredCompletionsPerWeek: 1,
-          UpdatedAt: now.toISOString(),
-        });
-        await repo.UpdateTeamStateRevisionIfMatch({ ID: state.teamId, StateRevision: before });
-        throw new Error("deliberate rollback");
-      }),
-    ).rejects.toThrow("deliberate rollback");
-    expect((await connection.repository.GetTaskByID(taskId)).Title).toBe("台所掃除");
-    expect(await connection.repository.GetTeamStateRevision(state.teamId)).toBe(before);
-  });
-  it("allows one of two concurrent writers and preserves string revision precision", async () => {
-    await connection.query(
-      sql`UPDATE teams SET state_revision=9007199254740993 WHERE id=${state.teamId}`,
-    );
-    await run("getMe");
-    expect(state.revision).toBe("9007199254740993");
-    const other = connection;
-    const input = operationSchema.parse({
-      operation: "patchTeamCurrent",
-      body: { name: "Concurrent" },
-      expectedState: state,
-    });
-    try {
-      const outcomes = await Promise.allSettled(
-        [connection.repository, other.repository].map((repo) =>
-          executeOperation(repo, input, { userId: id, now, vapidPublicKey: "" }),
-        ),
-      );
-      expect(outcomes.filter((r) => r.status === "fulfilled")).toHaveLength(1);
-      expect(outcomes.find((r) => r.status === "rejected")).toMatchObject({
-        reason: { status: 412 },
-      });
-      await run("getMe");
-      expect(state.revision).toBe("9007199254740994");
-    } finally {
-      // Shared test D1 binding remains owned by this suite.
-    }
   });
   it("denies cross-team resource mutation", async () => {
     const input = operationSchema.parse({
@@ -150,11 +71,6 @@ describe("D1 and business operations", () => {
       params: { taskId },
       body: { title: "intrusion" },
     });
-    const member = (await connection.repository.ListMembershipsByUserID(secondId))[0];
-    input.expectedState = {
-      teamId: member.TeamID,
-      revision: await connection.repository.GetTeamStateRevision(member.TeamID),
-    };
     await expect(
       executeOperation(connection.repository, input, { userId: secondId, now, vapidPublicKey: "" }),
     ).rejects.toMatchObject({ status: 404 });
@@ -200,13 +116,13 @@ describe("D1 and business operations", () => {
     );
     await closeOutstanding(connection.repository, "day", now);
     const first = await connection.repository.GetMonthlyPenaltySummary({
-      TeamID: state.teamId,
+      TeamID: teamId,
       MonthStart: "2026-09-01",
     });
     await closeOutstanding(connection.repository, "day", now);
     expect(
       await connection.repository.GetMonthlyPenaltySummary({
-        TeamID: state.teamId,
+        TeamID: teamId,
         MonthStart: "2026-09-01",
       }),
     ).toEqual(first);
@@ -362,19 +278,14 @@ describe("D1 and business operations", () => {
     await run("deleteReminder", undefined, { reminderId: reminder.id });
   });
   it("joins another team, rejects member invites and transfers ownership on departure", async () => {
-    const oldTeam = state.teamId;
+    const oldTeam = teamId;
     const invitation = (await run("postTeamInvite", {})) as { code: string };
     async function asSecond(operation: string, body?: unknown) {
-      const current = await executeOperation(
-        connection.repository,
-        operationSchema.parse({ operation: "getMe" }),
-        { userId: secondId, now, vapidPublicKey: "" },
-      );
-      return executeOperation(
-        connection.repository,
-        operationSchema.parse({ operation, body, expectedState: current.state }),
-        { userId: secondId, now, vapidPublicKey: "" },
-      );
+      return executeOperation(connection.repository, operationSchema.parse({ operation, body }), {
+        userId: secondId,
+        now,
+        vapidPublicKey: "",
+      });
     }
     await asSecond("postTeamJoin", { code: invitation.code });
     expect((await connection.repository.ListMembershipsByUserID(secondId))[0]).toMatchObject({
@@ -404,8 +315,8 @@ describe("D1 and business operations", () => {
       keys: { p256dh: "test-key", auth: "test-auth" },
       platform: "ios_safari_pwa",
     })) as { teamId: string };
-    expect(movedSubscription.teamId).toBe(state.teamId);
-    expect(state.teamId).not.toBe(oldTeam);
+    expect(movedSubscription.teamId).toBe(teamId);
+    expect(teamId).not.toBe(oldTeam);
     expect((await connection.repository.ListMembershipsByUserID(secondId))[0]).toMatchObject({
       TeamID: oldTeam,
       Role: "owner",

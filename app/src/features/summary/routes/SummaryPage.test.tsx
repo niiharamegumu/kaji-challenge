@@ -35,7 +35,7 @@ vi.mock("../../../lib/api/operations", async () => {
     ...actual,
     getPenaltySummaryMonthly: (...args: unknown[]) => mockGetPenaltySummaryMonthly(...args),
     listPenaltyRules: (...args: unknown[]) => mockListPenaltyRules(...args),
-    postTaskCompletionToggle: (...args: unknown[]) => mockPostTaskCompletionToggle(...args),
+    postTaskCompletion: (...args: unknown[]) => mockPostTaskCompletionToggle(...args),
     getMonthCloseCandidate: (...args: unknown[]) => mockGetMonthCloseCandidate(...args),
     postMonthClose: (...args: unknown[]) => mockPostMonthClose(...args),
   };
@@ -329,7 +329,7 @@ describe("SummaryPage", () => {
     await waitFor(() => {
       expect(mockPostTaskCompletionToggle).toHaveBeenCalledWith("daily-past-completed", {
         targetDate: yesterdayKey,
-        action: "decrement",
+        action: "incomplete",
       });
     });
 

@@ -3,15 +3,11 @@ import { AppError } from "../../src/server/domain/errors";
 import { operationError } from "../../src/server/transport/operation-error";
 
 describe("operation errors", () => {
-  it("preserves conflict state for the existing refresh flow", () => {
-    const state = { teamId: crypto.randomUUID(), revision: "9007199254740993" };
-    expect(
-      operationError(new AppError(412, "precondition_failed", "更新してください。", state)),
-    ).toEqual({
-      status: 412,
-      code: "precondition_failed",
-      message: "更新してください。",
-      currentState: state,
+  it("preserves safe application errors", () => {
+    expect(operationError(new AppError(403, "forbidden", "Forbidden"))).toEqual({
+      status: 403,
+      code: "forbidden",
+      message: "Forbidden",
     });
   });
   it("maps direct and wrapped D1 uniqueness errors without exposing query data", () => {

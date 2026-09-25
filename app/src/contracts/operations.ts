@@ -148,9 +148,9 @@ export const UpdateTaskRequestSchema = z.object({
   requiredCompletionsPerWeek: z.number().int().min(1).max(7).optional(),
 });
 export const ReorderTasksRequestSchema = z.object({ taskIds: z.array(z.string()).min(1) });
-export const ToggleTaskCompletionRequestSchema = z.object({
+export const TaskCompletionRequestSchema = z.object({
   targetDate: z.string().refine(isDate, "invalid date"),
-  action: z.enum(["toggle", "increment", "decrement", "complete"]).optional(),
+  action: z.enum(["complete", "incomplete", "increment", "decrement"]),
 });
 export const TaskCompletionResponseSchema = z.object({
   taskId: z.string(),
@@ -265,110 +265,88 @@ export const MonthCloseCandidateResponseSchema = z.object({
   pendingMonthCount: z.number().int().min(0),
 });
 
-export const teamStateSchema = z.object({
-  teamId: z.uuid(),
-  revision: z.string().regex(/^\d+$/),
-});
 export const operationSchema = z.discriminatedUnion("operation", [
   z.object({
     operation: z.literal("getMe"),
     params: z.object({}).default({}),
-    expectedState: teamStateSchema.optional(),
   }),
   z.object({
     operation: z.literal("patchMeNickname"),
     params: z.object({}).default({}),
     body: UpdateNicknameRequestSchema,
-    expectedState: teamStateSchema.optional(),
   }),
   z.object({
     operation: z.literal("patchMeColor"),
     params: z.object({}).default({}),
     body: UpdateColorRequestSchema,
-    expectedState: teamStateSchema.optional(),
   }),
   z.object({
     operation: z.literal("postPushSubscription"),
     params: z.object({}).default({}),
     body: UpsertPushSubscriptionRequestSchema,
-    expectedState: teamStateSchema.optional(),
   }),
   z.object({
     operation: z.literal("deletePushSubscription"),
     params: z.object({ subscriptionId: z.string() }),
-    expectedState: teamStateSchema.optional(),
   }),
   z.object({
     operation: z.literal("getPushSubscriptionsMe"),
     params: z.object({}).default({}),
-    expectedState: teamStateSchema.optional(),
   }),
   z.object({
     operation: z.literal("postTeamInvite"),
     params: z.object({}).default({}),
     body: CreateInviteRequestSchema,
-    expectedState: teamStateSchema.optional(),
   }),
   z.object({
     operation: z.literal("getTeamCurrentInvite"),
     params: z.object({}).default({}),
-    expectedState: teamStateSchema.optional(),
   }),
   z.object({
     operation: z.literal("patchTeamCurrent"),
     params: z.object({}).default({}),
     body: UpdateCurrentTeamRequestSchema,
-    expectedState: teamStateSchema.optional(),
   }),
   z.object({
     operation: z.literal("getTeamCurrentMembers"),
     params: z.object({}).default({}),
-    expectedState: teamStateSchema.optional(),
   }),
   z.object({
     operation: z.literal("postTeamJoin"),
     params: z.object({}).default({}),
     body: JoinTeamRequestSchema,
-    expectedState: teamStateSchema.optional(),
   }),
   z.object({
     operation: z.literal("postTeamLeave"),
     params: z.object({}).default({}),
-    expectedState: teamStateSchema.optional(),
   }),
   z.object({
     operation: z.literal("listTasks"),
     params: z.object({ type: TaskTypeSchema.optional() }).default({}),
-    expectedState: teamStateSchema.optional(),
   }),
   z.object({
     operation: z.literal("postTask"),
     params: z.object({}).default({}),
     body: CreateTaskRequestSchema,
-    expectedState: teamStateSchema.optional(),
   }),
   z.object({
     operation: z.literal("postTasksReorder"),
     params: z.object({}).default({}),
     body: ReorderTasksRequestSchema,
-    expectedState: teamStateSchema.optional(),
   }),
   z.object({
     operation: z.literal("patchTask"),
     params: z.object({ taskId: z.string() }),
     body: UpdateTaskRequestSchema,
-    expectedState: teamStateSchema.optional(),
   }),
   z.object({
     operation: z.literal("deleteTask"),
     params: z.object({ taskId: z.string() }),
-    expectedState: teamStateSchema.optional(),
   }),
   z.object({
-    operation: z.literal("postTaskCompletionToggle"),
+    operation: z.literal("postTaskCompletion"),
     params: z.object({ taskId: z.string() }),
-    body: ToggleTaskCompletionRequestSchema,
-    expectedState: teamStateSchema.optional(),
+    body: TaskCompletionRequestSchema,
   }),
   z.object({
     operation: z.literal("listReminders"),
@@ -376,84 +354,69 @@ export const operationSchema = z.discriminatedUnion("operation", [
       from: z.string().refine(isDate, "invalid date"),
       to: z.string().refine(isDate, "invalid date"),
     }),
-    expectedState: teamStateSchema.optional(),
   }),
   z.object({
     operation: z.literal("postReminder"),
     params: z.object({}).default({}),
     body: CreateReminderRequestSchema,
-    expectedState: teamStateSchema.optional(),
   }),
   z.object({
     operation: z.literal("listReminderDefinitions"),
     params: z.object({}).default({}),
-    expectedState: teamStateSchema.optional(),
   }),
   z.object({
     operation: z.literal("patchReminder"),
     params: z.object({ reminderId: z.string() }),
     body: UpdateReminderRequestSchema,
-    expectedState: teamStateSchema.optional(),
   }),
   z.object({
     operation: z.literal("deleteReminder"),
     params: z.object({ reminderId: z.string() }),
-    expectedState: teamStateSchema.optional(),
   }),
   z.object({
     operation: z.literal("listPenaltyRules"),
     params: z.object({ includeDeleted: z.boolean().optional() }).default({}),
-    expectedState: teamStateSchema.optional(),
   }),
   z.object({
     operation: z.literal("postPenaltyRule"),
     params: z.object({}).default({}),
     body: CreatePenaltyRuleRequestSchema,
-    expectedState: teamStateSchema.optional(),
   }),
   z.object({
     operation: z.literal("patchPenaltyRule"),
     params: z.object({ ruleId: z.string() }),
     body: UpdatePenaltyRuleRequestSchema,
-    expectedState: teamStateSchema.optional(),
   }),
   z.object({
     operation: z.literal("deletePenaltyRule"),
     params: z.object({ ruleId: z.string() }),
-    expectedState: teamStateSchema.optional(),
   }),
   z.object({
     operation: z.literal("listShoppingItems"),
     params: z.object({}).default({}),
-    expectedState: teamStateSchema.optional(),
   }),
   z.object({
     operation: z.literal("postShoppingItem"),
     params: z.object({}).default({}),
     body: CreateShoppingListItemRequestSchema,
-    expectedState: teamStateSchema.optional(),
   }),
   z.object({
     operation: z.literal("patchShoppingItem"),
     params: z.object({ itemId: z.string() }),
     body: UpdateShoppingListItemRequestSchema,
-    expectedState: teamStateSchema.optional(),
   }),
   z.object({
     operation: z.literal("deleteShoppingItem"),
     params: z.object({ itemId: z.string() }),
-    expectedState: teamStateSchema.optional(),
   }),
   z.object({
     operation: z.literal("postShoppingItemsReorder"),
     params: z.object({}).default({}),
     body: ReorderShoppingListItemsRequestSchema,
-    expectedState: teamStateSchema.optional(),
   }),
   z.object({
     operation: z.literal("getTaskOverview"),
     params: z.object({}).default({}),
-    expectedState: teamStateSchema.optional(),
   }),
   z.object({
     operation: z.literal("getPenaltySummaryMonthly"),
@@ -465,21 +428,17 @@ export const operationSchema = z.discriminatedUnion("operation", [
           .optional(),
       })
       .default({}),
-    expectedState: teamStateSchema.optional(),
   }),
   z.object({
     operation: z.literal("getMonthCloseCandidate"),
     params: z.object({}).default({}),
-    expectedState: teamStateSchema.optional(),
   }),
   z.object({
     operation: z.literal("postMonthClose"),
     params: z.object({ month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/) }),
-    expectedState: teamStateSchema.optional(),
   }),
 ]);
 export type Operation = z.infer<typeof operationSchema>;
-export type TeamState = z.infer<typeof teamStateSchema>;
 export const responseSchemas = {
   getMe: MeResponseSchema,
   patchMeNickname: UpdateNicknameResponseSchema,
@@ -498,7 +457,7 @@ export const responseSchemas = {
   postTasksReorder: z.object({ items: z.array(TaskSchema) }),
   patchTask: TaskSchema,
   deleteTask: z.object({}),
-  postTaskCompletionToggle: TaskCompletionResponseSchema,
+  postTaskCompletion: TaskCompletionResponseSchema,
   listReminders: ReminderCalendarResponseSchema,
   postReminder: ReminderSchema,
   listReminderDefinitions: ReminderListResponseSchema,

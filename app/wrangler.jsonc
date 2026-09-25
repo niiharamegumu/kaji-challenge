@@ -17,6 +17,9 @@
       "migrations_dir": "migrations",
     },
   ],
+  "durable_objects": { "bindings": [{ "name": "TEAM_REALTIME", "class_name": "TeamRealtime" }] },
+  // DOクラスと保存基盤を宣言する。D1のSQL migrationとは別の設定。
+  "exports": { "TeamRealtime": { "type": "durable-object", "storage": "sqlite" } },
   "vars": {
     "APP_ORIGIN": "http://localhost:5174",
     "JOBS_ENABLED": "false",

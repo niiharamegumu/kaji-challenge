@@ -11,7 +11,6 @@ import {
   type UpdateTaskRequest,
 } from "../../../lib/api/operations";
 import { queryKeys } from "../../../shared/query/queryKeys";
-import { handleTeamStatePreconditionFailure } from "../../../shared/query/teamStateRefresh";
 import { formatError } from "../../../shared/utils/errors";
 
 export function useTasksQuery() {
@@ -58,9 +57,6 @@ export function useTaskMutations(setStatus: StatusSetter) {
       ]);
     },
     onError: async (error) => {
-      if (await handleTeamStatePreconditionFailure(error, queryClient, setStatus)) {
-        return;
-      }
       setStatus(`タスク作成に失敗しました: ${formatError(error)}`);
     },
   });
@@ -76,9 +72,6 @@ export function useTaskMutations(setStatus: StatusSetter) {
       void invalidate();
     },
     onError: async (error) => {
-      if (await handleTeamStatePreconditionFailure(error, queryClient, setStatus)) {
-        return;
-      }
       setStatus(`タスク削除に失敗しました: ${formatError(error)}`);
     },
   });
@@ -95,9 +88,6 @@ export function useTaskMutations(setStatus: StatusSetter) {
       void invalidate();
     },
     onError: async (error) => {
-      if (await handleTeamStatePreconditionFailure(error, queryClient, setStatus)) {
-        return;
-      }
       setStatus(`タスク更新に失敗しました: ${formatError(error)}`);
     },
   });
@@ -130,9 +120,6 @@ export function useTaskMutations(setStatus: StatusSetter) {
       setStatus("並び順を更新しました");
     },
     onError: async (error) => {
-      if (await handleTeamStatePreconditionFailure(error, queryClient, setStatus)) {
-        return;
-      }
       void invalidate();
       setStatus(`並び順の更新に失敗しました: ${formatError(error)}`);
     },

@@ -12,7 +12,7 @@ import { useHomePageQueries, useToggleCompletionMutation } from "./useHomeQuerie
 const api = vi.hoisted(() => ({ save: vi.fn(), load: vi.fn() }));
 vi.mock("../../../lib/api/operations", async (original) => ({
   ...(await original<object>()),
-  postTaskCompletionToggle: api.save,
+  postTaskCompletion: api.save,
   getTaskOverview: api.load,
 }));
 
@@ -179,3 +179,69 @@ it("previews weekly increment and decrement while preserving the other member's 
 });
 
 afterEach(cleanup);
+
+it("sends explicit states for a once-weekly task and ignores taps while saving", async () => {
+  const completed = deferred<{ data: { completed: boolean; weeklyCompletedCount: number } }>();
+  const cancelled = deferred<{ data: { completed: boolean; weeklyCompletedCount: number } }>();
+  api.save.mockReturnValueOnce(completed.promise).mockReturnValueOnce(cancelled.promise);
+  const { client, user } = setup();
+  act(() => {
+    const home = fixture();
+    home.weeklyTasks[0].requiredCompletionsPerWeek = 1;
+    home.weeklyTasks[0].task.requiredCompletionsPerWeek = 1;
+    home.weeklyTasks[0].weekCompletedCount = 0;
+    home.weeklyTasks[0].completionSlots = [{ slot: 1 }];
+    client.setQueryData(queryKeys.home, home);
+  });
+
+  await user.click(screen.getByRole("button", { name: "増やす" }));
+  expect(api.save).toHaveBeenLastCalledWith("W", {
+    targetDate: todayString(),
+    action: "complete",
+  });
+  await user.click(screen.getByRole("button", { name: "減らす" }));
+  expect(api.save).toHaveBeenCalledTimes(1);
+
+  await act(async () => completed.resolve({ data: { completed: true, weeklyCompletedCount: 1 } }));
+  await waitFor(() => expect(client.isMutating()).toBe(0));
+  await user.click(screen.getByRole("button", { name: "減らす" }));
+  expect(api.save).toHaveBeenLastCalledWith("W", {
+    targetDate: todayString(),
+    action: "incomplete",
+  });
+  await act(async () => cancelled.resolve({ data: { completed: false, weeklyCompletedCount: 0 } }));
+});
+
+it("accepts three weekly taps before any response and tolerates out-of-order responses", async () => {
+  const responses = Array.from({ length: 3 }, () =>
+    deferred<{ data: { completed: boolean; weeklyCompletedCount: number } }>(),
+  );
+  for (const response of responses) api.save.mockReturnValueOnce(response.promise);
+  const { client, user } = setup();
+  act(() => {
+    const home = fixture();
+    home.weeklyTasks[0].weekCompletedCount = 0;
+    home.weeklyTasks[0].completionSlots = home.weeklyTasks[0].completionSlots.map((slot) => ({
+      slot: slot.slot,
+    }));
+    client.setQueryData(queryKeys.home, home);
+  });
+  for (let count = 1; count <= 3; count++) {
+    await user.click(screen.getByRole("button", { name: "増やす" }));
+    expect(await screen.findByText(`${count}/3`)).toBeVisible();
+  }
+  expect(api.save).toHaveBeenCalledTimes(3);
+  expect(api.save.mock.calls.every(([, body]) => body.action === "increment")).toBe(true);
+  for (const index of [1, 2, 0]) {
+    await act(async () =>
+      responses[index].resolve({
+        data: { completed: index === 2, weeklyCompletedCount: index + 1 },
+      }),
+    );
+    expect(await screen.findByText("3/3")).toBeVisible();
+  }
+  await waitFor(() => expect(client.isMutating()).toBe(0));
+  expect(
+    client.getQueryData<TaskOverviewResponse>(queryKeys.home)?.weeklyTasks[0].weekCompletedCount,
+  ).toBe(3);
+});

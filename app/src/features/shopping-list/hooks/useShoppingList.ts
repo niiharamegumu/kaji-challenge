@@ -17,7 +17,6 @@ import {
   type UpdateShoppingListItemRequest,
 } from "../../../lib/api/operations";
 import { queryKeys } from "../../../shared/query/queryKeys";
-import { handleTeamStatePreconditionFailure } from "../../../shared/query/teamStateRefresh";
 import { formatError } from "../../../shared/utils/errors";
 
 type StatusSetter = (message: string) => void;
@@ -58,9 +57,6 @@ export function useShoppingItemMutations(setStatus: StatusSetter) {
       ]);
     },
     onError: async (error) => {
-      if (await handleTeamStatePreconditionFailure(error, queryClient, setStatus)) {
-        return;
-      }
       setStatus(`買い物項目の追加に失敗しました: ${formatError(error)}`);
     },
   });
@@ -81,9 +77,6 @@ export function useShoppingItemMutations(setStatus: StatusSetter) {
       setStatus("買い物項目を更新しました");
     },
     onError: async (error) => {
-      if (await handleTeamStatePreconditionFailure(error, queryClient, setStatus)) {
-        return;
-      }
       setStatus(`買い物項目の更新に失敗しました: ${formatError(error)}`);
     },
   });
@@ -99,9 +92,6 @@ export function useShoppingItemMutations(setStatus: StatusSetter) {
       setStatus("買い物項目を削除しました");
     },
     onError: async (error) => {
-      if (await handleTeamStatePreconditionFailure(error, queryClient, setStatus)) {
-        return;
-      }
       setStatus(`買い物項目の削除に失敗しました: ${formatError(error)}`);
     },
     onSettled: () => {
@@ -119,9 +109,6 @@ export function useShoppingItemMutations(setStatus: StatusSetter) {
       setStatus("並び順を更新しました");
     },
     onError: async (error) => {
-      if (await handleTeamStatePreconditionFailure(error, queryClient, setStatus)) {
-        return;
-      }
       void invalidate();
       setStatus(`並び順の更新に失敗しました: ${formatError(error)}`);
     },

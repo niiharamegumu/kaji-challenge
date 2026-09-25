@@ -17,7 +17,6 @@ import {
   type UpdateReminderRequest,
 } from "../../../lib/api/operations";
 import { queryKeys } from "../../../shared/query/queryKeys";
-import { handleTeamStatePreconditionFailure } from "../../../shared/query/teamStateRefresh";
 import { formatError } from "../../../shared/utils/errors";
 import { monthEndDateKey, monthStartDateKey } from "../utils/date";
 
@@ -68,9 +67,6 @@ export function useReminderMutations(setStatus: StatusSetter) {
       void invalidate();
     },
     onError: async (error) => {
-      if (await handleTeamStatePreconditionFailure(error, queryClient, setStatus)) {
-        return;
-      }
       setStatus(`リマインダーの追加に失敗しました: ${formatError(error)}`);
     },
   });
@@ -94,9 +90,6 @@ export function useReminderMutations(setStatus: StatusSetter) {
       void invalidate();
     },
     onError: async (error) => {
-      if (await handleTeamStatePreconditionFailure(error, queryClient, setStatus)) {
-        return;
-      }
       setStatus(`リマインダーの更新に失敗しました: ${formatError(error)}`);
     },
   });
@@ -112,9 +105,6 @@ export function useReminderMutations(setStatus: StatusSetter) {
       void invalidate();
     },
     onError: async (error) => {
-      if (await handleTeamStatePreconditionFailure(error, queryClient, setStatus)) {
-        return;
-      }
       setStatus(`リマインダーの削除に失敗しました: ${formatError(error)}`);
     },
   });

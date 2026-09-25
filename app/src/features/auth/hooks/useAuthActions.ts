@@ -1,7 +1,7 @@
-import { setLatestTeamEtag } from "../../../lib/api/api-client-state";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 
+import { cancelTeamRequests } from "../../../lib/api/serverClient";
 import { getMe } from "../../../lib/api/operations";
 import { authClient } from "../api/authClient";
 import { queryKeys } from "../../../shared/query/queryKeys";
@@ -14,7 +14,7 @@ type SessionSetter = (value: SessionState) => void;
 export function useMeQuery(enabled: boolean) {
   return useQuery({
     queryKey: queryKeys.me,
-    queryFn: async () => (await getMe()).data,
+    queryFn: async ({ signal }) => (await getMe({ signal })).data,
     enabled,
     staleTime: 5 * 60_000,
     refetchOnMount: false,
@@ -50,8 +50,9 @@ export function useLogoutAction(setStatus: StatusSetter, setSession: SessionSett
       return;
     }
 
+    cancelTeamRequests();
     await queryClient.cancelQueries();
-    setLatestTeamEtag("");
+
     setSession({ authenticated: false });
     setStatus("ログアウトしました");
     queryClient.removeQueries();

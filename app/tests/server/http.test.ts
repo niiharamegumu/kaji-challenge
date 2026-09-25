@@ -1,12 +1,14 @@
+vi.mock("../../src/server/infrastructure/team-realtime", () => ({ TeamRealtime: class {} }));
 import { beforeEach, expect, it, vi } from "vitest";
 import type { RuntimeBindings } from "../../src/server/transport/runtime.server";
 
-const mocks = vi.hoisted(() => ({ start: vi.fn(), createRuntime: vi.fn() }));
+const mocks = vi.hoisted(() => ({ start: vi.fn(), createRuntime: vi.fn(), realtime: vi.fn() }));
 vi.mock("@tanstack/react-start/server-entry", () => ({ default: { fetch: mocks.start } }));
 vi.mock("../../src/server/transport/runtime.server", () => ({
   createRuntime: mocks.createRuntime,
 }));
 vi.mock("../../src/server/transport/scheduled.server", () => ({ scheduled: vi.fn() }));
+vi.mock("../../src/server/transport/realtime.server", () => ({ connectRealtime: mocks.realtime }));
 import worker from "../../src/server-entry";
 
 beforeEach(() => vi.clearAllMocks());
@@ -58,4 +60,12 @@ it("does not expose unexpected authentication errors in responses or logs", asyn
   } finally {
     log.mockRestore();
   }
+});
+
+it("preserves the exact WebSocket upgrade response", async () => {
+  const upgrade = { status: 101, webSocket: {} };
+  mocks.realtime.mockResolvedValue(upgrade);
+  expect(
+    await worker.fetch(new Request("https://app.example/api/realtime"), {} as RuntimeBindings),
+  ).toBe(upgrade);
 });

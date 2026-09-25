@@ -98,6 +98,17 @@ try {
   assert.equal(built.main, "index.js", "Alchemy main must match the built Worker entry");
   assert.equal(built.assets.directory, "../client", "Alchemy assets must match the build output");
   await access(join(appDirectory, "dist/server/index.js"));
+  assert(
+    built.durable_objects.bindings.some(
+      (binding) => binding.name === "TEAM_REALTIME" && binding.class_name === "TeamRealtime",
+    ),
+  );
+  assert.equal(built.exports.TeamRealtime.type, "durable-object");
+  assert.equal(built.exports.TeamRealtime.storage, "sqlite");
+  assert.match(
+    await readFile(join(appDirectory, "dist/server/index.js"), "utf8"),
+    /export[\s\S]*TeamRealtime/,
+  );
   const shell = await readFile(join(appDirectory, "dist/client/_shell.html"), "utf8");
   assert.match(shell, /<html\b/);
   assert.match(shell, /<script\b/);

@@ -13,6 +13,14 @@ describe("Alchemy deployment configuration", () => {
     const local = unstable_readConfig({
       config: new URL("../../wrangler.jsonc", import.meta.url).pathname,
     });
+    expect(local.durable_objects.bindings).toContainEqual({
+      name: "TEAM_REALTIME",
+      class_name: "TeamRealtime",
+    });
+    expect(local.exports.TeamRealtime).toMatchObject({
+      type: "durable-object",
+      storage: "sqlite",
+    });
     expect(deploymentResources(config).worker.compatibility).toEqual({
       date: local.compatibility_date,
       flags: local.compatibility_flags,

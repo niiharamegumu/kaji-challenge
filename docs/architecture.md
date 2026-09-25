@@ -8,17 +8,17 @@
 - `src/server/transport` で認証、入力検証、HTTP/Cronとの接続、依存組み立てを行う。
 - `src/server/application` は認可・業務手順・Repository/Delivery portを定義し、`domain` は純粋な業務規則を置く。React、Start、Better Auth、Drizzle、Cloudflare bindingをimportしない。
 - `src/server/infrastructure` がportを実装する。D1の `DB` bindingを使い、リクエスト/Cronの処理単位でRepositoryを構築する。接続文字列・接続プールは持たない。
-- team IDと文字列revisionを検証し、業務更新とrevision更新をD1のatomic batchでcommitする。下記の競合制御をすべての業務書き込みに適用する。
+- 業務データはD1へ保存し、チーム単位のDurable ObjectはWebSocketの変更通知と接続一覧だけを扱う。revision・ETag・操作ID・書き込み再試行は持たない。
 - browserからserver実装を直接importしない。例外は `serverClient.ts` から変換対象Server Functionへの入口と、契約schemaが利用する純粋な日付検証だけ。型importは許可する。
 - `make architecture-check` はUIとTS serverの依存境界を検査する。
 
 ## Server Functions
 
-`operations.functions.ts` は静的importできる `createServerFn` の入口。`validator` でZod検証し、handlerでsession/originを検証、Applicationでチーム認可を実施する。入力不正・業務エラーは型付き結果で返し、SQLや認証情報を返さない。出力schemaをtransaction内で検証してからcommitする。結果はStartのシリアライズへ渡し、手動のJSON stringify/parseは行わない。
+`operations.functions.ts` は静的importできる `createServerFn` の入口。`validator` でZod検証し、handlerでsession/originを検証、Applicationでチーム認可を実施する。入力不正・業務エラーは型付き結果で返し、SQLや認証情報を返さない。入力と認可の検証後、用途別Repository操作で保存する。返却DTOも出力schemaで検証するが、既にcommitした保存は応答検証の失敗では取り消せない。結果はStartのシリアライズへ渡し、手動のJSON stringify/parseは行わない。
 
 feature adapter → 共通client → Server Function → Application → Repositoryという構成は、Startのserver-only処理とUIの分離に従う。TanStack Queryがキャッシュ・再取得・mutationを管理する。単一のdiscriminated unionによるoperation入口はこのアプリの設計であり、Startの必須形式ではない。routeのbeforeLoadだけを認証境界にしない。
 
-取得処理にも期限切れ予定の整理・集計更新が含まれるため、現在はすべてPOST。純粋な読み取りに分離するまではGETへ変更しない。Startのredirectを返さず既存のエラー処理を使うため、共通clientから静的importした関数を直接呼ぶ。`useServerFn` はredirect等をRouterと連携するときに検討する。Server Function応答はWorker入口でno-storeにする。
+共通Server FunctionはPOST。読み取りoperationはD1を更新しない。期限切れ単発予定は表示時に除外し、日次ジョブで削除する。集計の保存は締め・過去の完了修正時だけ行う。Startのredirectを返さず既存のエラー処理を使うため、共通clientから静的importした関数を直接呼ぶ。`useServerFn` はredirect等をRouterと連携するときに検討する。Server Function応答はWorker入口でno-storeにする。
 
 ## UIの境界
 
@@ -29,31 +29,41 @@ feature adapter → 共通client → Server Function → Application → Reposit
 
 ### 操作のフィードバック
 
-家事の完了・購入済みは、TanStack Queryの未完了mutationの入力を取得結果に重ねて即時表示する。保存済みキャッシュは成功応答で更新し、失敗時はそのmutationの表示だけが消える。他の操作やメンバーの完了を一括rollbackしない。同じ家事への保存中の連打は抑止し、別の家事は操作できる。追加・編集フォームはPromiseを返し、共通FormSheetとインライン編集は呼出元mutationの `isPending` / `isError` を表示に使う。別のref/stateへ保存状態を複製せず、保存中の入力・閉じる操作・重複送信を抑止する。失敗時は入力を保持し、再表示時にmutationをresetする。全体の保存中表示は `shared/components/MutationFeedback.tsx` が担当する。
+家事の完了・購入済みは、TanStack Queryの未完了mutationの入力を取得結果に重ねて即時表示する。保存済みキャッシュは成功応答で更新し、失敗時はそのmutationの表示だけが消える。他の操作やメンバーの完了を一括rollbackしない。日間・週1回の保存中の連打は抑止する。週複数回は連続タップを受け付け、increment/decrementを送り、D1内の件数条件で上限・下限を守る。追加・編集フォームはPromiseを返し、共通FormSheetとインライン編集は呼出元mutationの `isPending` / `isError` を表示に使う。別のref/stateへ保存状態を複製せず、保存中の入力・閉じる操作・重複送信を抑止する。失敗時は入力を保持し、再表示時にmutationをresetする。全体の保存中表示は `shared/components/MutationFeedback.tsx` が担当する。
 
 API応答の実行時検証は共通clientの出力schemaで行う。feature hookで再検証したり、不正なDTOを一覧再取得で隠したりしない。保存応答のDTOを一覧に反映し、派生データの再取得はバックグラウンドで行う。家事完了の一覧同期は最後のpending mutationが終了するときにまとめる。楽観表示をDB保存済みの証拠として扱わず、再読込の検証では保存応答も待つ。
 
-`lib/api/serverClient.ts` はrevisionが必要な書き込みをブラウザー内で直列化し、送信時に最新revisionを読む。読み取りは並列のまま。同一チームの遅れて届いた読み取り応答でrevisionを巻き戻さず、ログアウト・所属変更前の応答と待機中の操作は破棄する。書き込みキューもセッションの世代ごとに分け、古い通信が新しいログイン後の操作を待たせない。別端末との競合は従来どおり412/428相当で再取得・再操作を促し、成否不明の書き込みは自動再送しない。mutationは `networkMode: "always"` / `retry: false` とし、オフライン時も通信を試行して失敗を返す。TanStack Queryの接続待ちキューへ操作を残さず、再ログイン後の自動送信を防ぐ。
+`lib/api/serverClient.ts` は待ち行列を持たずServer Functionsへ送信する。日間・週1回はcomplete/incomplete、週複数回はincrement/decrementという意図を送る。mutationは `networkMode: "always"` / `retry: false` とし、オフラインでも一度試みて失敗を返す。更新を自動再送しない。ログアウト・所属変更ではAbortControllerで古い通信を打ち切り、Queryキャッシュと接続を破棄する。
 
-## D1の更新と競合制御
+## D1の更新
 
-認証・業務・Push配信記録は `infrastructure/database.ts` で作る同じDrizzle D1 handleを使用する。業務テーブルは `schema.ts`、認証テーブルは `auth-schema.ts` に定義し、Repositoryは型付きquery builderで読み書きする。複雑な再帰集計やSQLiteの日付・window関数はDrizzleの `sql` を使用する。SQL結果の列順による変換は行わない。
+認証・業務・Pushは `infrastructure/database.ts` で作るDrizzle D1 handleを使用する。業務テーブルは `schema.ts`、認証は `auth-schema.ts`。通常のCRUDはquery builder、集計・条件付きINSERTにはパラメーター化した `sql` を使用する。
 
-D1では対話的なSQL transactionを開始できないため、`infrastructure/unit-of-work.ts` がリクエスト内の変更行とDrizzleの更新queryを保持する。commit前の読み取りは `db.with()` のCTEで変更行を重ね、join・集計にも未確定の変更を反映する。schemaのcodecでDate/booleanをDB値へ変換し、読み取りではDrizzleが復元する。認可・業務検証・出力schema検証に成功した場合だけ、Drizzleの `db.batch()` でまとめて適用する。`db.transaction()` へ置換しない。
+D1は対話的transactionを提供しない。複合操作は `repository.ts` の用途別コマンドが `db.batch()` で原子的に実行する。チーム移動・初期登録・担当解除・owner引継ぎは1つのbatch。完了回数はDBのCOUNTを条件に更新し、締め・過去の修正は `summary-statements.ts` の集計queryを同じbatchへ含める。batch内のSQL失敗は全体をrollbackする。認可や回数など変化する条件もSQLで検査し、外部通信はbatchへ含めない。read-modify-writeをJavaScriptで疑似transactionにしない。
 
-batchの先頭で `app_revision` の比較・更新を行う。他の業務処理が先にcommitした場合は制約違反でbatch全体を取り消し、最大3回まで読み取りから再実行する。業務SQLの制約違反も全体をrollbackする。チームrevisionはTEXT・BigIntで扱い、クライアントに丸め誤差のない文字列を返す。
+同じ項目の更新はDBが後に適用したものを採用する。主キー・外部キー・日次完了の一意制約・close_runsは保持するが、team/global revision、操作ID、通知連番、再試行用の台帳はない。WebSocket通知は保存の原子性や必達性を保証しない。応答が失われた更新は再取得して結果を確認し、必要なら手動で直す。
 
-これは全チームで共通の世代番号を使う楽観的な競合制御である。同時更新が増えると再試行が増えるため、高負荷時は再試行・DB処理時間を確認する。業務データの書き込みをRepository以外から行うと、この制御を迂回する。transaction callback内で外部送信など再実行できない副作用を起こさない。
+Better Authのnickname/colorHexは追加項目（input:false）としてアプリの認可済みAPIから更新する。初期チーム作成は所属の不在をSQLで確認し、同時初回ログインでも1チームにする。最大5セッションはSQL trigger、Pushの配信済み抑止は既存の専用記録で担保する。D1 read replicationは無効で、すべてprimaryへ読み書きする。
 
-認証テーブルはBetter Auth/Drizzle D1 adapterで扱う。ユーザー情報は `auth_user` のみを正とする。nickname/colorHexはBetter Authの追加項目（input:false）で、認可・revision検証付きの業務APIからのみ更新する。初期チーム・所属の作成は冪等な業務transactionで実行し、失敗後のログインで再実行できる。最大5セッションはSQL triggerで制限する。通知の送信枠はDrizzleのinsert-select/onConflictDoUpdateで取得し、配信成功を別のupdateで記録する。ネットワーク送信を業務batchに含めない。
+## リアルタイム同期と接続メンバー
 
-D1のread replicationは無効。すべてprimaryへ読み書きし、リクエストをまたぐDB結果キャッシュを置かない。
+`server-entry.ts` の `/api/realtime` は `realtime.server.ts` でOrigin・Better Authセッション・所属を検証する。チームとユーザーはブラウザーから受け取らず、サーバーが特定して `TEAM_REALTIME.getByName(teamId)` に接続する。HTTP101は共通ヘッダー処理で作り直さない。Service Workerの `/api/` 除外にはこの経路も含む。
+
+`infrastructure/team-realtime.ts` のTeamRealtimeは公式WebSocket Hibernation APIを使い、認証済みuserId/sessionId/teamIdをattachmentに保存する。復帰時は `getWebSockets()` と `deserializeAttachment()` から一覧を作る。接続一覧・業務データをDOのSQLに保存しない。通知時にセッション期限・失効・所属を検査し、不正な接続を閉じる。D1への認可照会と配信は公式`blockConcurrencyWhile`内で実行し、その間の入退室による未検証接続への配信・presenceの順序逆転を防ぐ。この範囲に業務データの更新は含めない。認可照会失敗時はログを残して接続を閉じ、再接続へ戻す。複数タブはuserIdでまとめ、最後の接続を閉じたときに表示から外す。
+
+メッセージは `contracts/realtime.ts` のpresence（userIdsの全置換）とteam-changed（再取得通知）。Server FunctionsとジョブはD1保存後に通知し、失敗は構造化ログへ記録する。通知失敗を保存失敗にしない。
+
+`useTeamRealtime.ts` は共通レイアウトに1接続を持ち、ページ移動では再接続しない。接続・復帰・team-changedで関連Queryを再取得する。mutation中の通知は終了までまとめ、楽観表示を上書きしない。切断時は一覧を消して再接続中表示とし、指数バックオフで接続だけを再試行する。業務更新は再送しない。
+
+ヘッダーのConnectedMembersは自分以外の接続メンバーを既存の名前・色から表示する。タップ、ホバー、キーボードフォーカスで名前を確認できる。閲覧ページや操作中状態は収集しない。通信断・強制終了ではサーバーの切断検知まで表示が残る。
+
+公式資料: [DOの同時実行制御](https://developers.cloudflare.com/durable-objects/api/state/#blockconcurrencywhile)、[DOクラス宣言](https://developers.cloudflare.com/durable-objects/reference/durable-objects-migrations/)、[WebSocket Hibernation](https://developers.cloudflare.com/durable-objects/best-practices/websockets/)、[D1 batch](https://developers.cloudflare.com/d1/worker-api/d1-database/#batch)。
 
 ## SQLと運用
 
-`app/migrations/` がSQLの正本。新規DBには全migrationを番号順に適用する。`0002_unify_users.sql` はユーザーをBetter Authへ統合し、`0003_iso_timestamps.sql` は認証・レート制限・Pushの日時をUTC ISO文字列へ統一する。既存D1のプロフィール・外部キー・履歴を保持する。Drizzle定義と適用済みDBのテーブル・列・主キー・外部キーは統合テストで照合する。テーブルの責務は [database.md](database.md) に記載する。旧DBの履歴やデータ移行は持たない。以降のschema変更は新しい番号のSQLとして追加し、適用済みファイルを編集しない。
+`app/migrations/` がSQLの正本。新規DBには全migrationを番号順に適用する。`0002_unify_users.sql` はユーザーをBetter Authへ統合し、`0003_iso_timestamps.sql` は認証・レート制限・Pushの日時をUTC ISO文字列へ統一する。`0004_remove_revisions.sql` はteams.state_revisionとapp_revisionだけを削除する。既存D1のプロフィール・外部キー・履歴を保持する。Drizzle定義と適用済みDBのテーブル・列・主キー・外部キーは統合テストで照合する。テーブルの責務は [database.md](database.md) に記載する。旧DBの履歴やデータ移行は持たない。以降のschema変更は新しい番号のSQLとして追加し、適用済みファイルを編集しない。
 
-`app/alchemy.run.ts` と `app/infra/` がWorker・D1・ドメイン・Secrets・Cronを管理する。配備時のSQL適用はAlchemyが管理する。ローカルはWranglerで同じSQLを適用する。環境はlocalとproductionだけとし、WranglerのローカルDBと本番D1を共有しない。本番のIaCはproduction以外のstageを拒否する。
+`app/alchemy.run.ts` と `app/infra/` がWorker・D1・TeamRealtimeのDO binding・ドメイン・Secrets・Cronを管理する。Alchemyの公開DurableObject APIを使い、既存Workerからクラスをexportする。ローカルwrangler.jsoncには同じbindingと、公式の`exports`によるSQLite DOクラス宣言を持つ（D1のSQL migrationとは別）。SQLite DOなのでWorkers Freeでも利用できる（利用枠内）。配備時のSQL適用はAlchemyが管理する。ローカルはWranglerで同じSQLを適用する。環境はlocalとproductionだけとし、WranglerのローカルDBと本番D1を共有しない。本番のIaCはproduction以外のstageを拒否する。
 
 本番配備は `.github/workflows/deploy-production.yml` がmain更新時にproduction Environmentの設定でplan/deployを実行する。CIはPR時に実行し、CDでは再実行しない。mainの保護ルールでPRと `cloudflare-quality` の成功を必須にする。SecretsはCIへ渡さず、配備stepに限定する。配備を直列化し、公開先のhealthとcommit SHAを検証する。
 

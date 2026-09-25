@@ -5,63 +5,19 @@ import { addDays, midnightJST, nextMonth, todayJST, weekday, weekStart } from ".
 import { effectiveAt, occurrenceDates } from "../domain/rules";
 import { invariant } from "../domain/errors";
 
-export async function ensureSummary(repo: Repository, teamId: string, month: string) {
+export async function readSummary(repo: Repository, teamId: string, month: string) {
   try {
     return await repo.GetMonthlyPenaltySummary({ TeamID: teamId, MonthStart: month + "-01" });
   } catch (error) {
     if (!(error instanceof Error) || !("status" in error) || error.status !== 404) throw error;
   }
-  await repo.UpsertMonthlyPenaltySummary({
+  return {
     TeamID: teamId,
     MonthStart: month + "-01",
     DailyPenaltyTotal: 0,
     WeeklyPenaltyTotal: 0,
     IsClosed: false,
-  });
-  return repo.GetMonthlyPenaltySummary({ TeamID: teamId, MonthStart: month + "-01" });
-}
-export async function recalculate(
-  repo: Repository,
-  teamId: string,
-  month: string,
-  coverage: boolean,
-) {
-  const start = month + "-01",
-    end = nextMonth(month),
-    summary = await ensureSummary(repo, teamId, month);
-  if (coverage) {
-    await repo.InsertDayCloseRunsForMonth({ TeamID: teamId, MonthStart: start, MonthEnd: end });
-    await repo.InsertWeekCloseRunsForMonth({
-      TeamID: teamId,
-      FirstWeekStart: weekStart(start),
-      MonthEnd: end,
-      MonthStart: start,
-    });
-  }
-  const daily = await repo.SumDailyPenaltyForMonth({
-    TeamID: teamId,
-    TargetDate: start,
-    TargetDate_2: end,
-  });
-  const weekly = await repo.SumWeeklyPenaltyForMonth({
-    TeamID: teamId,
-    TargetDate: start,
-    TargetDate_2: end,
-  });
-  await repo.SetMonthPenaltyTotals({
-    TeamID: teamId,
-    MonthStart: start,
-    DailyPenaltyTotal: daily,
-    WeeklyPenaltyTotal: weekly,
-  });
-  if (summary.IsClosed) await replaceRules(repo, teamId, start, daily + weekly);
-  return { daily, weekly };
-}
-async function replaceRules(repo: Repository, teamId: string, start: string, total: number) {
-  const rules = await repo.ListUndeletedPenaltyRulesByTeamID(teamId);
-  await repo.DeleteTriggeredRulesByMonth({ TeamID: teamId, MonthStart: start });
-  for (const r of rules.filter((r) => r.Threshold <= total))
-    await repo.AddTriggeredRuleForMonth({ TeamID: teamId, MonthStart: start, RuleID: r.ID });
+  };
 }
 export async function monthCandidate(
   repo: Repository,
@@ -90,7 +46,7 @@ export async function monthCandidate(
 }
 export async function closeMonth(repo: Repository, teamId: string, month: string, now: Date) {
   invariant(month < todayJST(now).slice(0, 7), "only past months can be closed", 409);
-  const summary = await ensureSummary(repo, teamId, month);
+  const summary = await readSummary(repo, teamId, month);
   if (summary.IsClosed) return false;
   const candidate = await monthCandidate(repo, teamId, now);
   invariant(
@@ -98,51 +54,7 @@ export async function closeMonth(repo: Repository, teamId: string, month: string
     "month is not the oldest eligible open month",
     409,
   );
-  const totals = await recalculate(repo, teamId, month, true);
-  await replaceRules(repo, teamId, month + "-01", totals.daily + totals.weekly);
-  await repo.CloseMonthlyPenaltySummary({ TeamID: teamId, MonthStart: month + "-01" });
-  return true;
-}
-export async function closePeriod(
-  repo: Repository,
-  teamId: string,
-  scope: "day" | "week",
-  date: string,
-) {
-  const month = (scope === "day" ? date : addDays(date, 6)).slice(0, 7);
-  const summary = await ensureSummary(repo, teamId, month);
-  // Existing closed-month coverage is authoritative; never increment twice.
-  if (summary.IsClosed) return false;
-  const inserted = await repo.InsertCloseRun({
-    TeamID: teamId,
-    Scope: scope === "day" ? "close_day" : "close_week",
-    TargetDate: date,
-  });
-  if (!inserted) return false;
-  const cutoff = midnightJST(addDays(date, scope === "day" ? 1 : 7));
-  if (scope === "day") {
-    const total = await repo.SumDailyPenaltyForClose({
-      TeamID: teamId,
-      TargetDate: date,
-      CreatedAt: cutoff,
-    });
-    await repo.IncrementDailyPenalty({
-      TeamID: teamId,
-      MonthStart: month + "-01",
-      DailyPenaltyTotal: total,
-    });
-  } else {
-    const total = await repo.SumWeeklyPenaltyForClose({
-      TeamID: teamId,
-      WeekStart: date,
-      CreatedAt: cutoff,
-    });
-    await repo.IncrementWeeklyPenalty({
-      TeamID: teamId,
-      MonthStart: month + "-01",
-      WeeklyPenaltyTotal: total,
-    });
-  }
+  await repo.RecalculateMonth({ teamId, month, ensureCoverage: true, closeMonth: true });
   return true;
 }
 export async function reminderOccurrences(
@@ -150,9 +62,11 @@ export async function reminderOccurrences(
   teamId: string,
   from: string,
   to: string,
+  today: string = from,
 ): Promise<M.ReminderOccurrence[]> {
   const records = await repo.ListRemindersByTeamID(teamId);
   return records
+    .filter((row) => row.Kind !== "one_time" || row.StartDate >= today)
     .flatMap((row) => {
       const r = map.reminder(row);
       return occurrenceDates(r, from, to).map((date) => ({
@@ -180,11 +94,10 @@ export async function overview(
   teamId: string,
   now: Date,
 ): Promise<M.TaskOverviewResponse> {
-  const today = todayJST(now),
-    start = weekStart(today),
-    month = today.slice(0, 7);
-  const summary = await ensureSummary(repo, teamId, month);
-  await repo.DeleteExpiredOneTimeRemindersByTeam({ TeamID: teamId, StartDate: today });
+  const today = todayJST(now);
+  const start = weekStart(today);
+  const month = today.slice(0, 7);
+  const summary = await readSummary(repo, teamId, month);
   const tasks = await repo.ListTasksByTeamID(teamId);
   const daily = new Map(
     (await repo.ListTaskCompletionDailyByTeamAndDate({ TeamID: teamId, TargetDate: today })).map(
@@ -230,10 +143,10 @@ export async function monthlySummary(
   month: string,
   now: Date,
 ): Promise<M.MonthlyPenaltySummary> {
-  const start = month + "-01",
-    end = nextMonth(month),
-    today = todayJST(now),
-    summary = await ensureSummary(repo, teamId, month);
+  const start = month + "-01";
+  const end = nextMonth(month);
+  const today = todayJST(now);
+  const summary = await readSummary(repo, teamId, month);
   const total = summary.DailyPenaltyTotal + summary.WeeklyPenaltyTotal;
   const triggered = summary.IsClosed
     ? await repo.ListTriggeredRuleIDsByMonth({ TeamID: teamId, MonthStart: start })
@@ -253,42 +166,57 @@ export async function monthlySummary(
   const daily = await repo.ListTaskCompletionDailyByMonthAndTeam({
     TeamID: teamId,
     TargetDate: start,
-    TargetDate_2: end,
+    BeforeDate: end,
   });
   const weekly = await repo.ListTaskCompletionWeeklySlotsByMonthAndTeam({
     TeamID: teamId,
     WeekStart: weekStart(start),
-    WeekStart_2: end,
+    BeforeWeekStart: end,
   });
-  const anchors = new Map<string, string>();
-  for (let w = weekStart(start); w < end; w = addDays(w, 7))
-    if (addDays(w, 6).slice(0, 7) === month) anchors.set(w < start ? start : w, w);
+  // 週次は日曜日が当月に入る週だけ表示する。月またぎ週は当月1日の行へ置く。
+  const weekByDisplayDate = new Map<string, string>();
+  for (let week = weekStart(start); week < end; week = addDays(week, 7)) {
+    if (addDays(week, 6).slice(0, 7) === month) {
+      weekByDisplayDate.set(week < start ? start : week, week);
+    }
+  }
+
   const groups: M.MonthlyTaskStatusGroup[] = [];
-  for (let date = today < end ? today : addDays(end, -1); date >= start; date = addDays(date, -1)) {
+  const lastDisplayDate = today < end ? today : addDays(end, -1);
+  for (let date = lastDisplayDate; date >= start; date = addDays(date, -1)) {
     const items: M.MonthlyTaskStatusItem[] = [];
-    for (const t of tasks) {
-      const w = anchors.get(date),
-        cutoff = t.Type === "daily" ? addDays(date, 1) : w ? addDays(w, 7) : null;
-      if (!cutoff || !effectiveAt({ createdAt: t.CreatedAt, deletedAt: t.DeletedAt }, cutoff))
+    const week = weekByDisplayDate.get(date);
+    for (const task of tasks) {
+      const dailyTask = task.Type === "daily";
+      if (!dailyTask && !week) continue;
+      const periodEnd = dailyTask ? addDays(date, 1) : addDays(week!, 7);
+      if (!effectiveAt({ createdAt: task.CreatedAt, deletedAt: task.DeletedAt }, periodEnd))
         continue;
-      const d = daily.find((e) => e.TaskID === t.ID && e.TargetDate === date),
-        ws = weekly.filter((e) => e.TaskID === t.ID && e.WeekStart === w);
-      invariant(t.Type === "daily" || t.Type === "weekly", "invalid task type");
+      invariant(task.Type === "daily" || task.Type === "weekly", "invalid task type");
+
+      const dailyCompletion = daily.find(
+        (entry) => entry.TaskID === task.ID && entry.TargetDate === date,
+      );
+      const weeklyCompletions = weekly.filter(
+        (entry) => entry.TaskID === task.ID && entry.WeekStart === week,
+      );
+      const completionSlots = dailyTask
+        ? map.slots(1, new Map([[1, dailyCompletion ? map.actor(dailyCompletion) : undefined]]))
+        : map.slots(
+            task.RequiredCompletionsPerWeek,
+            new Map(weeklyCompletions.map((entry) => [entry.Slot, map.actor(entry)])),
+          );
       items.push({
-        taskId: t.ID,
-        title: t.Title,
-        notes: t.Notes ?? undefined,
-        type: t.Type,
-        penaltyPoints: t.PenaltyPoints,
-        isDeleted: t.DeletedAt !== null,
-        completed: t.Type === "daily" ? !!d : ws.length >= t.RequiredCompletionsPerWeek,
-        completionSlots:
-          t.Type === "daily"
-            ? map.slots(1, new Map([[1, d ? map.actor(d) : undefined]]))
-            : map.slots(
-                t.RequiredCompletionsPerWeek,
-                new Map(ws.map((e) => [e.Slot, map.actor(e)])),
-              ),
+        taskId: task.ID,
+        title: task.Title,
+        notes: task.Notes ?? undefined,
+        type: task.Type,
+        penaltyPoints: task.PenaltyPoints,
+        isDeleted: task.DeletedAt !== null,
+        completed: dailyTask
+          ? !!dailyCompletion
+          : weeklyCompletions.length >= task.RequiredCompletionsPerWeek,
+        completionSlots,
       });
     }
     if (items.length) groups.push({ date, items });

@@ -9,8 +9,9 @@ import {
 import {
   getTaskOverview,
   listShoppingItems,
-  postTaskCompletionToggle,
+  postTaskCompletion,
   type TaskCompletionActor,
+  type TaskCompletionRequest,
   type TaskOverviewResponse,
 } from "../../../lib/api/operations";
 import {
@@ -18,16 +19,16 @@ import {
   penaltyRulesWithDeletedQueryOptions,
 } from "../../../shared/query/monthlyPenaltyQueries";
 import { queryKeys } from "../../../shared/query/queryKeys";
-import { handleTeamStatePreconditionFailure } from "../../../shared/query/teamStateRefresh";
 import { dateStringInJST, formatError, todayString } from "../../../shared/utils/errors";
 import { previousMonthKey } from "../utils/month";
 import { usePendingShoppingRemovals } from "../../shopping-list";
 
-type CompletionAction = "toggle" | "increment" | "decrement";
+type CompletionAction = TaskCompletionRequest["action"];
+type CompletionIntent = { taskId: string; action?: "toggle" | "increment" | "decrement" };
 const completionMutationKey = ["task-completion"];
 type CompletionChange = {
   taskId: string;
-  action?: CompletionAction;
+  action: CompletionAction;
   targetDate: string;
   actor?: TaskCompletionActor;
   completed: boolean;
@@ -65,6 +66,51 @@ function showCompletion(
   };
 }
 
+/** 確定済みデータへ未完了mutationを重ねる。共有キャッシュの全体rollbackはしない。 */
+function applyChange(home: TaskOverviewResponse, change: CompletionChange): TaskOverviewResponse {
+  let count = change.count;
+  if (change.action === "increment" || change.action === "decrement") {
+    const weekly = home.weeklyTasks.find((item) => item.task.id === change.taskId);
+    const delta = change.action === "increment" ? 1 : -1;
+    const required = weekly?.requiredCompletionsPerWeek ?? 1;
+    const current = weekly?.weekCompletedCount ?? 0;
+    count = Math.max(0, Math.min(required, current + delta));
+  }
+  return showCompletion(home, { ...change, count });
+}
+
+/** UIのタップをAPIの希望状態に変換する。複数回の週間タスクだけは加減算を送る。 */
+function completionChange(
+  home: TaskOverviewResponse,
+  intent: CompletionIntent,
+  actor?: TaskCompletionActor,
+): CompletionChange | undefined {
+  const common = { taskId: intent.taskId, targetDate: todayString(), actor };
+  const daily = home.dailyTasks.find((item) => item.task.id === intent.taskId);
+  if (daily) {
+    const completed = !daily.completedToday;
+    return { ...common, action: completed ? "complete" : "incomplete", completed, count: 0 };
+  }
+
+  const weekly = home.weeklyTasks.find((item) => item.task.id === intent.taskId);
+  if (!weekly) return;
+  const required = weekly.requiredCompletionsPerWeek;
+  if (required <= 1) {
+    const completed = weekly.weekCompletedCount === 0;
+    return {
+      ...common,
+      action: completed ? "complete" : "incomplete",
+      completed,
+      count: completed ? 1 : 0,
+    };
+  }
+
+  const action = intent.action === "decrement" ? "decrement" : "increment";
+  const delta = action === "increment" ? 1 : -1;
+  const count = Math.max(0, Math.min(required, weekly.weekCompletedCount + delta));
+  return { ...common, action, count, completed: count >= required };
+}
+
 function usePendingCompletions() {
   return useMutationState({
     filters: { mutationKey: completionMutationKey, status: "pending" },
@@ -100,7 +146,7 @@ export function useHomePageQueries() {
     });
 
   return {
-    homeQuery: { ...homeQuery, data: pendingCompletions.reduce(showCompletion, homeQuery.data) },
+    homeQuery: { ...homeQuery, data: pendingCompletions.reduce(applyChange, homeQuery.data) },
     shoppingItemsQuery: {
       ...shoppingItemsQuery,
       data: shoppingItemsQuery.data.filter((item) => !pendingShoppingIds.includes(item.id)),
@@ -122,24 +168,17 @@ export function useToggleCompletionMutation(
     mutationKey: completionMutationKey,
     onMutate: () => queryClient.cancelQueries({ queryKey: queryKeys.home }),
     mutationFn: ({ taskId, action, targetDate }: CompletionChange) =>
-      postTaskCompletionToggle(taskId, { targetDate, action }),
+      postTaskCompletion(taskId, { targetDate, action }),
     onSuccess: async ({ data }, change) => {
       await queryClient.cancelQueries({ queryKey: queryKeys.home });
+      // 週次は応答の絶対件数ではなく、この操作の増減だけを反映する。
+      // 応答順が逆転しても、他のpending mutationを二重に数えない。最後にDBと同期する。
       queryClient.setQueryData<TaskOverviewResponse>(
         queryKeys.home,
-        (home) =>
-          home &&
-          showCompletion(home, {
-            ...change,
-            completed: data.completed,
-            count: data.weeklyCompletedCount,
-          }),
+        (home) => home && applyChange(home, { ...change, completed: data.completed }),
       );
     },
     onError: async (error) => {
-      if (await handleTeamStatePreconditionFailure(error, queryClient, setStatus)) {
-        return;
-      }
       setStatus(`更新失敗: ${formatError(error)}`);
     },
     onSettled: () => {
@@ -152,32 +191,25 @@ export function useToggleCompletionMutation(
   });
 
   return {
-    pendingTaskIds: pending.map((change) => change.taskId),
-    toggle: ({ taskId, action }: { taskId: string; action?: CompletionAction }) => {
-      // 同じ対象への連打は抑止する。他のタスクはすぐ操作できる。
-      if (
+    pendingTaskIds: pending
+      .filter((change) => change.action === "complete" || change.action === "incomplete")
+      .map((change) => change.taskId),
+    toggle: (intent: CompletionIntent) => {
+      const home = queryClient.getQueryData<TaskOverviewResponse>(queryKeys.home);
+      if (!home) return;
+      const change = completionChange(home, intent, actor);
+      if (!change) return;
+
+      // 日間・週1回は保存中の反転を抑止し、週複数回の加減は連続操作できる。
+      const isStateChange = change.action === "complete" || change.action === "incomplete";
+      const taskHasPendingChange =
         queryClient.isMutating({
           mutationKey: completionMutationKey,
-          predicate: (item) => (item.state.variables as CompletionChange).taskId === taskId,
-        })
-      )
-        return;
-      const home = queryClient.getQueryData<TaskOverviewResponse>(queryKeys.home);
-      const daily = home?.dailyTasks.find((item) => item.task.id === taskId);
-      const weekly = home?.weeklyTasks.find((item) => item.task.id === taskId);
-      const previous = weekly?.weekCompletedCount ?? 0;
-      const required = weekly?.requiredCompletionsPerWeek ?? 1;
-      const decrease =
-        action === "decrement" || (required <= 1 && action !== "increment" && previous > 0);
-      const count = Math.max(0, Math.min(required, previous + (decrease ? -1 : 1)));
-      mutation.mutate({
-        taskId,
-        action,
-        actor,
-        targetDate: todayString(),
-        completed: daily ? !daily.completedToday : count >= required,
-        count,
-      });
+          predicate: (item) => (item.state.variables as CompletionChange).taskId === intent.taskId,
+        }) > 0;
+      if (isStateChange && taskHasPendingChange) return;
+
+      mutation.mutate(change);
     },
   };
 }

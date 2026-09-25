@@ -5,10 +5,12 @@
 - UI: Vitest/Testing Libraryで表示・操作・loading/empty/errorを検証します。mockはfeature API adapterの境界に置きます。
 - Domain: 日付境界、月またぎ週、完了規則、予定を決定的なfixtureで検証します。`app/tests/fixtures/domain-scenarios.json` は業務規則の期待値です。
 - Application/DB: 認可、チーム越境、競合とrollback、締めの冪等性、認証失効・セッション数を使い捨てのローカルD1で検証します。
-- API契約: `app/src/contracts/` のZod入出力・DTOを正本とし、transportとfeature adapter/hookを確認します。412/428相当の再取得も対象です。
-- 通信・接続の失敗: キャンセル後の応答でクライアントのrevisionを更新しないこと、メンテナンス中に業務処理がD1へアクセスしないことを確認します。
-- 操作フィードバック: 遅延中の家事完了・購入済み表示、失敗した操作だけの復元、連打防止、フォームの保存中表示・入力保持を確認します。共通clientでは書き込み順序・最新revisionの引継ぎ・並列読取・ログアウト後の待機操作破棄・新セッションの送信開始、オフライン書き込みの即時失敗と再接続時の再送抑止を検証します。E2Eでも更新通信を止めた状態の即時表示と失敗時の復元を確認します。
-- Transport/DB: Server Functionの入力不正・未認証・異なるoriginを業務処理より前に拒否し、出力schemaの検証失敗時には業務更新とrevisionを同じトランザクションでrollbackします。登録APIとセッション取得をmockするテストと、実Workersで通信するE2Eを併用します。
+- API契約: Zod入出力・DTOを正本とし、意図を指定した完了操作と、revisionを含まないtransport/adapterを確認します。
+- 通信: 所属変更・ログアウト時の古い通信の破棄、更新失敗時の再取得、オフライン更新の自動再送抑止を確認します。
+- 操作フィードバック: 遅延中の完了・購入済み表示、失敗した操作だけの復元、週次連続3タップ、フォームの入力保持を確認します。
+- Transport/DB: 入力不正・未認証・異なるOriginを拒否します。用途別D1 batchの制約違反は全体rollbackします。出力DTO検証は保存後であるため、検証失敗時もcommit済みデータは残ることを明示的に検証します。
+- リアルタイム: 認証済みユーザーからのチーム選択、Origin拒否、失効・期限切れ・脱退接続への配信停止、複数タブの重複排除、attachmentからのインスタンス復元、未検証接続への配信拒否、attachment不正・復元失敗を検証します。後者はHibernation APIの契約を模した単体テストであり、実Cloudflareの休止スケジューリングを再現したものではありません。
+- 接続UI: 切断時の一覧消去・再接続・Query再取得、mutation中の通知集約、画面遷移での接続維持を検証します。実WorkersのE2Eで2ユーザー間の完了/取消・購入済み・接続アイコンとチーム分離を確認します。
 - ブラウザー: Workers previewとローカルD1を使い、desktop/mobileで画面遷移、保存、ドラッグ、戻る操作、PWA offline shellを確認します。
 - 秘密情報: `.gitignore` の実Git判定、認証ログの機密値抑止、短いsession secret・非ローカルHTTP originの拒否を検証します。依存関係はCIの `bun audit --audit-level moderate` で確認します。ignoreのテストは、既に追跡された秘密値の検出や履歴スキャンを代替しません。
 - OAuth保存: Better Authの初回/再ログインとrefresh経路でaccess/refresh tokenの暗号化・復号、ID token非保存を実DBで確認します。Googleによる署名検証は別の確認範囲です。
@@ -31,7 +33,7 @@ Alchemyのbootstrap/plan/deployは `--help` でCLI起動を確認し、アプリ
 
 PRのCIは `test:local` で、Cloudflare公式pluginによる `vp build` と `vp preview` を検証する。build時は実資格情報だけでなくテスト用 `.dev.vars` も用意せず、CD同様に秘密値なしでSPA shellを生成する。build後に入口・assetsディレクトリ・PWAのshell登録を確認し、テスト用認証設定を追加してD1/E2Eを行う。Alchemyの内部APIや別プラグインによる代替buildは使用しない。本番はAlchemyの公開 `Worker` APIでこの形式の生成物を再bundleせず配備する。本番binding・権限・公開ドメイン・リソース更新はCDで別途確認する。
 
-DB統合テストのfixtureはWranglerの `getPlatformProxy` で実際のD1 bindingを起動し、初期SQLを適用する。DB制約によるbatch全体のrollback、世代番号の競合による再実行、同時更新、未commitの変更を含む読み取りを確認する。D1に未対応の対話的transactionや、DBをmockしたテストで代替しない。
+DB統合テストのfixtureはWranglerの `getPlatformProxy` で実際のD1 bindingを起動し、初期SQLを適用する。DB制約によるbatch全体のrollback、同時完了の回数上下限、同時初期登録、チーム移動、締めの冪等性を確認する。D1に未対応の対話的transactionや、DBをmockしたテストで代替しない。
 
 ブラウザーテストはpreviewと同じ一時D1を使用する。fixture用D1接続は初期データ投入直後に閉じ、ブラウザー操作中はpreview WorkerだけがDBを利用する。保存結果は更新応答を待った後の画面再読込で確認し、別エミュレーターによる同時SQL pollingを行わない。Googleとの実通信は行わず、テスト専用セッションを登録してWorkerの認証・Server Functions・業務DBを通す。`test:dev` は5195で実際の開発サーバーを起動し、未ログイン表示とリロード安定性を確認する。3回の自動リロードでブラウザーを閉じ、負荷を制限する。
 
@@ -51,7 +53,7 @@ Git除外には環境ファイル・状態・DB・鍵・HAR・SQLダンプを含
 
 ## Drizzle / D1
 
-`drizzle-schema.test.ts` は全テーブルのDrizzle定義とmigration適用後の列・型・null制約・主キー・外部キーを照合する。`d1-atomic.test.ts` はDrizzle batchの後半で起きる制約違反の全体rollback、競合時の読み直し、未確定行のjoin・集計・削除を検証する。Date/boolean/nullのcodecとSQLに似た入力値も確認する。ApplicationのRepository portへDrizzle型を漏らさない。
+`drizzle-schema.test.ts` は全テーブルのDrizzle定義とmigration適用後の列・型・null制約・主キー・外部キーを照合する。`d1-atomic.test.ts` は実際のD1 batch rollback、同時加減算・完了、部分更新、締めを検証する。ApplicationのRepository portへDrizzle型を漏らさない。
 
 ## 日本時間と端末タイムゾーン
 
@@ -59,4 +61,4 @@ Git除外には環境ファイル・状態・DB・鍵・HAR・SQLダンプを含
 
 `tests/e2e/application.spec.ts` はUTC・Los Angeles・Aucklandのブラウザーで、UTCと日本で日付・月が異なる時刻のヘッダー・集計月・カレンダーの今日とセルを確認する。日付utilityと招待期限のテストは `TZ=UTC` / `TZ=America/Los_Angeles` / `TZ=Pacific/Auckland` を付けたVitestでも実行できる。これはテスト時の環境変更で、配備にTZ環境変数を要求するものではない。
 
-`user-schema.test.ts` は0001→0002→0003の既存データ保持、認証日時・nullable期限・Push配信日時のISO変換とミリ秒精度を検証する。セッション期限での絞り込み、期限切れOAuth stateの削除、rate limitの加算・429・期間経過後の解除も実Better Auth/D1で確認する。`push.test.ts` はISO形式のlease比較・再取得・成功後再送抑止を検証する。
+`user-schema.test.ts` は0001→0002→0003→0004でrevision列/テーブルのみ撤去し、業務データを保持すること、認証日時・nullable期限・Push配信日時のISO変換とミリ秒精度を検証する。セッション期限での絞り込み、期限切れOAuth stateの削除、rate limitの加算・429・期間経過後の解除も実Better Auth/D1で確認する。`push.test.ts` はISO形式のlease比較・再取得・成功後再送抑止を検証する。

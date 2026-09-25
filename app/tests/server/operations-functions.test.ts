@@ -1,6 +1,12 @@
+vi.mock("cloudflare:workers", () => ({
+  waitUntil: (promise: Promise<unknown>) => {
+    void promise;
+  },
+}));
+vi.mock("../../src/server/transport/realtime.server", () => ({ notifyTeams: mocks.notify }));
 import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { responseSchemas, type TeamState } from "../../src/contracts/operations";
+import { responseSchemas } from "../../src/contracts/operations";
 import { provisionUser } from "../../src/server/application/provision-user";
 import { createTestDatabase } from "../helpers/d1";
 import type { WireResult } from "../../src/server/transport/operations.functions";
@@ -11,7 +17,8 @@ const mocks = vi.hoisted(() => ({
   headers: new Headers(),
   runtime: vi.fn(),
   session: vi.fn(),
-  transaction: vi.fn(),
+  repository: {} as object,
+  notify: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("@tanstack/react-start", () => ({
   createServerFn: () => ({
@@ -23,7 +30,10 @@ vi.mock("@tanstack/react-start", () => ({
   }),
 }));
 vi.mock("@tanstack/react-start/server", () => ({ getRequestHeaders: () => mocks.headers }));
-vi.mock("../../src/server/transport/runtime.server", () => ({ withRuntime: mocks.runtime }));
+vi.mock("../../src/server/transport/runtime.server", () => ({
+  withRuntime: mocks.runtime,
+  notifyChanges: mocks.notify,
+}));
 import "../../src/server/transport/operations.functions";
 
 beforeEach(() => {
@@ -33,7 +43,7 @@ beforeEach(() => {
     fn({
       bindings: { APP_ORIGIN: "https://app.example.com", VAPID_PUBLIC_KEY: "test" },
       auth: { api: { getSession: mocks.session } },
-      repository: { transaction: mocks.transaction },
+      repository: mocks.repository,
     }),
   );
 });
@@ -52,7 +62,6 @@ it("rejects absent sessions before any business transaction", async () => {
     error: { status: 401, code: "unauthorized" },
   });
   expect(mocks.session).toHaveBeenCalledWith({ headers: mocks.headers });
-  expect(mocks.transaction).not.toHaveBeenCalled();
 });
 
 it.each<Record<string, string>>([
@@ -65,13 +74,12 @@ it.each<Record<string, string>>([
     error: { status: 403, code: "forbidden" },
   });
   expect(mocks.session).not.toHaveBeenCalled();
-  expect(mocks.transaction).not.toHaveBeenCalled();
 });
 
 describe("transport transaction with D1", () => {
   let connection: Awaited<ReturnType<typeof createTestDatabase>>;
   const id = crypto.randomUUID();
-  let state: TeamState;
+  let teamId: string;
   beforeAll(async () => {
     connection = await createTestDatabase();
     await connection.query(sql`INSERT INTO auth_user (id,name,email)
@@ -80,14 +88,11 @@ describe("transport transaction with D1", () => {
       VALUES (${crypto.randomUUID()},${id},'google',${id})`);
     await provisionUser(connection.repository, id, new Date());
     const [member] = await connection.repository.ListMembershipsByUserID(id);
-    state = {
-      teamId: member.TeamID,
-      revision: await connection.repository.GetTeamStateRevision(member.TeamID),
-    };
+    teamId = member.TeamID;
   });
   beforeEach(() => {
     mocks.session.mockResolvedValue({ user: { id } });
-    mocks.transaction.mockImplementation((fn) => connection.repository.transaction(fn));
+    mocks.repository = connection.repository;
   });
   afterAll(async () => {
     if (!connection) return;
@@ -102,34 +107,25 @@ describe("transport transaction with D1", () => {
       data: {
         operation: "postTask",
         body: { title: "Transport task", type: "daily", penaltyPoints: 1 },
-        expectedState: state,
       },
     });
 
-  it("rolls back business writes and revision if output validation fails", async () => {
-    const before = await connection.repository.ListTasksByTeamID(state.teamId);
+  it("returns only a validated DTO and notifies after commit", async () => {
+    const result = await request();
+    expect(result).toMatchObject({ ok: true, data: { title: "Transport task" } });
+    expect(result).not.toHaveProperty("state");
+    expect(await connection.repository.ListTasksByTeamID(teamId)).toHaveLength(1);
+    expect(mocks.notify).toHaveBeenCalledWith(expect.anything(), [teamId]);
+  });
+  it("returns a safe error on malformed output without claiming that committed data was rolled back", async () => {
     const parse = vi.spyOn(responseSchemas.postTask, "parse").mockImplementationOnce(() => {
-      throw new Error("deliberate invalid output");
+      throw new Error("invalid");
     });
     try {
       expect(await request()).toMatchObject({ ok: false, error: { status: 500 } });
-      expect(parse).toHaveBeenCalledOnce();
-      expect(await connection.repository.ListTasksByTeamID(state.teamId)).toEqual(before);
-      expect(await connection.repository.GetTeamStateRevision(state.teamId)).toBe(state.revision);
     } finally {
       parse.mockRestore();
     }
-  });
-
-  it("commits a validated response and returns the persisted revision", async () => {
-    const result = await request();
-    expect(result.ok).toBe(true);
-    if (!result.ok) throw new Error("Expected a successful operation");
-    expect(result.data).toMatchObject({ title: "Transport task" });
-    expect(result.state.revision).not.toBe(state.revision);
-    expect(await connection.repository.GetTeamStateRevision(state.teamId)).toBe(
-      result.state.revision,
-    );
-    expect(await connection.repository.ListTasksByTeamID(state.teamId)).toHaveLength(1);
+    expect(await connection.repository.ListTasksByTeamID(teamId)).toHaveLength(2);
   });
 });

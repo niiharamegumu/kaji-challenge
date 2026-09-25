@@ -12,35 +12,11 @@ import {
 import { user } from "./auth-schema";
 
 // Runtime mapping of the deployed D1 schema. SQL migrations remain the DDL source of truth.
-export const appRevision = sqliteTable(
-  "app_revision",
-  {
-    id: integer("id").primaryKey(),
-    revision: integer("revision").notNull(),
-  },
-  (t) => [
-    check("app_revision_check_1", sql`${t.id}=1`),
-    check("app_revision_check_2", sql`${t.revision}>=0`),
-  ],
-);
-
-export const teams = sqliteTable(
-  "teams",
-  {
-    id: text("id").primaryKey().notNull(),
-    name: text("name").notNull(),
-    created_at: text("created_at").notNull(),
-    state_revision: text("state_revision")
-      .notNull()
-      .default(sql`'0'`),
-  },
-  (t) => [
-    check(
-      "teams_check_1",
-      sql`length(${t.state_revision})>0 AND ${t.state_revision} NOT GLOB '*[^0-9]*'`,
-    ),
-  ],
-);
+export const teams = sqliteTable("teams", {
+  id: text("id").primaryKey().notNull(),
+  name: text("name").notNull(),
+  created_at: text("created_at").notNull(),
+});
 
 export const inviteCodes = sqliteTable(
   "invite_codes",

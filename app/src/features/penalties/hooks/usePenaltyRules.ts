@@ -9,7 +9,6 @@ import {
   type PenaltyRule,
 } from "../../../lib/api/operations";
 import { queryKeys } from "../../../shared/query/queryKeys";
-import { handleTeamStatePreconditionFailure } from "../../../shared/query/teamStateRefresh";
 import { formatError } from "../../../shared/utils/errors";
 
 export function usePenaltyRulesQuery() {
@@ -40,9 +39,6 @@ export function usePenaltyRuleMutations(setStatus: StatusSetter) {
       void invalidate();
     },
     onError: async (error) => {
-      if (await handleTeamStatePreconditionFailure(error, queryClient, setStatus)) {
-        return;
-      }
       setStatus(`ルール作成に失敗しました: ${formatError(error)}`);
     },
   });
@@ -58,9 +54,6 @@ export function usePenaltyRuleMutations(setStatus: StatusSetter) {
       void invalidate();
     },
     onError: async (error) => {
-      if (await handleTeamStatePreconditionFailure(error, queryClient, setStatus)) {
-        return;
-      }
       setStatus(`ルール削除に失敗しました: ${formatError(error)}`);
     },
   });
@@ -87,9 +80,6 @@ export function usePenaltyRuleMutations(setStatus: StatusSetter) {
       ]);
     },
     onError: async (error) => {
-      if (await handleTeamStatePreconditionFailure(error, queryClient, setStatus)) {
-        return;
-      }
       setStatus(`ルール更新に失敗しました: ${formatError(error)}`);
     },
   });

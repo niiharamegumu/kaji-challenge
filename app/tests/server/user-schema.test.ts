@@ -94,6 +94,18 @@ beforeAll(async () => {
   await connection.binding.batch(
     unstable_splitSqlQuery(timestamps).map((q) => connection.binding.prepare(q)),
   );
+  const revisions = await readFile(
+    new URL("../../migrations/0004_remove_revisions.sql", import.meta.url),
+    "utf8",
+  );
+  await connection.binding.batch(
+    unstable_splitSqlQuery(revisions).map((q) => connection.binding.prepare(q)),
+  );
+  snapshots.teams = snapshots.teams.map((row) => {
+    const kept = { ...(row as Record<string, unknown>) };
+    delete kept.state_revision;
+    return kept;
+  });
 });
 afterAll(async () => {
   await connection?.close();
@@ -122,7 +134,7 @@ it("uses canonical auth identity while preserving application preferences", asyn
     CreatedAt: new Date(1700000000123).toISOString(),
   });
 });
-it("does not let Better Auth update-user bypass application revision checks for preferences", async () => {
+it("does not let Better Auth update-user bypass application authorization for preferences", async () => {
   const secret = "test-profile-fields-secret-at-least-32-characters";
   const auth = createAuth(connection.db, {
     baseURL: "https://app.example.com",
@@ -161,14 +173,14 @@ it("does not let Better Auth update-user bypass application revision checks for 
     Nickname: "ニックネーム",
     ColorHex: "#12ABEF",
   });
-  await connection.repository.UpdateUserNickname({ ID: id, Column2: "業務API" });
-  await connection.repository.UpdateUserColorHex({ ID: id, Column2: "#AABBCC" });
+  await connection.repository.UpdateUserNickname({ ID: id, Nickname: "業務API" });
+  await connection.repository.UpdateUserColorHex({ ID: id, ColorHex: "#AABBCC" });
   expect(await connection.repository.GetUserByID(id)).toMatchObject({
     Nickname: "業務API",
     ColorHex: "#AABBCC",
   });
-  await connection.repository.UpdateUserNickname({ ID: id, Column2: "" });
-  await connection.repository.UpdateUserColorHex({ ID: id, Column2: "" });
+  await connection.repository.UpdateUserNickname({ ID: id, Nickname: "" });
+  await connection.repository.UpdateUserColorHex({ ID: id, ColorHex: "" });
   expect(await connection.repository.GetUserByID(id)).toMatchObject({
     Nickname: "",
     ColorHex: null,
@@ -321,4 +333,17 @@ it("increments, blocks and resets rate limiting with ISO storage", async () => {
       .bind(row!.id)
       .first("count"),
   ).toBe(1);
+});
+
+it("removes revision storage without adding replacement counters", async () => {
+  expect(
+    await connection.binding
+      .prepare("SELECT name FROM sqlite_master WHERE name='app_revision'")
+      .first(),
+  ).toBeNull();
+  expect(
+    (await connection.binding.prepare("PRAGMA table_info(teams)").all()).results.map(
+      (row) => row.name,
+    ),
+  ).not.toContain("state_revision");
 });

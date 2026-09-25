@@ -12,7 +12,6 @@ import {
 } from "../../../lib/api/operations";
 import { queryKeys } from "../../../shared/query/queryKeys";
 import { extractHttpStatus, formatError } from "../../../shared/utils/errors";
-import { handleTeamStatePreconditionFailure } from "../../../shared/query/teamStateRefresh";
 import { INVITE_CODE_EXPIRES_IN_HOURS } from "../constants/invite";
 
 function currentTeamMembersQueryOptions(currentUserId: string | null) {
@@ -104,9 +103,6 @@ export function useInviteMutations(setStatus: StatusSetter) {
       );
     },
     onError: async (error) => {
-      if (await handleTeamStatePreconditionFailure(error, queryClient, setStatus)) {
-        return;
-      }
       setStatus(`招待コード発行に失敗しました: ${formatError(error)}`);
     },
   });
@@ -123,9 +119,6 @@ export function useInviteMutations(setStatus: StatusSetter) {
       ]);
     },
     onError: async (error) => {
-      if (await handleTeamStatePreconditionFailure(error, queryClient, setStatus)) {
-        return;
-      }
       if (extractHttpStatus(error) === 409) {
         setStatus("すでに参加しています");
         return;
@@ -146,9 +139,6 @@ export function useInviteMutations(setStatus: StatusSetter) {
       ]);
     },
     onError: async (error) => {
-      if (await handleTeamStatePreconditionFailure(error, queryClient, setStatus)) {
-        return;
-      }
       setStatus(`チーム離脱に失敗しました: ${formatError(error)}`);
     },
   });
@@ -170,9 +160,6 @@ export function useProfileMutations(setStatus: StatusSetter) {
       await invalidateQueryKeys(queryClient, nicknameRelatedQueryKeys);
     },
     onError: async (error) => {
-      if (await handleTeamStatePreconditionFailure(error, queryClient, setStatus)) {
-        return;
-      }
       setStatus(`ニックネーム更新に失敗しました: ${formatError(error)}`);
     },
   });
@@ -186,9 +173,6 @@ export function useProfileMutations(setStatus: StatusSetter) {
       await invalidateQueryKeys(queryClient, colorRelatedQueryKeys);
     },
     onError: async (error) => {
-      if (await handleTeamStatePreconditionFailure(error, queryClient, setStatus)) {
-        return;
-      }
       setStatus(`表示カラー更新に失敗しました: ${formatError(error)}`);
     },
   });
@@ -200,9 +184,6 @@ export function useProfileMutations(setStatus: StatusSetter) {
       await invalidateQueryKeys(queryClient, teamNameRelatedQueryKeys);
     },
     onError: async (error) => {
-      if (await handleTeamStatePreconditionFailure(error, queryClient, setStatus)) {
-        return;
-      }
       setStatus(`チーム名更新に失敗しました: ${formatError(error)}`);
     },
   });

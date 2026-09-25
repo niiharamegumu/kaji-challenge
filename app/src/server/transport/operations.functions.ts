@@ -5,21 +5,19 @@ import { operationSchema, responseSchemas } from "../../contracts/operations";
 import { AppError } from "../domain/errors";
 import { executeOperation } from "../application/operations";
 import { operationError } from "./operation-error";
-import type { TeamState } from "../../contracts/operations";
 export type WireResult =
   | {
       ok: true;
       data: z.output<(typeof responseSchemas)[keyof typeof responseSchemas]>;
-      state: TeamState;
     }
   | {
       ok: false;
-      error: { status: number; code: string; message: string; currentState?: TeamState };
+      error: { status: number; code: string; message: string };
     };
 export const invokeOperation = createServerFn({ method: "POST" })
   .validator((raw: unknown) => {
     const parsed = operationSchema.safeParse(raw);
-    // Keep the app's typed error response without exposing Zod input details.
+    // 入力値を含むZodエラーを公開せず、アプリ共通の型付きエラーで返す。
     return parsed.success ? parsed.data : null;
   })
   .handler(async ({ data: input }): Promise<WireResult> => {
@@ -31,25 +29,27 @@ export const invokeOperation = createServerFn({ method: "POST" })
     const startedAt = performance.now();
     let status = 200;
     try {
-      const { withRuntime } = await import("./runtime.server");
+      const { withRuntime, notifyChanges } = await import("./runtime.server");
       return await withRuntime(async (runtime) => {
-        const headers = getRequestHeaders(),
-          origin = headers.get("origin");
+        // 各Server Functionで認証する。画面側のログイン判定には依存しない。
+        const headers = getRequestHeaders();
+        const origin = headers.get("origin");
         if (origin && origin !== new URL(runtime.bindings.APP_ORIGIN).origin)
           throw new AppError(403, "forbidden", "Invalid origin");
         if (headers.get("sec-fetch-site") === "cross-site")
           throw new AppError(403, "forbidden", "Invalid request origin");
         const session = await runtime.auth.api.getSession({ headers });
         if (!session) throw new AppError(401, "unauthorized", "ログインしてください。");
-        return runtime.repository.transaction(async (repository) => {
-          const result = await executeOperation(repository, input, {
-            userId: session.user.id,
-            now: new Date(),
-            vapidPublicKey: runtime.bindings.VAPID_PUBLIC_KEY,
-          });
-          const validated = responseSchemas[input.operation].parse(result.data);
-          return { ok: true, data: validated, state: result.state };
+
+        const result = await executeOperation(runtime.repository, input, {
+          userId: session.user.id,
+          now: new Date(),
+          vapidPublicKey: runtime.bindings.VAPID_PUBLIC_KEY,
         });
+        // D1の保存はここで完了済み。通知はwaitUntilで実行し、HTTP応答を待たせない。
+        if (result.changedTeams.length) notifyChanges(runtime.bindings, result.changedTeams);
+        const validated = responseSchemas[input.operation].parse(result.data);
+        return { ok: true, data: validated };
       });
     } catch (error) {
       const mapped = operationError(error);

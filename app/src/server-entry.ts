@@ -2,8 +2,13 @@ import start from "@tanstack/react-start/server-entry";
 import { createRuntime, type RuntimeBindings } from "./server/transport/runtime.server";
 import { scheduled } from "./server/transport/scheduled.server";
 import { AppError } from "./server/domain/errors";
+import { connectRealtime } from "./server/transport/realtime.server";
+
+export { TeamRealtime } from "./server/infrastructure/team-realtime";
 
 function withResponseHeaders(response: Response, path: string): Response {
+  // WebSocketを保持したUpgrade応答は通常のHTTP Responseとして作り直さない。
+  if (response.status === 101) return response;
   const headers = new Headers(response.headers);
   headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
   headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
@@ -25,11 +30,19 @@ function withResponseHeaders(response: Response, path: string): Response {
 
 async function handleRequest(request: Request, bindings: RuntimeBindings) {
   const path = new URL(request.url).pathname;
+  if (path === "/api/realtime") {
+    try {
+      return await connectRealtime(request, bindings);
+    } catch {
+      console.error(JSON.stringify({ event: "realtime_connection_failed" }));
+      return new Response("Connection unavailable", { status: 503 });
+    }
+  }
   if (path === "/health") return Response.json({ status: "ok", release: bindings.APP_RELEASE });
   if (path.startsWith("/api/auth/")) {
     if (bindings.MAINTENANCE_MODE === "true") return new Response("Maintenance", { status: 503 });
     try {
-      const runtime = await createRuntime(bindings);
+      const runtime = createRuntime(bindings);
       return await runtime.auth.handler(request);
     } catch (error) {
       if (error instanceof AppError)

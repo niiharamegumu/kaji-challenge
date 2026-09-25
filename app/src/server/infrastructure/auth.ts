@@ -46,7 +46,7 @@ export function createAuth(db: Database, settings: AuthSettings) {
     },
     user: {
       additionalFields: {
-        // Only business Server Functions may change these fields after checking team revision.
+        // Only business Server Functions may change these fields after checking authorization.
         nickname: { type: "string", required: false, input: false },
         colorHex: { type: "string", required: false, input: false },
       },

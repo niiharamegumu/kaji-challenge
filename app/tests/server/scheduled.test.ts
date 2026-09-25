@@ -30,17 +30,12 @@ describe("scheduled entry with D1", () => {
     );
     const now = new Date("2026-08-31T03:00:00Z");
     await provisionUser(connection.repository, userId, now);
-    const current = await executeOperation(
-      connection.repository,
-      operationSchema.parse({ operation: "getMe" }),
-      { userId, now, vapidPublicKey: "" },
-    );
-    teamId = current.state.teamId;
+    teamId = (await connection.repository.ListMembershipsByUserID(userId))[0].TeamID;
     await executeOperation(
       connection.repository,
       operationSchema.parse({
         operation: "postTask",
-        expectedState: current.state,
+
         body: { title: "週次", type: "weekly", penaltyPoints: 3, requiredCompletionsPerWeek: 2 },
       }),
       { userId, now, vapidPublicKey: "" },
@@ -87,17 +82,11 @@ describe("scheduled entry with D1", () => {
   it("closes pending months oldest first, preserves totals and permits safe replay", async () => {
     const now = new Date("2026-10-05T03:00:00Z");
     async function close(month: string) {
-      const current = await executeOperation(
-        connection.repository,
-        operationSchema.parse({ operation: "getMe" }),
-        { userId, now, vapidPublicKey: "" },
-      );
       return executeOperation(
         connection.repository,
         operationSchema.parse({
           operation: "postMonthClose",
           params: { month },
-          expectedState: current.state,
         }),
         { userId, now, vapidPublicKey: "" },
       );
@@ -110,7 +99,6 @@ describe("scheduled entry with D1", () => {
       MonthStart: "2026-09-01",
     });
     expect(first).toMatchObject({ IsClosed: true, WeeklyPenaltyTotal: 12 });
-    const revision = await connection.repository.GetTeamStateRevision(teamId);
     await close("2026-09");
     expect(
       await connection.repository.GetMonthlyPenaltySummary({
@@ -118,6 +106,5 @@ describe("scheduled entry with D1", () => {
         MonthStart: "2026-09-01",
       }),
     ).toEqual(first);
-    expect(await connection.repository.GetTeamStateRevision(teamId)).toBe(revision);
   });
 });

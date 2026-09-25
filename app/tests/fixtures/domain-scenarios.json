@@ -4,7 +4,7 @@
       "type": "daily",
       "current": 0,
       "required": 1,
-      "action": "toggle",
+      "action": "complete",
       "target": "2026-09-14",
       "today": "2026-09-14",
       "count": 1
@@ -13,7 +13,7 @@
       "type": "daily",
       "current": 1,
       "required": 1,
-      "action": "toggle",
+      "action": "incomplete",
       "target": "2026-09-14",
       "today": "2026-09-14",
       "count": 0
@@ -31,7 +31,7 @@
       "type": "daily",
       "current": 0,
       "required": 1,
-      "action": "toggle",
+      "action": "increment",
       "target": "2026-08-31",
       "today": "2026-09-14",
       "error": true
@@ -40,7 +40,7 @@
       "type": "daily",
       "current": 0,
       "required": 1,
-      "action": "toggle",
+      "action": "complete",
       "target": "2026-09-15",
       "today": "2026-09-14",
       "error": true
@@ -58,7 +58,7 @@
       "type": "weekly",
       "current": 3,
       "required": 3,
-      "action": "toggle",
+      "action": "increment",
       "target": "2026-09-14",
       "today": "2026-09-14",
       "count": 3
@@ -76,7 +76,7 @@
       "type": "weekly",
       "current": 1,
       "required": 1,
-      "action": "toggle",
+      "action": "incomplete",
       "target": "2026-09-14",
       "today": "2026-09-14",
       "count": 0
@@ -84,8 +84,8 @@
     {
       "type": "weekly",
       "current": 1,
-      "required": 1,
-      "action": "toggle",
+      "required": 3,
+      "action": "complete",
       "target": "2026-08-31",
       "today": "2026-09-14",
       "error": true
@@ -102,7 +102,7 @@
     {
       "type": "weekly",
       "current": 0,
-      "required": 1,
+      "required": 3,
       "action": "complete",
       "target": "2026-09-14",
       "today": "2026-09-14",

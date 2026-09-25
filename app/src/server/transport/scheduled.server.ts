@@ -2,6 +2,7 @@ import { closeOutstanding, notifyOutstanding, crons } from "../application/jobs"
 import { createDatabase } from "../infrastructure/database";
 import { createDelivery } from "../infrastructure/push";
 import type { RuntimeBindings } from "./runtime.server";
+import { notifyTeams } from "./realtime.server";
 export async function scheduled(controller: ScheduledController, bindings: RuntimeBindings) {
   if (bindings.JOBS_ENABLED !== "true" || bindings.MAINTENANCE_MODE === "true") return;
   const connection = createDatabase(bindings.DB);
@@ -10,7 +11,10 @@ export async function scheduled(controller: ScheduledController, bindings: Runti
     (k) => crons[k] === controller.cron,
   );
   if (!key) throw new Error("Unknown cron expression");
-  if (key === "day" || key === "week") await closeOutstanding(connection.repository, key, now);
+  if (key === "day" || key === "week")
+    await closeOutstanding(connection.repository, key, now, (teamId) =>
+      notifyTeams(bindings, [teamId]),
+    );
   else
     await notifyOutstanding(
       connection.repository,

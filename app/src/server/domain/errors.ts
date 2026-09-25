@@ -3,7 +3,6 @@ export class AppError extends Error {
     public readonly status: number,
     public readonly code: string,
     message: string,
-    public readonly currentState?: { teamId: string; revision: string },
   ) {
     super(message);
     this.name = "AppError";

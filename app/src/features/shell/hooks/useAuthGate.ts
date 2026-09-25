@@ -2,7 +2,6 @@ import type { QueryClient, QueryStatus } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef } from "react";
 
 import type { MeResponse } from "../../../lib/api/operations";
-import { setLatestTeamEtag } from "../../../lib/api/api-client-state";
 import { extractHttpStatus, formatError } from "../../../shared/utils/errors";
 import type { SessionState } from "../../../state/session";
 
@@ -90,7 +89,7 @@ export function useAuthGate({
       handledInvalidSessionRef.current = true;
 
       queryClient.removeQueries();
-      setLatestTeamEtag("");
+
       setStatus(
         "アカウント情報が無効になったため、トップページへ戻りました。再ログインしてください。",
       );
