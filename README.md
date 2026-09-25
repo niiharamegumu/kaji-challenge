@@ -190,7 +190,7 @@ Alchemyはビルド済みの `dist/server/index.js` と `dist/client` を、公�
 1. `app/src/routes/`・`app/src/features/`: 画面と操作。
 2. `app/src/contracts/operations.ts`・`app/src/lib/api/`: 入出力の契約と通信。
 3. `app/src/server/transport/` → `application/` → `domain/`: 認証・認可・業務手順と規則。
-4. `app/src/server/infrastructure/`: D1、Better Auth、Pushの実装。`schema.ts` / `auth-schema.ts` がDrizzleのテーブル定義、`repository.ts` が型付きクエリ。業務更新は `unit-of-work.ts` のDrizzle batchでまとめる。
+4. `app/src/server/infrastructure/`: D1、Better Auth、Pushの実装。`schema.ts` / `auth-schema.ts` がDrizzleのテーブル定義、`repository.ts` が型付きクエリ。複合更新は用途別Repository操作のDrizzle batchでまとめる。`team-realtime.ts` がチームごとのWebSocket接続・通知を管理する。
 5. `app/migrations/`・`app/alchemy.run.ts`・`app/infra/config.ts`: SQLと配備構成。
 
 テーブルの責務は [database](docs/database.md)、詳しい境界は [architecture](docs/architecture.md)、検証方針は [testing](docs/testing.md) を参照してください。個人用資料・作業記録はGit管理外の `local-notes/` に保存します。
