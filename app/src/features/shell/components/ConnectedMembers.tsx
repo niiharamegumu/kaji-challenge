@@ -1,54 +1,117 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import type { TeamMember } from "../../../contracts/models";
 import { getReadableTextColor, resolveUserColor } from "../../../shared/utils/userColor";
 
 type Props = {
   members: TeamMember[];
   userIds: string[];
-  currentUserId: string | null;
   connected: boolean;
 };
-export function ConnectedMembers({ members, userIds, currentUserId, connected }: Props) {
-  const [selected, setSelected] = useState<string | null>(null);
-  if (!connected)
-    return (
-      <div role="status" className="mt-1 text-right text-xs text-stone-500">
-        再接続中…
-      </div>
-    );
-  const online = members.filter(
-    (member) => member.userId !== currentUserId && userIds.includes(member.userId),
+type OpenPanel = { kind: "member"; userId: string } | { kind: "all" } | null;
+
+function MemberAvatar({ member, online }: { member: TeamMember; online: boolean }) {
+  const color = resolveUserColor(member.colorHex);
+  return (
+    <span
+      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-white text-xs font-semibold ${online ? "" : "ring-1 ring-stone-300 grayscale-[0.7] opacity-60"}`}
+      style={{ backgroundColor: color, color: getReadableTextColor(color) }}
+    >
+      {Array.from(member.effectiveName.trim())[0] ?? "?"}
+    </span>
   );
-  if (!online.length) return null;
+}
+
+export function ConnectedMembers({ members, userIds, connected }: Props) {
+  const [openPanel, setOpenPanel] = useState<OpenPanel>(null);
+  const panelId = useId();
+  if (!members.length) return null;
+  // 自分の接続が切れたときは、古いpresenceを使って他の人を接続中と表示しない。
+  const memberStates = members.map((member) => {
+    const online = connected && userIds.includes(member.userId);
+    const status = !connected ? "接続確認中" : online ? "接続中" : "未接続";
+    return { member, online, label: `${member.effectiveName}（${status}）` };
+  });
+  const remainingCount = members.length - 2;
   return (
     <div
-      aria-label="接続中のチームメンバー"
-      className="mt-2 flex flex-wrap items-center justify-end gap-2"
+      aria-label="チームメンバー"
+      className="relative flex h-10 shrink-0 items-center -space-x-3"
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setOpenPanel(null);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") setOpenPanel(null);
+      }}
     >
-      {online.map((member) => {
-        const color = resolveUserColor(member.colorHex);
-        const label = `${member.effectiveName}（接続中）`;
+      {memberStates.slice(0, 2).map(({ member, online, label }, index) => {
+        const isOpen = openPanel?.kind === "member" && openPanel.userId === member.userId;
+        const tooltipId = `${panelId}-member-${index}`;
         return (
-          <div key={member.userId} className="group relative">
+          <div
+            key={member.userId}
+            onMouseEnter={() => setOpenPanel({ kind: "member", userId: member.userId })}
+            onMouseLeave={(event) => {
+              if (!event.currentTarget.contains(document.activeElement)) setOpenPanel(null);
+            }}
+          >
             <button
               type="button"
               aria-label={label}
-              aria-expanded={selected === member.userId}
-              onClick={() => setSelected(selected === member.userId ? null : member.userId)}
-              onBlur={() => setSelected(null)}
-              className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white text-sm font-semibold ring-1 ring-green-600 focus-visible:outline-2 focus-visible:outline-offset-2"
-              style={{ backgroundColor: color, color: getReadableTextColor(color) }}
+              aria-expanded={isOpen}
+              aria-describedby={isOpen ? tooltipId : undefined}
+              onFocus={() => setOpenPanel({ kind: "member", userId: member.userId })}
+              onClick={() => setOpenPanel({ kind: "member", userId: member.userId })}
+              className="flex h-10 w-9 items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
             >
-              {Array.from(member.effectiveName.trim())[0] ?? "?"}
+              <MemberAvatar member={member} online={online} />
             </button>
-            <span
-              className={`${selected === member.userId ? "block" : "hidden group-hover:block group-focus-within:block"} absolute right-0 top-full z-20 mt-1 whitespace-nowrap rounded-md bg-stone-800 px-2 py-1 text-xs text-white`}
-            >
-              {label}
-            </span>
+            {isOpen ? (
+              <span
+                id={tooltipId}
+                role="tooltip"
+                className="absolute right-0 top-full z-20 mt-1 w-max max-w-[min(20rem,calc(100vw-2rem))] rounded-md bg-stone-800 px-2 py-1 text-xs break-words text-white"
+              >
+                {label}
+              </span>
+            ) : null}
           </div>
         );
       })}
+      {remainingCount > 0 ? (
+        <div>
+          <button
+            type="button"
+            aria-label={`ほか${remainingCount}人：チームメンバー全${members.length}人を表示`}
+            aria-expanded={openPanel?.kind === "all"}
+            aria-controls={`${panelId}-all`}
+            onClick={() => setOpenPanel(openPanel?.kind === "all" ? null : { kind: "all" })}
+            className="flex h-10 w-9 items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
+          >
+            <span className="flex h-7 min-w-7 items-center justify-center rounded-full border-2 border-white bg-stone-200 px-1 text-xs font-semibold text-stone-700">
+              +{remainingCount}
+            </span>
+          </button>
+          {openPanel?.kind === "all" ? (
+            <ul
+              id={`${panelId}-all`}
+              aria-label="チームメンバー一覧"
+              className="absolute right-0 top-full z-20 mt-1 max-h-60 w-max max-w-[min(20rem,calc(100vw-2rem))] space-y-2 overflow-y-auto rounded-md border border-stone-200 bg-white p-3 text-xs shadow-lg"
+            >
+              {memberStates.map(({ member, online, label }) => (
+                <li key={member.userId} className="flex items-center gap-2">
+                  <MemberAvatar member={member} online={online} />
+                  <span className="min-w-0 break-words">{label}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+      {!connected ? (
+        <span role="status" className="sr-only">
+          再接続中…
+        </span>
+      ) : null}
     </div>
   );
 }

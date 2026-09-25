@@ -474,6 +474,14 @@ test("real WebSockets synchronize two users, deduplicate tabs and isolate teams"
     let connections = 0;
     page.on("websocket", () => connections++);
     await page.goto("/");
+    const ownIcon = page.getByRole("button", { name: "テストユーザー（接続中）", exact: true });
+    await expect(ownIcon).toBeVisible();
+    await expect(
+      page.getByLabel("チームメンバー", { exact: true }).getByRole("button"),
+    ).toHaveCount(2);
+    await expect(
+      page.getByRole("button", { name: "同期メンバー（未接続）", exact: true }),
+    ).toBeVisible();
     await peer.goto("/");
     await outsider.goto("/");
     const peerIcon = page.getByRole("button", { name: "同期メンバー（接続中）", exact: true });
@@ -481,7 +489,12 @@ test("real WebSockets synchronize two users, deduplicate tabs and isolate teams"
     await expect(
       peer.getByRole("button", { name: "テストユーザー（接続中）", exact: true }),
     ).toBeVisible();
-    await expect(outsider.getByLabel("接続中のチームメンバー")).toHaveCount(0);
+    await expect(
+      outsider.getByRole("button", { name: "別チーム（接続中）", exact: true }),
+    ).toBeVisible();
+    await expect(
+      outsider.getByLabel("チームメンバー", { exact: true }).getByRole("button"),
+    ).toHaveCount(1);
     await peerIcon.focus();
     await expect(page.getByText("同期メンバー（接続中）", { exact: true })).toBeVisible();
     await peerIcon.click();
@@ -530,6 +543,10 @@ test("real WebSockets synchronize two users, deduplicate tabs and isolate teams"
     await expect(outsider.getByText("リアルタイムの日間", { exact: true })).toHaveCount(0);
     await peerContext.close();
     await expect(peerIcon).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "同期メンバー（未接続）", exact: true }),
+    ).toBeVisible();
+    await expect(ownIcon).toBeVisible();
   } finally {
     await peerContext.close();
     await outsiderContext.close();

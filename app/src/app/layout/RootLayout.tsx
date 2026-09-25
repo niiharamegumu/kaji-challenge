@@ -250,23 +250,21 @@ export function RootLayout() {
       />
 
       <div className="mx-auto max-w-6xl">
-        <header className="p-2.5 md:p-4">
-          <div className="flex items-center justify-between gap-2 md:gap-3">
-            <div className="min-w-0 flex-1 overflow-x-auto">
-              <h1 className="whitespace-nowrap text-xl font-semibold tracking-normal md:text-2xl md:font-bold md:tracking-wide">
-                {currentTeamName}
-              </h1>
-            </div>
-            <div className="shrink-0 flex items-center gap-2">
-              <span className="text-xs whitespace-nowrap text-stone-700 md:text-sm">
-                {todayLabel}
-              </span>
-            </div>
+        <header className="flex items-start justify-between gap-3 p-2.5 md:items-center md:p-4">
+          <div className="flex min-w-0 flex-1 flex-col gap-0.5 md:flex-row md:items-center md:justify-between md:gap-3">
+            <h1
+              title={currentTeamName}
+              className="min-w-0 truncate text-xl font-semibold tracking-normal md:text-2xl md:font-bold md:tracking-wide"
+            >
+              {currentTeamName}
+            </h1>
+            <span className="shrink-0 whitespace-nowrap text-xs text-stone-700 md:text-sm">
+              {todayLabel}
+            </span>
           </div>
           <ConnectedMembers
             members={cachedMembersQuery.data ?? []}
             userIds={realtime.userIds}
-            currentUserId={currentUserId}
             connected={realtime.connected}
           />
         </header>
