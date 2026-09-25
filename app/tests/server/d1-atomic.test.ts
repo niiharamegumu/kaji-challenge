@@ -1,138 +1,288 @@
-import { and, count, eq, sql } from "drizzle-orm";
-import { alias } from "drizzle-orm/sqlite-core";
-import { teams } from "../../src/server/infrastructure/schema";
+import { eq, sql } from "drizzle-orm";
+import { teams, tasks } from "../../src/server/infrastructure/schema";
 import { user } from "../../src/server/infrastructure/auth-schema";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { atomic } from "../../src/server/infrastructure/unit-of-work";
 import { createTestDatabase } from "../helpers/d1";
+import { provisionUser } from "../../src/server/application/provision-user";
+import { executeOperation } from "../../src/server/application/operations";
+import { operationSchema, responseSchemas } from "../../src/contracts/operations";
 let connection: Awaited<ReturnType<typeof createTestDatabase>>;
+const userId = crypto.randomUUID(),
+  now = new Date("2026-09-25T00:00:00Z");
+let teamId: string, weeklyId: string, dailyId: string;
+const run = async (operation: string, body?: unknown, params = {}) =>
+  executeOperation(connection.repository, operationSchema.parse({ operation, body, params }), {
+    userId,
+    now,
+    vapidPublicKey: "",
+  });
 beforeAll(async () => {
   connection = await createTestDatabase();
+  await connection.db
+    .insert(user)
+    .values({ id: userId, name: "Atomic", email: "atomic@example.com" });
+  await Promise.all(
+    Array.from({ length: 5 }, () => provisionUser(connection.repository, userId, now)),
+  );
+  teamId = (await connection.repository.ListMembershipsByUserID(userId))[0].TeamID;
+  weeklyId = responseSchemas.postTask.parse(
+    (
+      await run("postTask", {
+        title: "Weekly",
+        type: "weekly",
+        penaltyPoints: 3,
+        requiredCompletionsPerWeek: 3,
+      })
+    ).data,
+  ).id;
+  dailyId = responseSchemas.postTask.parse(
+    (await run("postTask", { title: "Daily", type: "daily", penaltyPoints: 1 })).data,
+  ).id;
 });
 afterAll(async () => {
   await connection?.close();
 });
-const team = (id: string) => ({
-  id,
-  name: "Initial",
-  created_at: new Date().toISOString(),
-  state_revision: "0",
+it("provisions exactly one team under concurrent login", async () => {
+  expect(await connection.db.select().from(teams)).toHaveLength(1);
+  expect(await connection.repository.ListMembershipsByUserID(userId)).toHaveLength(1);
 });
-it("initializes all constraints with no broken foreign keys", async () => {
-  expect((await connection.binding.prepare("PRAGMA foreign_key_check").all()).results).toEqual([]);
+it("rolls back a real Drizzle batch when a later statement fails", async () => {
+  const row = { id: "duplicate", name: "Initial", created_at: now.toISOString() };
   await expect(
-    connection.binding
-      .prepare(
-        "INSERT INTO auth_session(id,token,user_id,expires_at) VALUES ('orphan','orphan','orphan','1970-01-01T00:00:00.001Z')",
-      )
-      .run(),
-  ).rejects.toThrow("FOREIGN KEY constraint failed");
+    connection.db.batch([
+      connection.db.insert(teams).values(row),
+      connection.db.insert(teams).values(row),
+    ]),
+  ).rejects.toThrow();
+  expect(await connection.db.select().from(teams).where(eq(teams.id, row.id))).toEqual([]);
 });
-it("discards the entire D1 batch and global revision on a late constraint failure", async () => {
-  const db = connection.binding;
-  const before = await db.prepare("SELECT revision FROM app_revision").first("revision");
-  await expect(
-    atomic(connection.db, async (unit) => {
-      await unit.insert(teams, team("duplicate"));
-      await unit.insert(teams, team("duplicate"));
+it("applies simultaneous increments up to capacity and decrements down to zero", async () => {
+  await Promise.all(
+    Array.from({ length: 8 }, () =>
+      run(
+        "postTaskCompletion",
+        { targetDate: "2026-09-25", action: "increment" },
+        { taskId: weeklyId },
+      ),
+    ),
+  );
+  expect(
+    await connection.repository.GetTaskCompletionWeeklyEntryCount({
+      TaskID: weeklyId,
+      WeekStart: "2026-09-21",
     }),
-  ).rejects.toThrow("UNIQUE constraint failed");
-  expect(await db.prepare("SELECT id FROM teams WHERE id='duplicate'").first()).toBeNull();
-  expect(await db.prepare("SELECT revision FROM app_revision").first("revision")).toBe(before);
-});
-it("retries simultaneous transactions without losing either update", async () => {
-  const db = connection.binding;
-  await atomic(connection.db, async (unit) => {
-    await unit.insert(teams, team("concurrent"));
-  });
-  let entered = 0;
-  let release!: () => void;
-  const barrier = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  const update = () =>
-    atomic(connection.db, async (unit) => {
-      const rows = await unit.read.select().from(teams).where(eq(teams.id, "concurrent"));
-      entered++;
-      if (entered === 2) release();
-      await barrier;
-      await unit.update(teams, eq(teams.id, "concurrent"), {
-        state_revision: String(BigInt(rows[0].state_revision!) + 1n),
-      });
-    });
-  await Promise.all([update(), update()]);
+  ).toBe(3);
+  await Promise.all(
+    Array.from({ length: 8 }, () =>
+      run(
+        "postTaskCompletion",
+        { targetDate: "2026-09-25", action: "decrement" },
+        { taskId: weeklyId },
+      ),
+    ),
+  );
   expect(
-    await db
-      .prepare("SELECT state_revision FROM teams WHERE id='concurrent'")
-      .first("state_revision"),
-  ).toBe("2");
-  expect(entered).toBe(3);
+    await connection.repository.GetTaskCompletionWeeklyEntryCount({
+      TaskID: weeklyId,
+      WeekStart: "2026-09-21",
+    }),
+  ).toBe(0);
 });
-it("joins and aggregates pending rows, including update and deletion, before commit", async () => {
-  await atomic(connection.db, async (unit) => {
-    await unit.insert(teams, team("pending"));
-    await unit.update(teams, eq(teams.id, "pending"), { name: "Changed" });
-    const other = alias(teams, "other");
-    expect(
-      await unit.read
-        .select({ total: count() })
-        .from(teams)
-        .innerJoin(other, eq(teams.id, other.id))
-        .where(eq(teams.name, "Changed")),
-    ).toEqual([{ total: 1 }]);
-    await unit.remove(teams, eq(teams.id, "pending"));
-    expect(await unit.read.select().from(teams).where(eq(teams.id, "pending"))).toEqual([]);
-  });
+it("simultaneous complete requests never toggle a daily task back", async () => {
+  await Promise.all(
+    Array.from({ length: 3 }, () =>
+      run(
+        "postTaskCompletion",
+        { targetDate: "2026-09-25", action: "complete" },
+        { taskId: dailyId },
+      ),
+    ),
+  );
   expect(
-    await connection.binding.prepare("SELECT * FROM teams WHERE id='pending'").first(),
-  ).toBeNull();
+    await connection.repository.HasTaskCompletionDaily({
+      TaskID: dailyId,
+      TargetDate: "2026-09-25",
+    }),
+  ).toBe(true);
+  await run(
+    "postTaskCompletion",
+    { targetDate: "2026-09-25", action: "incomplete" },
+    { taskId: dailyId },
+  );
+  expect(
+    await connection.repository.HasTaskCompletionDaily({
+      TaskID: dailyId,
+      TargetDate: "2026-09-25",
+    }),
+  ).toBe(false);
+});
+it("updates only submitted task fields during concurrent edits", async () => {
+  await Promise.all([
+    run("patchTask", { title: "Changed" }, { taskId: dailyId }),
+    run("patchTask", { notes: "Note" }, { taskId: dailyId }),
+  ]);
+  expect(await connection.repository.GetTaskByID(dailyId)).toMatchObject({
+    Title: "Changed",
+    Notes: "Note",
+  });
+});
+it("recalculates simultaneous closes without double-counting", async () => {
+  await connection.db.update(tasks).set({ created_at: "2026-09-01T00:00:00Z" });
+  await Promise.all(
+    Array.from({ length: 3 }, () => connection.repository.ClosePeriod(teamId, "day", "2026-09-24")),
+  );
+  expect(
+    await connection.repository.GetMonthlyPenaltySummary({
+      TeamID: teamId,
+      MonthStart: "2026-09-01",
+    }),
+  ).toMatchObject({ DailyPenaltyTotal: 1 });
+  expect(await connection.db.all(sql`PRAGMA foreign_key_check`)).toEqual([]);
+});
+it("keeps SQL-looking values as data", async () => {
+  const name = "O'Reilly ? ); DROP TABLE teams; --";
+  await run("patchTeamCurrent", { name });
+  expect((await connection.repository.ListMembershipsByUserID(userId))[0].TeamName).toBe(name);
 });
 
-it("preserves Drizzle Date/boolean codecs and nulls in staged joins and after commit", async () => {
-  const id = "codec-user";
-  const now = new Date("2026-09-23T03:04:05.678Z");
-  await connection.db.insert(user).values({
-    id,
-    name: "Codec",
-    email: "codec@example.com",
-    emailVerified: true,
-    createdAt: now,
-    updatedAt: now,
-  });
-  await atomic(connection.db, async (unit) => {
-    await unit.update(user, eq(user.id, id), {
-      nickname: "日本語",
-      colorHex: "#123abc",
-      updatedAt: now,
-    });
-    const [staged] = await unit.read.select().from(user).where(eq(user.id, id));
-    expect(staged).toMatchObject({
-      emailVerified: true,
-      createdAt: now,
-      updatedAt: now,
-      nickname: "日本語",
-      colorHex: "#123abc",
-    });
-    // Parameters remain values even when they contain SQL-looking content.
-    const name = "O'Reilly ? $1 ); DROP TABLE teams; --";
-    await unit.insert(teams, { ...team("codec-team"), name });
-    expect(
-      await unit.read
-        .select({ nickname: user.nickname, name: teams.name })
-        .from(user)
-        .innerJoin(teams, and(eq(teams.id, "codec-team"), eq(user.id, id))),
-    ).toEqual([{ nickname: "日本語", name }]);
-    await unit.update(user, eq(user.id, id), { nickname: null });
-    expect((await unit.read.select().from(user).where(eq(user.id, id)))[0].nickname).toBeNull();
-  });
-  expect((await connection.db.select().from(user).where(eq(user.id, id)))[0]).toMatchObject({
-    emailVerified: true,
-    nickname: null,
-    colorHex: "#123abc",
-    updatedAt: now,
-  });
-  const [stored] = await connection.db.all(
-    sql`SELECT email_verified, updated_at FROM auth_user WHERE id=${id}`,
+it("rolls back a completion when recalculating the same batch fails", async () => {
+  await connection.db.run(
+    sql`CREATE TRIGGER reject_summary BEFORE UPDATE ON monthly_penalty_summaries BEGIN SELECT RAISE(ABORT,'fixture'); END`,
   );
-  expect(stored).toEqual({ email_verified: 1, updated_at: now.toISOString() });
+  try {
+    await expect(
+      run(
+        "postTaskCompletion",
+        { targetDate: "2026-09-24", action: "complete" },
+        { taskId: dailyId },
+      ),
+    ).rejects.toThrow();
+    expect(
+      await connection.repository.HasTaskCompletionDaily({
+        TaskID: dailyId,
+        TargetDate: "2026-09-24",
+      }),
+    ).toBe(false);
+  } finally {
+    await connection.db.run(sql`DROP TRIGGER reject_summary`);
+  }
+});
+it("does not shift sort positions when task creation fails", async () => {
+  const before = await connection.repository.ListTasksByTeamID(teamId);
+  await expect(
+    connection.repository.forMember(teamId, userId).CreateTask({
+      ID: dailyId,
+      TeamID: teamId,
+      Title: "Duplicate",
+      Notes: null,
+      Type: "daily",
+      PenaltyPoints: 1,
+      AssigneeUserID: "",
+      RequiredCompletionsPerWeek: 1,
+      SortKey: 100,
+      CreatedAt: now.toISOString(),
+      UpdatedAt: now.toISOString(),
+    }),
+  ).rejects.toThrow();
+  expect(await connection.repository.ListTasksByTeamID(teamId)).toEqual(before);
+});
+it("does not partially reorder a list that gained an item after it was read", async () => {
+  const before = await connection.repository.ListTasksByTeamID(teamId);
+  await expect(
+    connection.repository.forMember(teamId, userId).Reorder({
+      teamId,
+      kind: "tasks",
+      type: "daily",
+      ids: ["removed-id"],
+      now: now.toISOString(),
+    }),
+  ).rejects.toMatchObject({ status: 409 });
+  expect(await connection.repository.ListTasksByTeamID(teamId)).toEqual(before);
+});
+it("allows only one concurrent move and preserves ownership and foreign keys", async () => {
+  const mover = crypto.randomUUID();
+  await connection.db
+    .insert(user)
+    .values({ id: mover, name: "Mover", email: mover + "@example.com" });
+  await provisionUser(connection.repository, mover, now);
+  const from = (await connection.repository.ListMembershipsByUserID(mover))[0].TeamID;
+  const outcomes = await Promise.allSettled(
+    ["Left", "Right"].map((name) =>
+      connection.repository.MoveMember({
+        userId: mover,
+        fromTeamId: from,
+        toTeamId: crypto.randomUUID(),
+        newTeamName: name,
+        now: now.toISOString(),
+      }),
+    ),
+  );
+  expect(outcomes.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+  expect((await connection.repository.ListMembershipsByUserID(mover))[0].Role).toBe("owner");
+  expect(await connection.db.select().from(teams).where(eq(teams.id, from))).toEqual([]);
+  expect(await connection.db.select().from(teams)).toHaveLength(2);
+  expect(await connection.db.all(sql`PRAGMA foreign_key_check`)).toEqual([]);
+});
+it("does not recalculate an already closed month during a repeated close", async () => {
+  await connection.repository.RecalculateMonth({
+    teamId,
+    month: "2026-09",
+    ensureCoverage: true,
+    closeMonth: true,
+  });
+  const saved = await connection.repository.GetMonthlyPenaltySummary({
+    TeamID: teamId,
+    MonthStart: "2026-09-01",
+  });
+  await connection.db.update(tasks).set({ penalty_points: 50 }).where(eq(tasks.id, dailyId));
+  await Promise.all([
+    connection.repository.RecalculateMonth({
+      teamId,
+      month: "2026-09",
+      ensureCoverage: true,
+      closeMonth: true,
+    }),
+    connection.repository.RecalculateMonth({
+      teamId,
+      month: "2026-09",
+      ensureCoverage: true,
+      closeMonth: true,
+    }),
+  ]);
+  expect(
+    await connection.repository.GetMonthlyPenaltySummary({
+      TeamID: teamId,
+      MonthStart: "2026-09-01",
+    }),
+  ).toEqual(saved);
+});
+it("keeps reads free of reminder deletion and summary creation", async () => {
+  const id = crypto.randomUUID();
+  await connection.repository.CreateReminder({
+    ID: id,
+    TeamID: teamId,
+    Title: "Expired",
+    Notes: null,
+    Kind: "one_time",
+    ScheduleType: null,
+    StartDate: "2026-09-01",
+    EndDate: null,
+    CreatedAt: now.toISOString(),
+    UpdatedAt: now.toISOString(),
+  });
+  const definitions = responseSchemas.listReminderDefinitions.parse(
+    (await run("listReminderDefinitions")).data,
+  );
+  expect(definitions.items.some((item) => item.id === id)).toBe(false);
+  const calendar = responseSchemas.listReminders.parse(
+    (await run("listReminders", undefined, { from: "2026-09-01", to: "2026-09-30" })).data,
+  );
+  expect(calendar.days.flatMap((day) => day.items).some((item) => item.reminderId === id)).toBe(
+    false,
+  );
+  expect(await connection.repository.GetReminderByID(id)).toMatchObject({ Title: "Expired" });
+  await run("getPenaltySummaryMonthly", undefined, { month: "2026-12" });
+  await expect(
+    connection.repository.GetMonthlyPenaltySummary({ TeamID: teamId, MonthStart: "2026-12-01" }),
+  ).rejects.toMatchObject({ status: 404 });
 });
