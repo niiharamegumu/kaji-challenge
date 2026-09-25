@@ -6,7 +6,6 @@ export function operationError(error: unknown) {
       status: error.status,
       code: error.code,
       message: error.message,
-      currentState: error.currentState,
     };
 
   // D1/Drizzle can wrap errors. Never return database details or query parameters.
