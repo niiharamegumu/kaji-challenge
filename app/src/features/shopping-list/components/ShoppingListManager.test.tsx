@@ -94,6 +94,9 @@ describe("ShoppingListManager", () => {
           },
         ]}
         isCreateOpen={false}
+        isCreating={false}
+        createFailed={false}
+        isUpdating={false}
         isReordering={false}
         onCloseCreate={() => undefined}
         onFormChange={() => undefined}
@@ -144,6 +147,9 @@ describe("ShoppingListManager", () => {
         form={{ name: "", notes: "" }}
         items={items}
         isCreateOpen={false}
+        isCreating={false}
+        createFailed={false}
+        isUpdating={false}
         isReordering={false}
         onCloseCreate={() => undefined}
         onFormChange={() => undefined}
@@ -173,6 +179,9 @@ describe("ShoppingListManager", () => {
         form={{ name: "", notes: "" }}
         items={items}
         isCreateOpen={false}
+        isCreating={false}
+        createFailed={false}
+        isUpdating={false}
         isReordering
         onCloseCreate={() => undefined}
         onFormChange={() => undefined}
