@@ -1,4 +1,4 @@
-import { cleanup, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -37,8 +37,32 @@ describe("ShoppingListPage", () => {
     resetTestQueryClient();
     resetApiMocks(apiMocks);
     mockListShoppingItems.mockResolvedValue(resolvedData({ items: [] }));
-    mockPostShoppingItem.mockResolvedValue(resolvedData({}));
-    mockPatchShoppingItem.mockResolvedValue(resolvedData({}));
+    mockPostShoppingItem.mockImplementation((payload) =>
+      Promise.resolve(
+        resolvedData({
+          id: "item-created",
+          teamId: "team-1",
+          name: "item",
+          sortKey: 1,
+          createdAt: "2026-02-01T00:00:00Z",
+          updatedAt: "2026-02-01T00:00:00Z",
+          ...payload,
+        }),
+      ),
+    );
+    mockPatchShoppingItem.mockImplementation((id, payload) =>
+      Promise.resolve(
+        resolvedData({
+          teamId: "team-1",
+          name: "item",
+          sortKey: 1,
+          createdAt: "2026-02-01T00:00:00Z",
+          updatedAt: "2026-02-01T00:00:00Z",
+          id,
+          ...payload,
+        }),
+      ),
+    );
     mockDeleteShoppingItem.mockResolvedValue(resolvedData({}));
     mockPostShoppingItemsReorder.mockResolvedValue(resolvedData({ items: [] }));
   });
@@ -120,6 +144,20 @@ describe("ShoppingListPage", () => {
     });
   });
 
+  it("clears the previous create error when reopening the form", async () => {
+    mockPostShoppingItem.mockRejectedValueOnce(new Error("offline"));
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole("button", { name: "追加" }));
+    await user.type(screen.getByLabelText("名前"), "牛乳");
+    await user.click(screen.getByRole("button", { name: "追加する" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("保存できませんでした");
+    await user.click(screen.getByRole("button", { name: "閉じる" }));
+    await user.click(screen.getByRole("button", { name: "追加" }));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("名前")).toHaveValue("牛乳");
+  });
+
   it("updates an item inline", async () => {
     mockListShoppingItems.mockResolvedValue({
       data: {
@@ -189,6 +227,45 @@ describe("ShoppingListPage", () => {
     await waitFor(() => {
       expect(mockDeleteShoppingItem).toHaveBeenCalledWith("item-1");
     });
+  });
+
+  it("prevents duplicate inline saves and keeps the draft when saving fails", async () => {
+    mockListShoppingItems.mockResolvedValue(
+      resolvedData({
+        items: [
+          {
+            id: "item-1",
+            teamId: "team-1",
+            name: "牛乳",
+            notes: null,
+            sortKey: 1,
+            createdAt: "2026-03-01T00:00:00Z",
+            updatedAt: "2026-03-01T00:00:00Z",
+          },
+        ],
+      }),
+    );
+    let reject!: (error: Error) => void;
+    mockPatchShoppingItem.mockImplementationOnce(
+      () =>
+        new Promise((_, no) => {
+          reject = no;
+        }),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole("button", { name: "編集" }));
+    await user.type(screen.getByLabelText("名前"), "追加");
+    await user.click(screen.getByRole("button", { name: "保存" }));
+    const saving = screen.getByRole("button", { name: "保存中…" });
+    expect(saving).toBeDisabled();
+    await user.click(saving);
+    expect(mockPatchShoppingItem).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      reject(new Error("offline"));
+    });
+    expect(screen.getByLabelText("名前")).toHaveValue("牛乳追加");
+    expect(screen.getByRole("button", { name: "保存" })).toBeEnabled();
   });
 
   it("shows boundary error when the list query fails", async () => {
