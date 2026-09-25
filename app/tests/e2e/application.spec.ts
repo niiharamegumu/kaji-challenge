@@ -389,7 +389,16 @@ test("completion responds before a delayed request and rolls back when it fails"
   await expect(card.getByRole("img")).toHaveAttribute("aria-label", "1回目: 未完了");
   await expect(card).toBeEnabled();
   await page.unrouteAll({ behavior: "wait" });
+  // aria-busy=falseは保存開始前にも成立するため、実際の保存応答を待つ。
+  const savedCompletion = page.waitForResponse(
+    (response) =>
+      response.url().includes("/_serverFn/") &&
+      (response.request().postData()?.includes("postTaskCompletion") ?? false),
+  );
   await card.click();
+  const response = await savedCompletion;
+  expect(response.ok()).toBe(true);
+  await response.finished();
   await expect(card).toHaveAttribute("aria-busy", "false");
   await page.reload();
   await expect(card.getByRole("img")).toHaveAttribute("aria-label", "1回目: テストユーザー");
