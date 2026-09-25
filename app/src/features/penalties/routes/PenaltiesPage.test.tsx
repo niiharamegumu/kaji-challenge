@@ -95,7 +95,19 @@ describe("PenaltiesPage", () => {
         ],
       },
     });
-    mockPatchPenaltyRule.mockResolvedValue({ data: {} });
+    mockPatchPenaltyRule.mockImplementation((id, payload) =>
+      Promise.resolve({
+        data: {
+          teamId: "team-1",
+          name: "rule",
+          threshold: 10,
+          createdAt: "2026-02-01T00:00:00Z",
+          updatedAt: "2026-02-01T00:00:00Z",
+          id,
+          ...payload,
+        },
+      }),
+    );
     const user = userEvent.setup();
 
     renderPenaltiesPage();
@@ -241,7 +253,19 @@ describe("PenaltiesPage", () => {
   });
 
   it("resets penalty rule form fields after creating rule", async () => {
-    mockPostPenaltyRule.mockResolvedValue({ data: {} });
+    mockPostPenaltyRule.mockImplementation((payload) =>
+      Promise.resolve({
+        data: {
+          id: "rule-created",
+          teamId: "team-1",
+          name: "rule",
+          threshold: 10,
+          createdAt: "2026-02-01T00:00:00Z",
+          updatedAt: "2026-02-01T00:00:00Z",
+          ...payload,
+        },
+      }),
+    );
     const user = userEvent.setup();
 
     renderPenaltiesPage();
