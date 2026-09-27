@@ -7,10 +7,10 @@
 - Application/DB: 認可、チーム越境、競合とrollback、締めの冪等性、認証失効・セッション数を使い捨てのローカルD1で検証します。
 - API契約: Zod入出力・DTOを正本とし、意図を指定した完了操作と、revisionを含まないtransport/adapterを確認します。
 - 通信: 所属変更・ログアウト時の古い通信の破棄、更新失敗時の再取得、オフライン更新の自動再送抑止を確認します。
-- 操作フィードバック: 遅延中の完了・購入済み表示、失敗した操作だけの復元、週次連続3タップ、フォームの入力保持を確認します。
+- 操作フィードバック: 遅延中の家事・ToDoの完了表示、失敗した操作だけの復元、週次連続3タップ、フォームの入力保持を確認します。
 - Transport/DB: 入力不正・未認証・異なるOriginを拒否します。用途別D1 batchの制約違反は全体rollbackします。出力DTO検証は保存後であるため、検証失敗時もcommit済みデータは残ることを明示的に検証します。
 - リアルタイム: 認証済みユーザーからのチーム選択、Origin拒否、失効・期限切れ・脱退接続への配信停止、複数タブの重複排除、attachmentからのインスタンス復元、未検証接続への配信拒否、attachment不正・復元失敗を検証します。後者はHibernation APIの契約を模した単体テストであり、実Cloudflareの休止スケジューリングを再現したものではありません。
-- 接続UI: 切断時の古いpresence破棄・メンバーの常時表示・接続確認中への切替、再接続・Query再取得、mutation中の通知集約、画面遷移での接続維持を検証します。実WorkersのE2Eで2ユーザー間の完了/取消・購入済み、アイコンの接続中/未接続切替とチーム分離を確認します。
+- 接続UI: 切断時の古いpresence破棄・メンバーの常時表示・接続確認中への切替、再接続・Query再取得、mutation中の通知集約、画面遷移での接続維持を検証します。実WorkersのE2Eで2ユーザー間の家事完了/取消・ToDo完了、アイコンの接続中/未接続切替とチーム分離を確認します。
 - ブラウザー: Workers previewとローカルD1を使い、desktop/mobileで画面遷移、保存、ドラッグ、戻る操作、PWA offline shellを確認します。
 - 秘密情報: `.gitignore` の実Git判定、認証ログの機密値抑止、短いsession secret・非ローカルHTTP originの拒否を検証します。依存関係はCIの `bun audit --audit-level moderate` で確認します。ignoreのテストは、既に追跡された秘密値の検出や履歴スキャンを代替しません。
 - OAuth保存: Better Authの初回/再ログインとrefresh経路でaccess/refresh tokenの暗号化・復号、ID token非保存を実DBで確認します。Googleによる署名検証は別の確認範囲です。
@@ -61,4 +61,8 @@ Git除外には環境ファイル・状態・DB・鍵・HAR・SQLダンプを含
 
 `tests/e2e/application.spec.ts` はUTC・Los Angeles・Aucklandのブラウザーで、UTCと日本で日付・月が異なる時刻のヘッダー・集計月・カレンダーの今日とセルを確認する。日付utilityと招待期限のテストは `TZ=UTC` / `TZ=America/Los_Angeles` / `TZ=Pacific/Auckland` を付けたVitestでも実行できる。これはテスト時の環境変更で、配備にTZ環境変数を要求するものではない。
 
-`user-schema.test.ts` は0001→0002→0003→0004でrevision列/テーブルのみ撤去し、業務データを保持すること、認証日時・nullable期限・Push配信日時のISO変換とミリ秒精度を検証する。セッション期限での絞り込み、期限切れOAuth stateの削除、rate limitの加算・429・期間経過後の解除も実Better Auth/D1で確認する。`push.test.ts` はISO形式のlease比較・再取得・成功後再送抑止を検証する。
+`user-schema.test.ts` は0001→0002→0003→0004でrevision列/テーブルを撤去し、0005でToDoへ移行し、業務データを保持すること、認証日時・nullable期限・Push配信日時のISO変換とミリ秒精度を検証する。セッション期限での絞り込み、期限切れOAuth stateの削除、rate limitの加算・429・期間経過後の解除も実Better Auth/D1で確認する。`push.test.ts` はISO形式のlease比較・再取得・成功後再送抑止を検証する。
+
+## ToDo移行とカテゴリー
+
+`tests/server/todos.test.ts`は旧買い物テーブルからのデータ保持・テーブル数不変・既存項目の未分類と空のカテゴリー一覧、カテゴリーの自由入力・0件保持・削除時の未分類化、完了時の物理削除、チーム分離、並行登録、失敗時のbatch rollback、入力制限を実D1で検証する。ToDo画面テストでは候補入力、絞り込み、カテゴリーの追加・削除と保存失敗時の入力保持を確認する。E2Eでは「その他」からカテゴリー管理への遷移、ToDoへ戻った際の反映、スマートフォンでのフィルター横スクロールとページ全体に横はみ出しがないことを確認する。
