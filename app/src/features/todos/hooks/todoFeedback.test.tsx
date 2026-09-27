@@ -56,9 +56,11 @@ function setup() {
     updatedAt: "2026-01-01T00:00:00Z",
   }));
   client.setQueryData(queryKeys.todoItems, items);
-  client.setQueryData(queryKeys.todoCategories, ["登録済み"]);
+  client.setQueryData(queryKeys.todoCategories, [null, "登録済み"]);
   api.load.mockReset().mockReturnValue(new Promise(() => {}));
-  api.categories.mockReset().mockResolvedValue({ data: { categories: ["登録済み", "新規"] } });
+  api.categories
+    .mockReset()
+    .mockResolvedValue({ data: { categories: [null, "登録済み", "新規"] } });
   const status = vi.fn();
   render(
     <QueryClientProvider client={client}>
