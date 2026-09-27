@@ -71,6 +71,10 @@ export function TodoPage() {
         submitDisabled={form.name.trim().length === 0 || categoriesQuery.data === undefined}
         onOpen={() => {
           createItem.reset();
+          setForm((previous) => ({
+            ...previous,
+            categoryId: selection.kind === "category" ? selection.id : "",
+          }));
           setIsCreateOpen(true);
         }}
         onClose={() => setIsCreateOpen(false)}
