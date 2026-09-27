@@ -81,7 +81,7 @@ describe("ToDo categories and team boundaries", () => {
     expect(item.category).toBe("買い物リスト");
     await run("postTodoCategory", { name: "買い物リスト" });
     await run("deleteTodoItem", undefined, { itemId: item.id });
-    expect(await run("listTodoCategories")).toEqual({ categories: ["買い物リスト"] });
+    expect(await run("listTodoCategories")).toEqual({ categories: [null, "買い物リスト"] });
     expect(
       (await connection.query(sql`SELECT id FROM todo_items WHERE id=${item.id}`)).rows,
     ).toEqual([]);
@@ -118,15 +118,15 @@ describe("ToDo categories and team boundaries", () => {
       Category: category,
     });
     expect(await run("listTodoCategories", undefined, {}, outsider)).toEqual({
-      categories: [category],
+      categories: [null, category],
     });
-    const ownCategories = (await run("listTodoCategories")) as { categories: string[] };
+    const ownCategories = (await run("listTodoCategories")) as { categories: (string | null)[] };
     expect(ownCategories.categories).not.toContain(category);
     expect(ownCategories.categories).not.toContain("侵入");
   });
   it("keeps concurrent category registrations without duplicates or lost updates", async () => {
     await Promise.all(["同時A", "同時B", "同時A"].map((name) => run("postTodoCategory", { name })));
-    const { categories } = (await run("listTodoCategories")) as { categories: string[] };
+    const { categories } = (await run("listTodoCategories")) as { categories: (string | null)[] };
     expect(categories.filter((name) => name === "同時A")).toHaveLength(1);
     expect(categories).toContain("同時B");
   });
@@ -145,7 +145,7 @@ describe("ToDo categories and team boundaries", () => {
         UpdatedAt: now.toISOString(),
       }),
     ).rejects.toThrow();
-    const { categories } = (await run("listTodoCategories")) as { categories: string[] };
+    const { categories } = (await run("listTodoCategories")) as { categories: (string | null)[] };
     expect(categories).not.toContain("rollback-only");
     expect(await member.GetTodoItemByID(item.id)).toMatchObject({
       Name: "元の項目",
