@@ -15,9 +15,10 @@ import { Route as AppCalendarRouteImport } from './routes/_app.calendar'
 import { Route as AppInvitesRouteImport } from './routes/_app.invites'
 import { Route as AppPenaltiesRouteImport } from './routes/_app.penalties'
 import { Route as AppSettingsRouteImport } from './routes/_app.settings'
-import { Route as AppShoppingListRouteImport } from './routes/_app.shopping-list'
 import { Route as AppSummaryRouteImport } from './routes/_app.summary'
 import { Route as AppTasksRouteImport } from './routes/_app.tasks'
+import { Route as AppTodoCategoriesRouteImport } from './routes/_app.todo-categories'
+import { Route as AppTodosRouteImport } from './routes/_app.todos'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 
 const AppRoute = AppRouteImport.update({
@@ -49,11 +50,6 @@ const AppSettingsRoute = AppSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AppRoute,
 } as any)
-const AppShoppingListRoute = AppShoppingListRouteImport.update({
-  id: '/shopping-list',
-  path: '/shopping-list',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppSummaryRoute = AppSummaryRouteImport.update({
   id: '/summary',
   path: '/summary',
@@ -62,6 +58,16 @@ const AppSummaryRoute = AppSummaryRouteImport.update({
 const AppTasksRoute = AppTasksRouteImport.update({
   id: '/tasks',
   path: '/tasks',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppTodoCategoriesRoute = AppTodoCategoriesRouteImport.update({
+  id: '/todo-categories',
+  path: '/todo-categories',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppTodosRoute = AppTodosRouteImport.update({
+  id: '/todos',
+  path: '/todos',
   getParentRoute: () => AppRoute,
 } as any)
 const AuthCallbackRoute = AuthCallbackRouteImport.update({
@@ -76,9 +82,10 @@ export interface FileRoutesByFullPath {
   '/invites': typeof AppInvitesRoute
   '/penalties': typeof AppPenaltiesRoute
   '/settings': typeof AppSettingsRoute
-  '/shopping-list': typeof AppShoppingListRoute
   '/summary': typeof AppSummaryRoute
   '/tasks': typeof AppTasksRoute
+  '/todo-categories': typeof AppTodoCategoriesRoute
+  '/todos': typeof AppTodosRoute
   '/auth/callback': typeof AuthCallbackRoute
 }
 export interface FileRoutesByTo {
@@ -86,9 +93,10 @@ export interface FileRoutesByTo {
   '/invites': typeof AppInvitesRoute
   '/penalties': typeof AppPenaltiesRoute
   '/settings': typeof AppSettingsRoute
-  '/shopping-list': typeof AppShoppingListRoute
   '/summary': typeof AppSummaryRoute
   '/tasks': typeof AppTasksRoute
+  '/todo-categories': typeof AppTodoCategoriesRoute
+  '/todos': typeof AppTodosRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/': typeof AppIndexRoute
 }
@@ -99,9 +107,10 @@ export interface FileRoutesById {
   '/_app/invites': typeof AppInvitesRoute
   '/_app/penalties': typeof AppPenaltiesRoute
   '/_app/settings': typeof AppSettingsRoute
-  '/_app/shopping-list': typeof AppShoppingListRoute
   '/_app/summary': typeof AppSummaryRoute
   '/_app/tasks': typeof AppTasksRoute
+  '/_app/todo-categories': typeof AppTodoCategoriesRoute
+  '/_app/todos': typeof AppTodosRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/_app/': typeof AppIndexRoute
 }
@@ -113,9 +122,10 @@ export interface FileRouteTypes {
     | '/invites'
     | '/penalties'
     | '/settings'
-    | '/shopping-list'
     | '/summary'
     | '/tasks'
+    | '/todo-categories'
+    | '/todos'
     | '/auth/callback'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -123,9 +133,10 @@ export interface FileRouteTypes {
     | '/invites'
     | '/penalties'
     | '/settings'
-    | '/shopping-list'
     | '/summary'
     | '/tasks'
+    | '/todo-categories'
+    | '/todos'
     | '/auth/callback'
     | '/'
   id:
@@ -135,9 +146,10 @@ export interface FileRouteTypes {
     | '/_app/invites'
     | '/_app/penalties'
     | '/_app/settings'
-    | '/_app/shopping-list'
     | '/_app/summary'
     | '/_app/tasks'
+    | '/_app/todo-categories'
+    | '/_app/todos'
     | '/auth/callback'
     | '/_app/'
   fileRoutesById: FileRoutesById
@@ -191,13 +203,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/shopping-list': {
-      id: '/_app/shopping-list'
-      path: '/shopping-list'
-      fullPath: '/shopping-list'
-      preLoaderRoute: typeof AppShoppingListRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/summary': {
       id: '/_app/summary'
       path: '/summary'
@@ -210,6 +215,20 @@ declare module '@tanstack/react-router' {
       path: '/tasks'
       fullPath: '/tasks'
       preLoaderRoute: typeof AppTasksRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/todo-categories': {
+      id: '/_app/todo-categories'
+      path: '/todo-categories'
+      fullPath: '/todo-categories'
+      preLoaderRoute: typeof AppTodoCategoriesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/todos': {
+      id: '/_app/todos'
+      path: '/todos'
+      fullPath: '/todos'
+      preLoaderRoute: typeof AppTodosRouteImport
       parentRoute: typeof AppRoute
     }
     '/auth/callback': {
@@ -227,9 +246,10 @@ interface AppRouteChildren {
   AppInvitesRoute: typeof AppInvitesRoute
   AppPenaltiesRoute: typeof AppPenaltiesRoute
   AppSettingsRoute: typeof AppSettingsRoute
-  AppShoppingListRoute: typeof AppShoppingListRoute
   AppSummaryRoute: typeof AppSummaryRoute
   AppTasksRoute: typeof AppTasksRoute
+  AppTodoCategoriesRoute: typeof AppTodoCategoriesRoute
+  AppTodosRoute: typeof AppTodosRoute
   AppIndexRoute: typeof AppIndexRoute
 }
 
@@ -238,9 +258,10 @@ const AppRouteChildren: AppRouteChildren = {
   AppInvitesRoute: AppInvitesRoute,
   AppPenaltiesRoute: AppPenaltiesRoute,
   AppSettingsRoute: AppSettingsRoute,
-  AppShoppingListRoute: AppShoppingListRoute,
   AppSummaryRoute: AppSummaryRoute,
   AppTasksRoute: AppTasksRoute,
+  AppTodoCategoriesRoute: AppTodoCategoriesRoute,
+  AppTodosRoute: AppTodosRoute,
   AppIndexRoute: AppIndexRoute,
 }
 
