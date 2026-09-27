@@ -1,3 +1,4 @@
+import { TodoCategoryQueryStatus } from "./TodoCategoryQueryStatus";
 import { useState } from "react";
 import { useTodoCategoryMutations, useTodoCategoriesQuery } from "../hooks/useTodoCategories";
 
@@ -11,15 +12,9 @@ export function TodoCategoryManager({ setStatus }: { setStatus: (message: string
       <p className="mt-3 text-xs text-stone-600">
         0件でもカテゴリーは残ります。カテゴリーを削除してもToDoは残り、未分類になります。
       </p>
-      {query.isPending ? <p className="mt-2 text-sm">読み込み中…</p> : null}
-      {query.isError ? (
-        <p role="alert" className="mt-2 text-sm text-red-700">
-          カテゴリーを読み込めませんでした。
-          <button type="button" className="underline" onClick={() => void query.refetch()}>
-            再試行
-          </button>
-        </p>
-      ) : null}
+      <div className="mt-2">
+        <TodoCategoryQueryStatus query={query} />
+      </div>
       <form
         className="mt-3"
         onSubmit={async (event) => {
