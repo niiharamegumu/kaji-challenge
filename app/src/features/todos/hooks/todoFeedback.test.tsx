@@ -1,3 +1,7 @@
+import {
+  categoryOrderFixture as order,
+  categoryIdFixture as cid,
+} from "../../../test/todoCategories";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -49,18 +53,18 @@ function setup() {
   const items: TodoItem[] = ["A", "B"].map((id) => ({
     id,
     name: id,
-    category: null,
+    categoryId: null,
     teamId: "team",
     sortKey: 1,
     createdAt: "2026-01-01T00:00:00Z",
     updatedAt: "2026-01-01T00:00:00Z",
   }));
   client.setQueryData(queryKeys.todoItems, items);
-  client.setQueryData(queryKeys.todoCategories, [null, "登録済み"]);
+  client.setQueryData(queryKeys.todoCategories, order(null, "登録済み"));
   api.load.mockReset().mockReturnValue(new Promise(() => {}));
   api.categories
     .mockReset()
-    .mockResolvedValue({ data: { categories: [null, "登録済み", "新規"] } });
+    .mockResolvedValue({ data: { categories: order(null, "登録済み", "新規") } });
   const status = vi.fn();
   render(
     <QueryClientProvider client={client}>
@@ -109,26 +113,32 @@ it("uses the saved response for edits without another list request", async () =>
   expect(api.categories).not.toHaveBeenCalled();
 });
 
-it.each([
-  ["編集を保存", null, 0],
-  ["編集を保存", "登録済み", 0],
-  ["編集を保存", "新規", 1],
-  ["新規保存", null, 0],
-  ["新規保存", "登録済み", 0],
-  ["新規保存", "新規", 1],
-] as const)(
-  "refreshes category options only for a new category: %s / %s",
-  async (button, category, requests) => {
+it.each(["編集を保存", "新規保存"])(
+  "saving an existing category does not refetch the registry: %s",
+  async (button) => {
     const { items, user, status } = setup();
-    const saved = { ...items[0], name: "保存済み", category };
+    const saved = { ...items[0], name: "保存済み", categoryId: cid("登録済み") };
     api.update.mockResolvedValueOnce({ data: saved });
     api.create.mockResolvedValueOnce({ data: saved });
     await user.click(screen.getByRole("button", { name: button }));
     expect(await screen.findByRole("button", { name: "保存済み" })).toBeVisible();
     await waitFor(() => expect(status).toHaveBeenCalled());
-    expect(api.categories).toHaveBeenCalledTimes(requests);
+    expect(api.categories).not.toHaveBeenCalled();
   },
 );
+
+it("refreshes category choices after a stale category conflict without changing the ToDo", async () => {
+  const { user, client, items, status } = setup();
+  api.update.mockRejectedValueOnce({
+    name: "ApiRequestError",
+    status: 409,
+    message: "カテゴリーが変更されました",
+  });
+  await user.click(screen.getByRole("button", { name: "編集を保存" }));
+  await waitFor(() => expect(api.categories).toHaveBeenCalledTimes(1));
+  expect(client.getQueryData(queryKeys.todoItems)).toEqual(items);
+  expect(status).toHaveBeenCalledWith(expect.stringContaining("失敗"));
+});
 
 afterEach(() => {
   cleanup();
