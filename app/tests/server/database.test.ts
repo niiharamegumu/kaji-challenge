@@ -75,11 +75,11 @@ describe("D1 and business operations", () => {
       executeOperation(connection.repository, input, { userId: secondId, now, vapidPublicKey: "" }),
     ).rejects.toMatchObject({ status: 404 });
   });
-  it("keeps shopping, reminder and penalty contracts", async () => {
-    const item = (await run("postShoppingItem", { name: "牛乳" })) as { id: string };
-    await run("patchShoppingItem", { notes: "2本" }, { itemId: item.id });
-    await run("listShoppingItems");
-    await run("postShoppingItemsReorder", { itemIds: [item.id] });
+  it("keeps todo, reminder and penalty contracts", async () => {
+    const item = (await run("postTodoItem", { name: "牛乳" })) as { id: string };
+    await run("patchTodoItem", { notes: "2本" }, { itemId: item.id });
+    await run("listTodoItems");
+    await run("postTodoItemsReorder", { itemIds: [item.id] });
     const reminder = (await run("postReminder", {
       title: "資源ごみ",
       kind: "recurring",
@@ -108,7 +108,7 @@ describe("D1 and business operations", () => {
     await run("listPenaltyRules");
     await run("deletePenaltyRule", undefined, { ruleId: rule.id });
     await run("deleteReminder", undefined, { reminderId: reminder.id });
-    await run("deleteShoppingItem", undefined, { itemId: item.id });
+    await run("deleteTodoItem", undefined, { itemId: item.id });
   });
   it("commits closing periods once, then resumes without double counting", async () => {
     await connection.query(
