@@ -177,6 +177,11 @@ function SortableTodoItem({
     transition: isDragging ? undefined : transition,
   };
 
+  const categoryLabel =
+    item.categoryId === null
+      ? "未分類"
+      : (categoriesQuery.data?.find((category) => category?.id === item.categoryId)?.name ??
+        (categoriesQuery.isPending ? "カテゴリー取得中…" : "カテゴリー不明"));
   const canSave = editState.name.trim().length > 0 && categoriesQuery.data !== undefined;
   const dragProps = isEditing
     ? {}
@@ -232,9 +237,9 @@ function SortableTodoItem({
             <div className="mt-0.5 flex min-w-0">
               <span
                 className="max-w-full truncate rounded bg-stone-100 px-1.5 py-0.5 text-[10px] leading-tight text-stone-600 sm:text-[11px]"
-                title={item.category ?? "未分類"}
+                title={categoryLabel}
               >
-                {item.category ?? "未分類"}
+                {categoryLabel}
               </span>
             </div>
             <div className="mt-1 flex items-center gap-1.5">
@@ -313,8 +318,8 @@ export function TodoItemForm({
       />
       <TodoCategoryInput
         categoriesQuery={categoriesQuery}
-        value={form.category}
-        onChange={(category) => onFormChange((prev) => ({ ...prev, category }))}
+        value={form.categoryId}
+        onChange={(category) => onFormChange((prev) => ({ ...prev, categoryId: category }))}
       />
     </div>
   );
@@ -397,7 +402,7 @@ export function TodoItemsSection({
     if (isUpdating) return;
     setEditingItemId(item.id);
     setEditState({
-      category: item.category ?? "",
+      categoryId: item.categoryId ?? "",
       name: item.name,
       notes: item.notes ?? "",
     });
@@ -410,7 +415,7 @@ export function TodoItemsSection({
 
   const saveEdit = async (itemId: string) => {
     const payload: UpdateTodoItemRequest = {
-      category: editState.category.trim() || null,
+      categoryId: editState.categoryId || null,
       name: editState.name.trim(),
       notes: editState.notes.trim() === "" ? null : editState.notes.trim(),
     };
