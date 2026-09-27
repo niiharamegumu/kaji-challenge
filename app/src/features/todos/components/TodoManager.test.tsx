@@ -1,0 +1,206 @@
+import { act, cleanup, render, screen, within } from "@testing-library/react";
+import type { ReactNode } from "react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { TodoManager } from "./TodoManager";
+
+type MockDragEndEvent = {
+  active: { id: string };
+  over: { id: string } | null;
+};
+
+type MockDndContextProps = {
+  children: ReactNode;
+  onDragEnd?: (event: MockDragEndEvent) => void;
+};
+
+type MockChildrenProps = {
+  children: ReactNode;
+};
+
+let latestOnDragEnd: ((event: MockDragEndEvent) => void) | null = null;
+
+afterEach(() => {
+  cleanup();
+});
+
+vi.mock("@dnd-kit/core", async () => {
+  const React = await vi.importActual<typeof import("react")>("react");
+  return {
+    DndContext: ({ children, onDragEnd }: MockDndContextProps) => {
+      latestOnDragEnd = onDragEnd ?? null;
+      return React.createElement("div", null, children);
+    },
+    KeyboardSensor: class {},
+    PointerSensor: class {},
+    TouchSensor: class {},
+    closestCenter: vi.fn(),
+    useSensor: vi.fn((sensor: unknown, options?: unknown) => ({
+      sensor,
+      options,
+    })),
+    useSensors: vi.fn((...sensors: unknown[]) => sensors),
+  };
+});
+
+vi.mock("@dnd-kit/sortable", async () => {
+  const React = await vi.importActual<typeof import("react")>("react");
+  return {
+    SortableContext: ({ children }: MockChildrenProps) =>
+      React.createElement(React.Fragment, null, children),
+    arrayMove: <T,>(items: T[], oldIndex: number, newIndex: number) => {
+      const nextItems = [...items];
+      const [moved] = nextItems.splice(oldIndex, 1);
+      nextItems.splice(newIndex, 0, moved);
+      return nextItems;
+    },
+    defaultAnimateLayoutChanges: vi.fn(() => true),
+    sortableKeyboardCoordinates: vi.fn(),
+    useSortable: vi.fn(() => ({
+      attributes: {},
+      listeners: {},
+      setNodeRef: vi.fn(),
+      transform: null,
+      transition: null,
+      isDragging: false,
+    })),
+    verticalListSortingStrategy: vi.fn(),
+  };
+});
+
+vi.mock("@dnd-kit/utilities", () => ({
+  CSS: {
+    Transform: {
+      toString: () => undefined,
+    },
+  },
+}));
+
+describe("TodoManager", () => {
+  it("linkifies only http and https URLs in notes", () => {
+    render(
+      <TodoManager
+        items={[
+          {
+            id: "item-1",
+            category: null,
+            teamId: "team-1",
+            name: "牛乳",
+            notes:
+              "公式 https://example.com/path?q=1 と <script>alert(1)</script> と javascript:alert(1)",
+            sortKey: 1,
+            createdAt: "2026-03-01T00:00:00Z",
+            updatedAt: "2026-03-01T00:00:00Z",
+          },
+        ]}
+        isUpdating={false}
+        isReordering={false}
+        onDelete={() => undefined}
+        onReorder={() => undefined}
+        onUpdate={async () => undefined}
+      />,
+    );
+
+    const link = screen.getByRole("link", {
+      name: "https://example.com/path?q=1",
+    });
+    expect(link).toHaveAttribute("href", "https://example.com/path?q=1");
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noreferrer");
+    expect(screen.getByText("<script>alert(1)</script>", { exact: false })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "javascript:alert(1)" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "牛乳 をドラッグして並び替え" })).toBeInTheDocument();
+  });
+
+  it("reorders items from the drag-and-drop path", () => {
+    const onReorder = vi.fn();
+    const items = [
+      {
+        id: "item-1",
+        category: null,
+        teamId: "team-1",
+        name: "牛乳",
+        notes: null,
+        sortKey: 1,
+        createdAt: "2026-03-01T00:00:00Z",
+        updatedAt: "2026-03-01T00:00:00Z",
+      },
+      {
+        id: "item-2",
+        category: null,
+        teamId: "team-1",
+        name: "卵",
+        notes: null,
+        sortKey: 2,
+        createdAt: "2026-03-01T00:00:00Z",
+        updatedAt: "2026-03-01T00:00:00Z",
+      },
+    ];
+
+    const { rerender } = render(
+      <TodoManager
+        items={items}
+        isUpdating={false}
+        isReordering={false}
+        onDelete={() => undefined}
+        onReorder={onReorder}
+        onUpdate={async () => undefined}
+      />,
+    );
+
+    if (latestOnDragEnd == null) {
+      throw new Error("drag handler was not registered");
+    }
+
+    act(() => {
+      latestOnDragEnd?.({
+        active: { id: "item-2" },
+        over: { id: "item-1" },
+      });
+    });
+
+    expect(onReorder).toHaveBeenCalledWith(["item-2", "item-1"]);
+
+    rerender(
+      <TodoManager
+        items={items}
+        isUpdating={false}
+        isReordering
+        onDelete={() => undefined}
+        onReorder={onReorder}
+        onUpdate={async () => undefined}
+      />,
+    );
+
+    const currentTodoSection = screen
+      .getByRole("heading", { name: "現在のToDo" })
+      .closest("article");
+    if (currentTodoSection == null) {
+      throw new Error("current todo section not found");
+    }
+    const list = within(currentTodoSection).getByRole("list");
+    const reorderedItems = within(list).getAllByRole("listitem");
+    expect(within(reorderedItems[0]).getByText("卵")).toBeInTheDocument();
+    expect(within(reorderedItems[1]).getByText("牛乳")).toBeInTheDocument();
+
+    expect(screen.getByRole("button", { name: "牛乳 をドラッグして並び替え" })).toBeDisabled();
+    act(() => {
+      latestOnDragEnd?.({ active: { id: "item-1" }, over: { id: "item-2" } });
+    });
+    expect(onReorder).toHaveBeenCalledTimes(1);
+
+    // Filtering during a save must not leave items from the previous filter visible.
+    rerender(
+      <TodoManager
+        items={[items[0]]}
+        isUpdating={false}
+        isReordering
+        onDelete={() => undefined}
+        onReorder={onReorder}
+        onUpdate={async () => undefined}
+      />,
+    );
+    expect(screen.getByText("牛乳")).toBeVisible();
+    expect(screen.queryByText("卵")).not.toBeInTheDocument();
+  });
+});
