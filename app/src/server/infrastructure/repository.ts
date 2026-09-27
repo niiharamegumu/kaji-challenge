@@ -629,12 +629,44 @@ export class D1Repository implements P.Repository {
         ),
       );
   }
-  async ListTodoCategories(teamId: string): Promise<string[]> {
+  async ListTodoCategories(teamId: string): Promise<(string | null)[]> {
     const rows = await this.db
-      .select({ categories: teams.todo_categories })
+      .select({
+        categories: teams.todo_categories,
+        unclassifiedSortKey: teams.todo_unclassified_sort_key,
+      })
       .from(teams)
       .where(and(eq(teams.id, teamId), this.access()));
-    return required(rows, "ListTodoCategories").categories;
+    const { categories, unclassifiedSortKey } = required(rows, "ListTodoCategories");
+    return [
+      ...categories.slice(0, unclassifiedSortKey),
+      null,
+      ...categories.slice(unclassifiedSortKey),
+    ];
+  }
+  async ReorderTodoCategories(teamId: string, categories: (string | null)[]): Promise<boolean> {
+    const names = categories.filter((name) => name !== null);
+    // Check the complete current set in the UPDATE itself, so a concurrent add/delete
+    // cannot be lost or resurrected by an older drag operation.
+    const rows = await this.db
+      .update(teams)
+      .set({
+        todo_categories: names,
+        todo_unclassified_sort_key: categories.indexOf(null),
+      })
+      .where(
+        and(
+          eq(teams.id, teamId),
+          this.access(),
+          sql`json_array_length(${teams.todo_categories}) = ${names.length}`,
+          sql`NOT EXISTS (
+        SELECT 1 FROM json_each(${teams.todo_categories}) AS current
+        WHERE NOT EXISTS (SELECT 1 FROM json_each(${JSON.stringify(names)}) AS requested WHERE requested.value = current.value)
+      )`,
+        ),
+      )
+      .returning({ id: teams.id });
+    return rows.length === 1;
   }
   async CreateTodoCategory(teamId: string, name: string): Promise<void> {
     await this.registerTodoCategory(teamId, name);
@@ -644,7 +676,13 @@ export class D1Repository implements P.Repository {
       this.db
         .update(teams)
         .set({
-          todo_categories: sql`(SELECT json_group_array(value) FROM json_each(${teams.todo_categories}) WHERE value <> ${name})`,
+          todo_categories: sql`(SELECT json_group_array(value) FROM (
+            SELECT value FROM json_each(${teams.todo_categories}) WHERE value <> ${name} ORDER BY key
+          ))`,
+          todo_unclassified_sort_key: sql`${teams.todo_unclassified_sort_key} - (
+            SELECT COUNT(*) FROM json_each(${teams.todo_categories})
+            WHERE value = ${name} AND key < ${teams.todo_unclassified_sort_key}
+          )`,
         })
         .where(and(eq(teams.id, teamId), this.access())),
       this.db
@@ -924,7 +962,7 @@ export class D1Repository implements P.Repository {
   }
   async ProvisionUser(userId: string, teamId: string, name: string, now: string): Promise<void> {
     await this.db.batch([
-      this.db.insert(teams).select(sql`SELECT ${teamId},${name},${now},'[]'
+      this.db.insert(teams).select(sql`SELECT ${teamId},${name},${now},'[]',0
         WHERE NOT EXISTS(SELECT 1 FROM team_members WHERE user_id=${userId})`),
       this.db.insert(teamMembers).select(sql`SELECT ${teamId},${userId},'owner',${now}
         WHERE EXISTS(SELECT 1 FROM teams WHERE id=${teamId}) AND NOT EXISTS(SELECT 1 FROM team_members WHERE user_id=${userId})`),
@@ -947,7 +985,7 @@ export class D1Repository implements P.Repository {
       this.db
         .insert(teams)
         .select(
-          sql`SELECT ${arg.toTeamId},${arg.newTeamName ?? ""},${arg.now},'[]' WHERE ${!arg.inviteCode} AND ${valid}`,
+          sql`SELECT ${arg.toTeamId},${arg.newTeamName ?? ""},${arg.now},'[]',0 WHERE ${!arg.inviteCode} AND ${valid}`,
         ),
       this.db
         .update(tasks)
