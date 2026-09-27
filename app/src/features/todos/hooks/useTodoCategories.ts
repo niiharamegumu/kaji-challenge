@@ -15,6 +15,11 @@ export function useTodoCategoriesQuery() {
   });
 }
 
+export type TodoCategoriesQuery = Pick<
+  ReturnType<typeof useTodoCategoriesQuery>,
+  "data" | "isPending" | "isError" | "refetch"
+>;
+
 export function useTodoCategoryMutations(setStatus: (message: string) => void) {
   const client = useQueryClient();
   const createCategory = useMutation({
