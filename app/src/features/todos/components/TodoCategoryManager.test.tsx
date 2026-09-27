@@ -1,3 +1,7 @@
+import {
+  categoryOrderFixture as order,
+  categoryIdFixture as cid,
+} from "../../../test/todoCategories";
 import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
@@ -30,13 +34,13 @@ const drag = (from: string, to: string | null) =>
   act(() => drop({ active: { id: from }, over: to === null ? null : { id: to } }));
 beforeEach(() => {
   resetTestQueryClient();
-  api.list.mockReset().mockResolvedValue({ data: { categories: [null, "買い物", "仕事"] } });
+  api.list.mockReset().mockResolvedValue({ data: { categories: order(null, "買い物", "仕事") } });
   api.reorder.mockReset();
 });
 afterEach(cleanup);
 
 it("shows the virtual unclassified row without a delete action, including zero registered categories", async () => {
-  api.list.mockResolvedValue({ data: { categories: [null] } });
+  api.list.mockResolvedValue({ data: { categories: order(null) } });
   renderWithProviders(<TodoCategoryManager setStatus={vi.fn()} />);
   expect(
     await screen.findByRole("button", { name: "未分類 をドラッグして並び替え" }),
@@ -56,8 +60,10 @@ it("shows the pending order, blocks mutations during save, then keeps the server
   const setStatus = vi.fn();
   renderWithProviders(<TodoCategoryManager setStatus={setStatus} />);
   await screen.findByRole("button", { name: "未分類 をドラッグして並び替え" });
-  await drag("unclassified", "category:仕事");
-  expect(api.reorder).toHaveBeenCalledWith({ categories: ["買い物", "仕事", null] });
+  await drag("unclassified", `category:${cid("仕事")}`);
+  expect(api.reorder).toHaveBeenCalledWith({
+    categoryIds: order("買い物", "仕事", null).map((category) => category?.id ?? null),
+  });
   await waitFor(() =>
     expect(labels()).toEqual([
       "買い物 をドラッグして並び替え",
@@ -68,9 +74,9 @@ it("shows the pending order, blocks mutations during save, then keeps the server
   expect(screen.getByRole("button", { name: "買い物 を削除" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "仕事 をドラッグして並び替え" })).toBeDisabled();
   expect(screen.getByLabelText("新しいカテゴリー")).toBeDisabled();
-  await drag("category:買い物", "unclassified");
+  await drag(`category:${cid("買い物")}`, "unclassified");
   expect(api.reorder).toHaveBeenCalledTimes(1);
-  await act(async () => resolve({ data: { categories: ["買い物", "仕事", null] } }));
+  await act(async () => resolve({ data: { categories: order("買い物", "仕事", null) } }));
   expect(setStatus).toHaveBeenCalledWith("カテゴリーの並び順を保存しました");
   expect(labels().at(-1)).toBe("未分類 をドラッグして並び替え");
   await waitFor(() => expect(screen.getByRole("button", { name: "買い物 を削除" })).toBeEnabled());
@@ -84,29 +90,31 @@ it("restores the fetched order after a failed save and allows retry without clea
   await screen.findByRole("button", { name: "未分類 をドラッグして並び替え" });
   await user.type(screen.getByLabelText("新しいカテゴリー"), "次に追加");
   api.list.mockResolvedValue({
-    data: { categories: [null, "買い物", "仕事", "別メンバーの追加"] },
+    data: { categories: order(null, "買い物", "仕事", "別メンバーの追加") },
   });
-  await drag("unclassified", "category:仕事");
+  await drag("unclassified", `category:${cid("仕事")}`);
   expect(await screen.findByRole("alert")).toHaveTextContent("保存に失敗");
   await waitFor(() => expect(labels()).toHaveLength(4));
   expect(labels()[0]).toBe("未分類 をドラッグして並び替え");
   expect(screen.getByLabelText("新しいカテゴリー")).toHaveValue("次に追加");
   api.reorder.mockResolvedValue({
-    data: { categories: ["買い物", null, "仕事", "別メンバーの追加"] },
+    data: { categories: order("買い物", null, "仕事", "別メンバーの追加") },
   });
-  await drag("unclassified", "category:買い物");
+  await drag("unclassified", `category:${cid("買い物")}`);
   await waitFor(() => expect(setStatus).toHaveBeenCalledWith("カテゴリーの並び順を保存しました"));
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 });
 
 it("ignores a cancelled or unchanged drag and separates reserved-looking names from null", async () => {
-  api.list.mockResolvedValue({ data: { categories: [null, "unclassified", "category:仕事"] } });
-  api.reorder.mockImplementation(async ({ categories }) => ({ data: { categories } }));
+  api.list.mockResolvedValue({ data: { categories: order(null, "unclassified", "仕事") } });
+  api.reorder.mockResolvedValue({ data: { categories: order("unclassified", null, "仕事") } });
   renderWithProviders(<TodoCategoryManager setStatus={vi.fn()} />);
   await screen.findByRole("button", { name: "未分類 をドラッグして並び替え" });
   await drag("unclassified", null);
   await drag("unclassified", "unclassified");
   expect(api.reorder).not.toHaveBeenCalled();
-  await drag("category:unclassified", "unclassified");
-  expect(api.reorder).toHaveBeenCalledWith({ categories: ["unclassified", null, "category:仕事"] });
+  await drag(`category:${cid("unclassified")}`, "unclassified");
+  expect(api.reorder).toHaveBeenCalledWith({
+    categoryIds: order("unclassified", null, "仕事").map((category) => category?.id ?? null),
+  });
 });
