@@ -80,7 +80,7 @@ describe("TodoManager", () => {
   it("linkifies only http and https URLs in notes", () => {
     render(
       <TodoManager
-        categoriesQuery={{ data: [], isPending: false, isError: false, refetch: vi.fn() }}
+        categoriesQuery={{ data: [null], isPending: false, isError: false, refetch: vi.fn() }}
         items={[
           {
             id: "item-1",
@@ -140,7 +140,7 @@ describe("TodoManager", () => {
 
     const { rerender } = render(
       <TodoManager
-        categoriesQuery={{ data: [], isPending: false, isError: false, refetch: vi.fn() }}
+        categoriesQuery={{ data: [null], isPending: false, isError: false, refetch: vi.fn() }}
         items={items}
         isUpdating={false}
         isReordering={false}
@@ -165,7 +165,7 @@ describe("TodoManager", () => {
 
     rerender(
       <TodoManager
-        categoriesQuery={{ data: [], isPending: false, isError: false, refetch: vi.fn() }}
+        categoriesQuery={{ data: [null], isPending: false, isError: false, refetch: vi.fn() }}
         items={items}
         isUpdating={false}
         isReordering
@@ -195,7 +195,7 @@ describe("TodoManager", () => {
     // Filtering during a save must not leave items from the previous filter visible.
     rerender(
       <TodoManager
-        categoriesQuery={{ data: [], isPending: false, isError: false, refetch: vi.fn() }}
+        categoriesQuery={{ data: [null], isPending: false, isError: false, refetch: vi.fn() }}
         items={[items[0]]}
         isUpdating={false}
         isReordering
