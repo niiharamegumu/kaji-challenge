@@ -4,7 +4,7 @@ import { TodoCategoryQueryStatus } from "./TodoCategoryQueryStatus";
 export type TodoCategorySelection =
   | { kind: "all" }
   | { kind: "unclassified" }
-  | { kind: "category"; name: string };
+  | { kind: "category"; id: string };
 
 export function TodoCategoryFilter({
   categoriesQuery,
@@ -17,10 +17,12 @@ export function TodoCategoryFilter({
 }) {
   const options: { value: TodoCategorySelection; label: string }[] = [
     { value: { kind: "all" }, label: "すべて" },
-    ...(categoriesQuery.data ?? []).map((name) => ({
+    ...(categoriesQuery.data ?? []).map((category) => ({
       value:
-        name === null ? { kind: "unclassified" as const } : { kind: "category" as const, name },
-      label: name ?? "未分類",
+        category === null
+          ? { kind: "unclassified" as const }
+          : { kind: "category" as const, id: category.id },
+      label: category?.name ?? "未分類",
     })),
   ];
   return (
@@ -34,13 +36,11 @@ export function TodoCategoryFilter({
           const selected =
             value.kind === option.value.kind &&
             (value.kind !== "category" ||
-              (option.value.kind === "category" && value.name === option.value.name));
+              (option.value.kind === "category" && value.id === option.value.id));
           return (
             <button
               key={
-                option.value.kind === "category"
-                  ? `category:${option.value.name}`
-                  : option.value.kind
+                option.value.kind === "category" ? `category:${option.value.id}` : option.value.kind
               }
               type="button"
               aria-pressed={selected}
