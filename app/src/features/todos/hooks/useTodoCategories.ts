@@ -34,17 +34,19 @@ export function useTodoCategoryMutations(setStatus: (message: string) => void) {
     onError: (error) => setStatus(`カテゴリーの追加に失敗しました: ${formatError(error)}`),
   });
   const removeCategory = useMutation({
-    mutationFn: (name: string) => deleteTodoCategory(name),
-    onSuccess: async (_, name) => {
+    mutationFn: (categoryId: string) => deleteTodoCategory(categoryId),
+    onSuccess: async (_, categoryId) => {
       await Promise.all([
         client.cancelQueries({ queryKey: queryKeys.todoCategories }),
         client.cancelQueries({ queryKey: queryKeys.todoItems }),
       ]);
       client.setQueryData<TodoCategoryOrder>(queryKeys.todoCategories, (categories) =>
-        categories?.filter((category) => category !== name),
+        categories?.filter((category) => category?.id !== categoryId),
       );
       client.setQueryData<TodoItem[]>(queryKeys.todoItems, (items) =>
-        items?.map((item) => (item.category === name ? { ...item, category: null } : item)),
+        items?.map((item) =>
+          item.categoryId === categoryId ? { ...item, categoryId: null } : item,
+        ),
       );
       void Promise.all([
         client.invalidateQueries({ queryKey: queryKeys.todoCategories }),
@@ -55,7 +57,10 @@ export function useTodoCategoryMutations(setStatus: (message: string) => void) {
     onError: (error) => setStatus(`カテゴリーの削除に失敗しました: ${formatError(error)}`),
   });
   const reorderCategories = useMutation({
-    mutationFn: (categories: TodoCategoryOrder) => postTodoCategoriesReorder({ categories }),
+    mutationFn: (categories: TodoCategoryOrder) =>
+      postTodoCategoriesReorder({
+        categoryIds: categories.map((category) => category?.id ?? null),
+      }),
     onSuccess: async ({ data }) => {
       await client.cancelQueries({ queryKey: queryKeys.todoCategories });
       client.setQueryData(queryKeys.todoCategories, data.categories);
