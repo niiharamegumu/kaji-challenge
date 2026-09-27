@@ -17,10 +17,10 @@ export function TodoCategoryFilter({
 }) {
   const options: { value: TodoCategorySelection; label: string }[] = [
     { value: { kind: "all" }, label: "すべて" },
-    { value: { kind: "unclassified" }, label: "未分類" },
     ...(categoriesQuery.data ?? []).map((name) => ({
-      value: { kind: "category" as const, name },
-      label: name,
+      value:
+        name === null ? { kind: "unclassified" as const } : { kind: "category" as const, name },
+      label: name ?? "未分類",
     })),
   ];
   return (
