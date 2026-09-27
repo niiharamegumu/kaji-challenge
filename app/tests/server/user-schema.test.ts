@@ -101,9 +101,14 @@ beforeAll(async () => {
   await connection.binding.batch(
     unstable_splitSqlQuery(revisions).map((q) => connection.binding.prepare(q)),
   );
+  const todos = await readFile(new URL("../../migrations/0005_todos.sql", import.meta.url), "utf8");
+  await connection.binding.batch(
+    unstable_splitSqlQuery(todos).map((q) => connection.binding.prepare(q)),
+  );
   snapshots.teams = snapshots.teams.map((row) => {
     const kept = { ...(row as Record<string, unknown>) };
     delete kept.state_revision;
+    kept.todo_categories = "[]";
     return kept;
   });
 });
