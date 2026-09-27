@@ -14,6 +14,7 @@ import {
   postTodoItemsReorder,
   type ReorderTodoItemsRequest,
   type TodoItem,
+  type TodoCategoryOrder,
   type UpdateTodoItemRequest,
 } from "../../../lib/api/operations";
 import { queryKeys } from "../../../shared/query/queryKeys";
@@ -48,7 +49,7 @@ export function useTodoItemMutations(setStatus: StatusSetter) {
   const refreshNewCategory = (category: string | null) => {
     if (
       category != null &&
-      !queryClient.getQueryData<string[]>(queryKeys.todoCategories)?.includes(category)
+      !queryClient.getQueryData<TodoCategoryOrder>(queryKeys.todoCategories)?.includes(category)
     ) {
       void queryClient.invalidateQueries({ queryKey: queryKeys.todoCategories });
     }
