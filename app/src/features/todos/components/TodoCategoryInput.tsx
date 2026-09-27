@@ -24,16 +24,14 @@ export function TodoCategoryInput({
         onChange={(event) => onChange(event.target.value)}
         className="h-10 min-w-0 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
       >
-        <option value="">
-          {categoriesQuery.data !== undefined
-            ? "未分類"
-            : categoriesQuery.isPending
-              ? "読み込み中…"
-              : "取得できませんでした"}
-        </option>
+        {categoriesQuery.data === undefined ? (
+          <option value="">
+            {categoriesQuery.isPending ? "読み込み中…" : "取得できませんでした"}
+          </option>
+        ) : null}
         {categoriesQuery.data?.map((name) => (
-          <option key={name} value={name}>
-            {name}
+          <option key={name === null ? "unclassified" : `category:${name}`} value={name ?? ""}>
+            {name ?? "未分類"}
           </option>
         ))}
       </select>
