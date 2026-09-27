@@ -44,7 +44,7 @@ export function TodoCategoryManager({ setStatus }: { setStatus: (message: string
         0件でもカテゴリーは残ります。カテゴリーを削除してもToDoは残り、未分類になります。
       </p>
       <p className="mt-2 text-xs text-stone-600">
-        左のハンドルをドラッグすると、未分類も含めて表示順を変更できます。スマホでは長押しして動かします。
+        右のハンドルをドラッグすると、未分類も含めて表示順を変更できます。スマホでは長押しして動かします。
       </p>
       <div className="mt-2">
         <TodoCategoryQueryStatus query={query} />
