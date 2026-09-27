@@ -20,6 +20,7 @@ export const teams = sqliteTable("teams", {
     .$type<string[]>()
     .notNull()
     .default(sql`'[]'`),
+  todo_unclassified_sort_key: integer("todo_unclassified_sort_key").notNull().default(0),
 });
 
 export const inviteCodes = sqliteTable(
