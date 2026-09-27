@@ -8,7 +8,7 @@ import {
 
 import {
   getTaskOverview,
-  listShoppingItems,
+  listTodoItems,
   postTaskCompletion,
   type TaskCompletionActor,
   type TaskCompletionRequest,
@@ -21,7 +21,7 @@ import {
 import { queryKeys } from "../../../shared/query/queryKeys";
 import { dateStringInJST, formatError, todayString } from "../../../shared/utils/errors";
 import { previousMonthKey } from "../utils/month";
-import { usePendingShoppingRemovals } from "../../shopping-list";
+import { usePendingTodoRemovals } from "../../todos";
 
 type CompletionAction = TaskCompletionRequest["action"];
 type CompletionIntent = { taskId: string; action?: "toggle" | "increment" | "decrement" };
@@ -123,9 +123,9 @@ export const homeQueryOptions = queryOptions({
   queryFn: async ({ signal }) => (await getTaskOverview({ signal })).data,
 });
 
-export const homeShoppingItemsQueryOptions = queryOptions({
-  queryKey: queryKeys.shoppingItems,
-  queryFn: async ({ signal }) => (await listShoppingItems({ signal })).data.items ?? [],
+export const homeTodoItemsQueryOptions = queryOptions({
+  queryKey: queryKeys.todoItems,
+  queryFn: async ({ signal }) => (await listTodoItems({ signal })).data.items ?? [],
 });
 
 export const previousMonthPenaltySummaryQueryOptions = () =>
@@ -133,13 +133,13 @@ export const previousMonthPenaltySummaryQueryOptions = () =>
 
 export function useHomePageQueries() {
   const pendingCompletions = usePendingCompletions();
-  const pendingShoppingIds = usePendingShoppingRemovals();
+  const pendingTodoIds = usePendingTodoRemovals();
   const previousMonth = previousMonthKey(dateStringInJST().slice(0, 7));
-  const [homeQuery, shoppingItemsQuery, previousMonthPenaltySummaryQuery, penaltyRulesQuery] =
+  const [homeQuery, todoItemsQuery, previousMonthPenaltySummaryQuery, penaltyRulesQuery] =
     useSuspenseQueries({
       queries: [
         homeQueryOptions,
-        homeShoppingItemsQueryOptions,
+        homeTodoItemsQueryOptions,
         monthlyPenaltySummaryQueryOptions(previousMonth),
         penaltyRulesWithDeletedQueryOptions,
       ],
@@ -147,9 +147,9 @@ export function useHomePageQueries() {
 
   return {
     homeQuery: { ...homeQuery, data: pendingCompletions.reduce(applyChange, homeQuery.data) },
-    shoppingItemsQuery: {
-      ...shoppingItemsQuery,
-      data: shoppingItemsQuery.data.filter((item) => !pendingShoppingIds.includes(item.id)),
+    todoItemsQuery: {
+      ...todoItemsQuery,
+      data: todoItemsQuery.data.filter((item) => !pendingTodoIds.includes(item.id)),
     },
     previousMonth,
     previousMonthPenaltySummaryQuery,
