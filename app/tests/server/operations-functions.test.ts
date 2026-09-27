@@ -55,9 +55,12 @@ it("rejects malformed inputs before opening the runtime", async () => {
   expect(mocks.runtime).not.toHaveBeenCalled();
 });
 
-it("rejects absent sessions before any business transaction", async () => {
+it.each([
+  { operation: "getMe" },
+  { operation: "postTodoCategoriesReorder", body: { categories: [null] } },
+])("rejects absent sessions before any business transaction: %j", async (data) => {
   mocks.session.mockResolvedValue(null);
-  expect(await mocks.handler({ data: { operation: "getMe" } })).toMatchObject({
+  expect(await mocks.handler({ data })).toMatchObject({
     ok: false,
     error: { status: 401, code: "unauthorized" },
   });
@@ -69,7 +72,11 @@ it.each<Record<string, string>>([
   { origin: "https://app.example.com", "sec-fetch-site": "cross-site" },
 ])("rejects cross-origin requests before authentication: %j", async (headers) => {
   mocks.headers = new Headers(headers);
-  expect(await mocks.handler({ data: { operation: "getMe" } })).toMatchObject({
+  expect(
+    await mocks.handler({
+      data: { operation: "postTodoCategoriesReorder", body: { categories: [null] } },
+    }),
+  ).toMatchObject({
     ok: false,
     error: { status: 403, code: "forbidden" },
   });
