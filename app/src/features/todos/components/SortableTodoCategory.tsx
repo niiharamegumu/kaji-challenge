@@ -37,19 +37,8 @@ export function SortableTodoCategory({
     <li
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`relative flex min-w-0 items-center gap-2 rounded-lg bg-stone-50 px-2 py-1 ${isDragging ? "z-10 opacity-70" : ""}`}
+      className={`relative flex min-w-0 items-center gap-2 rounded-lg bg-stone-50 py-1 pl-3 pr-1 ${isDragging ? "z-10 opacity-70" : ""}`}
     >
-      <button
-        ref={setActivatorNodeRef}
-        type="button"
-        {...attributes}
-        {...listeners}
-        disabled={disabled}
-        aria-label={`${label} をドラッグして並び替え`}
-        className="flex size-11 shrink-0 touch-none items-center justify-center rounded-lg text-stone-500 hover:bg-stone-200 focus-visible:outline-2 focus-visible:outline-stone-500 disabled:opacity-50"
-      >
-        <GripVertical size={18} aria-hidden="true" />
-      </button>
       <span className="min-w-0 flex-1 break-words text-sm">{label}</span>
       {category === null ? (
         <span className="shrink-0 px-3 text-xs text-stone-500">標準</span>
@@ -64,6 +53,17 @@ export function SortableTodoCategory({
           削除
         </button>
       )}
+      <button
+        ref={setActivatorNodeRef}
+        type="button"
+        {...attributes}
+        {...listeners}
+        disabled={disabled}
+        aria-label={`${label} をドラッグして並び替え`}
+        className="flex size-11 shrink-0 touch-none items-center justify-center rounded-lg text-stone-500 hover:bg-stone-200 focus-visible:outline-2 focus-visible:outline-stone-500 disabled:opacity-50"
+      >
+        <GripVertical size={18} aria-hidden="true" />
+      </button>
     </li>
   );
 }
