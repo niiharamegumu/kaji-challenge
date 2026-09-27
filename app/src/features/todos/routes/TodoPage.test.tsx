@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetApiMocks, resolvedData } from "../../../test/apiMock";
 import { withExpectedConsoleError } from "../../../test/console";
 import { renderWithProviders, resetTestQueryClient } from "../../../test/render";
+import { appQueryClient } from "../../../shared/query/queryClient";
+import { queryKeys } from "../../../shared/query/queryKeys";
 import { TodoPage } from "./TodoPage";
 import { TodoCategoriesPage } from "./TodoCategoriesPage";
 
@@ -96,6 +98,10 @@ describe("ToDo pages", () => {
     await user.click(await screen.findByRole("button", { name: "追加" }));
     expect(await screen.findByRole("dialog", { name: "ToDoを追加" })).toBeInTheDocument();
     expect(screen.queryByLabelText("数量")).not.toBeInTheDocument();
+    const categorySelect = screen.getByRole("combobox", { name: "カテゴリー（任意）" });
+    expect(categorySelect).toHaveValue("");
+    expect(within(categorySelect).getAllByRole("option")).toHaveLength(1);
+    expect(within(categorySelect).getByRole("option", { name: "未分類" })).toBeInTheDocument();
 
     await user.type(await screen.findByLabelText("名前"), "牛乳");
     await user.type(screen.getByLabelText("メモ"), "低脂肪");
@@ -173,6 +179,7 @@ describe("ToDo pages", () => {
   });
 
   it("updates an item inline", async () => {
+    mockListTodoCategories.mockResolvedValue(resolvedData({ categories: ["買い物リスト"] }));
     mockListTodoItems.mockResolvedValue({
       data: {
         items: [
@@ -204,13 +211,14 @@ describe("ToDo pages", () => {
     await user.type(nameInput, "低脂肪乳");
     await user.clear(notesInput);
     await user.type(notesInput, "特売");
+    await user.selectOptions(within(card).getByRole("combobox"), "買い物リスト");
     await user.click(within(card).getByRole("button", { name: "保存" }));
 
     await waitFor(() => {
       expect(mockPatchTodoItem).toHaveBeenCalledWith("item-1", {
         name: "低脂肪乳",
         notes: "特売",
-        category: null,
+        category: "買い物リスト",
       });
     });
   });
@@ -371,22 +379,158 @@ describe("ToDo pages", () => {
     },
   );
 
-  it("offers saved categories and creates a ToDo with a freely entered category", async () => {
+  it("creates a ToDo by selecting a registered category", async () => {
     const user = userEvent.setup();
     mockListTodoCategories.mockResolvedValue(resolvedData({ categories: ["買い物リスト"] }));
     renderPage();
     await user.click(await screen.findByRole("button", { name: "追加" }));
     await user.type(screen.getByLabelText("名前"), "予約する");
-    const input = screen.getByLabelText("カテゴリー（任意）");
-    const suggestions = document.getElementById(input.getAttribute("list")!);
-    expect(suggestions?.querySelector('option[value="買い物リスト"]')).not.toBeNull();
-    await user.type(input, "外出");
+    const select = screen.getByRole("combobox", { name: "カテゴリー（任意）" });
+    expect(within(select).getAllByRole("option")).toHaveLength(2);
+    await user.selectOptions(select, "買い物リスト");
     await user.click(screen.getByRole("button", { name: "追加する" }));
     await waitFor(() =>
       expect(mockPostTodoItem).toHaveBeenCalledWith({
         name: "予約する",
         notes: undefined,
-        category: "外出",
+        category: "買い物リスト",
+      }),
+    );
+  });
+
+  it("waits for category options without clearing the category on an existing ToDo", async () => {
+    let resolveCategories!: (value: { data: { categories: string[] } }) => void;
+    mockListTodoCategories.mockReturnValue(
+      new Promise((resolve) => {
+        resolveCategories = resolve;
+      }),
+    );
+    mockListTodoItems.mockResolvedValue(
+      resolvedData({ items: [fixture("a", "牛乳", "買い物リスト")] }),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole("button", { name: "編集" }));
+    const select = screen.getByRole("combobox", { name: "カテゴリー（任意）" });
+    expect(select).toBeDisabled();
+    expect(screen.getByRole("button", { name: "保存" })).toBeDisabled();
+    expect(within(select).queryByRole("option", { name: "未分類" })).not.toBeInTheDocument();
+    await act(async () => resolveCategories(resolvedData({ categories: ["買い物リスト"] })));
+    await waitFor(() => expect(select).toHaveValue("買い物リスト"));
+    expect(select).toBeEnabled();
+    expect(screen.getByLabelText("名前")).toHaveValue("牛乳");
+    expect(screen.getByRole("button", { name: "保存" })).toBeEnabled();
+  });
+
+  it("keeps creation unavailable after a category fetch failure until retry succeeds", async () => {
+    mockListTodoCategories.mockRejectedValue(new Error("offline"));
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole("button", { name: "追加" }));
+    const dialog = screen.getByRole("dialog", { name: "ToDoを追加" });
+    await user.type(within(dialog).getByLabelText("名前"), "予約する");
+    expect(await within(dialog).findByRole("alert", {}, { timeout: 4_000 })).toHaveTextContent(
+      "カテゴリーを読み込めませんでした",
+    );
+    expect(within(dialog).getByRole("combobox")).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "追加する" })).toBeDisabled();
+    mockListTodoCategories.mockResolvedValue(resolvedData({ categories: ["やること"] }));
+    await user.click(within(dialog).getByRole("button", { name: "再試行" }));
+    await waitFor(() => expect(within(dialog).getByRole("combobox")).toBeEnabled());
+    expect(within(dialog).getByRole("option", { name: "やること" })).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("名前")).toHaveValue("予約する");
+    expect(within(dialog).getByRole("button", { name: "追加する" })).toBeEnabled();
+  });
+
+  it.each(["追加", "編集"])(
+    "clears a deleted category from the %s draft without losing other fields",
+    async (action) => {
+      mockListTodoCategories.mockResolvedValue(resolvedData({ categories: ["買い物リスト"] }));
+      mockListTodoItems.mockResolvedValue(
+        resolvedData({ items: [fixture("a", "牛乳", "買い物リスト")] }),
+      );
+      const user = userEvent.setup();
+      renderPage();
+      await user.click(await screen.findByRole("button", { name: action }));
+      const name = screen.getByLabelText("名前");
+      await user.clear(name);
+      await user.type(name, "更新した名前");
+      await user.type(screen.getByLabelText("メモ"), "入力途中のメモ");
+      const select = screen.getByRole("combobox");
+      await user.selectOptions(select, "買い物リスト");
+      mockListTodoCategories.mockResolvedValue(resolvedData({ categories: [] }));
+      await act(async () => {
+        await appQueryClient.invalidateQueries({ queryKey: queryKeys.todoCategories });
+      });
+      await waitFor(() => expect(select).toHaveValue(""));
+      expect(name).toHaveValue("更新した名前");
+      expect(screen.getByLabelText("メモ")).toHaveValue("入力途中のメモ");
+      mockListTodoCategories.mockResolvedValue(resolvedData({ categories: ["買い物リスト"] }));
+      await act(async () => {
+        await appQueryClient.invalidateQueries({ queryKey: queryKeys.todoCategories });
+      });
+      expect(
+        await within(select).findByRole("option", { name: "買い物リスト" }),
+      ).toBeInTheDocument();
+      expect(select).toHaveValue("");
+      await user.click(
+        screen.getByRole("button", { name: action === "追加" ? "追加する" : "保存" }),
+      );
+      const payload = { name: "更新した名前", notes: "入力途中のメモ", category: null };
+      await waitFor(() => {
+        if (action === "追加") expect(mockPostTodoItem).toHaveBeenCalledWith(payload);
+        else expect(mockPatchTodoItem).toHaveBeenCalledWith("a", payload);
+      });
+    },
+  );
+
+  it("does not reselect a deleted filter when a category with the same name is registered again", async () => {
+    mockListTodoCategories.mockResolvedValue(resolvedData({ categories: ["買い物リスト"] }));
+    const user = userEvent.setup();
+    renderPage();
+    const filter = await screen.findByRole("group", { name: "カテゴリーで絞り込み" });
+    await user.click(await within(filter).findByRole("button", { name: "買い物リスト" }));
+    mockListTodoCategories.mockResolvedValue(resolvedData({ categories: [] }));
+    await act(async () => {
+      await appQueryClient.invalidateQueries({ queryKey: queryKeys.todoCategories });
+    });
+    await waitFor(() =>
+      expect(within(filter).getByRole("button", { name: "すべて" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      ),
+    );
+    mockListTodoCategories.mockResolvedValue(resolvedData({ categories: ["買い物リスト"] }));
+    await act(async () => {
+      await appQueryClient.invalidateQueries({ queryKey: queryKeys.todoCategories });
+    });
+    expect(within(filter).getByRole("button", { name: "すべて" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(await within(filter).findByRole("button", { name: "買い物リスト" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+  });
+
+  it("edits a classified ToDo back to unclassified", async () => {
+    mockListTodoCategories.mockResolvedValue(resolvedData({ categories: ["買い物リスト"] }));
+    mockListTodoItems.mockResolvedValue(
+      resolvedData({ items: [fixture("a", "牛乳", "買い物リスト")] }),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole("button", { name: "編集" }));
+    const select = screen.getByRole("combobox", { name: "カテゴリー（任意）" });
+    expect(select).toHaveValue("買い物リスト");
+    await user.selectOptions(select, "");
+    await user.click(screen.getByRole("button", { name: "保存" }));
+    await waitFor(() =>
+      expect(mockPatchTodoItem).toHaveBeenCalledWith("a", {
+        name: "牛乳",
+        notes: null,
+        category: null,
       }),
     );
   });

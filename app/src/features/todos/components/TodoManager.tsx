@@ -31,17 +31,18 @@ import {
 
 import { TodoCategoryInput } from "./TodoCategoryInput";
 
-export type TodoItemFormState = {
-  category: string;
-  name: string;
-  notes: string;
-};
+import type { TodoCategoriesQuery } from "../hooks/useTodoCategories";
+import {
+  emptyTodoItemForm,
+  useTodoItemFormState,
+  type TodoItemFormState,
+} from "../hooks/useTodoItemFormState";
 
 type Props = Pick<
   TodoItemsSectionProps,
   | "emptyMessage"
   | "filters"
-  | "categories"
+  | "categoriesQuery"
   | "items"
   | "isReordering"
   | "isUpdating"
@@ -52,7 +53,7 @@ type Props = Pick<
 
 type TodoItemsSectionProps = {
   filters?: ReactNode;
-  categories?: string[];
+  categoriesQuery: TodoCategoriesQuery;
   items: TodoItem[];
   isReordering: boolean;
   isUpdating: boolean;
@@ -140,7 +141,7 @@ function renderNotesWithLinks(value: string): ReactNode {
 }
 
 function SortableTodoItem({
-  categories,
+  categoriesQuery,
   item,
   isEditing,
   isSaving,
@@ -152,7 +153,7 @@ function SortableTodoItem({
   onSaveEdit,
   onComplete,
 }: {
-  categories: string[];
+  categoriesQuery: TodoCategoriesQuery;
   item: TodoItem;
   isEditing: boolean;
   isSaving: boolean;
@@ -176,7 +177,7 @@ function SortableTodoItem({
     transition: isDragging ? undefined : transition,
   };
 
-  const canSave = editState.name.trim().length > 0;
+  const canSave = editState.name.trim().length > 0 && categoriesQuery.data !== undefined;
   const dragProps = isEditing
     ? {}
     : {
@@ -189,11 +190,15 @@ function SortableTodoItem({
     <li
       ref={setNodeRef}
       style={style}
-      className={`relative rounded-xl border border-stone-200 bg-white p-3 shadow-sm ${isDragging ? "opacity-70 select-none" : ""}`}
+      className={`relative rounded-xl border border-stone-200 bg-white p-2.5 shadow-sm sm:p-3 ${isDragging ? "opacity-70 select-none" : ""}`}
     >
       {isEditing ? (
         <fieldset disabled={isSaving} className="grid gap-2">
-          <TodoItemForm categories={categories} form={editState} onFormChange={onChangeEditState} />
+          <TodoItemForm
+            categoriesQuery={categoriesQuery}
+            form={editState}
+            onFormChange={onChangeEditState}
+          />
           <div className="mt-1 flex flex-wrap gap-2">
             <button
               type="button"
@@ -216,38 +221,41 @@ function SortableTodoItem({
           </div>
         </fieldset>
       ) : (
-        <div className="flex items-start gap-3 pr-10">
+        <div className="flex items-start gap-2 pr-8 sm:pr-10">
           <div className="min-w-0 flex-1">
             <div className="break-words font-medium text-stone-900">{item.name}</div>
-            <span className="mt-1 inline-block max-w-full rounded-md bg-stone-100 px-2 py-1 text-xs break-words text-stone-600">
-              {item.category ?? "未分類"}
-            </span>
             {item.notes != null && item.notes !== "" ? (
               <div className="mt-1 whitespace-pre-wrap break-words text-xs text-stone-600">
                 {renderNotesWithLinks(item.notes)}
               </div>
             ) : null}
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  className="flex h-9 cursor-pointer items-center gap-1 rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 text-xs text-stone-700 transition-colors hover:bg-stone-100"
-                  onClick={() => onStartEdit(item)}
-                  aria-label="編集"
-                  onPointerDown={(event) => event.stopPropagation()}
-                >
-                  <Pencil size={14} aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  className="flex h-9 cursor-pointer items-center gap-1 rounded-lg border border-[color:var(--color-matcha-300)] bg-[color:var(--color-matcha-50)] px-2.5 py-1.5 text-xs text-[color:var(--color-matcha-700)] transition-colors hover:bg-[color:var(--color-matcha-100)]"
-                  onClick={onComplete}
-                  onPointerDown={(event) => event.stopPropagation()}
-                >
-                  <CircleCheck size={14} aria-hidden="true" />
-                  <span>完了にする</span>
-                </button>
-              </div>
+            <div className="mt-0.5 flex min-w-0">
+              <span
+                className="max-w-full truncate rounded bg-stone-100 px-1.5 py-0.5 text-[10px] leading-tight text-stone-600 sm:text-[11px]"
+                title={item.category ?? "未分類"}
+              >
+                {item.category ?? "未分類"}
+              </span>
+            </div>
+            <div className="mt-1 flex items-center gap-1.5">
+              <button
+                type="button"
+                className="flex h-7 cursor-pointer items-center gap-1 rounded-md border border-stone-300 bg-white px-2 py-1 text-[11px] text-stone-700 transition-colors hover:bg-stone-100 sm:h-8 sm:text-xs"
+                onClick={() => onStartEdit(item)}
+                aria-label="編集"
+                onPointerDown={(event) => event.stopPropagation()}
+              >
+                <Pencil size={12} aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                className="flex h-7 cursor-pointer items-center gap-1 rounded-md border border-[color:var(--color-matcha-300)] bg-[color:var(--color-matcha-50)] px-2 py-1 text-[11px] text-[color:var(--color-matcha-700)] transition-colors hover:bg-[color:var(--color-matcha-100)] sm:h-8 sm:text-xs"
+                onClick={onComplete}
+                onPointerDown={(event) => event.stopPropagation()}
+              >
+                <CircleCheck size={12} aria-hidden="true" />
+                <span>完了にする</span>
+              </button>
             </div>
           </div>
         </div>
@@ -255,7 +263,7 @@ function SortableTodoItem({
       {!isEditing ? (
         <button
           type="button"
-          className="absolute top-1/2 right-3 flex h-8 w-8 -translate-y-1/2 cursor-grab touch-none select-none items-center justify-center rounded-md text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700 active:cursor-grabbing focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-400"
+          className="absolute top-1/2 right-2 flex h-8 w-8 -translate-y-1/2 cursor-grab touch-none select-none items-center justify-center rounded-md text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700 active:cursor-grabbing focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-400 sm:right-3"
           onPointerDown={(event) => event.stopPropagation()}
           {...dragProps}
           disabled={isReordering}
@@ -268,11 +276,11 @@ function SortableTodoItem({
 }
 
 export function TodoItemForm({
-  categories = [],
+  categoriesQuery,
   form,
   onFormChange,
 }: {
-  categories?: string[];
+  categoriesQuery: TodoCategoriesQuery;
   form: TodoItemFormState;
   onFormChange: (updater: (prev: TodoItemFormState) => TodoItemFormState) => void;
 }) {
@@ -304,7 +312,7 @@ export function TodoItemForm({
         placeholder="例: 低脂肪乳"
       />
       <TodoCategoryInput
-        categories={categories}
+        categoriesQuery={categoriesQuery}
         value={form.category}
         onChange={(category) => onFormChange((prev) => ({ ...prev, category }))}
       />
@@ -314,7 +322,7 @@ export function TodoItemForm({
 
 export function TodoItemsSection({
   filters,
-  categories = [],
+  categoriesQuery,
   items,
   isReordering,
   isUpdating,
@@ -331,11 +339,7 @@ export function TodoItemsSection({
   emptyMessage = "ToDoはまだありません。やることを追加してください。",
 }: TodoItemsSectionProps) {
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
-  const [editState, setEditState] = useState<TodoItemFormState>({
-    category: "",
-    name: "",
-    notes: "",
-  });
+  const [editState, setEditState] = useTodoItemFormState(categoriesQuery.data);
   const [pendingCompleteItem, setPendingCompleteItem] = useState<PendingCompleteItem | null>(null);
   const [optimisticItemIds, setOptimisticItemIds] = useState<string[] | null>(null);
 
@@ -401,7 +405,7 @@ export function TodoItemsSection({
 
   const cancelEdit = () => {
     setEditingItemId(null);
-    setEditState({ name: "", notes: "", category: "" });
+    setEditState(emptyTodoItemForm);
   };
 
   const saveEdit = async (itemId: string) => {
@@ -410,7 +414,7 @@ export function TodoItemsSection({
       name: editState.name.trim(),
       notes: editState.notes.trim() === "" ? null : editState.notes.trim(),
     };
-    if (isUpdating) return;
+    if (isUpdating || categoriesQuery.data === undefined) return;
     try {
       await onUpdate(itemId, payload);
       cancelEdit();
@@ -455,7 +459,7 @@ export function TodoItemsSection({
               <ul className={`grid gap-2 ${listClassName}`}>
                 {optimisticItems.map((item) => (
                   <SortableTodoItem
-                    categories={categories}
+                    categoriesQuery={categoriesQuery}
                     key={item.id}
                     item={item}
                     isEditing={editingItemId === item.id}
@@ -500,7 +504,7 @@ export function TodoItemsSection({
 export function TodoManager({
   emptyMessage,
   filters,
-  categories = [],
+  categoriesQuery,
   items,
   isReordering,
   isUpdating,
@@ -519,7 +523,7 @@ export function TodoManager({
         <TodoItemsSection
           filters={filters}
           emptyMessage={emptyMessage}
-          categories={categories}
+          categoriesQuery={categoriesQuery}
           items={items}
           isReordering={isReordering}
           isUpdating={isUpdating}
