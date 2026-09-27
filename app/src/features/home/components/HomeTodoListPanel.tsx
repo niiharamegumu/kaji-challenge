@@ -2,7 +2,12 @@ import { ListTodo } from "lucide-react";
 import { Link } from "../../../shared/router/navigation";
 
 import type { TodoItem, UpdateTodoItemRequest } from "../../../lib/api/operations";
-import { TodoItemsSection, useTodoCategoriesQuery } from "../../todos";
+import {
+  restoreTodoOrder,
+  TodoCategoryFilter,
+  TodoItemsSection,
+  useTodoCategoryFilter,
+} from "../../todos";
 import { HOME_PANEL_CLASS_NAME } from "./panelStyles";
 
 type Props = {
@@ -22,9 +27,9 @@ export function HomeTodoListPanel({
   onReorder,
   onUpdate,
 }: Props) {
-  const categories = useTodoCategoriesQuery();
+  const { categoriesQuery, selection, setSelection, filterItems } = useTodoCategoryFilter();
   return (
-    <article className={HOME_PANEL_CLASS_NAME}>
+    <article className={`min-w-0 ${HOME_PANEL_CLASS_NAME}`}>
       <div className="flex items-center justify-between gap-2 px-2 md:px-0">
         <h2 className="text-lg font-semibold">ToDo</h2>
         <Link
@@ -35,18 +40,27 @@ export function HomeTodoListPanel({
           <span>ToDoへ</span>
         </Link>
       </div>
+      <TodoCategoryFilter
+        categoriesQuery={categoriesQuery}
+        value={selection}
+        onChange={setSelection}
+      />
       <TodoItemsSection
-        categories={categories.data ?? []}
-        items={items}
+        categoriesQuery={categoriesQuery}
+        items={filterItems(items)}
         isReordering={isReordering}
         isUpdating={isUpdating}
         onDelete={onDelete}
-        onReorder={onReorder}
+        onReorder={(itemIds) => onReorder(restoreTodoOrder(items, itemIds))}
         onUpdate={onUpdate}
         showSectionChrome={false}
         articleClassName="mt-2"
         listClassName=""
-        emptyMessage="ToDoはまだありません。やることを追加してください。"
+        emptyMessage={
+          selection.kind === "all"
+            ? "ToDoはまだありません。やることを追加してください。"
+            : "このカテゴリーのToDoはありません。"
+        }
         emptyClassName="mx-2 rounded-xl border border-dashed border-stone-300 bg-stone-50/80 px-4 py-8 text-center text-sm text-stone-600 md:mx-0"
       />
     </article>
