@@ -3,9 +3,9 @@ import { useAtom } from "jotai";
 import { statusMessageAtom } from "../../../shared/state/status";
 import { useOutletContext } from "../../../shared/router/navigation";
 import type { RootLayoutOutletContext } from "../../../shared/router/rootLayoutContext";
-import { useShoppingItemMutations } from "../../shopping-list";
+import { useTodoItemMutations } from "../../todos";
 import { DailyTasksPanel } from "../components/DailyTasksPanel";
-import { HomeShoppingListPanel } from "../components/HomeShoppingListPanel";
+import { HomeTodoListPanel } from "../components/HomeTodoListPanel";
 import { HOME_PANEL_SKELETON_CLASS_NAME } from "../components/panelStyles";
 import { TriggeredPenaltiesPanel } from "../components/TriggeredPenaltiesPanel";
 import { WeeklyRemindersPanel } from "../components/WeeklyRemindersPanel";
@@ -40,7 +40,7 @@ export function HomePageSkeleton() {
       </section>
 
       <section className="grid gap-2 md:grid-cols-2 md:gap-4">
-        {["reminders", "shopping"].map((panel) => (
+        {["reminders", "todo"].map((panel) => (
           <article key={panel} className={HOME_PANEL_SKELETON_CLASS_NAME}>
             <div className="mx-2 h-6 w-28 rounded bg-stone-200 md:mx-0" />
             <div className="mx-2 mt-3 space-y-2 md:mx-0">
@@ -78,7 +78,7 @@ export function HomePage() {
   const [, setStatus] = useAtom(statusMessageAtom);
   const {
     homeQuery,
-    shoppingItemsQuery,
+    todoItemsQuery,
     previousMonth,
     previousMonthPenaltySummaryQuery,
     penaltyRulesQuery,
@@ -88,10 +88,10 @@ export function HomePage() {
     setStatus,
     currentUserId ? { userId: currentUserId, effectiveName: displayName, colorHex } : undefined,
   );
-  const { updateItem, removeItem, reorderItems } = useShoppingItemMutations(setStatus);
+  const { updateItem, removeItem, reorderItems } = useTodoItemMutations(setStatus);
 
   const home = homeQuery.data;
-  const shoppingItems = shoppingItemsQuery.data;
+  const todoItems = todoItemsQuery.data;
   const previousMonthPenaltySummary = previousMonthPenaltySummaryQuery.data;
 
   const weeklyProgress =
@@ -128,8 +128,8 @@ export function HomePage() {
 
       <section className="grid gap-2 md:grid-cols-2 md:gap-4">
         <WeeklyRemindersPanel items={home.weeklyReminders} />
-        <HomeShoppingListPanel
-          items={shoppingItems}
+        <HomeTodoListPanel
+          items={todoItems}
           isReordering={reorderItems.isPending}
           isUpdating={updateItem.isPending}
           onDelete={(itemId) => {
