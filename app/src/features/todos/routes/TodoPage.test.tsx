@@ -124,6 +124,65 @@ describe("ToDo pages", () => {
     });
   });
 
+  it("defaults each new form to the active tab while preserving the text draft", async () => {
+    mockListTodoCategories.mockResolvedValue(
+      resolvedData({ categories: order("仕事", null, "買い物") }),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    const filter = await screen.findByRole("group", { name: "カテゴリーで絞り込み" });
+    await within(filter).findByRole("button", { name: "仕事" });
+    await user.click(screen.getByRole("button", { name: "追加" }));
+    expect(screen.getByRole("combobox")).toHaveValue("");
+    await user.type(screen.getByLabelText("名前"), "下書き");
+    await user.type(screen.getByLabelText("メモ"), "メモ");
+    await user.click(screen.getByRole("button", { name: "閉じる" }));
+
+    for (const [tab, categoryId] of [
+      ["仕事", cid("仕事")],
+      ["買い物", cid("買い物")],
+      ["未分類", ""],
+      ["仕事", cid("仕事")],
+      ["すべて", ""],
+    ]) {
+      await user.click(within(filter).getByRole("button", { name: tab }));
+      await user.click(screen.getByRole("button", { name: "追加" }));
+      expect(screen.getByRole("combobox")).toHaveValue(categoryId);
+      expect(screen.getByLabelText("名前")).toHaveValue("下書き");
+      expect(screen.getByLabelText("メモ")).toHaveValue("メモ");
+      await user.click(screen.getByRole("button", { name: "閉じる" }));
+    }
+  });
+
+  it.each([false, true])(
+    "saves the tab category and allows overriding it (override: %s)",
+    async (override) => {
+      mockListTodoCategories.mockResolvedValue(
+        resolvedData({ categories: order(null, "買い物", "仕事") }),
+      );
+      const user = userEvent.setup();
+      renderPage();
+      const filter = await screen.findByRole("group", { name: "カテゴリーで絞り込み" });
+      await user.click(await within(filter).findByRole("button", { name: "買い物" }));
+      await user.click(screen.getByRole("button", { name: "追加" }));
+      expect(screen.getByRole("combobox")).toHaveValue(cid("買い物"));
+      await user.type(screen.getByLabelText("名前"), "新しいToDo");
+      if (override) await user.selectOptions(screen.getByRole("combobox"), cid("仕事"));
+      await user.click(screen.getByRole("button", { name: "追加する" }));
+      await waitFor(() =>
+        expect(mockPostTodoItem).toHaveBeenCalledWith({
+          name: "新しいToDo",
+          notes: undefined,
+          categoryId: cid(override ? "仕事" : "買い物"),
+        }),
+      );
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      await user.click(screen.getByRole("button", { name: "追加" }));
+      expect(screen.getByRole("combobox")).toHaveValue(cid("買い物"));
+      expect(screen.getByLabelText("名前")).toHaveValue("");
+    },
+  );
+
   it("shows a created todo item at the top immediately", async () => {
     mockListTodoItems.mockResolvedValue({
       data: {
