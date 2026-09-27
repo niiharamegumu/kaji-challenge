@@ -1,9 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   type TodoItem,
+  type TodoCategoryOrder,
   deleteTodoCategory,
   listTodoCategories,
   postTodoCategory,
+  postTodoCategoriesReorder,
 } from "../../../lib/api/operations";
 import { queryKeys } from "../../../shared/query/queryKeys";
 import { formatError } from "../../../shared/utils/errors";
@@ -38,7 +40,7 @@ export function useTodoCategoryMutations(setStatus: (message: string) => void) {
         client.cancelQueries({ queryKey: queryKeys.todoCategories }),
         client.cancelQueries({ queryKey: queryKeys.todoItems }),
       ]);
-      client.setQueryData<string[]>(queryKeys.todoCategories, (categories) =>
+      client.setQueryData<TodoCategoryOrder>(queryKeys.todoCategories, (categories) =>
         categories?.filter((category) => category !== name),
       );
       client.setQueryData<TodoItem[]>(queryKeys.todoItems, (items) =>
@@ -52,5 +54,17 @@ export function useTodoCategoryMutations(setStatus: (message: string) => void) {
     },
     onError: (error) => setStatus(`カテゴリーの削除に失敗しました: ${formatError(error)}`),
   });
-  return { createCategory, removeCategory };
+  const reorderCategories = useMutation({
+    mutationFn: (categories: TodoCategoryOrder) => postTodoCategoriesReorder({ categories }),
+    onSuccess: async ({ data }) => {
+      await client.cancelQueries({ queryKey: queryKeys.todoCategories });
+      client.setQueryData(queryKeys.todoCategories, data.categories);
+      setStatus("カテゴリーの並び順を保存しました");
+    },
+    onError: (error) => {
+      setStatus(`カテゴリーの並べ替えに失敗しました: ${formatError(error)}`);
+      void client.invalidateQueries({ queryKey: queryKeys.todoCategories });
+    },
+  });
+  return { createCategory, removeCategory, reorderCategories };
 }
