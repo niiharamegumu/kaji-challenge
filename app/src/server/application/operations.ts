@@ -33,7 +33,8 @@ const readOperations = new Set<Operation["operation"]>([
   "listReminders",
   "listReminderDefinitions",
   "listPenaltyRules",
-  "listShoppingItems",
+  "listTodoItems",
+  "listTodoCategories",
   "getTaskOverview",
   "getPenaltySummaryMonthly",
   "getMonthCloseCandidate",
@@ -284,12 +285,24 @@ export async function executeOperation(
       };
       break;
     }
-    case "listShoppingItems":
-      data = { items: (await repo.ListShoppingItemsByTeamID(teamId)).map(map.shopping) };
+    case "listTodoCategories":
+      data = { categories: await repo.ListTodoCategories(teamId) };
       break;
-    case "postShoppingItem": {
+    case "postTodoCategory":
+      await repo.CreateTodoCategory(teamId, input.body.name);
+      data = { categories: await repo.ListTodoCategories(teamId) };
+      break;
+    case "deleteTodoCategory":
+      await repo.DeleteTodoCategory(teamId, input.params.name, now);
+      data = {};
+      break;
+    case "listTodoItems":
+      data = { items: (await repo.ListTodoItemsByTeamID(teamId)).map(map.todo) };
+      break;
+    case "postTodoItem": {
       const id = crypto.randomUUID();
-      await repo.CreateShoppingItem({
+      await repo.CreateTodoItem({
+        Category: input.body.category ?? null,
         ID: id,
         TeamID: teamId,
         Name: requiredText(input.body.name),
@@ -298,30 +311,32 @@ export async function executeOperation(
         CreatedAt: now,
         UpdatedAt: now,
       });
-      data = map.shopping(await repo.GetShoppingItemByID(id));
+      data = map.todo(await repo.GetTodoItemByID(id));
       break;
     }
-    case "patchShoppingItem": {
-      const item = await repo.GetShoppingItemByID(input.params.itemId);
+    case "patchTodoItem": {
+      const item = await repo.GetTodoItemByID(input.params.itemId);
       invariant(item.TeamID === teamId, "item not found", 404);
-      await repo.UpdateShoppingItem({
+      await repo.UpdateTodoItem({
+        TeamID: teamId,
+        Category: input.body.category,
         ID: item.ID,
         Name: input.body.name !== undefined ? requiredText(input.body.name) : undefined,
         Notes: input.body.notes === undefined ? undefined : input.body.notes?.trim() || null,
         UpdatedAt: now,
       });
-      data = map.shopping(await repo.GetShoppingItemByID(item.ID));
+      data = map.todo(await repo.GetTodoItemByID(item.ID));
       break;
     }
-    case "deleteShoppingItem": {
-      const item = await repo.GetShoppingItemByID(input.params.itemId);
+    case "deleteTodoItem": {
+      const item = await repo.GetTodoItemByID(input.params.itemId);
       invariant(item.TeamID === teamId, "item not found", 404);
-      await repo.DeleteShoppingItem(item.ID);
+      await repo.DeleteTodoItem(item.ID);
       data = {};
       break;
     }
-    case "postShoppingItemsReorder": {
-      const rows = await repo.ListShoppingItemsByTeamID(teamId);
+    case "postTodoItemsReorder": {
+      const rows = await repo.ListTodoItemsByTeamID(teamId);
       const ids = input.body.itemIds;
       validateReorder(
         rows.map((item) => item.ID),
@@ -330,10 +345,10 @@ export async function executeOperation(
       await repo.Reorder({
         teamId,
         ids,
-        kind: "shopping",
+        kind: "todo",
         now,
       });
-      data = { items: (await repo.ListShoppingItemsByTeamID(teamId)).map(map.shopping) };
+      data = { items: (await repo.ListTodoItemsByTeamID(teamId)).map(map.todo) };
       break;
     }
     case "listPenaltyRules":
