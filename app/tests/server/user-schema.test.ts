@@ -112,11 +112,17 @@ beforeAll(async () => {
   await connection.binding.batch(
     unstable_splitSqlQuery(categoryOrder).map((q) => connection.binding.prepare(q)),
   );
+  const categoryIds = await readFile(
+    new URL("../../migrations/0007_todo_category_ids.sql", import.meta.url),
+    "utf8",
+  );
+  await connection.binding.batch(
+    unstable_splitSqlQuery(categoryIds).map((q) => connection.binding.prepare(q)),
+  );
   snapshots.teams = snapshots.teams.map((row) => {
     const kept = { ...(row as Record<string, unknown>) };
     delete kept.state_revision;
     kept.todo_categories = "[]";
-    kept.todo_unclassified_sort_key = 0;
     return kept;
   });
 });
