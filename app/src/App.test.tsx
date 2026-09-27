@@ -224,7 +224,7 @@ describe("App", () => {
     ["タスク", "/tasks", "tasks page"],
     ["ペナルティ", "/penalties", "penalties page"],
     ["設定", "/settings", "settings page"],
-    ["カテゴリー管理", "/todo-categories", "todo categories page"],
+    ["カテゴリー", "/todo-categories", "todo categories page"],
   ])("navigates from %s to %s", async (label, path, page) => {
     mockGetMe.mockResolvedValue({
       data: { user: { id: "u1", displayName: "Owner" }, memberships: [] },
