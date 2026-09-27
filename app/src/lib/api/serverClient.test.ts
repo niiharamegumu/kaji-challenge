@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { cancelTeamRequests } from "./serverClient";
-import { deleteTask, listShoppingItems, patchMeNickname } from "./operations";
+import { deleteTask, listTodoItems, patchMeNickname } from "./operations";
 const invoke = vi.hoisted(() => vi.fn());
 vi.mock("../../server/transport/operations.functions", () => ({ invokeOperation: invoke }));
 
@@ -43,7 +43,7 @@ describe("Server Function adapters", () => {
   });
   it.each(["invalid", { items: [{ id: false }] }])("rejects malformed DTOs: %s", async (data) => {
     invoke.mockResolvedValue({ ok: true, data });
-    await expect(listShoppingItems()).rejects.toThrow();
+    await expect(listTodoItems()).rejects.toThrow();
   });
   it("honors cancellation before sending and after a late response", async () => {
     const controller = new AbortController();
@@ -54,11 +54,11 @@ describe("Server Function adapters", () => {
           resolve = r;
         }),
     );
-    const request = listShoppingItems({ signal: controller.signal });
+    const request = listTodoItems({ signal: controller.signal });
     controller.abort();
     resolve({ ok: true, data: { items: [] } });
     await expect(request).rejects.toMatchObject({ name: "AbortError" });
-    await expect(listShoppingItems({ signal: controller.signal })).rejects.toMatchObject({
+    await expect(listTodoItems({ signal: controller.signal })).rejects.toMatchObject({
       name: "AbortError",
     });
     expect(invoke).toHaveBeenCalledTimes(1);

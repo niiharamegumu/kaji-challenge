@@ -2,7 +2,7 @@ import { act, cleanup, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ShoppingListManager } from "./ShoppingListManager";
+import { TodoManager } from "./TodoManager";
 
 type MockDragEndEvent = {
   active: { id: string };
@@ -76,14 +76,14 @@ vi.mock("@dnd-kit/utilities", () => ({
   },
 }));
 
-describe("ShoppingListManager", () => {
+describe("TodoManager", () => {
   it("linkifies only http and https URLs in notes", () => {
     render(
-      <ShoppingListManager
-        form={{ name: "", notes: "" }}
+      <TodoManager
         items={[
           {
             id: "item-1",
+            category: null,
             teamId: "team-1",
             name: "牛乳",
             notes:
@@ -93,15 +93,8 @@ describe("ShoppingListManager", () => {
             updatedAt: "2026-03-01T00:00:00Z",
           },
         ]}
-        isCreateOpen={false}
-        isCreating={false}
-        createFailed={false}
         isUpdating={false}
         isReordering={false}
-        onCloseCreate={() => undefined}
-        onFormChange={() => undefined}
-        onOpenCreate={() => undefined}
-        onCreate={async () => undefined}
         onDelete={() => undefined}
         onReorder={() => undefined}
         onUpdate={async () => undefined}
@@ -124,6 +117,7 @@ describe("ShoppingListManager", () => {
     const items = [
       {
         id: "item-1",
+        category: null,
         teamId: "team-1",
         name: "牛乳",
         notes: null,
@@ -133,6 +127,7 @@ describe("ShoppingListManager", () => {
       },
       {
         id: "item-2",
+        category: null,
         teamId: "team-1",
         name: "卵",
         notes: null,
@@ -143,18 +138,10 @@ describe("ShoppingListManager", () => {
     ];
 
     const { rerender } = render(
-      <ShoppingListManager
-        form={{ name: "", notes: "" }}
+      <TodoManager
         items={items}
-        isCreateOpen={false}
-        isCreating={false}
-        createFailed={false}
         isUpdating={false}
         isReordering={false}
-        onCloseCreate={() => undefined}
-        onFormChange={() => undefined}
-        onOpenCreate={() => undefined}
-        onCreate={async () => undefined}
         onDelete={() => undefined}
         onReorder={onReorder}
         onUpdate={async () => undefined}
@@ -175,33 +162,45 @@ describe("ShoppingListManager", () => {
     expect(onReorder).toHaveBeenCalledWith(["item-2", "item-1"]);
 
     rerender(
-      <ShoppingListManager
-        form={{ name: "", notes: "" }}
+      <TodoManager
         items={items}
-        isCreateOpen={false}
-        isCreating={false}
-        createFailed={false}
         isUpdating={false}
         isReordering
-        onCloseCreate={() => undefined}
-        onFormChange={() => undefined}
-        onOpenCreate={() => undefined}
-        onCreate={async () => undefined}
         onDelete={() => undefined}
         onReorder={onReorder}
         onUpdate={async () => undefined}
       />,
     );
 
-    const currentShoppingSection = screen
-      .getByRole("heading", { name: "現在の買い物" })
+    const currentTodoSection = screen
+      .getByRole("heading", { name: "現在のToDo" })
       .closest("article");
-    if (currentShoppingSection == null) {
-      throw new Error("current shopping section not found");
+    if (currentTodoSection == null) {
+      throw new Error("current todo section not found");
     }
-    const list = within(currentShoppingSection).getByRole("list");
+    const list = within(currentTodoSection).getByRole("list");
     const reorderedItems = within(list).getAllByRole("listitem");
     expect(within(reorderedItems[0]).getByText("卵")).toBeInTheDocument();
     expect(within(reorderedItems[1]).getByText("牛乳")).toBeInTheDocument();
+
+    expect(screen.getByRole("button", { name: "牛乳 をドラッグして並び替え" })).toBeDisabled();
+    act(() => {
+      latestOnDragEnd?.({ active: { id: "item-1" }, over: { id: "item-2" } });
+    });
+    expect(onReorder).toHaveBeenCalledTimes(1);
+
+    // Filtering during a save must not leave items from the previous filter visible.
+    rerender(
+      <TodoManager
+        items={[items[0]]}
+        isUpdating={false}
+        isReordering
+        onDelete={() => undefined}
+        onReorder={onReorder}
+        onUpdate={async () => undefined}
+      />,
+    );
+    expect(screen.getByText("牛乳")).toBeVisible();
+    expect(screen.queryByText("卵")).not.toBeInTheDocument();
   });
 });

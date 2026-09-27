@@ -5,7 +5,8 @@ const loadPenaltiesPage = () => import("../features/penalties/routes/PenaltiesPa
 const loadSettingsPage = () => import("../features/settings/routes/SettingsPage");
 const loadSummaryPage = () => import("../features/summary/routes/SummaryPage");
 const loadReminderCalendarPage = () => import("../features/reminders/routes/ReminderCalendarPage");
-const loadShoppingListPage = () => import("../features/shopping-list/routes/ShoppingListPage");
+const loadTodoCategoriesPage = () => import("../features/todos/routes/TodoCategoriesPage");
+const loadTodoPage = () => import("../features/todos/routes/TodoPage");
 
 let tasksPagePromise: Promise<typeof import("../features/tasks/routes/TasksPage")> | null = null;
 let penaltiesPagePromise: Promise<
@@ -18,9 +19,10 @@ let summaryPagePromise: Promise<typeof import("../features/summary/routes/Summar
 let reminderCalendarPagePromise: Promise<
   typeof import("../features/reminders/routes/ReminderCalendarPage")
 > | null = null;
-let shoppingListPagePromise: Promise<
-  typeof import("../features/shopping-list/routes/ShoppingListPage")
+let todoCategoriesPagePromise: Promise<
+  typeof import("../features/todos/routes/TodoCategoriesPage")
 > | null = null;
+let todoListPagePromise: Promise<typeof import("../features/todos/routes/TodoPage")> | null = null;
 
 export function preloadTasksPageChunk() {
   tasksPagePromise ??= loadTasksPage();
@@ -47,9 +49,14 @@ export function preloadReminderCalendarPageChunk() {
   return reminderCalendarPagePromise;
 }
 
-export function preloadShoppingListPageChunk() {
-  shoppingListPagePromise ??= loadShoppingListPage();
-  return shoppingListPagePromise;
+export function preloadTodoCategoriesPageChunk() {
+  todoCategoriesPagePromise ??= loadTodoCategoriesPage();
+  return todoCategoriesPagePromise;
+}
+
+export function preloadTodoPageChunk() {
+  todoListPagePromise ??= loadTodoPage();
+  return todoListPagePromise;
 }
 
 export const TasksPage = lazy(async () => {
@@ -77,7 +84,12 @@ export const ReminderCalendarPage = lazy(async () => {
   return { default: module.ReminderCalendarPage };
 });
 
-export const ShoppingListPage = lazy(async () => {
-  const module = await preloadShoppingListPageChunk();
-  return { default: module.ShoppingListPage };
+export const TodoPage = lazy(async () => {
+  const module = await preloadTodoPageChunk();
+  return { default: module.TodoPage };
+});
+
+export const TodoCategoriesPage = lazy(async () => {
+  const module = await preloadTodoCategoriesPageChunk();
+  return { default: module.TodoCategoriesPage };
 });

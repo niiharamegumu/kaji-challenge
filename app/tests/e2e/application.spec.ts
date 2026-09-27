@@ -71,7 +71,7 @@ test("login screen and API paths never fall back to cached HTML", async ({
   expect(response.headers()["content-type"]).toContain("application/json");
   expect(await response.json()).toBeNull();
 });
-test("existing identity loads every route and updates shopping through Workers", async ({
+test("existing identity loads every route and updates todo through Workers", async ({
   page,
   context,
 }, testInfo) => {
@@ -90,7 +90,7 @@ test("existing identity loads every route and updates shopping through Workers",
   for (const [route, heading] of [
     ["/tasks", "タスク管理"],
     ["/summary", "月次サマリー"],
-    ["/shopping-list", "買い物リスト"],
+    ["/todos", "ToDo"],
   ]) {
     await page.goto(route);
     await expect(page.getByRole("heading", { name: heading, exact: true })).toBeVisible();
@@ -262,7 +262,7 @@ test("creates tasks, reorders with real drag sensors, and preserves navigation",
   await expect(page.getByText("操作確認A", { exact: true })).toBeVisible();
 });
 
-test("completed home cards release their animation layer before opening shopping", async ({
+test("completed home cards release their animation layer before opening todo", async ({
   page,
   context,
 }) => {
@@ -283,8 +283,8 @@ test("completed home cards release their animation layer before opening shopping
     .poll(() => dailyPanel.evaluate((element) => getComputedStyle(element).transform))
     .toBe("none");
 
-  await page.getByRole("button", { name: "買い物", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "買い物リスト", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "ToDo", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "ToDo", exact: true })).toBeVisible();
   await expect(dailyPanel).toHaveCount(0);
   await expect(page.locator('main [class*="ring-[color:var(--color-matcha-400)]"]')).toHaveCount(0);
 });
@@ -518,23 +518,23 @@ test("real WebSockets synchronize two users, deduplicate tabs and isolate teams"
     await extra.close();
     await expect(peerIcon).toBeVisible();
 
-    await page.getByRole("button", { name: "買い物", exact: true }).click();
-    await peer.getByRole("button", { name: "買い物", exact: true }).click();
+    await page.getByRole("button", { name: "ToDo", exact: true }).click();
+    await peer.getByRole("button", { name: "ToDo", exact: true }).click();
     await page.getByRole("button", { name: "追加", exact: true }).click();
-    await page.getByPlaceholder("例: 牛乳", { exact: true }).fill("リアルタイムの買い物");
+    await page.getByPlaceholder("例: 牛乳", { exact: true }).fill("リアルタイムのToDo");
     await page.getByRole("button", { name: "追加する", exact: true }).click();
-    await expect(peer.getByText("リアルタイムの買い物", { exact: true })).toBeVisible();
-    const item = peer.getByText("リアルタイムの買い物", { exact: true }).locator("..");
+    await expect(peer.getByText("リアルタイムのToDo", { exact: true })).toBeVisible();
+    const item = peer.getByText("リアルタイムのToDo", { exact: true }).locator("..");
     await item.getByRole("button", { name: "編集", exact: true }).click();
     await peer.getByLabel("メモ", { exact: true }).fill("共有メモ");
     await peer.getByRole("button", { name: "保存", exact: true }).click();
     await expect(page.getByText("共有メモ", { exact: true })).toBeVisible();
-    await item.getByRole("button", { name: "購入済みにする" }).click();
+    await item.getByRole("button", { name: "完了にする" }).click();
     await peer
-      .getByRole("dialog", { name: "購入済みにしますか？" })
-      .getByRole("button", { name: "購入済みにする", exact: true })
+      .getByRole("dialog", { name: "完了にしますか？" })
+      .getByRole("button", { name: "完了にする", exact: true })
       .click();
-    await expect(page.getByText("リアルタイムの買い物", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("リアルタイムのToDo", { exact: true })).toHaveCount(0);
     expect(connections).toBe(1);
 
     await page.goto("/tasks");
@@ -560,4 +560,134 @@ test("real WebSockets synchronize two users, deduplicate tabs and isolate teams"
     await peerContext.close();
     await outsiderContext.close();
   }
+});
+
+test("ToDo categories persist, filter and detach without deleting items", async ({
+  page,
+  context,
+}, testInfo) => {
+  await authenticate(context);
+  await page.goto("/todos");
+  await expect(page).toHaveURL(/\/todos$/);
+  const category = `分類検証-${testInfo.project.name}`;
+  for (const [name, value] of [
+    ["分類テストA", category],
+    ["分類テスト未分類", ""],
+    ["分類テストB", category],
+  ]) {
+    await page.getByRole("button", { name: "追加", exact: true }).click();
+    await page.getByLabel("名前", { exact: true }).fill(name);
+    await page.getByLabel("カテゴリー（任意）").fill(value);
+    await page.getByRole("button", { name: "追加する", exact: true }).click();
+    await expect(page.getByText(name, { exact: true })).toBeVisible();
+  }
+  const filter = page.getByRole("group", { name: "カテゴリーで絞り込み" });
+  await filter.getByRole("button", { name: category, exact: true }).click();
+  await expect(page.getByText("分類テスト未分類", { exact: true })).toHaveCount(0);
+  const handle = page.getByRole("button", { name: "分類テストB をドラッグして並び替え" });
+  await handle.scrollIntoViewIfNeeded();
+  const from = await handle.boundingBox();
+  const to = await page
+    .getByRole("button", { name: "分類テストA をドラッグして並び替え" })
+    .boundingBox();
+  if (!from || !to) throw new Error("ToDo drag handles are not visible");
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2 + 10, { steps: 5 });
+  await expect(handle).toHaveAttribute("aria-pressed", "true");
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 20 });
+  const saved = page.waitForResponse(
+    (response) =>
+      response.url().includes("/_serverFn/") &&
+      (response.request().postData()?.includes("postTodoItemsReorder") ?? false),
+  );
+  await page.mouse.up();
+  expect((await saved).ok()).toBe(true);
+  await page.reload();
+  await expect(
+    page.getByRole("button", { name: /分類テスト.*をドラッグして並び替え/ }),
+  ).toHaveCount(3);
+  expect(
+    await page
+      .getByRole("button", { name: /分類テスト.*をドラッグして並び替え/ })
+      .evaluateAll((elements) => elements.map((element) => element.getAttribute("aria-label"))),
+  ).toEqual([
+    "分類テストA をドラッグして並び替え",
+    "分類テスト未分類 をドラッグして並び替え",
+    "分類テストB をドラッグして並び替え",
+  ]);
+  await page.screenshot({ path: testInfo.outputPath("todos-categories.png"), fullPage: true });
+  await page.getByRole("button", { name: "その他", exact: true }).click();
+  await page.getByRole("button", { name: "カテゴリー管理", exact: true }).click();
+  await expect(page).toHaveURL(/\/todo-categories$/);
+  await expect(page.getByRole("heading", { name: "カテゴリー管理" })).toBeVisible();
+  await page.getByLabel("新しいカテゴリー").fill("0件のカテゴリー");
+  await page.getByRole("button", { name: "カテゴリーを追加", exact: true }).click();
+  await expect(page.getByRole("button", { name: "0件のカテゴリー を削除" })).toBeVisible();
+  const extraCategories = [
+    "買い物リスト",
+    "やることリスト",
+    "家のメンテナンス",
+    "手続き・予約",
+    "週末のお出かけ",
+    "あとで確認すること",
+  ];
+  for (const name of extraCategories) {
+    await page.getByLabel("新しいカテゴリー").fill(name);
+    await page.getByRole("button", { name: "カテゴリーを追加", exact: true }).click();
+    await expect(page.getByRole("button", { name: `${name} を削除` })).toBeVisible();
+  }
+  await page.screenshot({
+    path: testInfo.outputPath("todo-category-management.png"),
+    fullPage: true,
+  });
+  await page.getByRole("button", { name: "ToDo", exact: true }).click();
+  await expect(page.getByLabel("新しいカテゴリー")).toHaveCount(0);
+  await expect(filter.getByRole("button", { name: "すべて", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  const headingBox = await page.getByRole("heading", { name: "現在のToDo" }).boundingBox();
+  const filterBox = await filter.boundingBox();
+  expect(headingBox && filterBox && filterBox.y >= headingBox.y + headingBox.height).toBeTruthy();
+  if (testInfo.project.name === "mobile") {
+    expect(await filter.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(
+      true,
+    );
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+    await filter.evaluate((element) => {
+      element.scrollLeft = element.scrollWidth;
+    });
+    expect(await filter.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+  }
+  await filter.getByRole("button", { name: "あとで確認すること", exact: true }).click();
+  await expect(page.getByText("このカテゴリーのToDoはありません。")).toBeVisible();
+  await filter.getByRole("button", { name: "すべて", exact: true }).click();
+  await page.screenshot({ path: testInfo.outputPath("todos-category-tabs.png"), fullPage: false });
+  await page.getByRole("button", { name: "その他", exact: true }).click();
+  await page.getByRole("button", { name: "カテゴリー管理", exact: true }).click();
+  await page.reload();
+  await expect(page.getByRole("button", { name: "0件のカテゴリー を削除" })).toBeVisible();
+  await page.getByRole("button", { name: `${category} を削除` }).click();
+  await expect(page.getByRole("button", { name: `${category} を削除` })).toHaveCount(0);
+  await page.getByRole("button", { name: "ToDo", exact: true }).click();
+  await filter.getByRole("button", { name: "未分類", exact: true }).click();
+  await expect(page.getByText("分類テストA", { exact: true })).toBeVisible();
+  await expect(page.getByText("分類テストB", { exact: true })).toBeVisible();
+  await page.goto("/");
+  const item = page.getByText("分類テストA", { exact: true }).locator("..");
+  await expect(item.getByText("未分類", { exact: true })).toBeVisible();
+  const completed = page.waitForResponse(
+    (response) =>
+      response.url().includes("/_serverFn/") &&
+      (response.request().postData()?.includes("deleteTodoItem") ?? false),
+  );
+  await item.getByRole("button", { name: "完了にする", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "完了にする", exact: true }).click();
+  expect((await completed).ok()).toBe(true);
+  await page.reload();
+  await expect(page.getByText("分類テストA", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("分類テストB", { exact: true })).toBeVisible();
 });

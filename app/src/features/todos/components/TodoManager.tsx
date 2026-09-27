@@ -16,13 +16,12 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Check, GripVertical, Pencil, Plus, ShoppingBasket, X } from "lucide-react";
+import { Check, GripVertical, Pencil, CircleCheck, X } from "lucide-react";
 import type { ChangeEvent, ReactNode } from "react";
-import { startTransition, useState } from "react";
+import { useId, useState } from "react";
 
-import type { ShoppingListItem, UpdateShoppingListItemRequest } from "../../../lib/api/operations";
+import type { TodoItem, UpdateTodoItemRequest } from "../../../lib/api/operations";
 import { ConfirmModal } from "../../../shared/components/ConfirmModal";
-import { FormSheet } from "../../../shared/components/FormSheet";
 import { PAGE_SECTION_CHROMELESS_CLASS_NAME } from "../../../shared/styles/pageSection";
 import {
   restrictToVerticalAxis,
@@ -30,36 +29,36 @@ import {
   smoothSortableTransition,
 } from "../../../shared/utils/sortableAnimation";
 
-export type ShoppingItemFormState = {
+import { TodoCategoryInput } from "./TodoCategoryInput";
+
+export type TodoItemFormState = {
+  category: string;
   name: string;
   notes: string;
 };
 
-type Props = {
-  form: ShoppingItemFormState;
-  items: ShoppingListItem[];
-  isCreateOpen: boolean;
-  isCreating: boolean;
-  createFailed: boolean;
-  isReordering: boolean;
-  isUpdating: boolean;
-  showCreateButton?: boolean;
-  onCloseCreate: () => void;
-  onFormChange: (updater: (prev: ShoppingItemFormState) => ShoppingItemFormState) => void;
-  onOpenCreate: () => void;
-  onCreate: () => Promise<void>;
-  onDelete: (itemId: string) => void;
-  onReorder: (itemIds: string[]) => void;
-  onUpdate: (itemId: string, payload: UpdateShoppingListItemRequest) => Promise<void>;
-};
+type Props = Pick<
+  TodoItemsSectionProps,
+  | "emptyMessage"
+  | "filters"
+  | "categories"
+  | "items"
+  | "isReordering"
+  | "isUpdating"
+  | "onDelete"
+  | "onReorder"
+  | "onUpdate"
+>;
 
-type ShoppingListItemsSectionProps = {
-  items: ShoppingListItem[];
+type TodoItemsSectionProps = {
+  filters?: ReactNode;
+  categories?: string[];
+  items: TodoItem[];
   isReordering: boolean;
   isUpdating: boolean;
   onDelete: (itemId: string) => void;
   onReorder: (itemIds: string[]) => void;
-  onUpdate: (itemId: string, payload: UpdateShoppingListItemRequest) => Promise<void>;
+  onUpdate: (itemId: string, payload: UpdateTodoItemRequest) => Promise<void>;
   title?: string;
   description?: string;
   headerContent?: ReactNode;
@@ -68,11 +67,6 @@ type ShoppingListItemsSectionProps = {
   listClassName?: string;
   emptyClassName?: string;
   emptyMessage?: string;
-};
-
-type EditState = {
-  name: string;
-  notes: string;
 };
 
 type PendingCompleteItem = {
@@ -145,10 +139,12 @@ function renderNotesWithLinks(value: string): ReactNode {
   return parts;
 }
 
-function SortableShoppingItem({
+function SortableTodoItem({
+  categories,
   item,
   isEditing,
   isSaving,
+  isReordering,
   editState,
   onStartEdit,
   onChangeEditState,
@@ -156,18 +152,21 @@ function SortableShoppingItem({
   onSaveEdit,
   onComplete,
 }: {
-  item: ShoppingListItem;
+  categories: string[];
+  item: TodoItem;
   isEditing: boolean;
   isSaving: boolean;
-  editState: EditState;
-  onStartEdit: (item: ShoppingListItem) => void;
-  onChangeEditState: (next: EditState) => void;
+  isReordering: boolean;
+  editState: TodoItemFormState;
+  onStartEdit: (item: TodoItem) => void;
+  onChangeEditState: (updater: (prev: TodoItemFormState) => TodoItemFormState) => void;
   onCancelEdit: () => void;
   onSaveEdit: (itemId: string) => void;
   onComplete: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id,
+    disabled: isEditing || isReordering,
     animateLayoutChanges: smoothSortableLayoutChanges,
     transition: smoothSortableTransition,
   });
@@ -194,24 +193,7 @@ function SortableShoppingItem({
     >
       {isEditing ? (
         <fieldset disabled={isSaving} className="grid gap-2">
-          <label className="text-xs text-stone-700" htmlFor={`shopping-name-${item.id}`}>
-            名前
-          </label>
-          <input
-            id={`shopping-name-${item.id}`}
-            className="h-10 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
-            value={editState.name}
-            onChange={(event) => onChangeEditState({ ...editState, name: event.target.value })}
-          />
-          <label className="text-xs text-stone-700" htmlFor={`shopping-notes-${item.id}`}>
-            メモ
-          </label>
-          <input
-            id={`shopping-notes-${item.id}`}
-            className="h-10 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
-            value={editState.notes}
-            onChange={(event) => onChangeEditState({ ...editState, notes: event.target.value })}
-          />
+          <TodoItemForm categories={categories} form={editState} onFormChange={onChangeEditState} />
           <div className="mt-1 flex flex-wrap gap-2">
             <button
               type="button"
@@ -236,7 +218,10 @@ function SortableShoppingItem({
       ) : (
         <div className="flex items-start gap-3 pr-10">
           <div className="min-w-0 flex-1">
-            <div className="font-medium text-stone-900">{item.name}</div>
+            <div className="break-words font-medium text-stone-900">{item.name}</div>
+            <span className="mt-1 inline-block max-w-full rounded-md bg-stone-100 px-2 py-1 text-xs break-words text-stone-600">
+              {item.category ?? "未分類"}
+            </span>
             {item.notes != null && item.notes !== "" ? (
               <div className="mt-1 whitespace-pre-wrap break-words text-xs text-stone-600">
                 {renderNotesWithLinks(item.notes)}
@@ -259,8 +244,8 @@ function SortableShoppingItem({
                   onClick={onComplete}
                   onPointerDown={(event) => event.stopPropagation()}
                 >
-                  <ShoppingBasket size={14} aria-hidden="true" />
-                  <span>購入済みにする</span>
+                  <CircleCheck size={14} aria-hidden="true" />
+                  <span>完了にする</span>
                 </button>
               </div>
             </div>
@@ -273,6 +258,7 @@ function SortableShoppingItem({
           className="absolute top-1/2 right-3 flex h-8 w-8 -translate-y-1/2 cursor-grab touch-none select-none items-center justify-center rounded-md text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700 active:cursor-grabbing focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-400"
           onPointerDown={(event) => event.stopPropagation()}
           {...dragProps}
+          disabled={isReordering}
         >
           <GripVertical size={16} aria-hidden="true" />
         </button>
@@ -281,85 +267,87 @@ function SortableShoppingItem({
   );
 }
 
-export function ShoppingItemForm({
+export function TodoItemForm({
+  categories = [],
   form,
   onFormChange,
 }: {
-  form: ShoppingItemFormState;
-  onFormChange: (updater: (prev: ShoppingItemFormState) => ShoppingItemFormState) => void;
+  categories?: string[];
+  form: TodoItemFormState;
+  onFormChange: (updater: (prev: TodoItemFormState) => TodoItemFormState) => void;
 }) {
-  const handleChange =
-    (key: keyof ShoppingItemFormState) => (event: ChangeEvent<HTMLInputElement>) => {
-      onFormChange((prev) => ({ ...prev, [key]: event.target.value }));
-    };
+  const formId = useId();
+  const handleChange = (key: keyof TodoItemFormState) => (event: ChangeEvent<HTMLInputElement>) => {
+    onFormChange((prev) => ({ ...prev, [key]: event.target.value }));
+  };
 
   return (
     <div className="grid gap-2">
-      <label className="text-xs text-stone-700 sm:text-sm" htmlFor="shopping-item-name">
+      <label className="text-xs text-stone-700 sm:text-sm" htmlFor={`${formId}-name`}>
         名前
       </label>
       <input
-        id="shopping-item-name"
+        id={`${formId}-name`}
         className="h-10 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
         value={form.name}
         onChange={handleChange("name")}
         placeholder="例: 牛乳"
       />
-      <label className="text-xs text-stone-700 sm:text-sm" htmlFor="shopping-item-notes">
+      <label className="text-xs text-stone-700 sm:text-sm" htmlFor={`${formId}-notes`}>
         メモ
       </label>
       <input
-        id="shopping-item-notes"
+        id={`${formId}-notes`}
         className="h-10 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
         value={form.notes}
         onChange={handleChange("notes")}
         placeholder="例: 低脂肪乳"
       />
+      <TodoCategoryInput
+        categories={categories}
+        value={form.category}
+        onChange={(category) => onFormChange((prev) => ({ ...prev, category }))}
+      />
     </div>
   );
 }
 
-export function ShoppingListItemsSection({
+export function TodoItemsSection({
+  filters,
+  categories = [],
   items,
   isReordering,
   isUpdating,
   onDelete,
   onReorder,
   onUpdate,
-  title = "現在の買い物",
+  title = "現在のToDo",
   description,
   headerContent,
   showSectionChrome = true,
   articleClassName = `mt-3 rounded-xl px-0 py-3 md:mt-4 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`,
   listClassName = "mt-4",
   emptyClassName = "mx-2 mt-4 rounded-xl border border-dashed border-stone-300 bg-stone-50/80 px-4 py-8 text-center text-sm text-stone-600 md:mx-0",
-  emptyMessage = "買い物項目はまだありません。必要なものを追加してください。",
-}: ShoppingListItemsSectionProps) {
+  emptyMessage = "ToDoはまだありません。やることを追加してください。",
+}: TodoItemsSectionProps) {
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
-  const [editState, setEditState] = useState<EditState>({
+  const [editState, setEditState] = useState<TodoItemFormState>({
+    category: "",
     name: "",
     notes: "",
   });
   const [pendingCompleteItem, setPendingCompleteItem] = useState<PendingCompleteItem | null>(null);
   const [optimisticItemIds, setOptimisticItemIds] = useState<string[] | null>(null);
 
-  const serverItemIds = items.map((item) => item.id);
-  const shouldUseOptimisticOrder =
-    optimisticItemIds != null &&
-    optimisticItemIds.length === serverItemIds.length &&
-    optimisticItemIds.some((itemId, index) => itemId !== serverItemIds[index]);
-  const optimisticItemIndex =
-    shouldUseOptimisticOrder && optimisticItemIds != null
-      ? new Map(optimisticItemIds.map((itemId, index) => [itemId, index]))
+  const itemsById = new Map(items.map((item) => [item.id, item]));
+  const pendingOrder =
+    isReordering && optimisticItemIds?.length === items.length
+      ? optimisticItemIds.map((id) => itemsById.get(id))
       : null;
-  const optimisticItems =
-    optimisticItemIndex == null
-      ? items
-      : [...items].sort(
-          (left, right) =>
-            (optimisticItemIndex.get(left.id) ?? Number.MAX_SAFE_INTEGER) -
-            (optimisticItemIndex.get(right.id) ?? Number.MAX_SAFE_INTEGER),
-        );
+  // A category switch or deletion can change the list while an order is being saved.
+  const optimisticItems = pendingOrder?.every((item): item is TodoItem => item !== undefined)
+    ? pendingOrder
+    : items;
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -379,7 +367,7 @@ export function ShoppingListItemsSection({
   const itemIds = optimisticItems.map((item) => item.id);
 
   const applyReorder = (activeId: string, overId: string) => {
-    if (activeId === overId) {
+    if (isReordering || activeId === overId) {
       return;
     }
     const oldIndex = optimisticItems.findIndex((item) => item.id === activeId);
@@ -388,10 +376,9 @@ export function ShoppingListItemsSection({
       return;
     }
     const nextItems = arrayMove(optimisticItems, oldIndex, newIndex);
-    startTransition(() => {
-      setOptimisticItemIds(nextItems.map((item) => item.id));
-    });
-    onReorder(nextItems.map((item) => item.id));
+    const nextIds = nextItems.map((item) => item.id);
+    setOptimisticItemIds(nextIds);
+    onReorder(nextIds);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -402,10 +389,11 @@ export function ShoppingListItemsSection({
     applyReorder(String(active.id), String(over.id));
   };
 
-  const startEdit = (item: ShoppingListItem) => {
+  const startEdit = (item: TodoItem) => {
     if (isUpdating) return;
     setEditingItemId(item.id);
     setEditState({
+      category: item.category ?? "",
       name: item.name,
       notes: item.notes ?? "",
     });
@@ -413,11 +401,12 @@ export function ShoppingListItemsSection({
 
   const cancelEdit = () => {
     setEditingItemId(null);
-    setEditState({ name: "", notes: "" });
+    setEditState({ name: "", notes: "", category: "" });
   };
 
   const saveEdit = async (itemId: string) => {
-    const payload: UpdateShoppingListItemRequest = {
+    const payload: UpdateTodoItemRequest = {
+      category: editState.category.trim() || null,
       name: editState.name.trim(),
       notes: editState.notes.trim() === "" ? null : editState.notes.trim(),
     };
@@ -452,6 +441,7 @@ export function ShoppingListItemsSection({
           <div className="px-2 text-right text-xs text-stone-500 md:px-0">並び順を保存中...</div>
         ) : null}
 
+        {filters}
         {optimisticItems.length === 0 ? (
           <div className={emptyClassName}>{emptyMessage}</div>
         ) : (
@@ -464,11 +454,13 @@ export function ShoppingListItemsSection({
             <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
               <ul className={`grid gap-2 ${listClassName}`}>
                 {optimisticItems.map((item) => (
-                  <SortableShoppingItem
+                  <SortableTodoItem
+                    categories={categories}
                     key={item.id}
                     item={item}
                     isEditing={editingItemId === item.id}
                     isSaving={isUpdating}
+                    isReordering={isReordering}
                     editState={editState}
                     onStartEdit={startEdit}
                     onChangeEditState={setEditState}
@@ -487,13 +479,11 @@ export function ShoppingListItemsSection({
 
       <ConfirmModal
         isOpen={pendingCompleteItem != null}
-        title="購入済みにしますか？"
+        title="完了にしますか？"
         message={
-          pendingCompleteItem == null
-            ? ""
-            : `「${pendingCompleteItem.name}」を買い物リストから削除します。`
+          pendingCompleteItem == null ? "" : `「${pendingCompleteItem.name}」をToDoから削除します。`
         }
-        confirmLabel="購入済みにする"
+        confirmLabel="完了にする"
         onCancel={() => setPendingCompleteItem(null)}
         onConfirm={() => {
           if (pendingCompleteItem == null) {
@@ -507,79 +497,46 @@ export function ShoppingListItemsSection({
   );
 }
 
-export function ShoppingListManager({
-  form,
+export function TodoManager({
+  emptyMessage,
+  filters,
+  categories = [],
   items,
-  isCreateOpen,
-  isCreating,
-  createFailed,
   isReordering,
   isUpdating,
-  showCreateButton = true,
-  onCloseCreate,
-  onFormChange,
-  onOpenCreate,
-  onCreate,
   onDelete,
   onReorder,
   onUpdate,
 }: Props) {
-  const canCreate = form.name.trim().length > 0;
-
   return (
-    <>
-      <article
-        className={`animate-enter rounded-xl px-0 py-3 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
-      >
-        <div className="flex items-center justify-between gap-3 px-2 md:px-0">
-          <h2 className="text-lg font-semibold text-stone-900">買い物リスト</h2>
-          {showCreateButton ? (
-            <button
-              type="button"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-stone-900 text-white transition-colors hover:bg-stone-800"
-              onClick={onOpenCreate}
-              aria-label="追加"
-            >
-              <Plus size={16} aria-hidden="true" />
-            </button>
-          ) : null}
-        </div>
-        <div className="mt-4 border-t border-stone-200 pt-4">
-          <ShoppingListItemsSection
-            items={items}
-            isReordering={isReordering}
-            isUpdating={isUpdating}
-            onDelete={onDelete}
-            onReorder={onReorder}
-            onUpdate={onUpdate}
-            articleClassName=""
-            headerContent={
-              <span className="rounded-full border border-stone-200 bg-stone-50 px-3 py-1 text-xs text-stone-700">
-                <span className="whitespace-nowrap">{items.length}件</span>
-              </span>
-            }
-          />
-        </div>
-        <p className="mt-4 px-2 text-xs text-stone-500 md:px-0">
-          今必要なものだけをチームで共有します。購入済みにすると一覧から消えます。
-        </p>
-      </article>
-
-      <FormSheet
-        isOpen={isCreateOpen}
-        isSubmitting={isCreating}
-        submitFailed={createFailed}
-        title="買い物項目を追加"
-        submitLabel="追加する"
-        submitIcon={<Plus size={16} aria-hidden="true" />}
-        submitDisabled={!canCreate}
-        onClose={onCloseCreate}
-        onSubmit={() => {
-          return onCreate().then(onCloseCreate);
-        }}
-      >
-        <ShoppingItemForm form={form} onFormChange={onFormChange} />
-      </FormSheet>
-    </>
+    <article
+      className={`animate-enter rounded-xl px-0 py-3 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
+    >
+      <div className="flex items-center justify-between gap-3 px-2 md:px-0">
+        <h2 className="text-lg font-semibold text-stone-900">ToDo</h2>
+      </div>
+      <div className="mt-4 border-t border-stone-200 pt-4">
+        <TodoItemsSection
+          filters={filters}
+          emptyMessage={emptyMessage}
+          categories={categories}
+          items={items}
+          isReordering={isReordering}
+          isUpdating={isUpdating}
+          onDelete={onDelete}
+          onReorder={onReorder}
+          onUpdate={onUpdate}
+          articleClassName=""
+          headerContent={
+            <span className="rounded-full border border-stone-200 bg-stone-50 px-3 py-1 text-xs text-stone-700">
+              <span className="whitespace-nowrap">{items.length}件</span>
+            </span>
+          }
+        />
+      </div>
+      <p className="mt-4 px-2 text-xs text-stone-500 md:px-0">
+        ToDoをチームで共有します。完了すると削除されます。
+      </p>
+    </article>
   );
 }

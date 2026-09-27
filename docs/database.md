@@ -13,7 +13,7 @@ Cloudflare D1に19テーブルを持つ。ユーザー情報の正本はBetter A
 | 家事 | `tasks` | 家事定義、担当、並び順、論理削除 |
 | 日次完了 | `task_completion_daily` | 1家事・1日に最大1件という制約 |
 | 週次完了 | `task_completion_weekly_entries` | 1週間に複数回の完了・実行者・取り消す順番。日次と制約が異なる |
-| 買い物・予定 | `shopping_items`・`reminders` | 独立した業務データ |
+| ToDo・予定 | `todo_items`・`reminders` | チーム共有のToDoと予定。カテゴリーは`teams.todo_categories`に保持 |
 | ペナルティ | `penalty_rules` | 適用条件と論理削除 |
 | 月次確定 | `monthly_penalty_summaries`・`monthly_penalty_summary_triggered_rules` | 月次合計・締め状態・締め時点の発動ルールID。現在の定義だけからは確定状態を再現できない |
 | 締め台帳 | `close_runs` | 日次/週次の処理済み期間を記録し、補完・再実行時の二重計上を防止 |
@@ -41,6 +41,8 @@ Better Authの追加項目と入力制御は [公式Databaseガイド](https://b
 
 SQL migrationがDDLの正本です。schemaの変更だけではDBは更新されないため、今後の列・制約の変更では新しいmigrationとDrizzle定義を一緒に更新し、`drizzle-schema.test.ts` で照合してください。
 
+今後追加するmigrationはテーブル・カラム・インデックス・制約などのスキーマ変更に限定します。業務データの補正・カテゴリー設定は含めません。適用済みの過去migrationは変更しません。
+
 ## 日時の保存形式
 
 すべてのアプリ管理の日時列はUTCの固定形式 `YYYY-MM-DDTHH:mm:ss.sssZ`（TEXT）で保存する。日付のみの列は `YYYY-MM-DD` のまま。認証日時は `auth-schema.ts` のDrizzle customTypeで `Date` と相互変換し、Better Authの `lastRequest` だけはライブラリが期待する数値のUnixミリ秒と相互変換する。DB上はどちらも同じISO文字列。Pushの `lease_until` / `sent_at` もISO文字列で比較・保存する。
@@ -56,3 +58,9 @@ SQL migrationがDDLの正本です。schemaの変更だけではDBは更新さ�
 `0004_remove_revisions.sql` は `teams.state_revision` と `app_revision` を削除する追加migration。タスク・完了・チーム・セッション等の既存データは維持する。新しいrevision・操作ID・通知番号のテーブルは作らない。リアルタイムの接続一覧はDOのWebSocket attachmentから作り、D1には保存しない。
 
 旧Workerはこの列を参照するため、旧版をメンテナンス・Cron無効にして実行中の更新が終わってから適用する。SQL適用後は旧Workerへコードだけrollbackしない。新Workerを同じ停止設定で配備・確認し、再開する。詳しい手順はlocal-notes/operations/deployment-guide.mdを参照。
+
+## ToDoとカテゴリー
+
+`0005_todos.sql`は`shopping_items`を`todo_items`へ改名し、カテゴリー用カラムとインデックスを定義する。ID・チーム・名前・メモ・順序・日時は保持し、テーブル数は増やさない。既存項目は`category = NULL`の未分類で引き継ぎ、カテゴリー一覧は空配列で開始する。カテゴリーの自動設定や手動補正SQLは用意せず、必要になった時点で画面から設定する。完了操作は項目を物理削除する。
+
+カテゴリー一覧は`teams.todo_categories`のJSON文字列配列で管理し、0件でも明示的に削除するまで保持する。名前は前後空白を除いて1〜50文字、チーム内で同一名を重複登録しない。新規名のToDo保存はカテゴリー登録と同じD1 batch、カテゴリー削除は一覧からの除去と該当ToDoの未分類化を同じD1 batchに含める。並行追加ではSQL内で重複確認と追加を行い、アプリ側で配列を読み書きして上書きしない。

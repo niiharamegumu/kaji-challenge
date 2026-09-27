@@ -235,7 +235,7 @@ describe("SummaryPage", () => {
               },
               {
                 taskId: "weekly-past-completed",
-                title: "買い物",
+                title: "ToDo",
                 type: "weekly",
                 penaltyPoints: 2,
                 completed: true,

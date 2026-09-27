@@ -26,7 +26,7 @@ import {
   taskCompletionDaily,
   taskCompletionWeeklyEntries,
   inviteCodes,
-  shoppingItems,
+  todoItems,
   reminders,
   penaltyRules,
   monthlyPenaltySummaries,
@@ -84,14 +84,15 @@ const pushFields = {
   CreatedAt: iso(pushSubscriptions.created_at),
   UpdatedAt: iso(pushSubscriptions.updated_at),
 };
-const shoppingFields = {
-  ID: shoppingItems.id,
-  TeamID: shoppingItems.team_id,
-  Name: shoppingItems.name,
-  Notes: shoppingItems.notes,
-  SortKey: shoppingItems.sort_key,
-  CreatedAt: iso(shoppingItems.created_at),
-  UpdatedAt: iso(shoppingItems.updated_at),
+const todoFields = {
+  Category: todoItems.category,
+  ID: todoItems.id,
+  TeamID: todoItems.team_id,
+  Name: todoItems.name,
+  Notes: todoItems.notes,
+  SortKey: todoItems.sort_key,
+  CreatedAt: iso(todoItems.created_at),
+  UpdatedAt: iso(todoItems.updated_at),
 };
 const reminderFields = {
   ID: reminders.id,
@@ -613,52 +614,94 @@ export class D1Repository implements P.Repository {
     );
   }
 
-  async CreateShoppingItem(arg: P.CreateShoppingItemParams): Promise<void> {
+  private registerTodoCategory(teamId: string, name: string) {
+    // SQL appends only the missing name, avoiding lost updates from concurrent editors.
+    return this.db
+      .update(teams)
+      .set({
+        todo_categories: sql`json_insert(${teams.todo_categories}, '$[#]', ${name})`,
+      })
+      .where(
+        and(
+          eq(teams.id, teamId),
+          this.access(),
+          sql`NOT EXISTS (SELECT 1 FROM json_each(${teams.todo_categories}) WHERE value=${name})`,
+        ),
+      );
+  }
+  async ListTodoCategories(teamId: string): Promise<string[]> {
+    const rows = await this.db
+      .select({ categories: teams.todo_categories })
+      .from(teams)
+      .where(and(eq(teams.id, teamId), this.access()));
+    return required(rows, "ListTodoCategories").categories;
+  }
+  async CreateTodoCategory(teamId: string, name: string): Promise<void> {
+    await this.registerTodoCategory(teamId, name);
+  }
+  async DeleteTodoCategory(teamId: string, name: string, now: string): Promise<void> {
     await this.db.batch([
       this.db
-        .update(shoppingItems)
-        .set({ sort_key: sql`${shoppingItems.sort_key}+100` })
-        .where(and(and(eq(shoppingItems.team_id, arg.TeamID), this.access()), this.access())),
+        .update(teams)
+        .set({
+          todo_categories: sql`(SELECT json_group_array(value) FROM json_each(${teams.todo_categories}) WHERE value <> ${name})`,
+        })
+        .where(and(eq(teams.id, teamId), this.access())),
       this.db
-        .insert(shoppingItems)
+        .update(todoItems)
+        .set({ category: null, updated_at: now })
+        .where(and(eq(todoItems.team_id, teamId), eq(todoItems.category, name), this.access())),
+    ]);
+  }
+
+  async CreateTodoItem(arg: P.CreateTodoItemParams): Promise<void> {
+    await this.db.batch([
+      this.db
+        .update(todoItems)
+        .set({ sort_key: sql`${todoItems.sort_key}+100` })
+        .where(and(eq(todoItems.team_id, arg.TeamID), this.access())),
+      ...(arg.Category == null ? [] : [this.registerTodoCategory(arg.TeamID, arg.Category)]),
+      this.db
+        .insert(todoItems)
         .select(
-          sql`SELECT ${arg.ID},${arg.TeamID},${arg.Name},${arg.Notes},100,${arg.CreatedAt},${arg.UpdatedAt} WHERE ${this.access()}`,
+          sql`SELECT ${arg.ID},${arg.TeamID},${arg.Name},${arg.Notes},${arg.Category},100,${arg.CreatedAt},${arg.UpdatedAt} WHERE ${this.access()}`,
         ),
     ]);
   }
 
-  async DeleteShoppingItem(id: string): Promise<number> {
+  async DeleteTodoItem(id: string): Promise<number> {
     return this.db
-      .delete(shoppingItems)
-      .where(and(eq(shoppingItems.id, id), this.access()))
+      .delete(todoItems)
+      .where(and(eq(todoItems.id, id), this.access()))
       .returning()
       .then((rows) => rows.length);
   }
-  async GetShoppingItemByID(id: string): Promise<P.ShoppingItem> {
-    const rows = await this.db
-      .select(shoppingFields)
-      .from(shoppingItems)
-      .where(eq(shoppingItems.id, id));
-    return required(rows, "GetShoppingItemByID");
+  async GetTodoItemByID(id: string): Promise<P.TodoItem> {
+    const rows = await this.db.select(todoFields).from(todoItems).where(eq(todoItems.id, id));
+    return required(rows, "GetTodoItemByID");
   }
-  async ListShoppingItemsByTeamID(teamID: string): Promise<P.ShoppingItem[]> {
+  async ListTodoItemsByTeamID(teamID: string): Promise<P.TodoItem[]> {
     return this.db
-      .select(shoppingFields)
-      .from(shoppingItems)
-      .where(eq(shoppingItems.team_id, teamID))
-      .orderBy(shoppingItems.sort_key, shoppingItems.created_at, shoppingItems.id);
+      .select(todoFields)
+      .from(todoItems)
+      .where(eq(todoItems.team_id, teamID))
+      .orderBy(todoItems.sort_key, todoItems.created_at, todoItems.id);
   }
-  async UpdateShoppingItem(arg: P.UpdateShoppingItemParams): Promise<void> {
-    await this.db
-      .update(shoppingItems)
+  async UpdateTodoItem(arg: P.UpdateTodoItemParams): Promise<void> {
+    const update = this.db
+      .update(todoItems)
       .set({
         name: arg.Name,
         notes: arg.Notes,
+        category: arg.Category,
         updated_at: arg.UpdatedAt,
       })
-      .where(and(eq(shoppingItems.id, arg.ID), this.access()))
-      .returning()
-      .then((rows) => rows.length);
+      .where(and(eq(todoItems.id, arg.ID), eq(todoItems.team_id, arg.TeamID), this.access()));
+    if (arg.Category == null) {
+      await update;
+    } else {
+      await this.db.batch([this.registerTodoCategory(arg.TeamID, arg.Category), update]);
+    }
   }
   async FindOldestMonthCloseCandidate(
     arg: P.FindOldestMonthCloseCandidateParams,
@@ -881,7 +924,7 @@ export class D1Repository implements P.Repository {
   }
   async ProvisionUser(userId: string, teamId: string, name: string, now: string): Promise<void> {
     await this.db.batch([
-      this.db.insert(teams).select(sql`SELECT ${teamId},${name},${now}
+      this.db.insert(teams).select(sql`SELECT ${teamId},${name},${now},'[]'
         WHERE NOT EXISTS(SELECT 1 FROM team_members WHERE user_id=${userId})`),
       this.db.insert(teamMembers).select(sql`SELECT ${teamId},${userId},'owner',${now}
         WHERE EXISTS(SELECT 1 FROM teams WHERE id=${teamId}) AND NOT EXISTS(SELECT 1 FROM team_members WHERE user_id=${userId})`),
@@ -904,7 +947,7 @@ export class D1Repository implements P.Repository {
       this.db
         .insert(teams)
         .select(
-          sql`SELECT ${arg.toTeamId},${arg.newTeamName ?? ""},${arg.now} WHERE ${!arg.inviteCode} AND ${valid}`,
+          sql`SELECT ${arg.toTeamId},${arg.newTeamName ?? ""},${arg.now},'[]' WHERE ${!arg.inviteCode} AND ${valid}`,
         ),
       this.db
         .update(tasks)
@@ -967,7 +1010,7 @@ export class D1Repository implements P.Repository {
   }
   async Reorder(arg: P.ReorderParams): Promise<void> {
     if (!arg.ids.length) return;
-    const table = arg.kind === "tasks" ? tasks : shoppingItems;
+    const table = arg.kind === "tasks" ? tasks : todoItems;
     const ids = JSON.stringify(arg.ids);
     const scope = and(
       eq(table.team_id, arg.teamId),

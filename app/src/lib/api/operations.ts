@@ -157,35 +157,50 @@ export function deletePenaltyRule(
 ): Promise<ApiResult<Record<string, never>>> {
   return callOperation("deletePenaltyRule", { params: { ruleId } }, 204, options);
 }
-export function listShoppingItems(
+export function listTodoCategories(
   options?: CallOptions,
-): Promise<ApiResult<{ items: M.ShoppingListItem[] }>> {
-  return callOperation("listShoppingItems", { params: {} }, 200, options);
+): Promise<ApiResult<{ categories: string[] }>> {
+  return callOperation("listTodoCategories", { params: {} }, 200, options);
 }
-export function postShoppingItem(
-  body: M.CreateShoppingListItemRequest,
+export function postTodoCategory(
+  body: { name: string },
   options?: CallOptions,
-): Promise<ApiResult<M.ShoppingListItem>> {
-  return callOperation("postShoppingItem", { params: {}, body }, 201, options);
+): Promise<ApiResult<{ categories: string[] }>> {
+  return callOperation("postTodoCategory", { params: {}, body }, 201, options);
 }
-export function patchShoppingItem(
+export function deleteTodoCategory(
+  name: string,
+  options?: CallOptions,
+): Promise<ApiResult<Record<string, never>>> {
+  return callOperation("deleteTodoCategory", { params: { name } }, 204, options);
+}
+export function listTodoItems(options?: CallOptions): Promise<ApiResult<{ items: M.TodoItem[] }>> {
+  return callOperation("listTodoItems", { params: {} }, 200, options);
+}
+export function postTodoItem(
+  body: M.CreateTodoItemRequest,
+  options?: CallOptions,
+): Promise<ApiResult<M.TodoItem>> {
+  return callOperation("postTodoItem", { params: {}, body }, 201, options);
+}
+export function patchTodoItem(
   itemId: string,
-  body: M.UpdateShoppingListItemRequest,
+  body: M.UpdateTodoItemRequest,
   options?: CallOptions,
-): Promise<ApiResult<M.ShoppingListItem>> {
-  return callOperation("patchShoppingItem", { params: { itemId }, body }, 200, options);
+): Promise<ApiResult<M.TodoItem>> {
+  return callOperation("patchTodoItem", { params: { itemId }, body }, 200, options);
 }
-export function deleteShoppingItem(
+export function deleteTodoItem(
   itemId: string,
   options?: CallOptions,
 ): Promise<ApiResult<Record<string, never>>> {
-  return callOperation("deleteShoppingItem", { params: { itemId } }, 204, options);
+  return callOperation("deleteTodoItem", { params: { itemId } }, 204, options);
 }
-export function postShoppingItemsReorder(
-  body: M.ReorderShoppingListItemsRequest,
+export function postTodoItemsReorder(
+  body: M.ReorderTodoItemsRequest,
   options?: CallOptions,
-): Promise<ApiResult<{ items: M.ShoppingListItem[] }>> {
-  return callOperation("postShoppingItemsReorder", { params: {}, body }, 200, options);
+): Promise<ApiResult<{ items: M.TodoItem[] }>> {
+  return callOperation("postTodoItemsReorder", { params: {}, body }, 200, options);
 }
 export function getTaskOverview(options?: CallOptions): Promise<ApiResult<M.TaskOverviewResponse>> {
   return callOperation("getTaskOverview", { params: {} }, 200, options);

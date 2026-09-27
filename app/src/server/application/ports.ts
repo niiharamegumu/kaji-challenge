@@ -262,7 +262,8 @@ export interface UpsertPushSubscriptionRow {
   UpdatedAt: string;
 }
 
-export interface CreateShoppingItemParams {
+export interface CreateTodoItemParams {
+  Category: string | null;
   ID: string;
   TeamID: string;
   Name: string;
@@ -272,7 +273,9 @@ export interface CreateShoppingItemParams {
   UpdatedAt: string;
 }
 
-export interface UpdateShoppingItemParams {
+export interface UpdateTodoItemParams {
+  TeamID: string;
+  Category?: string | null;
   ID: string;
   Name?: string;
   Notes?: string | null;
@@ -434,7 +437,8 @@ export interface Reminder {
   UpdatedAt: string;
 }
 
-export interface ShoppingItem {
+export interface TodoItem {
+  Category: string | null;
   ID: string;
   TeamID: string;
   Name: string;
@@ -494,7 +498,7 @@ export type ReorderParams = {
   teamId: string;
   ids: string[];
   now: string;
-} & ({ kind: "tasks"; type: string } | { kind: "shopping" });
+} & ({ kind: "tasks"; type: string } | { kind: "todo" });
 
 export interface SetCompletionParams {
   teamId: string;
@@ -573,11 +577,14 @@ export interface Repository {
   ListPushSubscriptionsByUserID(userID: string): Promise<ListPushSubscriptionsByUserIDRow[]>;
   ListTeamIDsForPush(): Promise<string[]>;
   UpsertPushSubscription(arg: UpsertPushSubscriptionParams): Promise<UpsertPushSubscriptionRow>;
-  CreateShoppingItem(arg: CreateShoppingItemParams): Promise<void>;
-  DeleteShoppingItem(id: string): Promise<number>;
-  GetShoppingItemByID(id: string): Promise<ShoppingItem>;
-  ListShoppingItemsByTeamID(teamID: string): Promise<ShoppingItem[]>;
-  UpdateShoppingItem(arg: UpdateShoppingItemParams): Promise<void>;
+  ListTodoCategories(teamId: string): Promise<string[]>;
+  CreateTodoCategory(teamId: string, name: string): Promise<void>;
+  DeleteTodoCategory(teamId: string, name: string, now: string): Promise<void>;
+  CreateTodoItem(arg: CreateTodoItemParams): Promise<void>;
+  DeleteTodoItem(id: string): Promise<number>;
+  GetTodoItemByID(id: string): Promise<TodoItem>;
+  ListTodoItemsByTeamID(teamID: string): Promise<TodoItem[]>;
+  UpdateTodoItem(arg: UpdateTodoItemParams): Promise<void>;
   FindOldestMonthCloseCandidate(
     arg: FindOldestMonthCloseCandidateParams,
   ): Promise<FindOldestMonthCloseCandidateRow>;

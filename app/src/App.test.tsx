@@ -31,14 +31,14 @@ const mockGetMe = vi.fn();
 const mockGetTeamCurrentMembers = vi.fn();
 const mockGetTeamCurrentInvite = vi.fn();
 const mockPostTeamInvite = vi.fn();
-const mockListShoppingItems = vi.fn();
+const mockListTodoItems = vi.fn();
 const mockPrefetchHomeData = vi.fn();
 const mockPreloadTasksPageChunk = vi.fn();
 const mockPreloadPenaltiesPageChunk = vi.fn();
 const mockPreloadSettingsPageChunk = vi.fn();
 const mockPreloadSummaryPageChunk = vi.fn();
 const mockPreloadReminderCalendarPageChunk = vi.fn();
-const mockPreloadShoppingListPageChunk = vi.fn();
+const mockPreloadTodoPageChunk = vi.fn();
 
 vi.mock("./lib/api/operations", () => ({
   TaskType: { daily: "daily", weekly: "weekly" },
@@ -55,16 +55,17 @@ vi.mock("./lib/api/operations", () => ({
   getMe: (...args: unknown[]) => mockGetMe(...args),
   getTeamCurrentMembers: (...args: unknown[]) => mockGetTeamCurrentMembers(...args),
   getTeamCurrentInvite: (...args: unknown[]) => mockGetTeamCurrentInvite(...args),
-  listShoppingItems: (...args: unknown[]) => mockListShoppingItems(...args),
+  listTodoCategories: vi.fn().mockResolvedValue({ data: { categories: [] } }),
+  listTodoItems: (...args: unknown[]) => mockListTodoItems(...args),
   listReminders: vi.fn(),
   listReminderDefinitions: vi.fn(),
   postReminder: vi.fn(),
   patchReminder: vi.fn(),
   deleteReminder: vi.fn(),
-  postShoppingItem: vi.fn(),
-  patchShoppingItem: vi.fn(),
-  deleteShoppingItem: vi.fn(),
-  postShoppingItemsReorder: vi.fn(),
+  postTodoItem: vi.fn(),
+  patchTodoItem: vi.fn(),
+  deleteTodoItem: vi.fn(),
+  postTodoItemsReorder: vi.fn(),
   postTasksReorder: vi.fn(),
   postTask: vi.fn(),
   postTaskCompletion: vi.fn(),
@@ -87,14 +88,16 @@ vi.mock("./app/route-chunks", () => ({
   SettingsPage: () => <div>settings page</div>,
   SummaryPage: () => <div>summary page</div>,
   ReminderCalendarPage: () => <div>calendar page</div>,
-  ShoppingListPage: () => <div>shopping page</div>,
+  TodoPage: () => <div>todo page</div>,
+  TodoCategoriesPage: () => <div>todo categories page</div>,
+  preloadTodoCategoriesPageChunk: vi.fn(),
   preloadTasksPageChunk: (...args: unknown[]) => mockPreloadTasksPageChunk(...args),
   preloadPenaltiesPageChunk: (...args: unknown[]) => mockPreloadPenaltiesPageChunk(...args),
   preloadSettingsPageChunk: (...args: unknown[]) => mockPreloadSettingsPageChunk(...args),
   preloadSummaryPageChunk: (...args: unknown[]) => mockPreloadSummaryPageChunk(...args),
   preloadReminderCalendarPageChunk: (...args: unknown[]) =>
     mockPreloadReminderCalendarPageChunk(...args),
-  preloadShoppingListPageChunk: (...args: unknown[]) => mockPreloadShoppingListPageChunk(...args),
+  preloadTodoPageChunk: (...args: unknown[]) => mockPreloadTodoPageChunk(...args),
 }));
 
 describe("App", () => {
@@ -116,14 +119,14 @@ describe("App", () => {
     mockGetTeamCurrentMembers.mockReset();
     mockGetTeamCurrentInvite.mockReset();
     mockPostTeamInvite.mockReset();
-    mockListShoppingItems.mockReset();
+    mockListTodoItems.mockReset();
     mockPrefetchHomeData.mockReset();
     mockPreloadTasksPageChunk.mockReset();
     mockPreloadPenaltiesPageChunk.mockReset();
     mockPreloadSettingsPageChunk.mockReset();
     mockPreloadSummaryPageChunk.mockReset();
     mockPreloadReminderCalendarPageChunk.mockReset();
-    mockPreloadShoppingListPageChunk.mockReset();
+    mockPreloadTodoPageChunk.mockReset();
 
     mockGetTaskOverview.mockResolvedValue({
       data: {
@@ -141,7 +144,7 @@ describe("App", () => {
     mockSummary.mockResolvedValue({ data: { totalPenalty: 0 } });
     mockGetTeamCurrentMembers.mockResolvedValue({ data: { items: [] } });
     mockGetTeamCurrentInvite.mockResolvedValue({ data: null });
-    mockListShoppingItems.mockResolvedValue({ data: { items: [] } });
+    mockListTodoItems.mockResolvedValue({ data: { items: [] } });
     mockPostTeamInvite.mockResolvedValue({
       data: {
         code: "NEWCODE",
@@ -155,7 +158,7 @@ describe("App", () => {
     mockPreloadSettingsPageChunk.mockResolvedValue(undefined);
     mockPreloadSummaryPageChunk.mockResolvedValue(undefined);
     mockPreloadReminderCalendarPageChunk.mockResolvedValue(undefined);
-    mockPreloadShoppingListPageChunk.mockResolvedValue(undefined);
+    mockPreloadTodoPageChunk.mockResolvedValue(undefined);
     mockGetMe.mockRejectedValue(new Error("request failed: 401"));
   });
 
@@ -203,7 +206,7 @@ describe("App", () => {
 
     await waitFor(() => {
       expect(primaryNav.getByRole("button", { name: "ホーム" })).toBeInTheDocument();
-      expect(primaryNav.getByRole("button", { name: "買い物" })).toBeInTheDocument();
+      expect(primaryNav.getByRole("button", { name: "ToDo" })).toBeInTheDocument();
       expect(primaryNav.getByRole("button", { name: "カレンダー" })).toBeInTheDocument();
       expect(primaryNav.getByRole("button", { name: "サマリー" })).toBeInTheDocument();
       expect(floatingNav.getByRole("button", { name: "その他" })).toBeInTheDocument();
@@ -221,6 +224,7 @@ describe("App", () => {
     ["タスク", "/tasks", "tasks page"],
     ["ペナルティ", "/penalties", "penalties page"],
     ["設定", "/settings", "settings page"],
+    ["カテゴリー管理", "/todo-categories", "todo categories page"],
   ])("navigates from %s to %s", async (label, path, page) => {
     mockGetMe.mockResolvedValue({
       data: { user: { id: "u1", displayName: "Owner" }, memberships: [] },
@@ -252,7 +256,7 @@ describe("App", () => {
     });
   });
 
-  it("shows shopping list panel on home after authentication", async () => {
+  it("shows todo list panel on home after authentication", async () => {
     mockGetMe.mockResolvedValue({
       data: { user: { id: "u1", displayName: "Owner" }, memberships: [] },
     });
@@ -260,7 +264,7 @@ describe("App", () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "買い物リスト" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "ToDo" })).toBeInTheDocument();
     });
   });
 
@@ -418,7 +422,7 @@ describe("App", () => {
         expect(mockPreloadSummaryPageChunk).toHaveBeenCalledTimes(1);
         expect(mockPreloadPenaltiesPageChunk).toHaveBeenCalledTimes(1);
         expect(mockPreloadSettingsPageChunk).toHaveBeenCalledTimes(1);
-        expect(mockPreloadShoppingListPageChunk).toHaveBeenCalledTimes(1);
+        expect(mockPreloadTodoPageChunk).toHaveBeenCalledTimes(1);
       });
     } finally {
       globalThis.requestIdleCallback = originalRequestIdleCallback;
@@ -481,8 +485,8 @@ describe("App", () => {
 
     const primaryNav = within(await screen.findByTestId("floating-nav-primary"));
     const floatingNav = within(await screen.findByTestId("floating-nav"));
-    const shoppingButton = primaryNav.getByRole("button", {
-      name: "買い物",
+    const todoButton = primaryNav.getByRole("button", {
+      name: "ToDo",
     });
     const calendarButton = primaryNav.getByRole("button", {
       name: "カレンダー",
@@ -490,7 +494,7 @@ describe("App", () => {
     const summaryButton = primaryNav.getByRole("button", { name: "サマリー" });
     const moreButton = floatingNav.getByRole("button", { name: "その他" });
 
-    fireEvent.touchStart(shoppingButton);
+    fireEvent.touchStart(todoButton);
     fireEvent.pointerEnter(calendarButton, { pointerType: "mouse" });
     fireEvent.pointerEnter(summaryButton, { pointerType: "mouse" });
     await user.click(moreButton);
@@ -501,6 +505,6 @@ describe("App", () => {
     expect(mockPreloadTasksPageChunk).toHaveBeenCalledTimes(1);
     expect(mockPreloadReminderCalendarPageChunk).toHaveBeenCalledTimes(1);
     expect(mockPreloadSummaryPageChunk).toHaveBeenCalledTimes(1);
-    expect(mockPreloadShoppingListPageChunk).toHaveBeenCalledTimes(1);
+    expect(mockPreloadTodoPageChunk).toHaveBeenCalledTimes(1);
   });
 });
