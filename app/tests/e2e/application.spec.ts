@@ -583,7 +583,7 @@ test("ToDo categories persist, filter and detach without deleting items", async 
   ]) {
     await page.getByRole("button", { name: "追加", exact: true }).click();
     await page.getByLabel("名前", { exact: true }).fill(name);
-    await page.getByLabel("カテゴリー（任意）").selectOption(value);
+    await page.getByLabel("カテゴリー（任意）").selectOption({ label: value || "未分類" });
     await page.getByRole("button", { name: "追加する", exact: true }).click();
     await expect(page.getByText(name, { exact: true })).toBeVisible();
   }
@@ -814,7 +814,13 @@ test("persists category order including unclassified with mouse, touch and keybo
   await page.keyboard.press("Space", { delay: 100 });
   await expect(dragHandle("買い物")).toHaveAttribute("aria-pressed", "true");
   await page.keyboard.press("ArrowUp");
-  await expect(page.getByRole("status")).toContainText("over droppable area category:仕事");
+  await expect
+    .poll(async () => {
+      const shopping = await dragHandle("買い物").boundingBox();
+      const work = await dragHandle("仕事").boundingBox();
+      return shopping !== null && work !== null && shopping.y < work.y;
+    })
+    .toBe(true);
   const keyboardSaved = waitForSave();
   await page.keyboard.press("Space");
   expect((await keyboardSaved).ok()).toBe(true);
