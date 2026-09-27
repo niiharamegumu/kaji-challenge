@@ -84,7 +84,7 @@ describe("TodoManager", () => {
         items={[
           {
             id: "item-1",
-            category: null,
+            categoryId: null,
             teamId: "team-1",
             name: "牛乳",
             notes:
@@ -118,7 +118,7 @@ describe("TodoManager", () => {
     const items = [
       {
         id: "item-1",
-        category: null,
+        categoryId: null,
         teamId: "team-1",
         name: "牛乳",
         notes: null,
@@ -128,7 +128,7 @@ describe("TodoManager", () => {
       },
       {
         id: "item-2",
-        category: null,
+        categoryId: null,
         teamId: "team-1",
         name: "卵",
         notes: null,
