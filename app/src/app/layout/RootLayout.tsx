@@ -34,7 +34,8 @@ import {
   preloadSummaryPageChunk,
   preloadTasksPageChunk,
   preloadReminderCalendarPageChunk,
-  preloadShoppingListPageChunk,
+  preloadTodoPageChunk,
+  preloadTodoCategoriesPageChunk,
 } from "../route-chunks";
 
 const FloatingNav = lazy(async () => {
@@ -189,7 +190,7 @@ export function RootLayout() {
       void preloadPenaltiesPageChunk();
       void preloadSettingsPageChunk();
       void preloadReminderCalendarPageChunk();
-      void preloadShoppingListPageChunk();
+      void preloadTodoPageChunk();
 
       if (location.pathname !== "/") {
         prefetchHomeDataOnce();
@@ -214,8 +215,11 @@ export function RootLayout() {
       case "/calendar":
         void preloadReminderCalendarPageChunk();
         break;
-      case "/shopping-list":
-        void preloadShoppingListPageChunk();
+      case "/todo-categories":
+        void preloadTodoCategoriesPageChunk();
+        break;
+      case "/todos":
+        void preloadTodoPageChunk();
         break;
       default:
         break;
