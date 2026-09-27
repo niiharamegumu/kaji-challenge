@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { TodoCategoryOrder } from "../../../lib/api/operations";
 
 export type TodoItemFormState = {
   category: string;
@@ -8,7 +9,7 @@ export type TodoItemFormState = {
 
 export const emptyTodoItemForm: TodoItemFormState = { category: "", name: "", notes: "" };
 
-export function useTodoItemFormState(categories: string[] | undefined) {
+export function useTodoItemFormState(categories: TodoCategoryOrder | undefined) {
   const [form, setForm] = useState(emptyTodoItemForm);
 
   // Only a loaded category list can invalidate a selection; keep the other draft fields.
