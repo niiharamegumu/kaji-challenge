@@ -50,16 +50,10 @@ export type TaskCompletionSlot = z.infer<typeof Schemas.TaskCompletionSlotSchema
 export type PenaltyRule = z.infer<typeof Schemas.PenaltyRuleSchema>;
 export type CreatePenaltyRuleRequest = z.infer<typeof Schemas.CreatePenaltyRuleRequestSchema>;
 export type UpdatePenaltyRuleRequest = z.infer<typeof Schemas.UpdatePenaltyRuleRequestSchema>;
-export type ShoppingListItem = z.infer<typeof Schemas.ShoppingListItemSchema>;
-export type CreateShoppingListItemRequest = z.infer<
-  typeof Schemas.CreateShoppingListItemRequestSchema
->;
-export type UpdateShoppingListItemRequest = z.infer<
-  typeof Schemas.UpdateShoppingListItemRequestSchema
->;
-export type ReorderShoppingListItemsRequest = z.infer<
-  typeof Schemas.ReorderShoppingListItemsRequestSchema
->;
+export type TodoItem = z.infer<typeof Schemas.TodoItemSchema>;
+export type CreateTodoItemRequest = z.infer<typeof Schemas.CreateTodoItemRequestSchema>;
+export type UpdateTodoItemRequest = z.infer<typeof Schemas.UpdateTodoItemRequestSchema>;
+export type ReorderTodoItemsRequest = z.infer<typeof Schemas.ReorderTodoItemsRequestSchema>;
 export type TaskOverviewDailyTask = z.infer<typeof Schemas.TaskOverviewDailyTaskSchema>;
 export type TaskOverviewWeeklyTask = z.infer<typeof Schemas.TaskOverviewWeeklyTaskSchema>;
 export type TaskOverviewResponse = z.infer<typeof Schemas.TaskOverviewResponseSchema>;
