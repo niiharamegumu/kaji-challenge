@@ -88,7 +88,7 @@ function setup() {
     defaultOptions: { queries: { retry: false, staleTime: Infinity }, mutations: { retry: false } },
   });
   client.setQueryData(queryKeys.home, fixture());
-  client.setQueryData(queryKeys.shoppingItems, []);
+  client.setQueryData(queryKeys.todoItems, []);
   client.setQueryData([...queryKeys.rules, "withDeleted"], []);
   client.setQueryData([...queryKeys.monthlySummary, previousMonthKey(todayString().slice(0, 7))], {
     totalPenalty: 0,
