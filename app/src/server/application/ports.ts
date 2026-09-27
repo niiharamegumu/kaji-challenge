@@ -577,7 +577,8 @@ export interface Repository {
   ListPushSubscriptionsByUserID(userID: string): Promise<ListPushSubscriptionsByUserIDRow[]>;
   ListTeamIDsForPush(): Promise<string[]>;
   UpsertPushSubscription(arg: UpsertPushSubscriptionParams): Promise<UpsertPushSubscriptionRow>;
-  ListTodoCategories(teamId: string): Promise<string[]>;
+  ListTodoCategories(teamId: string): Promise<(string | null)[]>;
+  ReorderTodoCategories(teamId: string, categories: (string | null)[]): Promise<boolean>;
   CreateTodoCategory(teamId: string, name: string): Promise<void>;
   DeleteTodoCategory(teamId: string, name: string, now: string): Promise<void>;
   CreateTodoItem(arg: CreateTodoItemParams): Promise<void>;
