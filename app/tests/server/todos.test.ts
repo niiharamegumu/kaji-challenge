@@ -6,7 +6,7 @@ import { createTestDatabase } from "../helpers/d1";
 import { provisionUser } from "../../src/server/application/provision-user";
 import { executeOperation } from "../../src/server/application/operations";
 import { operationSchema, responseSchemas } from "../../src/contracts/operations";
-import type { TodoItem } from "../../src/contracts/models";
+import type { TodoItem, TodoCategoriesResponse } from "../../src/contracts/models";
 
 it("preserves shopping rows as unclassified ToDos without adding tables or categories", async () => {
   const connection = await createTestDatabase(undefined, "0004_remove_revisions.sql");
@@ -61,8 +61,22 @@ describe("ToDo categories and team boundaries", () => {
     });
     return responseSchemas[input.operation].parse(result.data);
   }
+  const register = async (name: string, userId = owner) => {
+    const response = (await run(
+      "postTodoCategory",
+      { name },
+      {},
+      userId,
+    )) as TodoCategoriesResponse;
+    return response.categories.find((category) => category?.name === name.trim())!;
+  };
   const create = async (name: string, category: string | null, userId = owner) =>
-    (await run("postTodoItem", { name, category }, {}, userId)) as TodoItem;
+    (await run(
+      "postTodoItem",
+      { name, categoryId: category === null ? null : (await register(category, userId)).id },
+      {},
+      userId,
+    )) as TodoItem;
   beforeAll(async () => {
     connection = await createTestDatabase();
     for (const id of [owner, outsider]) {
@@ -76,12 +90,14 @@ describe("ToDo categories and team boundaries", () => {
     await connection?.close();
   });
 
-  it("registers free input once, retains empty categories and physically deletes completed items", async () => {
+  it("registers categories once, retains empty categories and physically deletes completed items", async () => {
     const item = await create("牛乳", "  買い物リスト  ");
-    expect(item.category).toBe("買い物リスト");
+    expect(item.categoryId).toBe((await register("買い物リスト")).id);
     await run("postTodoCategory", { name: "買い物リスト" });
     await run("deleteTodoItem", undefined, { itemId: item.id });
-    expect(await run("listTodoCategories")).toEqual({ categories: [null, "買い物リスト"] });
+    expect(await run("listTodoCategories")).toEqual({
+      categories: [null, await register("買い物リスト")],
+    });
     expect(
       (await connection.query(sql`SELECT id FROM todo_items WHERE id=${item.id}`)).rows,
     ).toEqual([]);
@@ -89,14 +105,20 @@ describe("ToDo categories and team boundaries", () => {
   it("preserves categories during partial edits and accepts explicit clearing", async () => {
     const item = await create("連絡", "やることリスト");
     expect(await run("patchTodoItem", { notes: "明日" }, { itemId: item.id })).toMatchObject({
-      category: "やることリスト",
+      categoryId: item.categoryId,
       notes: "明日",
     });
-    expect(await run("patchTodoItem", { category: "連絡先" }, { itemId: item.id })).toMatchObject({
-      category: "連絡先",
+    expect(
+      await run(
+        "patchTodoItem",
+        { categoryId: (await register("連絡先")).id },
+        { itemId: item.id },
+      ),
+    ).toMatchObject({
+      categoryId: (await register("連絡先")).id,
     });
-    expect(await run("patchTodoItem", { category: null }, { itemId: item.id })).toMatchObject({
-      category: null,
+    expect(await run("patchTodoItem", { categoryId: null }, { itemId: item.id })).toMatchObject({
+      categoryId: null,
     });
   });
   it("deletes a used category without deleting ToDos or touching another team", async () => {
@@ -104,33 +126,33 @@ describe("ToDo categories and team boundaries", () => {
     const own = await create("自分のToDo", category);
     const other = await create("別チームのToDo", category, outsider);
     await expect(
-      run("patchTodoItem", { category: "侵入" }, { itemId: other.id }),
+      run("patchTodoItem", { categoryId: crypto.randomUUID() }, { itemId: other.id }),
     ).rejects.toMatchObject({ status: 404 });
     await expect(run("deleteTodoItem", undefined, { itemId: other.id })).rejects.toMatchObject({
       status: 404,
     });
-    await run("deleteTodoCategory", undefined, { name: category });
+    await run("deleteTodoCategory", undefined, { categoryId: own.categoryId });
     expect(await connection.repository.GetTodoItemByID(own.id)).toMatchObject({
-      Category: null,
+      CategoryID: null,
       Name: "自分のToDo",
     });
     expect(await connection.repository.GetTodoItemByID(other.id)).toMatchObject({
-      Category: category,
+      CategoryID: other.categoryId,
     });
     expect(await run("listTodoCategories", undefined, {}, outsider)).toEqual({
-      categories: [null, category],
+      categories: [null, { id: other.categoryId, name: category }],
     });
-    const ownCategories = (await run("listTodoCategories")) as { categories: (string | null)[] };
-    expect(ownCategories.categories).not.toContain(category);
-    expect(ownCategories.categories).not.toContain("侵入");
+    const ownCategories = (await run("listTodoCategories")) as TodoCategoriesResponse;
+    expect(ownCategories.categories.map((category) => category?.id)).not.toContain(own.categoryId);
+    expect(ownCategories.categories.map((category) => category?.name)).not.toContain("侵入");
   });
   it("keeps concurrent category registrations without duplicates or lost updates", async () => {
     await Promise.all(["同時A", "同時B", "同時A"].map((name) => run("postTodoCategory", { name })));
-    const { categories } = (await run("listTodoCategories")) as { categories: (string | null)[] };
-    expect(categories.filter((name) => name === "同時A")).toHaveLength(1);
-    expect(categories).toContain("同時B");
+    const { categories } = (await run("listTodoCategories")) as TodoCategoriesResponse;
+    expect(categories.filter((category) => category?.name === "同時A")).toHaveLength(1);
+    expect(categories.map((category) => category?.name)).toContain("同時B");
   });
-  it("keeps registration and item creation atomic on a failed insert", async () => {
+  it("keeps item order unchanged on a failed insert", async () => {
     const item = await create("元の項目", null);
     const member = connection.repository.forMember(item.teamId, owner);
     await expect(
@@ -139,19 +161,54 @@ describe("ToDo categories and team boundaries", () => {
         TeamID: item.teamId,
         Name: "重複ID",
         Notes: null,
-        Category: "rollback-only",
+        CategoryID: null,
         SortKey: 100,
         CreatedAt: now.toISOString(),
         UpdatedAt: now.toISOString(),
       }),
     ).rejects.toThrow();
-    const { categories } = (await run("listTodoCategories")) as { categories: (string | null)[] };
-    expect(categories).not.toContain("rollback-only");
     expect(await member.GetTodoItemByID(item.id)).toMatchObject({
       Name: "元の項目",
       SortKey: 100,
-      Category: null,
+      CategoryID: null,
     });
+  });
+  it("rejects foreign and deleted IDs without changing item order or content", async () => {
+    const foreign = await register("別チーム専用", outsider);
+    const deleted = await register("削除済み");
+    await run("deleteTodoCategory", undefined, { categoryId: deleted.id });
+    const item = await create("変更しない", null);
+    const before = await connection.repository.ListTodoItemsByTeamID(item.teamId);
+    for (const categoryId of [foreign.id, deleted.id]) {
+      await expect(run("postTodoItem", { name: "拒否する", categoryId })).rejects.toMatchObject({
+        status: 409,
+      });
+      await expect(
+        run("patchTodoItem", { name: "拒否する", categoryId }, { itemId: item.id }),
+      ).rejects.toMatchObject({ status: 409 });
+    }
+    expect(await connection.repository.ListTodoItemsByTeamID(item.teamId)).toEqual(before);
+  });
+  it("does not relink an unclassified ToDo when a category is recreated with the same name", async () => {
+    const item = await create("再分類しない", "再作成");
+    await run("deleteTodoCategory", undefined, { categoryId: item.categoryId });
+    const replacement = await register("再作成");
+    expect(replacement.id).not.toBe(item.categoryId);
+    expect((await connection.repository.GetTodoItemByID(item.id)).CategoryID).toBeNull();
+  });
+  it("keeps references valid when deletion races a ToDo create or edit", async () => {
+    for (const editing of [false, true]) {
+      const category = await register("並行削除");
+      const existing = await create("編集元", null);
+      await Promise.allSettled([
+        editing
+          ? run("patchTodoItem", { categoryId: category.id }, { itemId: existing.id })
+          : run("postTodoItem", { name: "同時追加", categoryId: category.id }),
+        run("deleteTodoCategory", undefined, { categoryId: category.id }),
+      ]);
+      const rows = await connection.repository.ListTodoItemsByTeamID(existing.teamId);
+      expect(rows.some((row) => row.CategoryID === category.id)).toBe(false);
+    }
   });
   it.each(["", "   ", "a".repeat(51)])("rejects invalid category names: %s", (name) => {
     expect(
@@ -160,7 +217,7 @@ describe("ToDo categories and team boundaries", () => {
     expect(
       operationSchema.safeParse({
         operation: "postTodoItem",
-        body: { name: "test", category: name },
+        body: { name: "test", categoryId: name },
       }).success,
     ).toBe(false);
   });
