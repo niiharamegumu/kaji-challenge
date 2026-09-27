@@ -296,6 +296,14 @@ export async function executeOperation(
       await repo.DeleteTodoCategory(teamId, input.params.name, now);
       data = {};
       break;
+    case "postTodoCategoriesReorder":
+      invariant(
+        await repo.ReorderTodoCategories(teamId, input.body.categories),
+        "カテゴリーが変更されました。一覧を確認して並べ替え直してください。",
+        409,
+      );
+      data = { categories: await repo.ListTodoCategories(teamId) };
+      break;
     case "listTodoItems":
       data = { items: (await repo.ListTodoItemsByTeamID(teamId)).map(map.todo) };
       break;
