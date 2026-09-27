@@ -1,3 +1,4 @@
+import type { TodoCategory } from "../../../lib/api/operations";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical } from "lucide-react";
@@ -6,17 +7,17 @@ import {
   smoothSortableTransition,
 } from "../../../shared/utils/sortableAnimation";
 
-export const todoCategoryDragId = (category: string | null) =>
-  category === null ? "unclassified" : `category:${category}`;
+export const todoCategoryDragId = (category: TodoCategory | null) =>
+  category === null ? "unclassified" : `category:${category.id}`;
 
 export function SortableTodoCategory({
   category,
   disabled,
   onRemove,
 }: {
-  category: string | null;
+  category: TodoCategory | null;
   disabled: boolean;
-  onRemove: (name: string) => void;
+  onRemove: (categoryId: string) => void;
 }) {
   const {
     attributes,
@@ -32,7 +33,7 @@ export function SortableTodoCategory({
     animateLayoutChanges: smoothSortableLayoutChanges,
     transition: smoothSortableTransition,
   });
-  const label = category ?? "未分類";
+  const label = category?.name ?? "未分類";
   return (
     <li
       ref={setNodeRef}
@@ -46,7 +47,7 @@ export function SortableTodoCategory({
         <button
           type="button"
           disabled={disabled}
-          onClick={() => onRemove(category)}
+          onClick={() => onRemove(category.id)}
           aria-label={`${label} を削除`}
           className="min-h-9 shrink-0 rounded-lg border border-stone-300 px-3 text-xs text-stone-700 disabled:opacity-50"
         >
