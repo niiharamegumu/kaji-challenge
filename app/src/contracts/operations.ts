@@ -187,24 +187,28 @@ export const UpdatePenaltyRuleRequestSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   description: z.string().max(500).optional(),
 });
-export const ShoppingListItemSchema = z.object({
+export const TodoCategorySchema = z.string().trim().min(1).max(50);
+export const TodoItemSchema = z.object({
   id: z.string(),
   teamId: z.string(),
   name: z.string(),
   notes: z.string().nullable().optional(),
+  category: TodoCategorySchema.nullable(),
   sortKey: z.number().int().min(1),
   createdAt: z.iso.datetime({ offset: true }),
   updatedAt: z.iso.datetime({ offset: true }),
 });
-export const CreateShoppingListItemRequestSchema = z.object({
+export const CreateTodoItemRequestSchema = z.object({
+  category: TodoCategorySchema.nullable().optional(),
   name: z.string().min(1).max(100),
   notes: z.string().max(500).optional(),
 });
-export const UpdateShoppingListItemRequestSchema = z.object({
+export const UpdateTodoItemRequestSchema = z.object({
+  category: TodoCategorySchema.nullable().optional(),
   name: z.string().min(1).max(100).optional(),
   notes: z.string().max(500).nullable().optional(),
 });
-export const ReorderShoppingListItemsRequestSchema = z.object({
+export const ReorderTodoItemsRequestSchema = z.object({
   itemIds: z.array(z.string()).min(1),
 });
 export const TaskOverviewDailyTaskSchema = z.object({
@@ -392,27 +396,40 @@ export const operationSchema = z.discriminatedUnion("operation", [
     params: z.object({ ruleId: z.string() }),
   }),
   z.object({
-    operation: z.literal("listShoppingItems"),
+    operation: z.literal("listTodoCategories"),
     params: z.object({}).default({}),
   }),
   z.object({
-    operation: z.literal("postShoppingItem"),
+    operation: z.literal("postTodoCategory"),
     params: z.object({}).default({}),
-    body: CreateShoppingListItemRequestSchema,
+    body: z.object({ name: TodoCategorySchema }),
   }),
   z.object({
-    operation: z.literal("patchShoppingItem"),
+    operation: z.literal("deleteTodoCategory"),
+    params: z.object({ name: TodoCategorySchema }),
+  }),
+  z.object({
+    operation: z.literal("listTodoItems"),
+    params: z.object({}).default({}),
+  }),
+  z.object({
+    operation: z.literal("postTodoItem"),
+    params: z.object({}).default({}),
+    body: CreateTodoItemRequestSchema,
+  }),
+  z.object({
+    operation: z.literal("patchTodoItem"),
     params: z.object({ itemId: z.string() }),
-    body: UpdateShoppingListItemRequestSchema,
+    body: UpdateTodoItemRequestSchema,
   }),
   z.object({
-    operation: z.literal("deleteShoppingItem"),
+    operation: z.literal("deleteTodoItem"),
     params: z.object({ itemId: z.string() }),
   }),
   z.object({
-    operation: z.literal("postShoppingItemsReorder"),
+    operation: z.literal("postTodoItemsReorder"),
     params: z.object({}).default({}),
-    body: ReorderShoppingListItemsRequestSchema,
+    body: ReorderTodoItemsRequestSchema,
   }),
   z.object({
     operation: z.literal("getTaskOverview"),
@@ -467,11 +484,14 @@ export const responseSchemas = {
   postPenaltyRule: PenaltyRuleSchema,
   patchPenaltyRule: PenaltyRuleSchema,
   deletePenaltyRule: z.object({}),
-  listShoppingItems: z.object({ items: z.array(ShoppingListItemSchema) }),
-  postShoppingItem: ShoppingListItemSchema,
-  patchShoppingItem: ShoppingListItemSchema,
-  deleteShoppingItem: z.object({}),
-  postShoppingItemsReorder: z.object({ items: z.array(ShoppingListItemSchema) }),
+  listTodoCategories: z.object({ categories: z.array(TodoCategorySchema) }),
+  postTodoCategory: z.object({ categories: z.array(TodoCategorySchema) }),
+  deleteTodoCategory: z.object({}),
+  listTodoItems: z.object({ items: z.array(TodoItemSchema) }),
+  postTodoItem: TodoItemSchema,
+  patchTodoItem: TodoItemSchema,
+  deleteTodoItem: z.object({}),
+  postTodoItemsReorder: z.object({ items: z.array(TodoItemSchema) }),
   getTaskOverview: TaskOverviewResponseSchema,
   getPenaltySummaryMonthly: MonthlyPenaltySummarySchema,
   getMonthCloseCandidate: MonthCloseCandidateResponseSchema,
