@@ -17,7 +17,7 @@ export const teams = sqliteTable("teams", {
   name: text("name").notNull(),
   created_at: text("created_at").notNull(),
   todo_categories: text("todo_categories", { mode: "json" })
-    .$type<string[]>()
+    .$type<({ id: string; name: string } | null)[]>()
     .notNull()
     .default(sql`'[]'`),
 });
@@ -43,7 +43,7 @@ export const todoItems = sqliteTable(
     team_id: text("team_id").notNull(),
     name: text("name").notNull(),
     notes: text("notes"),
-    category: text("category"),
+    category_id: text("category_id"),
     sort_key: integer("sort_key").notNull(),
     created_at: text("created_at").notNull(),
     updated_at: text("updated_at").notNull(),

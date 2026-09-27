@@ -26,7 +26,7 @@ export function TodoPage() {
   const handleCreate = async () => {
     if (categoriesQuery.data === undefined) return;
     const payload: CreateTodoItemRequest = {
-      category: form.category.trim() || null,
+      categoryId: form.categoryId || null,
       name: form.name.trim(),
       notes: form.notes.trim() === "" ? undefined : form.notes.trim(),
     };

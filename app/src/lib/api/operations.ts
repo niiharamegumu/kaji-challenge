@@ -159,20 +159,26 @@ export function deletePenaltyRule(
 }
 export function listTodoCategories(
   options?: CallOptions,
-): Promise<ApiResult<{ categories: string[] }>> {
+): Promise<ApiResult<M.TodoCategoriesResponse>> {
   return callOperation("listTodoCategories", { params: {} }, 200, options);
 }
 export function postTodoCategory(
   body: { name: string },
   options?: CallOptions,
-): Promise<ApiResult<{ categories: string[] }>> {
+): Promise<ApiResult<M.TodoCategoriesResponse>> {
   return callOperation("postTodoCategory", { params: {}, body }, 201, options);
 }
 export function deleteTodoCategory(
-  name: string,
+  categoryId: string,
   options?: CallOptions,
 ): Promise<ApiResult<Record<string, never>>> {
-  return callOperation("deleteTodoCategory", { params: { name } }, 204, options);
+  return callOperation("deleteTodoCategory", { params: { categoryId } }, 204, options);
+}
+export function postTodoCategoriesReorder(
+  body: M.ReorderTodoCategoriesRequest,
+  options?: CallOptions,
+): Promise<ApiResult<M.TodoCategoriesResponse>> {
+  return callOperation("postTodoCategoriesReorder", { params: {}, body }, 200, options);
 }
 export function listTodoItems(options?: CallOptions): Promise<ApiResult<{ items: M.TodoItem[] }>> {
   return callOperation("listTodoItems", { params: {} }, 200, options);

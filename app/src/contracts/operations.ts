@@ -187,24 +187,41 @@ export const UpdatePenaltyRuleRequestSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   description: z.string().max(500).optional(),
 });
-export const TodoCategorySchema = z.string().trim().min(1).max(50);
+export const TodoCategoryNameSchema = z.string().trim().min(1).max(50);
+export const TodoCategorySchema = z.object({ id: z.uuid(), name: TodoCategoryNameSchema });
+// null denotes the virtual unclassified category; names are display-only.
+export const TodoCategoryOrderSchema = z
+  .array(TodoCategorySchema.nullable())
+  .min(1)
+  .refine(
+    (categories) =>
+      categories.includes(null) &&
+      new Set(categories.map((category) => category?.id ?? null)).size === categories.length,
+  );
+export const TodoCategoriesResponseSchema = z.object({ categories: TodoCategoryOrderSchema });
+export const ReorderTodoCategoriesRequestSchema = z.object({
+  categoryIds: z
+    .array(z.uuid().nullable())
+    .min(1)
+    .refine((ids) => ids.includes(null) && new Set(ids).size === ids.length),
+});
 export const TodoItemSchema = z.object({
   id: z.string(),
   teamId: z.string(),
   name: z.string(),
   notes: z.string().nullable().optional(),
-  category: TodoCategorySchema.nullable(),
+  categoryId: z.uuid().nullable(),
   sortKey: z.number().int().min(1),
   createdAt: z.iso.datetime({ offset: true }),
   updatedAt: z.iso.datetime({ offset: true }),
 });
 export const CreateTodoItemRequestSchema = z.object({
-  category: TodoCategorySchema.nullable().optional(),
+  categoryId: z.uuid().nullable().optional(),
   name: z.string().min(1).max(100),
   notes: z.string().max(500).optional(),
 });
 export const UpdateTodoItemRequestSchema = z.object({
-  category: TodoCategorySchema.nullable().optional(),
+  categoryId: z.uuid().nullable().optional(),
   name: z.string().min(1).max(100).optional(),
   notes: z.string().max(500).nullable().optional(),
 });
@@ -402,11 +419,16 @@ export const operationSchema = z.discriminatedUnion("operation", [
   z.object({
     operation: z.literal("postTodoCategory"),
     params: z.object({}).default({}),
-    body: z.object({ name: TodoCategorySchema }),
+    body: z.object({ name: TodoCategoryNameSchema }),
   }),
   z.object({
     operation: z.literal("deleteTodoCategory"),
-    params: z.object({ name: TodoCategorySchema }),
+    params: z.object({ categoryId: z.uuid() }),
+  }),
+  z.object({
+    operation: z.literal("postTodoCategoriesReorder"),
+    params: z.object({}).default({}),
+    body: ReorderTodoCategoriesRequestSchema,
   }),
   z.object({
     operation: z.literal("listTodoItems"),
@@ -484,8 +506,9 @@ export const responseSchemas = {
   postPenaltyRule: PenaltyRuleSchema,
   patchPenaltyRule: PenaltyRuleSchema,
   deletePenaltyRule: z.object({}),
-  listTodoCategories: z.object({ categories: z.array(TodoCategorySchema) }),
-  postTodoCategory: z.object({ categories: z.array(TodoCategorySchema) }),
+  listTodoCategories: TodoCategoriesResponseSchema,
+  postTodoCategory: TodoCategoriesResponseSchema,
+  postTodoCategoriesReorder: TodoCategoriesResponseSchema,
   deleteTodoCategory: z.object({}),
   listTodoItems: z.object({ items: z.array(TodoItemSchema) }),
   postTodoItem: TodoItemSchema,

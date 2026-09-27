@@ -85,7 +85,7 @@ const pushFields = {
   UpdatedAt: iso(pushSubscriptions.updated_at),
 };
 const todoFields = {
-  Category: todoItems.category,
+  CategoryID: todoItems.category_id,
   ID: todoItems.id,
   TeamID: todoItems.team_id,
   Name: todoItems.name,
@@ -614,59 +614,106 @@ export class D1Repository implements P.Repository {
     );
   }
 
-  private registerTodoCategory(teamId: string, name: string) {
-    // SQL appends only the missing name, avoiding lost updates from concurrent editors.
-    return this.db
+  async CreateTodoCategory(teamId: string, category: P.TodoCategory): Promise<void> {
+    // An empty registry defaults to unclassified first. New teams store [null] explicitly.
+    // Preserve the existing ID when the same name is submitted twice.
+    await this.db
       .update(teams)
       .set({
-        todo_categories: sql`json_insert(${teams.todo_categories}, '$[#]', ${name})`,
+        todo_categories: sql`json_insert(
+        CASE WHEN json_array_length(${teams.todo_categories})=0 THEN '[null]' ELSE ${teams.todo_categories} END,
+        '$[#]', json(${JSON.stringify(category)})
+      )`,
       })
       .where(
         and(
           eq(teams.id, teamId),
           this.access(),
-          sql`NOT EXISTS (SELECT 1 FROM json_each(${teams.todo_categories}) WHERE value=${name})`,
+          sql`NOT EXISTS (SELECT 1 FROM json_each(${teams.todo_categories}) WHERE json_extract(value, '$.name')=${category.name})`,
         ),
       );
   }
-  async ListTodoCategories(teamId: string): Promise<string[]> {
+  async ListTodoCategories(teamId: string): Promise<(P.TodoCategory | null)[]> {
     const rows = await this.db
       .select({ categories: teams.todo_categories })
       .from(teams)
       .where(and(eq(teams.id, teamId), this.access()));
-    return required(rows, "ListTodoCategories").categories;
+    const { categories } = required(rows, "ListTodoCategories");
+    return categories.length === 0 ? [null] : categories;
   }
-  async CreateTodoCategory(teamId: string, name: string): Promise<void> {
-    await this.registerTodoCategory(teamId, name);
+  async ReorderTodoCategories(teamId: string, categoryIds: (string | null)[]): Promise<boolean> {
+    const ids = categoryIds.filter((id) => id !== null);
+    // Join by ID to preserve the current name, including renames made during a drag.
+    // Compare the complete ID set in the same statement to reject stale add/delete lists.
+    const rows = await this.db
+      .update(teams)
+      .set({
+        todo_categories: sql`(SELECT json_group_array(json(value)) FROM (
+        SELECT current.value FROM json_each(${JSON.stringify(categoryIds)}) AS requested
+        LEFT JOIN json_each(${teams.todo_categories}) AS current
+          ON requested.value = json_extract(current.value, '$.id')
+        ORDER BY requested.key
+      ))`,
+      })
+      .where(
+        and(
+          eq(teams.id, teamId),
+          this.access(),
+          sql`(SELECT COUNT(*) FROM json_each(${teams.todo_categories}) WHERE type <> 'null') = ${ids.length}`,
+          sql`NOT EXISTS (
+        SELECT 1 FROM json_each(${teams.todo_categories}) AS current WHERE current.type <> 'null'
+        AND NOT EXISTS (SELECT 1 FROM json_each(${JSON.stringify(ids)}) AS requested
+          WHERE requested.value = json_extract(current.value, '$.id'))
+      )`,
+        ),
+      )
+      .returning({ id: teams.id });
+    return rows.length === 1;
   }
-  async DeleteTodoCategory(teamId: string, name: string, now: string): Promise<void> {
+  async DeleteTodoCategory(teamId: string, categoryId: string, now: string): Promise<void> {
     await this.db.batch([
       this.db
         .update(teams)
         .set({
-          todo_categories: sql`(SELECT json_group_array(value) FROM json_each(${teams.todo_categories}) WHERE value <> ${name})`,
+          todo_categories: sql`(SELECT json_group_array(json(value)) FROM (
+          SELECT value FROM json_each(${teams.todo_categories})
+          WHERE json_extract(value, '$.id') IS NOT ${categoryId} ORDER BY key
+        ))`,
         })
         .where(and(eq(teams.id, teamId), this.access())),
       this.db
         .update(todoItems)
-        .set({ category: null, updated_at: now })
-        .where(and(eq(todoItems.team_id, teamId), eq(todoItems.category, name), this.access())),
+        .set({ category_id: null, updated_at: now })
+        .where(
+          and(eq(todoItems.team_id, teamId), eq(todoItems.category_id, categoryId), this.access()),
+        ),
     ]);
   }
 
-  async CreateTodoItem(arg: P.CreateTodoItemParams): Promise<void> {
-    await this.db.batch([
+  private todoCategoryExists(teamId: string, categoryId: string | null | undefined) {
+    return categoryId == null
+      ? sql`1`
+      : sql`EXISTS (
+      SELECT 1 FROM ${teams}, json_each(${teams.todo_categories}) AS category
+      WHERE ${teams.id}=${teamId} AND json_extract(category.value, '$.id')=${categoryId}
+    )`;
+  }
+
+  async CreateTodoItem(arg: P.CreateTodoItemParams): Promise<boolean> {
+    const allowed = and(this.access(), this.todoCategoryExists(arg.TeamID, arg.CategoryID));
+    const [, inserted] = await this.db.batch([
       this.db
         .update(todoItems)
         .set({ sort_key: sql`${todoItems.sort_key}+100` })
-        .where(and(eq(todoItems.team_id, arg.TeamID), this.access())),
-      ...(arg.Category == null ? [] : [this.registerTodoCategory(arg.TeamID, arg.Category)]),
+        .where(and(eq(todoItems.team_id, arg.TeamID), allowed)),
       this.db
         .insert(todoItems)
         .select(
-          sql`SELECT ${arg.ID},${arg.TeamID},${arg.Name},${arg.Notes},${arg.Category},100,${arg.CreatedAt},${arg.UpdatedAt} WHERE ${this.access()}`,
-        ),
+          sql`SELECT ${arg.ID},${arg.TeamID},${arg.Name},${arg.Notes},${arg.CategoryID},100,${arg.CreatedAt},${arg.UpdatedAt} WHERE ${allowed}`,
+        )
+        .returning({ id: todoItems.id }),
     ]);
+    return inserted.length === 1;
   }
 
   async DeleteTodoItem(id: string): Promise<number> {
@@ -687,21 +734,25 @@ export class D1Repository implements P.Repository {
       .where(eq(todoItems.team_id, teamID))
       .orderBy(todoItems.sort_key, todoItems.created_at, todoItems.id);
   }
-  async UpdateTodoItem(arg: P.UpdateTodoItemParams): Promise<void> {
-    const update = this.db
+  async UpdateTodoItem(arg: P.UpdateTodoItemParams): Promise<boolean> {
+    const rows = await this.db
       .update(todoItems)
       .set({
         name: arg.Name,
         notes: arg.Notes,
-        category: arg.Category,
+        category_id: arg.CategoryID,
         updated_at: arg.UpdatedAt,
       })
-      .where(and(eq(todoItems.id, arg.ID), eq(todoItems.team_id, arg.TeamID), this.access()));
-    if (arg.Category == null) {
-      await update;
-    } else {
-      await this.db.batch([this.registerTodoCategory(arg.TeamID, arg.Category), update]);
-    }
+      .where(
+        and(
+          eq(todoItems.id, arg.ID),
+          eq(todoItems.team_id, arg.TeamID),
+          this.access(),
+          this.todoCategoryExists(arg.TeamID, arg.CategoryID),
+        ),
+      )
+      .returning({ id: todoItems.id });
+    return rows.length === 1;
   }
   async FindOldestMonthCloseCandidate(
     arg: P.FindOldestMonthCloseCandidateParams,
@@ -924,7 +975,7 @@ export class D1Repository implements P.Repository {
   }
   async ProvisionUser(userId: string, teamId: string, name: string, now: string): Promise<void> {
     await this.db.batch([
-      this.db.insert(teams).select(sql`SELECT ${teamId},${name},${now},'[]'
+      this.db.insert(teams).select(sql`SELECT ${teamId},${name},${now},'[null]'
         WHERE NOT EXISTS(SELECT 1 FROM team_members WHERE user_id=${userId})`),
       this.db.insert(teamMembers).select(sql`SELECT ${teamId},${userId},'owner',${now}
         WHERE EXISTS(SELECT 1 FROM teams WHERE id=${teamId}) AND NOT EXISTS(SELECT 1 FROM team_members WHERE user_id=${userId})`),
@@ -947,7 +998,7 @@ export class D1Repository implements P.Repository {
       this.db
         .insert(teams)
         .select(
-          sql`SELECT ${arg.toTeamId},${arg.newTeamName ?? ""},${arg.now},'[]' WHERE ${!arg.inviteCode} AND ${valid}`,
+          sql`SELECT ${arg.toTeamId},${arg.newTeamName ?? ""},${arg.now},'[null]' WHERE ${!arg.inviteCode} AND ${valid}`,
         ),
       this.db
         .update(tasks)

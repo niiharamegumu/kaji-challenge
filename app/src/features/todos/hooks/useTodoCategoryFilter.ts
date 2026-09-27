@@ -10,7 +10,7 @@ export function useTodoCategoryFilter() {
   if (
     selection.kind === "category" &&
     query.data !== undefined &&
-    !query.data.includes(selection.name)
+    !query.data.some((category) => category?.id === selection.id)
   ) {
     setSelection({ kind: "all" });
   }
@@ -20,8 +20,8 @@ export function useTodoCategoryFilter() {
       (item) =>
         selection.kind === "all" ||
         (selection.kind === "unclassified"
-          ? item.category == null
-          : item.category === selection.name),
+          ? item.categoryId == null
+          : item.categoryId === selection.id),
     );
 
   return { categoriesQuery: query, selection, setSelection, filterItems };

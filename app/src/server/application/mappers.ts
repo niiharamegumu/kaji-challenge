@@ -42,7 +42,7 @@ export function reminder(r: P.Reminder): M.Reminder {
 }
 export function todo(r: P.TodoItem): M.TodoItem {
   return {
-    category: r.Category,
+    categoryId: r.CategoryID,
     id: r.ID,
     teamId: r.TeamID,
     name: r.Name,

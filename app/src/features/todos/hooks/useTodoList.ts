@@ -16,6 +16,7 @@ import {
   type TodoItem,
   type UpdateTodoItemRequest,
 } from "../../../lib/api/operations";
+import { isApiRequestError } from "../../../lib/api/api-client-state";
 import { queryKeys } from "../../../shared/query/queryKeys";
 import { formatError } from "../../../shared/utils/errors";
 
@@ -45,11 +46,8 @@ export function useTodoItemMutations(setStatus: StatusSetter) {
     await queryClient.invalidateQueries({ queryKey: queryKeys.todoItems });
   };
 
-  const refreshNewCategory = (category: string | null) => {
-    if (
-      category != null &&
-      !queryClient.getQueryData<string[]>(queryKeys.todoCategories)?.includes(category)
-    ) {
+  const refreshCategoryConflict = (error: unknown) => {
+    if (isApiRequestError(error) && error.status === 409) {
       void queryClient.invalidateQueries({ queryKey: queryKeys.todoCategories });
     }
   };
@@ -57,7 +55,6 @@ export function useTodoItemMutations(setStatus: StatusSetter) {
   const createItem = useMutation({
     mutationFn: async (payload: CreateTodoItemRequest) => postTodoItem(payload),
     onSuccess: async (response) => {
-      refreshNewCategory(response.data.category);
       setStatus("ToDoを追加しました");
       await queryClient.cancelQueries({ queryKey: queryKeys.todoItems });
       const createdItem = response.data;
@@ -67,6 +64,7 @@ export function useTodoItemMutations(setStatus: StatusSetter) {
       ]);
     },
     onError: (error) => {
+      refreshCategoryConflict(error);
       setStatus(`ToDoの追加に失敗しました: ${formatError(error)}`);
     },
   });
@@ -79,10 +77,10 @@ export function useTodoItemMutations(setStatus: StatusSetter) {
       queryClient.setQueryData<TodoItem[]>(queryKeys.todoItems, (items) =>
         items?.map((item) => (item.id === data.id ? data : item)),
       );
-      refreshNewCategory(data.category);
       setStatus("ToDoを更新しました");
     },
     onError: (error) => {
+      refreshCategoryConflict(error);
       setStatus(`ToDoの更新に失敗しました: ${formatError(error)}`);
     },
   });

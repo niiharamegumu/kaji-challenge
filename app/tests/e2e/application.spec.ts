@@ -7,7 +7,8 @@ const secret = "kaji-e2e-only-secret-do-not-use-in-production";
 const userId = crypto.randomUUID(),
   token = crypto.randomUUID();
 const peerToken = crypto.randomUUID(),
-  outsiderToken = crypto.randomUUID();
+  outsiderToken = crypto.randomUUID(),
+  categoryOrderToken = crypto.randomUUID();
 test.beforeAll(async () => {
   const path = process.env.KAJI_D1_TEST_PATH;
   if (!path) throw new Error("Run browser tests via bun run test:local for isolated D1 storage");
@@ -27,6 +28,7 @@ test.beforeAll(async () => {
     for (const [name, accessToken] of [
       ["同期メンバー", peerToken],
       ["別チーム", outsiderToken],
+      ["カテゴリー順序", categoryOrderToken],
     ]) {
       const id = crypto.randomUUID();
       await connection.query(
@@ -581,7 +583,7 @@ test("ToDo categories persist, filter and detach without deleting items", async 
   ]) {
     await page.getByRole("button", { name: "追加", exact: true }).click();
     await page.getByLabel("名前", { exact: true }).fill(name);
-    await page.getByLabel("カテゴリー（任意）").selectOption(value);
+    await page.getByLabel("カテゴリー（任意）").selectOption({ label: value || "未分類" });
     await page.getByRole("button", { name: "追加する", exact: true }).click();
     await expect(page.getByText(name, { exact: true })).toBeVisible();
   }
@@ -736,4 +738,111 @@ test("ToDo categories persist, filter and detach without deleting items", async 
   await page.reload();
   await expect(page.getByText("分類テストA", { exact: true })).toHaveCount(0);
   await expect(page.getByText("分類テストB", { exact: true })).toBeVisible();
+});
+
+test("persists category order including unclassified with mouse, touch and keyboard", async ({
+  page,
+  context,
+  isMobile,
+}, testInfo) => {
+  await authenticate(context, categoryOrderToken);
+  await page.goto("/todo-categories");
+  const order = page.getByRole("list", { name: "カテゴリーの表示順" });
+  for (const category of ["仕事", "買い物"]) {
+    await page.getByLabel("新しいカテゴリー").fill(category);
+    await page.getByRole("button", { name: "カテゴリーを追加" }).click();
+    await expect(order.getByRole("button", { name: `${category} を削除` })).toBeVisible();
+  }
+  const dragHandle = (name: string) =>
+    order.getByRole("button", { name: `${name} をドラッグして並び替え`, exact: true });
+  const expectOrder = async (names: string[]) => {
+    await expect
+      .poll(async () =>
+        order
+          .getByRole("button", { name: /をドラッグして並び替え/ })
+          .evaluateAll((buttons) => buttons.map((button) => button.getAttribute("aria-label"))),
+      )
+      .toEqual(names.map((name) => `${name} をドラッグして並び替え`));
+  };
+  const waitForSave = () =>
+    page.waitForResponse(
+      (response) =>
+        response.url().includes("/_serverFn/") &&
+        (response.request().postData()?.includes("postTodoCategoriesReorder") ?? false),
+    );
+  await expectOrder(["未分類", "仕事", "買い物"]);
+  await order.scrollIntoViewIfNeeded();
+  const from = (await dragHandle("未分類").boundingBox())!;
+  const to = (await dragHandle("買い物").boundingBox())!;
+  const start = { x: from.x + from.width / 2, y: from.y + from.height / 2 };
+  const end = { x: to.x + to.width / 2, y: to.y + to.height / 2 };
+  if (isMobile) {
+    const cdp = await context.newCDPSession(page);
+    try {
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchStart",
+        touchPoints: [{ ...start, id: 1 }],
+      });
+      await expect(dragHandle("未分類")).toHaveAttribute("aria-pressed", "true");
+      for (let step = 1; step <= 10; step++) {
+        await cdp.send("Input.dispatchTouchEvent", {
+          type: "touchMove",
+          touchPoints: [{ x: start.x, y: start.y + ((end.y - start.y) * step) / 10, id: 1 }],
+        });
+      }
+      const saved = waitForSave();
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+      expect((await saved).ok()).toBe(true);
+    } finally {
+      await cdp.detach();
+    }
+  } else {
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    await page.mouse.move(start.x, start.y + 10, { steps: 5 });
+    await expect(dragHandle("未分類")).toHaveAttribute("aria-pressed", "true");
+    await page.mouse.move(end.x, end.y, { steps: 15 });
+    const saved = waitForSave();
+    await page.mouse.up();
+    expect((await saved).ok()).toBe(true);
+  }
+  await expectOrder(["仕事", "買い物", "未分類"]);
+  await page.reload();
+  await expectOrder(["仕事", "買い物", "未分類"]);
+  // Keyboard moves a named category as well as the virtual row.
+  await dragHandle("買い物").focus();
+  await page.keyboard.press("Space", { delay: 100 });
+  await expect(dragHandle("買い物")).toHaveAttribute("aria-pressed", "true");
+  await page.keyboard.press("ArrowUp");
+  await expect
+    .poll(async () => {
+      const shopping = await dragHandle("買い物").boundingBox();
+      const work = await dragHandle("仕事").boundingBox();
+      return shopping !== null && work !== null && shopping.y < work.y;
+    })
+    .toBe(true);
+  const keyboardSaved = waitForSave();
+  await page.keyboard.press("Space");
+  expect((await keyboardSaved).ok()).toBe(true);
+  await expectOrder(["買い物", "仕事", "未分類"]);
+  await page.screenshot({ path: testInfo.outputPath("todo-category-order.png"), fullPage: true });
+
+  for (const path of ["/", "/todos"]) {
+    await page.goto(path);
+    const tabs = page.getByRole("group", { name: "カテゴリーで絞り込み" });
+    await expect(tabs.getByRole("button")).toHaveText(["すべて", "買い物", "仕事", "未分類"]);
+  }
+  await page.getByRole("button", { name: "追加", exact: true }).click();
+  const select = page.getByRole("combobox", { name: "カテゴリー（任意）" });
+  await expect(select.locator("option")).toHaveText(["買い物", "仕事", "未分類"]);
+  await expect(select).toHaveValue("");
+  await page.getByLabel("名前", { exact: true }).fill("順序変更後の未分類ToDo");
+  await page.getByRole("button", { name: "追加する", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.reload();
+  await page
+    .getByRole("group", { name: "カテゴリーで絞り込み" })
+    .getByRole("button", { name: "未分類", exact: true })
+    .click();
+  await expect(page.getByText("順序変更後の未分類ToDo", { exact: true })).toBeVisible();
 });

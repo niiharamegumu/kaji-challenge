@@ -1,3 +1,7 @@
+export interface TodoCategory {
+  id: string;
+  name: string;
+}
 export interface GetTaskCompletionWeeklyEntryCountParams {
   TaskID: string;
   WeekStart: string;
@@ -263,7 +267,7 @@ export interface UpsertPushSubscriptionRow {
 }
 
 export interface CreateTodoItemParams {
-  Category: string | null;
+  CategoryID: string | null;
   ID: string;
   TeamID: string;
   Name: string;
@@ -275,7 +279,7 @@ export interface CreateTodoItemParams {
 
 export interface UpdateTodoItemParams {
   TeamID: string;
-  Category?: string | null;
+  CategoryID?: string | null;
   ID: string;
   Name?: string;
   Notes?: string | null;
@@ -438,7 +442,7 @@ export interface Reminder {
 }
 
 export interface TodoItem {
-  Category: string | null;
+  CategoryID: string | null;
   ID: string;
   TeamID: string;
   Name: string;
@@ -577,14 +581,15 @@ export interface Repository {
   ListPushSubscriptionsByUserID(userID: string): Promise<ListPushSubscriptionsByUserIDRow[]>;
   ListTeamIDsForPush(): Promise<string[]>;
   UpsertPushSubscription(arg: UpsertPushSubscriptionParams): Promise<UpsertPushSubscriptionRow>;
-  ListTodoCategories(teamId: string): Promise<string[]>;
-  CreateTodoCategory(teamId: string, name: string): Promise<void>;
-  DeleteTodoCategory(teamId: string, name: string, now: string): Promise<void>;
-  CreateTodoItem(arg: CreateTodoItemParams): Promise<void>;
+  ListTodoCategories(teamId: string): Promise<(TodoCategory | null)[]>;
+  ReorderTodoCategories(teamId: string, categoryIds: (string | null)[]): Promise<boolean>;
+  CreateTodoCategory(teamId: string, category: TodoCategory): Promise<void>;
+  DeleteTodoCategory(teamId: string, categoryId: string, now: string): Promise<void>;
+  CreateTodoItem(arg: CreateTodoItemParams): Promise<boolean>;
   DeleteTodoItem(id: string): Promise<number>;
   GetTodoItemByID(id: string): Promise<TodoItem>;
   ListTodoItemsByTeamID(teamID: string): Promise<TodoItem[]>;
-  UpdateTodoItem(arg: UpdateTodoItemParams): Promise<void>;
+  UpdateTodoItem(arg: UpdateTodoItemParams): Promise<boolean>;
   FindOldestMonthCloseCandidate(
     arg: FindOldestMonthCloseCandidateParams,
   ): Promise<FindOldestMonthCloseCandidateRow>;
