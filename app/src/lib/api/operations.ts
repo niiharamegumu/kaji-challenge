@@ -169,10 +169,10 @@ export function postTodoCategory(
   return callOperation("postTodoCategory", { params: {}, body }, 201, options);
 }
 export function deleteTodoCategory(
-  name: string,
+  categoryId: string,
   options?: CallOptions,
 ): Promise<ApiResult<Record<string, never>>> {
-  return callOperation("deleteTodoCategory", { params: { name } }, 204, options);
+  return callOperation("deleteTodoCategory", { params: { categoryId } }, 204, options);
 }
 export function postTodoCategoriesReorder(
   body: M.ReorderTodoCategoriesRequest,
