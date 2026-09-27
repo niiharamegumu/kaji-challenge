@@ -57,7 +57,7 @@ it("rejects malformed inputs before opening the runtime", async () => {
 
 it.each([
   { operation: "getMe" },
-  { operation: "postTodoCategoriesReorder", body: { categories: [null] } },
+  { operation: "postTodoCategoriesReorder", body: { categoryIds: [null] } },
 ])("rejects absent sessions before any business transaction: %j", async (data) => {
   mocks.session.mockResolvedValue(null);
   expect(await mocks.handler({ data })).toMatchObject({
@@ -74,7 +74,7 @@ it.each<Record<string, string>>([
   mocks.headers = new Headers(headers);
   expect(
     await mocks.handler({
-      data: { operation: "postTodoCategoriesReorder", body: { categories: [null] } },
+      data: { operation: "postTodoCategoriesReorder", body: { categoryIds: [null] } },
     }),
   ).toMatchObject({
     ok: false,
