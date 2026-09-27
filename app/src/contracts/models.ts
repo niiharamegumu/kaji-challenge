@@ -51,6 +51,7 @@ export type PenaltyRule = z.infer<typeof Schemas.PenaltyRuleSchema>;
 export type CreatePenaltyRuleRequest = z.infer<typeof Schemas.CreatePenaltyRuleRequestSchema>;
 export type UpdatePenaltyRuleRequest = z.infer<typeof Schemas.UpdatePenaltyRuleRequestSchema>;
 export type TodoItem = z.infer<typeof Schemas.TodoItemSchema>;
+export type TodoCategory = z.infer<typeof Schemas.TodoCategorySchema>;
 export type TodoCategoryOrder = z.infer<typeof Schemas.TodoCategoryOrderSchema>;
 export type TodoCategoriesResponse = z.infer<typeof Schemas.TodoCategoriesResponseSchema>;
 export type ReorderTodoCategoriesRequest = z.infer<
