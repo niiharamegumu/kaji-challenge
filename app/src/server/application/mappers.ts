@@ -40,8 +40,9 @@ export function reminder(r: P.Reminder): M.Reminder {
     updatedAt: r.UpdatedAt,
   };
 }
-export function shopping(r: P.ShoppingItem): M.ShoppingListItem {
+export function todo(r: P.TodoItem): M.TodoItem {
   return {
+    category: r.Category,
     id: r.ID,
     teamId: r.TeamID,
     name: r.Name,
