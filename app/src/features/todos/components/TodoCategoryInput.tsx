@@ -29,9 +29,9 @@ export function TodoCategoryInput({
             {categoriesQuery.isPending ? "読み込み中…" : "取得できませんでした"}
           </option>
         ) : null}
-        {categoriesQuery.data?.map((name) => (
-          <option key={name === null ? "unclassified" : `category:${name}`} value={name ?? ""}>
-            {name ?? "未分類"}
+        {categoriesQuery.data?.map((category) => (
+          <option key={category?.id ?? "unclassified"} value={category?.id ?? ""}>
+            {category?.name ?? "未分類"}
           </option>
         ))}
       </select>
