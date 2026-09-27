@@ -1,3 +1,7 @@
+import {
+  categoryOrderFixture as order,
+  categoryIdFixture as cid,
+} from "../../src/test/todoCategories";
 import { readFile } from "node:fs/promises";
 import { sql } from "drizzle-orm";
 import { unstable_splitSqlQuery } from "wrangler";
@@ -31,11 +35,6 @@ it("adds only an unclassified sort key while preserving registered categories an
       ).rows,
     ).toEqual([{ todo_categories: '["買い物","仕事"]', todo_unclassified_sort_key: 0 }]);
     expect((await connection.query(sql`SELECT * FROM todo_items`)).rows).toEqual(before);
-    expect(await connection.repository.ListTodoCategories("legacy")).toEqual([
-      null,
-      "買い物",
-      "仕事",
-    ]);
     for (const invalidKey of [-1, 3]) {
       await expect(
         connection.query(
@@ -63,9 +62,20 @@ describe("persisted category order", () => {
     });
     return responseSchemas[input.operation].parse(result.data);
   }
-  const list = async () => ((await run("listTodoCategories")) as TodoCategoriesResponse).categories;
-  const reorder = (categories: (string | null)[]) =>
-    run("postTodoCategoriesReorder", { categories });
+  const list = async () =>
+    ((await run("listTodoCategories")) as TodoCategoriesResponse).categories.map(
+      (category) => category?.name ?? null,
+    );
+  const reorder = async (categories: (string | null)[]) => {
+    const current = ((await run("listTodoCategories")) as TodoCategoriesResponse).categories;
+    return run("postTodoCategoriesReorder", {
+      categoryIds: categories.map((name) =>
+        name === null
+          ? null
+          : (current.find((category) => category?.name === name)?.id ?? cid(name)),
+      ),
+    });
+  };
   beforeAll(async () => {
     connection = await createTestDatabase();
     for (const id of [owner, outsider]) {
@@ -79,7 +89,7 @@ describe("persisted category order", () => {
   });
   beforeEach(async () => {
     await connection.query(
-      sql`UPDATE teams SET todo_categories='["A","B","C"]',todo_unclassified_sort_key=0 WHERE id IN (${teamId},${otherTeamId})`,
+      sql`UPDATE teams SET todo_categories=${JSON.stringify(order(null, "A", "B", "C"))} WHERE id IN (${teamId},${otherTeamId})`,
     );
   });
   afterAll(async () => {
@@ -93,36 +103,35 @@ describe("persisted category order", () => {
   ])(
     "persists a complete order including the virtual unclassified category: %j",
     async (...categories) => {
-      expect(await reorder(categories)).toEqual({ categories });
+      expect(await reorder(categories)).toEqual({ categories: order(...categories) });
       expect(await list()).toEqual(categories);
       const stored = (
-        await connection.query(
-          sql`SELECT todo_categories,todo_unclassified_sort_key FROM teams WHERE id=${teamId}`,
-        )
+        await connection.query(sql`SELECT todo_categories FROM teams WHERE id=${teamId}`)
       ).rows[0];
-      expect(JSON.parse(String(stored.todo_categories))).toEqual(
-        categories.filter((name) => name !== null),
-      );
-      expect(stored.todo_unclassified_sort_key).toBe(categories.indexOf(null));
+      expect(JSON.parse(String(stored.todo_categories))).toEqual(order(...categories));
       expect(await run("listTodoCategories", undefined, {}, outsider)).toEqual({
-        categories: [null, "A", "B", "C"],
+        categories: order(null, "A", "B", "C"),
       });
     },
   );
   it("keeps the other relative positions on deletion and appends new categories", async () => {
     await reorder(["C", "A", null, "B"]);
-    await run("deleteTodoCategory", undefined, { name: "C" });
+    await run("deleteTodoCategory", undefined, { categoryId: cid("C") });
     expect(await list()).toEqual(["A", null, "B"]);
-    await run("deleteTodoCategory", undefined, { name: "B" });
+    await run("deleteTodoCategory", undefined, { categoryId: cid("B") });
     expect(await list()).toEqual(["A", null]);
-    await run("deleteTodoCategory", undefined, { name: "missing" });
+    await run("deleteTodoCategory", undefined, { categoryId: cid("missing") });
     expect(await list()).toEqual(["A", null]);
     await run("postTodoCategory", { name: "D" });
     expect(await list()).toEqual(["A", null, "D"]);
     await run("postTodoCategory", { name: "A" });
     expect(await list()).toEqual(["A", null, "D"]);
-    await run("deleteTodoCategory", undefined, { name: "A" });
-    await run("deleteTodoCategory", undefined, { name: "D" });
+    await run("deleteTodoCategory", undefined, { categoryId: cid("A") });
+    await run("deleteTodoCategory", undefined, {
+      categoryId: ((await run("listTodoCategories")) as TodoCategoriesResponse).categories.find(
+        (c) => c?.name === "D",
+      )!.id,
+    });
     expect(await reorder([null])).toEqual({ categories: [null] });
     await run("postTodoCategory", { name: "First" });
     expect(await list()).toEqual([null, "First"]);
@@ -151,7 +160,7 @@ describe("persisted category order", () => {
   it("does not resurrect a concurrently deleted category", async () => {
     await Promise.allSettled([
       reorder(["C", "A", null, "B"]),
-      run("deleteTodoCategory", undefined, { name: "C" }),
+      run("deleteTodoCategory", undefined, { categoryId: cid("C") }),
     ]);
     expect(new Set(await list())).toEqual(new Set([null, "A", "B"]));
   });
@@ -159,14 +168,16 @@ describe("persisted category order", () => {
     expect(
       await connection.repository
         .forMember(otherTeamId, owner)
-        .ReorderTodoCategories(otherTeamId, ["C", null, "A", "B"]),
+        .ReorderTodoCategories(otherTeamId, [cid("C"), null, cid("A"), cid("B")]),
     ).toBe(false);
     const scoped = connection.repository.forMember(teamId, owner);
     await connection.query(
       sql`UPDATE team_members SET team_id=${otherTeamId},role='member' WHERE user_id=${owner}`,
     );
     try {
-      expect(await scoped.ReorderTodoCategories(teamId, ["C", null, "A", "B"])).toBe(false);
+      expect(await scoped.ReorderTodoCategories(teamId, [cid("C"), null, cid("A"), cid("B")])).toBe(
+        false,
+      );
     } finally {
       await connection.query(
         sql`UPDATE team_members SET team_id=${teamId},role='owner' WHERE user_id=${owner}`,
@@ -174,12 +185,34 @@ describe("persisted category order", () => {
     }
     expect(await list()).toEqual([null, "A", "B", "C"]);
   });
+  it("preserves renamed labels and ToDo references when saving an order captured before the rename", async () => {
+    const categoryIds = [cid("B"), null, cid("C"), cid("A")];
+    const created = responseSchemas.postTodoItem.parse(
+      await run("postTodoItem", { name: "牛乳", categoryId: cid("A") }),
+    );
+    await connection.query(
+      sql`UPDATE teams SET todo_categories=json_set(todo_categories,'$[1].name','新しい名前') WHERE id=${teamId}`,
+    );
+    expect(await run("postTodoCategoriesReorder", { categoryIds })).toEqual({
+      categories: [...order("B", null, "C"), { id: cid("A"), name: "新しい名前" }],
+    });
+    expect((await connection.repository.GetTodoItemByID(created.id)).CategoryID).toBe(cid("A"));
+  });
+  it("rejects a stale ID even when the category is recreated under the same name", async () => {
+    await run("deleteTodoCategory", undefined, { categoryId: cid("A") });
+    await run("postTodoCategory", { name: "A" });
+    await expect(
+      run("postTodoCategoriesReorder", { categoryIds: [cid("A"), null, cid("B"), cid("C")] }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(await list()).toEqual([null, "B", "C", "A"]);
+  });
   it("keeps reserved-looking category names distinct from unclassified", async () => {
     await run("postTodoCategory", { name: "unclassified" });
     await run("postTodoCategory", { name: "未分類" });
     await run("postTodoCategory", { name: '引用 " \\ $' });
     const categories = ["未分類", "unclassified", '引用 " \\ $', "C", null, "A", "B"];
-    expect(await reorder(categories)).toEqual({ categories });
+    await reorder(categories);
+    expect(await list()).toEqual(categories);
   });
 });
 
@@ -193,8 +226,25 @@ it.each([
   [null, "a".repeat(51)],
 ])("rejects malformed order input and output: %j", (...categories) => {
   expect(
-    operationSchema.safeParse({ operation: "postTodoCategoriesReorder", body: { categories } })
-      .success,
+    operationSchema.safeParse({
+      operation: "postTodoCategoriesReorder",
+      body: { categoryIds: categories },
+    }).success,
   ).toBe(false);
   expect(responseSchemas.listTodoCategories.safeParse({ categories }).success).toBe(false);
 });
+
+it.each([[cid("A")], [null, cid("A"), cid("A")], [null, null, cid("A")]])(
+  "rejects malformed null/duplicate structure even with valid UUIDs: %j",
+  (...categoryIds) => {
+    expect(
+      operationSchema.safeParse({ operation: "postTodoCategoriesReorder", body: { categoryIds } })
+        .success,
+    ).toBe(false);
+    expect(
+      responseSchemas.listTodoCategories.safeParse({
+        categories: categoryIds.map((id) => (id === null ? null : { id, name: "A" })),
+      }).success,
+    ).toBe(false);
+  },
+);
