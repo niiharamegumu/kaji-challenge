@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useHomePageQueries } from "./useHomeQueries";
 
 const mockGetTaskOverview = vi.fn();
-const mockListShoppingItems = vi.fn();
+const mockListTodoItems = vi.fn();
 const mockGetPenaltySummaryMonthly = vi.fn();
 const mockListPenaltyRules = vi.fn();
 
@@ -15,7 +15,7 @@ vi.mock("../../../lib/api/operations", async () => {
   return {
     ...actual,
     getTaskOverview: (...args: unknown[]) => mockGetTaskOverview(...args),
-    listShoppingItems: (...args: unknown[]) => mockListShoppingItems(...args),
+    listTodoItems: (...args: unknown[]) => mockListTodoItems(...args),
     getPenaltySummaryMonthly: (...args: unknown[]) => mockGetPenaltySummaryMonthly(...args),
     listPenaltyRules: (...args: unknown[]) => mockListPenaltyRules(...args),
   };
@@ -40,14 +40,14 @@ function deferred<T>() {
 function QueryProbe() {
   const {
     homeQuery,
-    shoppingItemsQuery,
+    todoItemsQuery,
     previousMonth,
     previousMonthPenaltySummaryQuery,
     penaltyRulesQuery,
   } = useHomePageQueries();
   return (
     <div>
-      {homeQuery.isSuccess ? "home-ready" : "home-pending"}:{shoppingItemsQuery.data.length}:
+      {homeQuery.isSuccess ? "home-ready" : "home-pending"}:{todoItemsQuery.data.length}:
       {previousMonth}:{previousMonthPenaltySummaryQuery.data.totalPenalty}:
       {penaltyRulesQuery.data?.length ?? 0}
     </div>
@@ -57,18 +57,18 @@ function QueryProbe() {
 describe("useHomePageQueries", () => {
   beforeEach(() => {
     mockGetTaskOverview.mockReset();
-    mockListShoppingItems.mockReset();
+    mockListTodoItems.mockReset();
     mockGetPenaltySummaryMonthly.mockReset();
     mockListPenaltyRules.mockReset();
   });
 
   it("starts all home requests in parallel", async () => {
     const home = deferred<{ data: Record<string, never> }>();
-    const shopping = deferred<{ data: { items: never[] } }>();
+    const todo = deferred<{ data: { items: never[] } }>();
     const summary = deferred<{ data: { totalPenalty: number } }>();
     const rules = deferred<{ data: { items: never[] } }>();
     mockGetTaskOverview.mockReturnValue(home.promise);
-    mockListShoppingItems.mockReturnValue(shopping.promise);
+    mockListTodoItems.mockReturnValue(todo.promise);
     mockGetPenaltySummaryMonthly.mockReturnValue(summary.promise);
     mockListPenaltyRules.mockReturnValue(rules.promise);
     const queryClient = new QueryClient({
@@ -85,7 +85,7 @@ describe("useHomePageQueries", () => {
 
     await waitFor(() => {
       expect(mockGetTaskOverview).toHaveBeenCalledOnce();
-      expect(mockListShoppingItems).toHaveBeenCalledOnce();
+      expect(mockListTodoItems).toHaveBeenCalledOnce();
       expect(mockGetPenaltySummaryMonthly).toHaveBeenCalledOnce();
       expect(mockGetPenaltySummaryMonthly).toHaveBeenCalledWith({
         month: "2026-07",
@@ -94,7 +94,7 @@ describe("useHomePageQueries", () => {
     });
 
     home.resolve({ data: {} });
-    shopping.resolve({ data: { items: [] } });
+    todo.resolve({ data: { items: [] } });
     summary.resolve({ data: { totalPenalty: 3 } });
     rules.resolve({ data: { items: [] } });
     expect(await screen.findByText("home-ready:0:2026-07:3:0")).toBeInTheDocument();
