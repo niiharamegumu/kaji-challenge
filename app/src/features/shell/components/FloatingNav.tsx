@@ -9,7 +9,8 @@ import {
   Settings,
   Shield,
   ShieldAlert,
-  ShoppingCart,
+  ListTodo,
+  Tags,
   UserCircle2,
 } from "lucide-react";
 import type { FocusEvent as ReactFocusEvent, PointerEvent as ReactPointerEvent } from "react";
@@ -28,7 +29,7 @@ type Props = {
 };
 
 type PrimaryNavItem = {
-  id: "home" | "shopping" | "calendar" | "summary";
+  id: "home" | "todo" | "calendar" | "summary";
   label: string;
   icon: LucideIcon;
   path?: string;
@@ -63,11 +64,11 @@ const primaryItems: PrimaryNavItem[] = [
     intentPath: "/",
   },
   {
-    id: "shopping",
-    label: "買い物",
-    icon: ShoppingCart,
-    path: "/shopping-list",
-    intentPath: "/shopping-list",
+    id: "todo",
+    label: "ToDo",
+    icon: ListTodo,
+    path: "/todos",
+    intentPath: "/todos",
   },
   {
     id: "calendar",
@@ -91,7 +92,7 @@ function getPrimaryIndex(pathname: string) {
   if (pathname === "/") {
     return 0;
   }
-  if (pathname.startsWith("/shopping-list")) {
+  if (pathname.startsWith("/todos")) {
     return 1;
   }
   if (pathname.startsWith("/calendar")) {
@@ -134,6 +135,13 @@ export function FloatingNav({
   const userTextColor = getReadableTextColor(userBgColor);
 
   const secondaryItems: SecondaryNavItem[] = [
+    {
+      id: "todo-categories",
+      label: "カテゴリー管理",
+      icon: Tags,
+      path: "/todo-categories",
+      intentPath: "/todo-categories",
+    },
     {
       id: "tasks",
       label: "タスク",
