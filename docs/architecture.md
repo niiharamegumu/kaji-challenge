@@ -29,7 +29,7 @@ feature adapter → 共通client → Server Function → Application → Reposit
 
 ### 操作のフィードバック
 
-家事の完了・購入済みは、TanStack Queryの未完了mutationの入力を取得結果に重ねて即時表示する。保存済みキャッシュは成功応答で更新し、失敗時はそのmutationの表示だけが消える。他の操作やメンバーの完了を一括rollbackしない。日間・週1回の保存中の連打は抑止する。週複数回は連続タップを受け付け、increment/decrementを送り、D1内の件数条件で上限・下限を守る。追加・編集フォームはPromiseを返し、共通FormSheetとインライン編集は呼出元mutationの `isPending` / `isError` を表示に使う。別のref/stateへ保存状態を複製せず、保存中の入力・閉じる操作・重複送信を抑止する。失敗時は入力を保持し、再表示時にmutationをresetする。全体の保存中表示は `shared/components/MutationFeedback.tsx` が担当する。
+家事の完了・ToDo完了は、TanStack Queryの未完了mutationの入力を取得結果に重ねて即時表示する。保存済みキャッシュは成功応答で更新し、失敗時はそのmutationの表示だけが消える。他の操作やメンバーの完了を一括rollbackしない。日間・週1回の保存中の連打は抑止する。週複数回は連続タップを受け付け、increment/decrementを送り、D1内の件数条件で上限・下限を守る。追加・編集フォームはPromiseを返し、共通FormSheetとインライン編集は呼出元mutationの `isPending` / `isError` を表示に使う。別のref/stateへ保存状態を複製せず、保存中の入力・閉じる操作・重複送信を抑止する。失敗時は入力を保持し、再表示時にmutationをresetする。全体の保存中表示は `shared/components/MutationFeedback.tsx` が担当する。
 
 API応答の実行時検証は共通clientの出力schemaで行う。feature hookで再検証したり、不正なDTOを一覧再取得で隠したりしない。保存応答のDTOを一覧に反映し、派生データの再取得はバックグラウンドで行う。家事完了の一覧同期は最後のpending mutationが終了するときにまとめる。楽観表示をDB保存済みの証拠として扱わず、再読込の検証では保存応答も待つ。
 
@@ -76,3 +76,7 @@ Alchemyは `Cloudflare.Worker("Application", { bundle: false, ... })` でbuild�
 CDは本番Secretsを渡さずbuildし、その後のstepでAlchemy bootstrap → plan → deploy → health確認を実行する。CIの再実行はしない。build出力の入口・assetsディレクトリを変えた場合はIaCも更新し、test:localで一致を検証する。
 
 公式資料: [CloudflareのTanStack Start構成](https://developers.cloudflare.com/workers/framework-guides/web-apps/tanstack-start/)、[Alchemyのビルド済みWorker配備](https://alchemy.run/providers/cloudflare/workers/worker/#configuration)。
+
+## ToDo
+
+`features/todos`を公開境界とし、専用ページは`/todos`。ホームも同じToDo query/mutationを使う。カテゴリー管理は「その他」から開く`/todo-categories`へ分離する。専用ページは「現在のToDo」の下に「すべて」「未分類」「登録済みカテゴリー」の切り替えボタンを置き、1行の横スクロールで表示する。絞り込み中の並び替えは表示対象の位置だけを置き換え、全体のID順をAPIへ送る。カテゴリー候補のqueryもチーム変更・リアルタイム通知で再取得する。
