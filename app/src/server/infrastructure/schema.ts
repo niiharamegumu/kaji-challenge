@@ -16,6 +16,10 @@ export const teams = sqliteTable("teams", {
   id: text("id").primaryKey().notNull(),
   name: text("name").notNull(),
   created_at: text("created_at").notNull(),
+  todo_categories: text("todo_categories", { mode: "json" })
+    .$type<string[]>()
+    .notNull()
+    .default(sql`'[]'`),
 });
 
 export const inviteCodes = sqliteTable(
@@ -32,21 +36,22 @@ export const inviteCodes = sqliteTable(
   ],
 );
 
-export const shoppingItems = sqliteTable(
-  "shopping_items",
+export const todoItems = sqliteTable(
+  "todo_items",
   {
     id: text("id").primaryKey().notNull(),
     team_id: text("team_id").notNull(),
     name: text("name").notNull(),
     notes: text("notes"),
+    category: text("category"),
     sort_key: integer("sort_key").notNull(),
     created_at: text("created_at").notNull(),
     updated_at: text("updated_at").notNull(),
   },
   (t) => [
     foreignKey({ columns: [t.team_id], foreignColumns: [teams.id] }).onDelete("cascade"),
-    index("shopping_team_sort_idx").on(t.team_id, t.sort_key, t.created_at),
-    check("shopping_items_check_1", sql`${t.sort_key}>=1`),
+    index("todo_team_sort_idx").on(t.team_id, t.sort_key, t.created_at),
+    check("todo_items_check_1", sql`${t.sort_key}>=1`),
   ],
 );
 
