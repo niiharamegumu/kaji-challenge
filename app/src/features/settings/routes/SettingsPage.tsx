@@ -1,10 +1,10 @@
 import { useSetAtom } from "jotai";
-import { useActionState, useState, useTransition } from "react";
+import { useState } from "react";
 import { useOutletContext } from "../../../shared/router/navigation";
 
 import type { RootLayoutOutletContext } from "../../../shared/router/rootLayoutContext";
 import { statusMessageAtom } from "../../../shared/state/status";
-import { InviteManager } from "../components/InviteManager";
+import { SettingsManager } from "../components/SettingsManager";
 import {
   useInviteMutations,
   useProfileMutations,
@@ -12,32 +12,20 @@ import {
 } from "../hooks/useSettings";
 import type { InviteState } from "../model/invite";
 
-type SaveProfileActionState = {
-  status: "idle" | "success" | "error";
-};
-
-const initialSaveProfileActionState: SaveProfileActionState = {
-  status: "idle",
-};
+type Draft = { key: string | null; value: string };
 
 export function SettingsPage() {
-  const { currentUserId, currentTeamName } = useOutletContext<RootLayoutOutletContext>();
+  const { currentUserId, currentTeamId, currentTeamName } =
+    useOutletContext<RootLayoutOutletContext>();
   const [joinCode, setJoinCode] = useState("");
-  const [, startTransition] = useTransition();
   const setStatus = useSetAtom(statusMessageAtom);
   const { createInvite, joinTeam, leaveTeam } = useInviteMutations(setStatus);
   const { updateNickname, updateColor, updateTeamName } = useProfileMutations(setStatus);
-  const { membersQuery, currentInviteQuery } = useTeamSettingsQueries(currentUserId);
+  const { membersQuery, currentInviteQuery } = useTeamSettingsQueries();
 
-  const [nicknameDraft, setNicknameDraft] = useState("");
-  const [colorHexDraft, setColorHexDraft] = useState("");
-  const [teamNameDraft, setTeamNameDraft] = useState("");
-  const [nicknameDraftUserId, setNicknameDraftUserId] = useState<string | null>(null);
-  const [colorHexDraftUserId, setColorHexDraftUserId] = useState<string | null>(null);
-  const [teamNameDraftKey, setTeamNameDraftKey] = useState("");
-  const [nicknameDirty, setNicknameDirty] = useState(false);
-  const [colorHexDirty, setColorHexDirty] = useState(false);
-  const [teamNameDirty, setTeamNameDirty] = useState(false);
+  const [nicknameDraft, setNicknameDraft] = useState<Draft | null>(null);
+  const [colorHexDraft, setColorHexDraft] = useState<Draft | null>(null);
+  const [teamNameDraft, setTeamNameDraft] = useState<Draft | null>(null);
 
   const invite: InviteState | null =
     currentInviteQuery.data == null
@@ -46,17 +34,13 @@ export function SettingsPage() {
           code: currentInviteQuery.data.code,
           expiresAt: currentInviteQuery.data.expiresAt,
         };
-  const currentNickname =
-    membersQuery.data.find((member) => member.userId === currentUserId)?.nickname ?? "";
-  const currentColorHex =
-    membersQuery.data.find((member) => member.userId === currentUserId)?.colorHex ?? "";
-  const currentTeamKey = `${currentUserId ?? "anonymous"}:${currentTeamName}`;
+  const currentMember = membersQuery.data.find((member) => member.userId === currentUserId);
+  const currentTeamKey = `${currentUserId}:${currentTeamId}`;
   const nickname =
-    nicknameDirty && nicknameDraftUserId === currentUserId ? nicknameDraft : currentNickname;
+    nicknameDraft?.key === currentUserId ? nicknameDraft.value : (currentMember?.nickname ?? "");
   const colorHex =
-    colorHexDirty && colorHexDraftUserId === currentUserId ? colorHexDraft : currentColorHex;
-  const teamName =
-    teamNameDirty && teamNameDraftKey === currentTeamKey ? teamNameDraft : currentTeamName;
+    colorHexDraft?.key === currentUserId ? colorHexDraft.value : (currentMember?.colorHex ?? "");
+  const teamName = teamNameDraft?.key === currentTeamKey ? teamNameDraft.value : currentTeamName;
 
   const handleCreateInvite = async () => {
     try {
@@ -84,66 +68,9 @@ export function SettingsPage() {
     }
   };
 
-  const [, saveNicknameAction, isSavingNickname] = useActionState(
-    async (
-      _prev: SaveProfileActionState,
-      nextNickname: string,
-    ): Promise<SaveProfileActionState> => {
-      try {
-        await updateNickname.mutateAsync(nextNickname);
-        setNicknameDraft(nextNickname);
-        setNicknameDraftUserId(currentUserId);
-        setNicknameDirty(false);
-        return { status: "success" };
-      } catch {
-        // Error status is handled by mutation onError.
-        return { status: "error" };
-      }
-    },
-    initialSaveProfileActionState,
-  );
-
-  const [, saveColorAction, isSavingColor] = useActionState(
-    async (
-      _prev: SaveProfileActionState,
-      nextColorHex: string,
-    ): Promise<SaveProfileActionState> => {
-      try {
-        await updateColor.mutateAsync(nextColorHex.trim().length === 0 ? null : nextColorHex);
-        setColorHexDraft(nextColorHex);
-        setColorHexDraftUserId(currentUserId);
-        setColorHexDirty(false);
-        return { status: "success" };
-      } catch {
-        // Error status is handled by mutation onError.
-        return { status: "error" };
-      }
-    },
-    initialSaveProfileActionState,
-  );
-
-  const [, saveTeamNameAction, isSavingTeamName] = useActionState(
-    async (
-      _prev: SaveProfileActionState,
-      nextTeamName: string,
-    ): Promise<SaveProfileActionState> => {
-      try {
-        await updateTeamName.mutateAsync(nextTeamName);
-        setTeamNameDraft(nextTeamName);
-        setTeamNameDraftKey(currentTeamKey);
-        setTeamNameDirty(false);
-        return { status: "success" };
-      } catch {
-        // Error status is handled by mutation onError.
-        return { status: "error" };
-      }
-    },
-    initialSaveProfileActionState,
-  );
-
   return (
     <section className="mt-2 pb-1 md:mt-4">
-      <InviteManager
+      <SettingsManager
         invite={invite}
         joinCode={joinCode}
         members={membersQuery.data}
@@ -153,24 +80,18 @@ export function SettingsPage() {
         isCreatingInvite={createInvite.isPending}
         isJoiningTeam={joinTeam.isPending}
         isLeavingTeam={leaveTeam.isPending}
-        isSavingNickname={isSavingNickname}
-        isSavingColor={isSavingColor}
-        isSavingTeamName={isSavingTeamName}
+        isSavingNickname={updateNickname.isPending}
+        isSavingColor={updateColor.isPending}
+        isSavingTeamName={updateTeamName.isPending}
         onJoinCodeChange={setJoinCode}
         onNicknameChange={(value) => {
-          setNicknameDraft(value);
-          setNicknameDraftUserId(currentUserId);
-          setNicknameDirty(true);
+          setNicknameDraft({ key: currentUserId, value });
         }}
         onColorHexChange={(value) => {
-          setColorHexDraft(value);
-          setColorHexDraftUserId(currentUserId);
-          setColorHexDirty(true);
+          setColorHexDraft({ key: currentUserId, value });
         }}
         onTeamNameChange={(value) => {
-          setTeamNameDraft(value);
-          setTeamNameDraftKey(currentTeamKey);
-          setTeamNameDirty(true);
+          setTeamNameDraft({ key: currentTeamKey, value });
         }}
         onCreateInvite={() => {
           void handleCreateInvite();
@@ -182,18 +103,24 @@ export function SettingsPage() {
           void handleLeaveTeam();
         }}
         onSaveNickname={() => {
-          startTransition(() => {
-            saveNicknameAction(nickname);
+          if (updateNickname.isPending) return;
+          updateNickname.mutate(nickname, {
+            onSuccess: () =>
+              setNicknameDraft((current) => (current === nicknameDraft ? null : current)),
           });
         }}
         onSaveColor={() => {
-          startTransition(() => {
-            saveColorAction(colorHex);
+          if (updateColor.isPending) return;
+          updateColor.mutate(colorHex.trim() || null, {
+            onSuccess: () =>
+              setColorHexDraft((current) => (current === colorHexDraft ? null : current)),
           });
         }}
         onSaveTeamName={() => {
-          startTransition(() => {
-            saveTeamNameAction(teamName);
+          if (updateTeamName.isPending) return;
+          updateTeamName.mutate(teamName, {
+            onSuccess: () =>
+              setTeamNameDraft((current) => (current === teamNameDraft ? null : current)),
           });
         }}
       />
