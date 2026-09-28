@@ -429,10 +429,16 @@ export async function executeOperation(
       invariant(to >= from, "to must be on or after from");
       const start = from > today.slice(0, 7) + "-01" ? from : today.slice(0, 7) + "-01";
       const items = await reminderOccurrences(repo, teamId, start, to, todayJST(context.now));
+      const itemsByDate = new Map<string, typeof items>();
+      for (const item of items) {
+        const day = itemsByDate.get(item.date);
+        if (day) day.push(item);
+        else itemsByDate.set(item.date, [item]);
+      }
       data = {
-        days: [...new Set(items.map((r) => r.date))].map((date) => ({
+        days: [...itemsByDate].map(([date, occurrences]) => ({
           date,
-          items: items.filter((r) => r.date === date),
+          items: occurrences,
         })),
       };
       break;
