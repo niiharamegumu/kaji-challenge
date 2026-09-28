@@ -168,6 +168,13 @@ export function postTodoCategory(
 ): Promise<ApiResult<M.TodoCategoriesResponse>> {
   return callOperation("postTodoCategory", { params: {}, body }, 201, options);
 }
+export function patchTodoCategory(
+  categoryId: string,
+  body: { name: string },
+  options?: CallOptions,
+): Promise<ApiResult<M.TodoCategoriesResponse>> {
+  return callOperation("patchTodoCategory", { params: { categoryId }, body }, 200, options);
+}
 export function deleteTodoCategory(
   categoryId: string,
   options?: CallOptions,
