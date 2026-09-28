@@ -108,6 +108,7 @@ describe("PushSettings", () => {
     mockDeletePushSubscription.mockResolvedValue({ data: {} });
     mockOutletContext.mockReturnValue({
       currentUserId: "u1",
+      currentTeamId: "team-1",
       currentTeamName: "Team A",
       displayName: "Owner",
     });
