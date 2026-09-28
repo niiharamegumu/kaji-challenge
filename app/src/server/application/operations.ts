@@ -292,6 +292,14 @@ export async function executeOperation(
       await repo.CreateTodoCategory(teamId, { id: crypto.randomUUID(), name: input.body.name });
       data = { categories: await repo.ListTodoCategories(teamId) };
       break;
+    case "patchTodoCategory":
+      invariant(
+        await repo.RenameTodoCategory(teamId, input.params.categoryId, input.body.name),
+        "同じ名前のカテゴリーがあるか、対象が削除されています。一覧を確認してください。",
+        409,
+      );
+      data = { categories: await repo.ListTodoCategories(teamId) };
+      break;
     case "deleteTodoCategory":
       await repo.DeleteTodoCategory(teamId, input.params.categoryId, now);
       data = {};
