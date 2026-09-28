@@ -24,6 +24,7 @@ feature adapter → 共通client → Server Function → Application → Reposit
 
 - 他featureのcomponents/hooks/state/libを直接importせず、`features/<feature>/index.ts` の公開APIを使います。
 - 共通UIは `shared/components`、共通query/stateは `shared/query` と `shared/state` に配置します。
+- ヘッダーと設定画面のチームメンバー一覧は `shared/query/teamMembersQuery.ts` のquery定義とキャッシュを共有する。設定の保存状態はmutationから取得し、編集中の値はユーザーID・チームIDで区別する。
 - 追加・編集フォームは `shared/components/FormSheet.tsx` の共通シェルを使います。`FooterQuickAction` は追加ボタンとそのシェルの組み立てを担当し、featureに端末別のシェルを複製しません。
 - `shared` は `features` に依存しません。画面はfeature adapterを通してServer Functionsを利用します。
 
