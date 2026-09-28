@@ -1,5 +1,8 @@
 import { TodoCategoryQueryStatus } from "./TodoCategoryQueryStatus";
 import { useState } from "react";
+import type { TodoCategory } from "../../../lib/api/operations";
+import { FormSheet } from "../../../shared/components/FormSheet";
+import { formatError } from "../../../shared/utils/errors";
 import {
   closestCenter,
   DndContext,
@@ -22,10 +25,15 @@ import { SortableTodoCategory, todoCategoryDragId } from "./SortableTodoCategory
 
 export function TodoCategoryManager({ setStatus }: { setStatus: (message: string) => void }) {
   const query = useTodoCategoriesQuery();
-  const { createCategory, removeCategory, reorderCategories } = useTodoCategoryMutations(setStatus);
+  const { createCategory, renameCategory, removeCategory, reorderCategories } =
+    useTodoCategoryMutations(setStatus);
   const [name, setName] = useState("");
+  const [editing, setEditing] = useState<TodoCategory | null>(null);
   const pending =
-    createCategory.isPending || removeCategory.isPending || reorderCategories.isPending;
+    createCategory.isPending ||
+    renameCategory.isPending ||
+    removeCategory.isPending ||
+    reorderCategories.isPending;
   const categories = reorderCategories.isPending ? reorderCategories.variables : (query.data ?? []);
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
@@ -108,7 +116,11 @@ export function TodoCategoryManager({ setStatus }: { setStatus: (message: string
                 key={todoCategoryDragId(category)}
                 category={category}
                 disabled={pending}
-                onRemove={(name) => removeCategory.mutate(name)}
+                onRemove={(categoryId) => removeCategory.mutate(categoryId)}
+                onEdit={(category) => {
+                  renameCategory.reset();
+                  setEditing({ ...category });
+                }}
               />
             ))}
           </ul>
@@ -117,6 +129,37 @@ export function TodoCategoryManager({ setStatus }: { setStatus: (message: string
       {query.isSuccess && query.data.length === 1 ? (
         <p className="mt-2 text-xs text-stone-500">カテゴリーはまだありません。</p>
       ) : null}
+      <FormSheet
+        isOpen={editing !== null}
+        title="カテゴリー名を変更"
+        submitLabel="保存"
+        isSubmitting={renameCategory.isPending}
+        submitDisabled={!editing?.name.trim() || pending}
+        onClose={() => setEditing(null)}
+        onSubmit={async () => {
+          if (editing === null) return;
+          await renameCategory.mutateAsync({ id: editing.id, name: editing.name.trim() });
+          setEditing(null);
+        }}
+      >
+        <label className="grid gap-2 text-xs text-stone-700">
+          カテゴリー名
+          <input
+            className="h-10 min-w-0 rounded-lg border border-stone-300 bg-white px-3 text-sm"
+            value={editing?.name ?? ""}
+            maxLength={50}
+            onChange={(event) => {
+              const value = event.target.value;
+              setEditing((current) => (current === null ? null : { ...current, name: value }));
+            }}
+          />
+        </label>
+        {renameCategory.isError ? (
+          <p role="alert" className="mt-2 text-sm text-red-700">
+            保存に失敗しました: {formatError(renameCategory.error)}
+          </p>
+        ) : null}
+      </FormSheet>
     </div>
   );
 }

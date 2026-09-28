@@ -422,6 +422,11 @@ export const operationSchema = z.discriminatedUnion("operation", [
     body: z.object({ name: TodoCategoryNameSchema }),
   }),
   z.object({
+    operation: z.literal("patchTodoCategory"),
+    params: z.object({ categoryId: z.uuid() }),
+    body: z.object({ name: TodoCategoryNameSchema }),
+  }),
+  z.object({
     operation: z.literal("deleteTodoCategory"),
     params: z.object({ categoryId: z.uuid() }),
   }),
@@ -508,6 +513,7 @@ export const responseSchemas = {
   deletePenaltyRule: z.object({}),
   listTodoCategories: TodoCategoriesResponseSchema,
   postTodoCategory: TodoCategoriesResponseSchema,
+  patchTodoCategory: TodoCategoriesResponseSchema,
   postTodoCategoriesReorder: TodoCategoriesResponseSchema,
   deleteTodoCategory: z.object({}),
   listTodoItems: z.object({ items: z.array(TodoItemSchema) }),

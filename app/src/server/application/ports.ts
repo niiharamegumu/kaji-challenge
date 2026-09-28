@@ -584,6 +584,7 @@ export interface Repository {
   ListTodoCategories(teamId: string): Promise<(TodoCategory | null)[]>;
   ReorderTodoCategories(teamId: string, categoryIds: (string | null)[]): Promise<boolean>;
   CreateTodoCategory(teamId: string, category: TodoCategory): Promise<void>;
+  RenameTodoCategory(teamId: string, categoryId: string, name: string): Promise<boolean>;
   DeleteTodoCategory(teamId: string, categoryId: string, now: string): Promise<void>;
   CreateTodoItem(arg: CreateTodoItemParams): Promise<boolean>;
   DeleteTodoItem(id: string): Promise<number>;
