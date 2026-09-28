@@ -14,10 +14,12 @@ export function SortableTodoCategory({
   category,
   disabled,
   onRemove,
+  onEdit,
 }: {
   category: TodoCategory | null;
   disabled: boolean;
   onRemove: (categoryId: string) => void;
+  onEdit: (category: TodoCategory) => void;
 }) {
   const {
     attributes,
@@ -44,15 +46,26 @@ export function SortableTodoCategory({
       {category === null ? (
         <span className="shrink-0 px-3 text-xs text-stone-500">標準</span>
       ) : (
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => onRemove(category.id)}
-          aria-label={`${label} を削除`}
-          className="min-h-9 shrink-0 rounded-lg border border-stone-300 px-3 text-xs text-stone-700 disabled:opacity-50"
-        >
-          削除
-        </button>
+        <>
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => onEdit(category)}
+            aria-label={`${label} を編集`}
+            className="min-h-9 shrink-0 rounded-lg border border-stone-300 px-3 text-xs text-stone-700 disabled:opacity-50"
+          >
+            編集
+          </button>
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => onRemove(category.id)}
+            aria-label={`${label} を削除`}
+            className="min-h-9 shrink-0 rounded-lg border border-stone-300 px-3 text-xs text-stone-700 disabled:opacity-50"
+          >
+            削除
+          </button>
+        </>
       )}
       <button
         ref={setActivatorNodeRef}
