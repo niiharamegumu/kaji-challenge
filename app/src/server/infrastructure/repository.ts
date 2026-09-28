@@ -633,6 +633,29 @@ export class D1Repository implements P.Repository {
         ),
       );
   }
+  async RenameTodoCategory(teamId: string, categoryId: string, name: string): Promise<boolean> {
+    // Resolve the current array position and check uniqueness in the same write.
+    const rows = await this.db
+      .update(teams)
+      .set({
+        todo_categories: sql`json_set(${teams.todo_categories},
+          (SELECT '$[' || key || '].name' FROM json_each(${teams.todo_categories})
+            WHERE json_extract(value, '$.id')=${categoryId}), ${name})`,
+      })
+      .where(
+        and(
+          eq(teams.id, teamId),
+          this.access(),
+          sql`EXISTS (SELECT 1 FROM json_each(${teams.todo_categories})
+            WHERE json_extract(value, '$.id')=${categoryId})`,
+          sql`NOT EXISTS (SELECT 1 FROM json_each(${teams.todo_categories})
+            WHERE json_extract(value, '$.id')<>${categoryId}
+              AND json_extract(value, '$.name')=${name})`,
+        ),
+      )
+      .returning({ id: teams.id });
+    return rows.length === 1;
+  }
   async ListTodoCategories(teamId: string): Promise<(P.TodoCategory | null)[]> {
     const rows = await this.db
       .select({ categories: teams.todo_categories })
