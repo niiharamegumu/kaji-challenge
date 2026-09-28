@@ -8,7 +8,7 @@ export function TodoCategoriesPage() {
     <section className="mt-2 w-full min-w-0 px-2 py-3 md:mt-4 md:px-6 md:py-6">
       <h2 className="text-lg font-semibold text-stone-900">カテゴリー管理</h2>
       <p className="mt-2 text-sm text-stone-600">
-        ToDoで使うカテゴリーを追加・削除・並べ替えできます。
+        ToDoで使うカテゴリーを追加・名前変更・削除・並べ替えできます。
       </p>
       <TodoCategoryManager setStatus={setStatus} />
     </section>
