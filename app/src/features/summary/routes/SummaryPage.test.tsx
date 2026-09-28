@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppProviders } from "../../../app/providers";
 import { SuspenseQueryBoundary } from "../../../shared/components/SuspenseQueryBoundary";
 import { appQueryClient } from "../../../shared/query/queryClient";
-import { dateStringInJST } from "../../../shared/utils/errors";
+import { dateStringInJST } from "../../../shared/utils/dates";
 import { withExpectedConsoleError } from "../../../test/console";
 import { SummaryPage } from "./SummaryPage";
 
@@ -41,8 +41,8 @@ vi.mock("../../../lib/api/operations", async () => {
   };
 });
 
-vi.mock("../../../shared/utils/errors", async () => {
-  const actual = await vi.importActual<object>("../../../shared/utils/errors");
+vi.mock("../../../shared/utils/dates", async () => {
+  const actual = await vi.importActual<object>("../../../shared/utils/dates");
   return {
     ...actual,
     dateStringInJST: (...args: unknown[]) => mockDateStringInJST(...args),
@@ -142,18 +142,18 @@ describe("SummaryPage", () => {
     });
   });
 
-  it("renders safely when summary arrays are null", async () => {
+  it("renders the empty state for valid empty summary arrays", async () => {
     mockGetPenaltySummaryMonthly.mockResolvedValue({
       data: {
         totalPenalty: 0,
         dailyPenaltyTotal: 0,
         weeklyPenaltyTotal: 0,
         isClosed: false,
-        triggeredPenaltyRuleIds: null,
-        taskStatusByDate: null,
+        triggeredPenaltyRuleIds: [],
+        taskStatusByDate: [],
       },
     });
-    mockListPenaltyRules.mockResolvedValue({ data: { items: null } });
+    mockListPenaltyRules.mockResolvedValue({ data: { items: [] } });
 
     renderPage();
 
