@@ -569,7 +569,7 @@ test("ToDo categories persist, filter and detach without deleting items", async 
   context,
 }, testInfo) => {
   await authenticate(context);
-  const category = `分類検証-${testInfo.project.name}`;
+  let category = `分類検証-${testInfo.project.name}`;
   await page.goto("/todo-categories");
   await page.getByLabel("新しいカテゴリー").fill(category);
   await page.getByRole("button", { name: "カテゴリーを追加", exact: true }).click();
@@ -633,6 +633,13 @@ test("ToDo categories persist, filter and detach without deleting items", async 
   await page.getByRole("button", { name: "カテゴリー", exact: true }).click();
   await expect(page).toHaveURL(/\/todo-categories$/);
   await expect(page.getByRole("heading", { name: "カテゴリー管理" })).toBeVisible();
+  await page.getByRole("button", { name: `${category} を編集`, exact: true }).click();
+  category = `名前変更-${testInfo.project.name}`;
+  await page.getByLabel("カテゴリー名", { exact: true }).fill(category);
+  await page.getByRole("button", { name: "保存", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "カテゴリー名を変更" })).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole("button", { name: `${category} を編集`, exact: true })).toBeVisible();
   await page.getByLabel("新しいカテゴリー").fill("0件のカテゴリー");
   await page.getByRole("button", { name: "カテゴリーを追加", exact: true }).click();
   await expect(page.getByRole("button", { name: "0件のカテゴリー を削除" })).toBeVisible();
