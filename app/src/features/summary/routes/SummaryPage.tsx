@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient, useSuspenseQueries } from "@tanstack/react-query";
 import { Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Circle } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useSearchParams } from "../../../shared/router/navigation";
 import { CompletionSlots } from "../../../shared/components/CompletionSlots";
 import { ConfirmModal } from "../../../shared/components/ConfirmModal";
@@ -11,7 +11,8 @@ import {
 } from "../../../shared/query/monthlyPenaltyQueries";
 import { queryKeys } from "../../../shared/query/queryKeys";
 import { PAGE_SECTION_CHROMELESS_CLASS_NAME } from "../../../shared/styles/pageSection";
-import { dateStringInJST, formatError } from "../../../shared/utils/errors";
+import { dateStringInJST } from "../../../shared/utils/dates";
+import { formatError } from "../../../shared/utils/errors";
 import { closeMonth as closeMonthRequest, useMonthCloseCandidate } from "../../month-close";
 import {
   completePastDailyTask as completePastDailyTaskRequest,
@@ -67,13 +68,6 @@ const weekEndDateKey = (dateKey: string) => {
   return date.toISOString().slice(0, 10);
 };
 
-const asArray = <T,>(value: T[] | null | undefined): T[] => {
-  if (Array.isArray(value)) {
-    return value;
-  }
-  return [];
-};
-
 export function SummaryPage() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -99,8 +93,8 @@ export function SummaryPage() {
   const summaryData = summary.data;
   const monthCloseCandidate = useMonthCloseCandidate();
   const closeCandidate = monthCloseCandidate.data?.candidate;
-  const monthlyTaskStatusGroups = asArray(summaryData.taskStatusByDate);
-  const currentDateKey = useMemo(() => dateStringInJST(), []);
+  const monthlyTaskStatusGroups = summaryData.taskStatusByDate;
+  const currentDateKey = dateStringInJST();
 
   const closeRequested = searchParams.get("close") === "1" && closeCandidate?.month === month;
   const clearCloseRequest = () => {
@@ -181,17 +175,8 @@ export function SummaryPage() {
     });
   };
 
-  const [currentYear, currentMonth] = useMemo(() => {
-    const [yearPart, monthPart] = month.split("-");
-    return [Number(yearPart), Number(monthPart)];
-  }, [month]);
-
-  const yearOptions = useMemo(() => {
-    if (Number.isNaN(currentYear)) {
-      return [];
-    }
-    return Array.from({ length: 7 }, (_, i) => currentYear - 3 + i);
-  }, [currentYear]);
+  const [currentYear, currentMonth] = month.split("-").map(Number);
+  const yearOptions = Array.from({ length: 7 }, (_, index) => currentYear - 3 + index);
 
   const selectYearMonth = (year: number, monthNumber: number) => {
     updateMonth(`${year}-${String(monthNumber).padStart(2, "0")}`);
