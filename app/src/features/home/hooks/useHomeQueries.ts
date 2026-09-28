@@ -19,7 +19,8 @@ import {
   penaltyRulesWithDeletedQueryOptions,
 } from "../../../shared/query/monthlyPenaltyQueries";
 import { queryKeys } from "../../../shared/query/queryKeys";
-import { dateStringInJST, formatError, todayString } from "../../../shared/utils/errors";
+import { dateStringInJST } from "../../../shared/utils/dates";
+import { formatError } from "../../../shared/utils/errors";
 import { previousMonthKey } from "../utils/month";
 import { usePendingTodoRemovals } from "../../todos";
 
@@ -85,7 +86,7 @@ function completionChange(
   intent: CompletionIntent,
   actor?: TaskCompletionActor,
 ): CompletionChange | undefined {
-  const common = { taskId: intent.taskId, targetDate: todayString(), actor };
+  const common = { taskId: intent.taskId, targetDate: dateStringInJST(), actor };
   const daily = home.dailyTasks.find((item) => item.task.id === intent.taskId);
   if (daily) {
     const completed = !daily.completedToday;
