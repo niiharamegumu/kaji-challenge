@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { ensureLatestPWARegistration, waitForPWARegistration } from "../../../app/pwa-register";
 import {
@@ -25,10 +25,6 @@ async function getCurrentBrowserSubscription() {
     return null;
   }
   return registration.pushManager.getSubscription();
-}
-
-async function getPWARegistration() {
-  return waitForPWARegistration();
 }
 
 export function usePushNotifications(setStatus: StatusSetter) {
@@ -78,7 +74,7 @@ export function usePushNotifications(setStatus: StatusSetter) {
     };
   }, []);
 
-  const enableCurrentDevice = useCallback(async () => {
+  const enableCurrentDevice = async () => {
     if (!isPushSupported()) {
       setStatus("この端末では Web Push を利用できません。");
       return;
@@ -129,9 +125,9 @@ export function usePushNotifications(setStatus: StatusSetter) {
     });
     setDeviceEndpoint(serialized.endpoint);
     setStatus("この端末のプッシュ通知をオンにしました。");
-  }, [setStatus, subscriptionsQuery.data, upsertMutation]);
+  };
 
-  const disableCurrentDevice = useCallback(async () => {
+  const disableCurrentDevice = async () => {
     if (!isPushSupported()) {
       setStatus("この端末では Web Push を利用できません。");
       return;
@@ -149,9 +145,9 @@ export function usePushNotifications(setStatus: StatusSetter) {
     }
     setDeviceEndpoint(null);
     setStatus("この端末のプッシュ通知をオフにしました。");
-  }, [deleteMutation, deviceEndpoint, setStatus, subscriptionsQuery.data?.items]);
+  };
 
-  const sendLocalTestNotification = useCallback(async () => {
+  const sendLocalTestNotification = async () => {
     if (!isPushSupported()) {
       setStatus("この端末では Web Push を利用できません。");
       return;
@@ -164,7 +160,7 @@ export function usePushNotifications(setStatus: StatusSetter) {
       setStatus("プッシュ通知の許可がまだ有効ではありません。");
       return;
     }
-    const registration = await getPWARegistration();
+    const registration = await waitForPWARegistration();
     if (registration == null) {
       setStatus("Service Worker の準備がまだ完了していません。");
       return;
@@ -188,22 +184,15 @@ export function usePushNotifications(setStatus: StatusSetter) {
     };
     await registration.showNotification("家事チャレンジ", notificationOptions);
     setStatus("プッシュ通知テストを送信しました。");
-  }, [setStatus]);
+  };
 
-  const activeCount = useMemo(
-    () => subscriptionsQuery.data?.items.filter((item) => item.isActive).length ?? 0,
-    [subscriptionsQuery.data?.items],
-  );
-  const isCurrentDeviceEnabled = useMemo(() => {
-    if (deviceEndpoint == null) {
-      return false;
-    }
-    return (
-      subscriptionsQuery.data?.items.some(
-        (item) => item.endpoint === deviceEndpoint && item.isActive,
-      ) ?? false
-    );
-  }, [deviceEndpoint, subscriptionsQuery.data?.items]);
+  const activeCount = subscriptionsQuery.data?.items.filter((item) => item.isActive).length ?? 0;
+  const isCurrentDeviceEnabled =
+    deviceEndpoint != null &&
+    (subscriptionsQuery.data?.items.some(
+      (item) => item.endpoint === deviceEndpoint && item.isActive,
+    ) ??
+      false);
 
   return {
     activeCount,
