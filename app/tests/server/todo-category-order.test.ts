@@ -190,9 +190,13 @@ describe("persisted category order", () => {
     const created = responseSchemas.postTodoItem.parse(
       await run("postTodoItem", { name: "牛乳", categoryId: cid("A") }),
     );
-    await connection.query(
-      sql`UPDATE teams SET todo_categories=json_set(todo_categories,'$[1].name','新しい名前') WHERE id=${teamId}`,
-    );
+    const before = await connection.repository.GetTodoItemByID(created.id);
+    expect(
+      await run("patchTodoCategory", { name: " 新しい名前 " }, { categoryId: cid("A") }),
+    ).toEqual({
+      categories: [null, { id: cid("A"), name: "新しい名前" }, ...order("B", "C")],
+    });
+    expect(await connection.repository.GetTodoItemByID(created.id)).toEqual(before);
     expect(await run("postTodoCategoriesReorder", { categoryIds })).toEqual({
       categories: [...order("B", null, "C"), { id: cid("A"), name: "新しい名前" }],
     });
@@ -206,6 +210,84 @@ describe("persisted category order", () => {
     ).rejects.toMatchObject({ status: 409 });
     expect(await list()).toEqual([null, "B", "C", "A"]);
   });
+  it("rejects duplicate, missing and foreign IDs without changing either team", async () => {
+    await expect(
+      run("patchTodoCategory", { name: " B " }, { categoryId: cid("A") }),
+    ).rejects.toMatchObject({ status: 409 });
+    await expect(
+      run("patchTodoCategory", { name: "Missing" }, { categoryId: crypto.randomUUID() }),
+    ).rejects.toMatchObject({ status: 409 });
+    const foreignId = crypto.randomUUID();
+    await connection.repository.CreateTodoCategory(otherTeamId, { id: foreignId, name: "Other" });
+    const otherBefore = await connection.repository.ListTodoCategories(otherTeamId);
+    await expect(
+      run("patchTodoCategory", { name: "Changed" }, { categoryId: foreignId }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(
+      await connection.repository
+        .forMember(otherTeamId, owner)
+        .RenameTodoCategory(otherTeamId, cid("A"), "Changed"),
+    ).toBe(false);
+    expect(await list()).toEqual([null, "A", "B", "C"]);
+    expect(await connection.repository.ListTodoCategories(otherTeamId)).toEqual(otherBefore);
+  });
+  it("checks membership again when renaming and never revives a deleted ID", async () => {
+    const scoped = connection.repository.forMember(teamId, owner);
+    await connection.query(
+      sql`UPDATE team_members SET team_id=${otherTeamId},role='member' WHERE user_id=${owner}`,
+    );
+    try {
+      expect(await scoped.RenameTodoCategory(teamId, cid("A"), "Changed")).toBe(false);
+    } finally {
+      await connection.query(
+        sql`UPDATE team_members SET team_id=${teamId},role='owner' WHERE user_id=${owner}`,
+      );
+    }
+    expect(await list()).toEqual([null, "A", "B", "C"]);
+    await run("deleteTodoCategory", undefined, { categoryId: cid("A") });
+    await run("postTodoCategory", { name: "A" });
+    await expect(
+      run("patchTodoCategory", { name: "Changed" }, { categoryId: cid("A") }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(await list()).toEqual([null, "B", "C", "A"]);
+  });
+  it("allows the same name and safely stores quotes and reserved-looking names", async () => {
+    for (const name of ["A", '引用 " \\ $', "未分類"]) {
+      const result = responseSchemas.patchTodoCategory.parse(
+        await run("patchTodoCategory", { name }, { categoryId: cid("A") }),
+      );
+      expect(result.categories).toEqual([null, { id: cid("A"), name }, ...order("B", "C")]);
+    }
+  });
+  it("preserves concurrent additions and reordering while renaming by ID", async () => {
+    await Promise.all([
+      run("patchTodoCategory", { name: "Renamed" }, { categoryId: cid("A") }),
+      run("postTodoCategoriesReorder", { categoryIds: [cid("C"), cid("A"), null, cid("B")] }),
+    ]);
+    expect(await list()).toEqual(["C", "Renamed", null, "B"]);
+    await Promise.all([
+      run("patchTodoCategory", { name: "Updated" }, { categoryId: cid("A") }),
+      run("postTodoCategory", { name: "D" }),
+    ]);
+    expect(await list()).toEqual(["C", "Updated", null, "B", "D"]);
+  });
+  it("rejects concurrent duplicate renames and preserves concurrent deletions", async () => {
+    const results = await Promise.allSettled(
+      ["A", "B"].map((name) =>
+        run("patchTodoCategory", { name: "Same" }, { categoryId: cid(name) }),
+      ),
+    );
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect((await list()).filter((name) => name === "Same")).toHaveLength(1);
+    await Promise.allSettled([
+      run("patchTodoCategory", { name: "Renamed" }, { categoryId: cid("C") }),
+      run("deleteTodoCategory", undefined, { categoryId: cid("C") }),
+    ]);
+    const categories = responseSchemas.listTodoCategories.parse(
+      await run("listTodoCategories"),
+    ).categories;
+    expect(categories.some((category) => category?.id === cid("C"))).toBe(false);
+  });
   it("keeps reserved-looking category names distinct from unclassified", async () => {
     await run("postTodoCategory", { name: "unclassified" });
     await run("postTodoCategory", { name: "未分類" });
@@ -214,6 +296,21 @@ describe("persisted category order", () => {
     await reorder(categories);
     expect(await list()).toEqual(categories);
   });
+});
+
+it.each([
+  { categoryId: cid("A"), name: " " },
+  { categoryId: cid("A"), name: "a".repeat(51) },
+  { categoryId: null, name: "未分類" },
+  { categoryId: "A", name: "Name" },
+])("rejects malformed rename input: %j", ({ categoryId, name }) => {
+  expect(
+    operationSchema.safeParse({
+      operation: "patchTodoCategory",
+      params: { categoryId },
+      body: { name },
+    }).success,
+  ).toBe(false);
 });
 
 it.each([
