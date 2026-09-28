@@ -2,7 +2,7 @@ import {
   DATE_TIME_FORMAT_OPTIONS,
   NICKNAME_MAX_LENGTH,
   TEAM_NAME_MAX_LENGTH,
-} from "../../constants/invite";
+} from "../constants/invite";
 
 export const formatDateTime = (value: string) => {
   const date = new Date(value);

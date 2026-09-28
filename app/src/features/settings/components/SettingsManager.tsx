@@ -11,8 +11,8 @@ import {
   JoinTeamSection,
   TeamMembersSection,
   TeamNameSection,
-} from "./invite/InviteSections";
-import { getColorHexError, getNicknameError, getTeamNameError } from "./invite/inviteUtils";
+} from "./SettingsSections";
+import { getColorHexError, getNicknameError, getTeamNameError } from "./settingsUtils";
 
 type Props = {
   invite: InviteState | null;
@@ -39,7 +39,7 @@ type Props = {
   onSaveTeamName: () => void;
 };
 
-export function InviteManager({
+export function SettingsManager({
   invite,
   joinCode,
   members,

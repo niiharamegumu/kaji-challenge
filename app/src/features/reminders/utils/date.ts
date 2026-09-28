@@ -1,4 +1,4 @@
-import { dateStringInJST } from "../../../shared/utils/errors";
+import { dateStringInJST } from "../../../shared/utils/dates";
 
 export function todayDateKey(date: Date = new Date()) {
   return dateStringInJST(date);

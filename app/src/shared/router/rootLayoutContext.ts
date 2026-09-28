@@ -1,6 +1,7 @@
 import { createContext } from "react";
 export type RootLayoutOutletContext = {
   currentUserId: string | null;
+  currentTeamId: string | null;
   currentTeamName: string;
   displayName: string;
   colorHex: string | null;

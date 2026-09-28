@@ -1,9 +1,9 @@
 import { Check, Copy, RefreshCw } from "lucide-react";
 
-import type { TeamMember } from "../../../../lib/api/operations";
-import { getReadableTextColor, resolveUserColor } from "../../../../shared/utils/userColor";
-import type { InviteState } from "../../model/invite";
-import { formatDateTime } from "./inviteUtils";
+import type { TeamMember } from "../../../lib/api/operations";
+import { getReadableTextColor, resolveUserColor } from "../../../shared/utils/userColor";
+import type { InviteState } from "../model/invite";
+import { formatDateTime } from "./settingsUtils";
 
 const SETTINGS_PRIMARY_BUTTON_CLASS_NAME =
   "min-h-11 rounded-lg bg-stone-900 px-4 py-2 text-sm whitespace-nowrap text-white transition-colors duration-200 hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-60";

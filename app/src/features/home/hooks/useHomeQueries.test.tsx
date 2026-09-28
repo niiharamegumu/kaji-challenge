@@ -21,8 +21,8 @@ vi.mock("../../../lib/api/operations", async () => {
   };
 });
 
-vi.mock("../../../shared/utils/errors", async () => {
-  const actual = await vi.importActual<object>("../../../shared/utils/errors");
+vi.mock("../../../shared/utils/dates", async () => {
+  const actual = await vi.importActual<object>("../../../shared/utils/dates");
   return {
     ...actual,
     dateStringInJST: () => "2026-08-21",

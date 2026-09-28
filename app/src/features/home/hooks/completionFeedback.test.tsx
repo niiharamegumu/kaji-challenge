@@ -5,7 +5,7 @@ import { Suspense } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { TaskOverviewResponse } from "../../../lib/api/operations";
 import { queryKeys } from "../../../shared/query/queryKeys";
-import { todayString } from "../../../shared/utils/errors";
+import { dateStringInJST } from "../../../shared/utils/dates";
 import { previousMonthKey } from "../utils/month";
 import { useHomePageQueries, useToggleCompletionMutation } from "./useHomeQueries";
 
@@ -39,8 +39,8 @@ function fixture(): TaskOverviewResponse {
     updatedAt: "2026-01-01T00:00:00Z",
   });
   return {
-    today: todayString(),
-    month: todayString().slice(0, 7),
+    today: dateStringInJST(),
+    month: dateStringInJST().slice(0, 7),
     elapsedDaysInWeek: 3,
     monthlyPenaltyTotal: 0,
     dailyTasks: ["A", "B"].map((id) => ({ task: task(id, "daily"), completedToday: false })),
@@ -90,9 +90,12 @@ function setup() {
   client.setQueryData(queryKeys.home, fixture());
   client.setQueryData(queryKeys.todoItems, []);
   client.setQueryData([...queryKeys.rules, "withDeleted"], []);
-  client.setQueryData([...queryKeys.monthlySummary, previousMonthKey(todayString().slice(0, 7))], {
-    totalPenalty: 0,
-  });
+  client.setQueryData(
+    [...queryKeys.monthlySummary, previousMonthKey(dateStringInJST().slice(0, 7))],
+    {
+      totalPenalty: 0,
+    },
+  );
   const status = vi.fn();
   render(
     <QueryClientProvider client={client}>
@@ -147,7 +150,12 @@ it("keeps confirmed completion without waiting for the home refetch", async () =
   await user.click(await screen.findByRole("button", { name: "A:未完了" }));
   await act(async () => {
     saved.resolve({
-      data: { taskId: "A", targetDate: todayString(), completed: true, weeklyCompletedCount: 0 },
+      data: {
+        taskId: "A",
+        targetDate: dateStringInJST(),
+        completed: true,
+        weeklyCompletedCount: 0,
+      },
     });
   });
   await waitFor(() => expect(client.isMutating()).toBe(0));
@@ -196,7 +204,7 @@ it("sends explicit states for a once-weekly task and ignores taps while saving",
 
   await user.click(screen.getByRole("button", { name: "増やす" }));
   expect(api.save).toHaveBeenLastCalledWith("W", {
-    targetDate: todayString(),
+    targetDate: dateStringInJST(),
     action: "complete",
   });
   await user.click(screen.getByRole("button", { name: "減らす" }));
@@ -206,7 +214,7 @@ it("sends explicit states for a once-weekly task and ignores taps while saving",
   await waitFor(() => expect(client.isMutating()).toBe(0));
   await user.click(screen.getByRole("button", { name: "減らす" }));
   expect(api.save).toHaveBeenLastCalledWith("W", {
-    targetDate: todayString(),
+    targetDate: dateStringInJST(),
     action: "incomplete",
   });
   await act(async () => cancelled.resolve({ data: { completed: false, weeklyCompletedCount: 0 } }));

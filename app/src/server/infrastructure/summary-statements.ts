@@ -87,8 +87,8 @@ export function summaryStatements(db: Database, options: SummaryOptions) {
       AND (t.deleted_at IS NULL
         OR t.deleted_at >= strftime('%Y-%m-%dT%H:%M:%fZ', c.target_date, '+7 days', '-9 hours'))
     WHERE c.team_id = ${teamId} AND c.scope = 'close_week'
-      AND date(c.target_date, '+6 days') >= ${start}
-      AND date(c.target_date, '+6 days') < ${end}
+      AND c.target_date >= ${addDays(start, -6)}
+      AND c.target_date < ${addDays(end, -6)}
       AND (
         SELECT COUNT(*) FROM task_completion_weekly_entries w
         WHERE w.task_id = t.id AND w.week_start = c.target_date

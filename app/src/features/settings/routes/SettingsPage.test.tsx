@@ -1,10 +1,12 @@
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AppProviders } from "../../../app/providers";
 import { SuspenseQueryBoundary } from "../../../shared/components/SuspenseQueryBoundary";
 import { appQueryClient } from "../../../shared/query/queryClient";
+import { teamMembersQueryOptions } from "../../../shared/query/teamMembersQuery";
+import { renderWithProviders } from "../../../test/render";
 import { SettingsPage } from "./SettingsPage";
 
 const mockGetMe = vi.fn();
@@ -108,6 +110,7 @@ describe("SettingsPage", () => {
     mockDeletePushSubscription.mockResolvedValue({ data: {} });
     mockOutletContext.mockReturnValue({
       currentUserId: "u1",
+      currentTeamId: "team-1",
       currentTeamName: "Team A",
       displayName: "Owner",
     });
@@ -146,6 +149,83 @@ describe("SettingsPage", () => {
       expect(screen.getByRole("heading", { name: "設定" })).toBeInTheDocument();
     });
     expect(mockGetMe).not.toHaveBeenCalled();
+  });
+
+  it("reuses the member list already fetched by the header", async () => {
+    await appQueryClient.ensureQueryData(teamMembersQueryOptions);
+    renderWithProviders(<SettingsPage />);
+
+    await screen.findByRole("heading", { name: "設定" });
+    expect(mockGetTeamCurrentMembers).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    {
+      label: "ニックネーム",
+      value: "新しい名前",
+      mutation: mockPatchMeNickname,
+      payload: { nickname: "新しい名前" },
+    },
+    {
+      label: "表示カラー",
+      value: "#123456",
+      mutation: mockPatchMeColor,
+      payload: { colorHex: "#123456" },
+    },
+    {
+      label: "チーム名",
+      value: "新しいチーム",
+      mutation: mockPatchTeamCurrent,
+      payload: { name: "新しいチーム" },
+    },
+  ])(
+    "keeps $label on save failure and allows retry without duplicate submissions",
+    async ({ label, value, mutation, payload }) => {
+      let rejectSave!: (reason: Error) => void;
+      mutation.mockImplementationOnce(
+        () =>
+          new Promise((_, reject) => {
+            rejectSave = reject;
+          }),
+      );
+      const user = userEvent.setup();
+      renderWithProviders(<SettingsPage />);
+      const input = await screen.findByRole("textbox", { name: label });
+      const field = input.parentElement!;
+      await user.clear(input);
+      await user.type(input, value);
+      await user.click(within(field).getByRole("button", { name: "保存" }));
+
+      const saving = within(field).getByRole("button", { name: "保存中..." });
+      expect(input).toBeDisabled();
+      expect(saving).toBeDisabled();
+      await user.click(saving);
+      expect(mutation).toHaveBeenCalledTimes(1);
+
+      await act(async () => rejectSave(new Error("save failed")));
+      await waitFor(() => expect(input).toBeEnabled());
+      expect(input).toHaveValue(value);
+      await user.click(within(field).getByRole("button", { name: "保存" }));
+      await waitFor(() => expect(mutation).toHaveBeenCalledTimes(2));
+      expect(mutation).toHaveBeenLastCalledWith(payload);
+      await waitFor(() => expect(input).toBeEnabled());
+    },
+  );
+
+  it("discards a team-name draft when moving to another team with the same name", async () => {
+    const user = userEvent.setup();
+    const { rerender } = renderWithProviders(<SettingsPage />);
+    const input = await screen.findByRole("textbox", { name: "チーム名" });
+    await user.clear(input);
+    await user.type(input, "編集中");
+    mockOutletContext.mockReturnValue({
+      currentUserId: "u1",
+      currentTeamId: "team-2",
+      currentTeamName: "Team A",
+      displayName: "Owner",
+    });
+    rerender(<SettingsPage />);
+    expect(input).toHaveValue("Team A");
   });
 
   it("does not re-fetch current invite immediately after creating invite", async () => {
@@ -275,6 +355,7 @@ describe("SettingsPage", () => {
 
     mockOutletContext.mockReturnValue({
       currentUserId: "u2",
+      currentTeamId: "team-2",
       currentTeamName: "Team B",
       displayName: "Partner",
     });

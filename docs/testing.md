@@ -3,6 +3,7 @@
 挙動を観測できる最小の層で検証します。実DBテストのskipを成功として報告しません。
 
 - UI: Vitest/Testing Libraryで表示・操作・loading/empty/errorを検証します。mockはfeature API adapterの境界に置きます。
+- 設定画面ではヘッダーのメンバーキャッシュ再利用、プロフィール保存中の操作抑止、失敗時の入力保持・再試行、同名の別チームへ移動した際のdraft分離を確認します。
 - Domain: 日付境界、月またぎ週、完了規則、予定を決定的なfixtureで検証します。`app/tests/fixtures/domain-scenarios.json` は業務規則の期待値です。
 - Application/DB: 認可、チーム越境、競合とrollback、締めの冪等性、認証失効・セッション数を使い捨てのローカルD1で検証します。
 - API契約: Zod入出力・DTOを正本とし、意図を指定した完了操作と、revisionを含まないtransport/adapterを確認します。
@@ -54,6 +55,8 @@ Git除外には環境ファイル・状態・DB・鍵・HAR・SQLダンプを含
 ## Drizzle / D1
 
 `drizzle-schema.test.ts` は全テーブルのDrizzle定義とmigration適用後の列・型・null制約・主キー・外部キーを照合する。`d1-atomic.test.ts` は実際のD1 batch rollback、同時加減算・完了、部分更新、締めを検証する。ApplicationのRepository portへDrizzle型を漏らさない。
+
+`summary.test.ts` は複数家事・日付・週・チームを混在させ、ホーム/月次集計の完了が混ざらないこと、完了者がNULLでも完了状態を保持すること、月またぎ週を終了月へ表示することを実D1で確認する。不正な集計DTOは共通clientのテストで拒否を確認し、画面側の空一覧への変換で隠さない。
 
 ## 日本時間と端末タイムゾーン
 

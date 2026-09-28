@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatDateTime } from "./inviteUtils";
+import { formatDateTime } from "./settingsUtils";
 
 describe("invite expiry in Japan", () => {
   it.each([

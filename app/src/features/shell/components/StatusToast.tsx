@@ -12,16 +12,11 @@ export function StatusToast({ message, onDismiss, actionLabel, onAction }: Props
   const [isHovered, setIsHovered] = useState(false);
   const [isPressing, setIsPressing] = useState(false);
   const onDismissRef = useRef(onDismiss);
-  const onActionRef = useRef(onAction);
   const hasAction = actionLabel != null && onAction != null;
 
   useEffect(() => {
     onDismissRef.current = onDismiss;
   }, [onDismiss]);
-
-  useEffect(() => {
-    onActionRef.current = onAction;
-  }, [onAction]);
 
   useEffect(() => {
     // The toast lifetime is keyed to the visible message itself.
@@ -62,7 +57,7 @@ export function StatusToast({ message, onDismiss, actionLabel, onAction }: Props
           <button
             type="button"
             className="shrink-0 rounded-md bg-[color:var(--color-matcha-600)] px-2 py-1 text-xs font-medium text-white transition-colors duration-200 hover:bg-[color:var(--color-matcha-700)]"
-            onClick={() => onActionRef.current?.()}
+            onClick={onAction}
           >
             {actionLabel}
           </button>
@@ -70,7 +65,7 @@ export function StatusToast({ message, onDismiss, actionLabel, onAction }: Props
         <button
           type="button"
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-stone-600 transition-colors duration-200 hover:bg-stone-50"
-          onClick={() => onDismissRef.current()}
+          onClick={onDismiss}
           aria-label="ステータスメッセージを閉じる"
         >
           <X size={16} aria-hidden="true" />

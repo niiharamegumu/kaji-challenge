@@ -1,7 +1,6 @@
 import { useSuspenseQueries, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getTeamCurrentInvite,
-  getTeamCurrentMembers,
   type InviteCodeResponse,
   patchMeColor,
   patchMeNickname,
@@ -11,28 +10,14 @@ import {
   postTeamLeave,
 } from "../../../lib/api/operations";
 import { queryKeys } from "../../../shared/query/queryKeys";
+import { teamMembersQueryOptions } from "../../../shared/query/teamMembersQuery";
 import { extractHttpStatus, formatError } from "../../../shared/utils/errors";
 import { INVITE_CODE_EXPIRES_IN_HOURS } from "../constants/invite";
 
-function currentTeamMembersQueryOptions(currentUserId: string | null) {
+function currentInviteQueryOptions() {
   return {
-    queryKey: [...queryKeys.teamMembers, currentUserId ?? "none"],
+    queryKey: queryKeys.currentInvite,
     queryFn: async () => {
-      if (currentUserId == null) {
-        return [];
-      }
-      return (await getTeamCurrentMembers()).data.items;
-    },
-  } as const;
-}
-
-function currentInviteQueryOptions(currentUserId: string | null) {
-  return {
-    queryKey: [...queryKeys.currentInvite, currentUserId ?? "none"],
-    queryFn: async () => {
-      if (currentUserId == null) {
-        return null;
-      }
       try {
         return (await getTeamCurrentInvite()).data;
       } catch (error) {
@@ -45,12 +30,9 @@ function currentInviteQueryOptions(currentUserId: string | null) {
   } as const;
 }
 
-export function useTeamSettingsQueries(currentUserId: string | null) {
+export function useTeamSettingsQueries() {
   const [membersQuery, currentInviteQuery] = useSuspenseQueries({
-    queries: [
-      currentTeamMembersQueryOptions(currentUserId),
-      currentInviteQueryOptions(currentUserId),
-    ],
+    queries: [teamMembersQueryOptions, currentInviteQueryOptions()],
   });
 
   return { membersQuery, currentInviteQuery };

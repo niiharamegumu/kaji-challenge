@@ -5,6 +5,17 @@ import { addDays, midnightJST, nextMonth, todayJST, weekday, weekStart } from ".
 import { effectiveAt, occurrenceDates } from "../domain/rules";
 import { invariant } from "../domain/errors";
 
+function groupBy<T>(items: T[], keyOf: (item: T) => string): Map<string, T[]> {
+  const groups = new Map<string, T[]>();
+  for (const item of items) {
+    const key = keyOf(item);
+    const group = groups.get(key);
+    if (group) group.push(item);
+    else groups.set(key, [item]);
+  }
+  return groups;
+}
+
 export async function readSummary(repo: Repository, teamId: string, month: string) {
   try {
     return await repo.GetMonthlyPenaltySummary({ TeamID: teamId, MonthStart: month + "-01" });
@@ -97,17 +108,15 @@ export async function overview(
   const today = todayJST(now);
   const start = weekStart(today);
   const month = today.slice(0, 7);
-  const summary = await readSummary(repo, teamId, month);
-  const tasks = await repo.ListTasksByTeamID(teamId);
-  const daily = new Map(
-    (await repo.ListTaskCompletionDailyByTeamAndDate({ TeamID: teamId, TargetDate: today })).map(
-      (r) => [r.TaskID, r],
-    ),
-  );
-  const weekly = await repo.ListTaskCompletionWeeklySlotsByTeamAndWeek({
-    TeamID: teamId,
-    WeekStart: start,
-  });
+  const [summary, tasks, dailyEntries, weekly, weeklyReminders] = await Promise.all([
+    readSummary(repo, teamId, month),
+    repo.ListTasksByTeamID(teamId),
+    repo.ListTaskCompletionDailyByTeamAndDate({ TeamID: teamId, TargetDate: today }),
+    repo.ListTaskCompletionWeeklySlotsByTeamAndWeek({ TeamID: teamId, WeekStart: start }),
+    reminderOccurrences(repo, teamId, today, addDays(start, 6)),
+  ]);
+  const daily = new Map(dailyEntries.map((entry) => [entry.TaskID, entry]));
+  const weeklyByTask = groupBy(weekly, (entry) => entry.TaskID);
   return {
     month,
     today,
@@ -123,7 +132,7 @@ export async function overview(
     weeklyTasks: tasks
       .filter((t) => t.Type === "weekly")
       .map((t) => {
-        const entries = weekly.filter((e) => e.TaskID === t.ID);
+        const entries = weeklyByTask.get(t.ID) ?? [];
         return {
           task: map.task(t),
           weekCompletedCount: entries.length,
@@ -134,7 +143,7 @@ export async function overview(
           ),
         };
       }),
-    weeklyReminders: await reminderOccurrences(repo, teamId, today, addDays(start, 6)),
+    weeklyReminders,
   };
 }
 export async function monthlySummary(
@@ -146,7 +155,24 @@ export async function monthlySummary(
   const start = month + "-01";
   const end = nextMonth(month);
   const today = todayJST(now);
-  const summary = await readSummary(repo, teamId, month);
+  const [summary, tasks, daily, weekly] = await Promise.all([
+    readSummary(repo, teamId, month),
+    repo.ListTasksForMonthlyStatusByTeam({
+      TeamID: teamId,
+      DeletedAt: midnightJST(start),
+      CreatedAt: midnightJST(end),
+    }),
+    repo.ListTaskCompletionDailyByMonthAndTeam({
+      TeamID: teamId,
+      TargetDate: start,
+      BeforeDate: end,
+    }),
+    repo.ListTaskCompletionWeeklySlotsByMonthAndTeam({
+      TeamID: teamId,
+      WeekStart: weekStart(start),
+      BeforeWeekStart: end,
+    }),
+  ]);
   const total = summary.DailyPenaltyTotal + summary.WeeklyPenaltyTotal;
   const triggered = summary.IsClosed
     ? await repo.ListTriggeredRuleIDsByMonth({ TeamID: teamId, MonthStart: start })
@@ -158,21 +184,10 @@ export async function monthlySummary(
       )
         .filter((r) => r.Threshold <= total)
         .map((r) => r.ID);
-  const tasks = await repo.ListTasksForMonthlyStatusByTeam({
-    TeamID: teamId,
-    DeletedAt: midnightJST(start),
-    CreatedAt: midnightJST(end),
-  });
-  const daily = await repo.ListTaskCompletionDailyByMonthAndTeam({
-    TeamID: teamId,
-    TargetDate: start,
-    BeforeDate: end,
-  });
-  const weekly = await repo.ListTaskCompletionWeeklySlotsByMonthAndTeam({
-    TeamID: teamId,
-    WeekStart: weekStart(start),
-    BeforeWeekStart: end,
-  });
+  const dailyByTaskAndDate = new Map(
+    daily.map((entry) => [`${entry.TaskID}:${entry.TargetDate}`, entry]),
+  );
+  const weeklyByTaskAndWeek = groupBy(weekly, (entry) => `${entry.TaskID}:${entry.WeekStart}`);
   // 週次は日曜日が当月に入る週だけ表示する。月またぎ週は当月1日の行へ置く。
   const weekByDisplayDate = new Map<string, string>();
   for (let week = weekStart(start); week < end; week = addDays(week, 7)) {
@@ -194,12 +209,8 @@ export async function monthlySummary(
         continue;
       invariant(task.Type === "daily" || task.Type === "weekly", "invalid task type");
 
-      const dailyCompletion = daily.find(
-        (entry) => entry.TaskID === task.ID && entry.TargetDate === date,
-      );
-      const weeklyCompletions = weekly.filter(
-        (entry) => entry.TaskID === task.ID && entry.WeekStart === week,
-      );
+      const dailyCompletion = dailyByTaskAndDate.get(`${task.ID}:${date}`);
+      const weeklyCompletions = weeklyByTaskAndWeek.get(`${task.ID}:${week}`) ?? [];
       const completionSlots = dailyTask
         ? map.slots(1, new Map([[1, dailyCompletion ? map.actor(dailyCompletion) : undefined]]))
         : map.slots(

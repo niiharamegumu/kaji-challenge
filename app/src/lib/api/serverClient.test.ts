@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { cancelTeamRequests } from "./serverClient";
-import { deleteTask, listTodoItems, patchMeNickname } from "./operations";
+import { deleteTask, getPenaltySummaryMonthly, listTodoItems, patchMeNickname } from "./operations";
 const invoke = vi.hoisted(() => vi.fn());
 vi.mock("../../server/transport/operations.functions", () => ({ invokeOperation: invoke }));
 
@@ -45,6 +45,26 @@ describe("Server Function adapters", () => {
     invoke.mockResolvedValue({ ok: true, data });
     await expect(listTodoItems()).rejects.toThrow();
   });
+  it.each(["taskStatusByDate", "triggeredPenaltyRuleIds"])(
+    "rejects null %s before rendering the summary",
+    async (field) => {
+      invoke.mockResolvedValue({
+        ok: true,
+        data: {
+          teamId: "team",
+          month: "2026-09",
+          dailyPenaltyTotal: 0,
+          weeklyPenaltyTotal: 0,
+          totalPenalty: 0,
+          isClosed: false,
+          taskStatusByDate: [],
+          triggeredPenaltyRuleIds: [],
+          [field]: null,
+        },
+      });
+      await expect(getPenaltySummaryMonthly({ month: "2026-09" })).rejects.toThrow();
+    },
+  );
   it("honors cancellation before sending and after a late response", async () => {
     const controller = new AbortController();
     let resolve!: (v: unknown) => void;
