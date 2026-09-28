@@ -5,6 +5,7 @@ import {
   deleteTodoCategory,
   listTodoCategories,
   postTodoCategory,
+  patchTodoCategory,
   postTodoCategoriesReorder,
 } from "../../../lib/api/operations";
 import { queryKeys } from "../../../shared/query/queryKeys";
@@ -32,6 +33,18 @@ export function useTodoCategoryMutations(setStatus: (message: string) => void) {
       setStatus("カテゴリーを追加しました");
     },
     onError: (error) => setStatus(`カテゴリーの追加に失敗しました: ${formatError(error)}`),
+  });
+  const renameCategory = useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) => patchTodoCategory(id, { name }),
+    onSuccess: async ({ data }) => {
+      await client.cancelQueries({ queryKey: queryKeys.todoCategories });
+      client.setQueryData(queryKeys.todoCategories, data.categories);
+      setStatus("カテゴリー名を変更しました");
+    },
+    onError: (error) => {
+      setStatus(`カテゴリー名の変更に失敗しました: ${formatError(error)}`);
+      void client.invalidateQueries({ queryKey: queryKeys.todoCategories });
+    },
   });
   const removeCategory = useMutation({
     mutationFn: (categoryId: string) => deleteTodoCategory(categoryId),
@@ -71,5 +84,5 @@ export function useTodoCategoryMutations(setStatus: (message: string) => void) {
       void client.invalidateQueries({ queryKey: queryKeys.todoCategories });
     },
   });
-  return { createCategory, removeCategory, reorderCategories };
+  return { createCategory, renameCategory, removeCategory, reorderCategories };
 }
