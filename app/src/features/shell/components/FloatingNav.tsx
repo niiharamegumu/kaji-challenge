@@ -137,7 +137,7 @@ export function FloatingNav({
   const secondaryItems: SecondaryNavItem[] = [
     {
       id: "todo-categories",
-      label: "カテゴリー管理",
+      label: "カテゴリー",
       icon: Tags,
       path: "/todo-categories",
       intentPath: "/todo-categories",

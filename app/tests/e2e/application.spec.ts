@@ -630,7 +630,7 @@ test("ToDo categories persist, filter and detach without deleting items", async 
   ]);
   await page.screenshot({ path: testInfo.outputPath("todos-categories.png"), fullPage: true });
   await page.getByRole("button", { name: "その他", exact: true }).click();
-  await page.getByRole("button", { name: "カテゴリー管理", exact: true }).click();
+  await page.getByRole("button", { name: "カテゴリー", exact: true }).click();
   await expect(page).toHaveURL(/\/todo-categories$/);
   await expect(page.getByRole("heading", { name: "カテゴリー管理" })).toBeVisible();
   await page.getByLabel("新しいカテゴリー").fill("0件のカテゴリー");
@@ -715,7 +715,7 @@ test("ToDo categories persist, filter and detach without deleting items", async 
   await page.screenshot({ path: testInfo.outputPath("home-category-tabs.png"), fullPage: false });
 
   await page.getByRole("button", { name: "その他", exact: true }).click();
-  await page.getByRole("button", { name: "カテゴリー管理", exact: true }).click();
+  await page.getByRole("button", { name: "カテゴリー", exact: true }).click();
   await page.reload();
   await expect(page.getByRole("button", { name: "0件のカテゴリー を削除" })).toBeVisible();
   await page.getByRole("button", { name: `${category} を削除` }).click();
