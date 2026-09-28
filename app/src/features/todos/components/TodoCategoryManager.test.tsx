@@ -10,11 +10,12 @@ import type { TodoCategoriesResponse } from "../../../lib/api/operations";
 import { renderWithProviders, resetTestQueryClient } from "../../../test/render";
 import { TodoCategoryManager } from "./TodoCategoryManager";
 
-const api = vi.hoisted(() => ({ list: vi.fn(), reorder: vi.fn() }));
+const api = vi.hoisted(() => ({ list: vi.fn(), reorder: vi.fn(), rename: vi.fn() }));
 vi.mock("../../../lib/api/operations", async (original) => ({
   ...(await original<object>()),
   listTodoCategories: api.list,
   postTodoCategoriesReorder: api.reorder,
+  patchTodoCategory: api.rename,
 }));
 type Drop = { active: { id: string }; over: { id: string } | null };
 let drop: (event: Drop) => void;
@@ -36,6 +37,7 @@ beforeEach(() => {
   resetTestQueryClient();
   api.list.mockReset().mockResolvedValue({ data: { categories: order(null, "買い物", "仕事") } });
   api.reorder.mockReset();
+  api.rename.mockReset();
 });
 afterEach(cleanup);
 
@@ -46,7 +48,67 @@ it("shows the virtual unclassified row without a delete action, including zero r
     await screen.findByRole("button", { name: "未分類 をドラッグして並び替え" }),
   ).toBeVisible();
   expect(screen.queryByRole("button", { name: "未分類 を削除" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "未分類 を編集" })).not.toBeInTheDocument();
   expect(screen.getByText("カテゴリーはまだありません。")).toBeVisible();
+});
+
+it("renames by ID, blocks operations while saving and displays the returned order", async () => {
+  let resolve!: (value: { data: TodoCategoriesResponse }) => void;
+  api.rename.mockImplementation(
+    () =>
+      new Promise((done) => {
+        resolve = done;
+      }),
+  );
+  const user = userEvent.setup();
+  renderWithProviders(<TodoCategoryManager setStatus={vi.fn()} />);
+  await user.click(await screen.findByRole("button", { name: "買い物 を編集" }));
+  const dialog = screen.getByRole("dialog", { name: "カテゴリー名を変更" });
+  const input = within(dialog).getByLabelText("カテゴリー名");
+  expect(input).toHaveValue("買い物");
+  await user.clear(input);
+  expect(within(dialog).getByRole("button", { name: "保存" })).toBeDisabled();
+  await user.type(input, " 買い出し ");
+  await user.click(within(dialog).getByRole("button", { name: "保存" }));
+  expect(api.rename).toHaveBeenCalledWith(cid("買い物"), { name: "買い出し" });
+  expect(input).toBeDisabled();
+  expect(within(dialog).getByRole("button", { name: "閉じる" })).toBeDisabled();
+  expect(within(dialog).getByRole("button", { name: "保存中…" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "仕事 を編集" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "買い物 を削除" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "買い物 をドラッグして並び替え" })).toBeDisabled();
+  await drag("unclassified", `category:${cid("仕事")}`);
+  expect(api.reorder).not.toHaveBeenCalled();
+  await act(async () =>
+    resolve({
+      data: { categories: [null, { id: cid("買い物"), name: "買い出し" }, ...order("仕事")] },
+    }),
+  );
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  expect(labels()).toEqual([
+    "未分類 をドラッグして並び替え",
+    "買い出し をドラッグして並び替え",
+    "仕事 をドラッグして並び替え",
+  ]);
+});
+
+it("keeps a failed rename draft for retry and resets the error when opening another category", async () => {
+  api.rename.mockRejectedValueOnce(new Error("offline"));
+  const user = userEvent.setup();
+  renderWithProviders(<TodoCategoryManager setStatus={vi.fn()} />);
+  await user.click(await screen.findByRole("button", { name: "買い物 を編集" }));
+  await user.clear(screen.getByLabelText("カテゴリー名"));
+  await user.type(screen.getByLabelText("カテゴリー名"), "買い出し");
+  await user.click(screen.getByRole("button", { name: "保存" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("保存に失敗");
+  expect(screen.getByLabelText("カテゴリー名")).toHaveValue("買い出し");
+  expect(screen.getByRole("button", { name: "買い物 を編集" })).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "閉じる" }));
+  await user.click(screen.getByRole("button", { name: "仕事 を編集" }));
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(screen.getByLabelText("カテゴリー名")).toHaveValue("仕事");
+  await user.click(screen.getByRole("button", { name: "閉じる" }));
+  expect(api.rename).toHaveBeenCalledTimes(1);
 });
 
 it("shows the pending order, blocks mutations during save, then keeps the server order", async () => {
