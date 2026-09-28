@@ -14,12 +14,12 @@ import {
 } from "../../features/auth";
 import { prefetchHomeData } from "../../features/home/preload";
 import { MonthCloseBanner } from "../../features/month-close";
-import { listCurrentTeamMembers } from "../../features/shell/api/teamMembersApi";
+import { teamMembersQueryOptions } from "../../shared/query/teamMembersQuery";
 import { StatusToast } from "../../features/shell/components/StatusToast";
 import { useAuthGate } from "../../features/shell/hooks/useAuthGate";
 import { useCurrentUserProfile } from "../../features/shell/hooks/useCurrentUserProfile";
 import { BootScreen } from "../../shared/components/BootScreen";
-import { queryKeys } from "../../shared/query/queryKeys";
+import { dateStringInJST } from "../../shared/utils/dates";
 import { refreshTeamState as invalidateTeamState } from "../../shared/query/teamStateRefresh";
 import {
   RootLayoutContext,
@@ -81,14 +81,14 @@ export function RootLayout() {
 
   const meQuery = useMeQuery(true);
   const cachedMembersQuery = useQuery({
-    queryKey: queryKeys.teamMembers,
-    queryFn: listCurrentTeamMembers,
+    ...teamMembersQueryOptions,
     enabled: meQuery.isSuccess,
   });
   const login = useLoginAction(setStatus);
   const logoutAction = useLogoutAction(setStatus, setSession);
   const { currentUserId, currentTeamName, currentUserName, currentUserColorHex } =
     useCurrentUserProfile(meQuery.data, cachedMembersQuery.data);
+  const currentTeamId = meQuery.data?.memberships[0]?.teamId ?? null;
   const { isAuthChecking, isAuthenticated, refetchAfterLogin } = useAuthGate({
     loggedIn,
     meData: meQuery.data,
@@ -122,14 +122,16 @@ export function RootLayout() {
   const outletContext = useMemo<RootLayoutOutletContext>(
     () => ({
       currentUserId,
+      currentTeamId,
       currentTeamName,
       displayName: currentUserName,
       colorHex: currentUserColorHex,
     }),
-    [currentTeamName, currentUserColorHex, currentUserId, currentUserName],
+    [currentTeamId, currentTeamName, currentUserColorHex, currentUserId, currentUserName],
   );
+  const today = dateStringInJST();
   const todayLabel = useMemo(() => {
-    const now = new Date();
+    const now = new Date(`${today}T00:00:00+09:00`);
     const fullDate = new Intl.DateTimeFormat("ja-JP", {
       timeZone: "Asia/Tokyo",
       year: "numeric",
@@ -141,7 +143,7 @@ export function RootLayout() {
       weekday: "short",
     }).format(now);
     return `${fullDate}（${weekday}）`;
-  }, []);
+  }, [today]);
   const prefetchHomeDataOnce = useCallback(() => {
     if (homeDataPrefetchedRef.current) {
       return;
