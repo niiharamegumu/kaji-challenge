@@ -58,6 +58,11 @@ it("rejects malformed inputs before opening the runtime", async () => {
 it.each([
   { operation: "getMe" },
   { operation: "postTodoCategoriesReorder", body: { categoryIds: [null] } },
+  {
+    operation: "patchTodoCategory",
+    params: { categoryId: crypto.randomUUID() },
+    body: { name: "Name" },
+  },
 ])("rejects absent sessions before any business transaction: %j", async (data) => {
   mocks.session.mockResolvedValue(null);
   expect(await mocks.handler({ data })).toMatchObject({
