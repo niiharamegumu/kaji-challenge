@@ -1,3 +1,5 @@
+import appLogo from "../assets/app-logo.png?inline";
+
 type BootScreenProps = {
   mode?: "overlay" | "page";
 };
@@ -19,7 +21,7 @@ export function BootScreen({ mode = "page" }: BootScreenProps) {
     >
       <span className="flex flex-col items-center justify-center">
         <img
-          src="/icons/pwa-192x192.png"
+          src={appLogo}
           alt=""
           width={96}
           height={96}
