@@ -8,7 +8,8 @@ const userId = crypto.randomUUID(),
   token = crypto.randomUUID();
 const peerToken = crypto.randomUUID(),
   outsiderToken = crypto.randomUUID(),
-  categoryOrderToken = crypto.randomUUID();
+  categoryOrderToken = crypto.randomUUID(),
+  swipeAreaToken = crypto.randomUUID();
 test.beforeAll(async () => {
   const path = process.env.KAJI_D1_TEST_PATH;
   if (!path) throw new Error("Run browser tests via bun run test:local for isolated D1 storage");
@@ -29,6 +30,7 @@ test.beforeAll(async () => {
       ["同期メンバー", peerToken],
       ["別チーム", outsiderToken],
       ["カテゴリー順序", categoryOrderToken],
+      ["スワイプ領域", swipeAreaToken],
     ]) {
       const id = crypto.randomUUID();
       await connection.query(
@@ -819,6 +821,117 @@ test("ToDo categories persist, filter and detach without deleting items", async 
   await page.reload();
   await expect(page.getByText("分類テストA", { exact: true })).toHaveCount(0);
   await expect(page.getByText("分類テストB", { exact: true })).toBeVisible();
+});
+
+test.describe("ToDo swipe hit area", () => {
+  test.use({ hasTouch: true });
+
+  test("switches categories from blank space with one or zero ToDos", async ({
+    page,
+    context,
+  }, testInfo) => {
+    await authenticate(context, swipeAreaToken);
+    await page.goto("/todo-categories");
+    for (const category of ["スワイプ用", "空のカテゴリー"]) {
+      await page.getByLabel("新しいカテゴリー").fill(category);
+      await page.getByRole("button", { name: "カテゴリーを追加", exact: true }).click();
+      await expect(page.getByRole("button", { name: `${category} を削除` })).toBeVisible();
+    }
+    await page.goto("/todos");
+    await page.getByRole("button", { name: "追加", exact: true }).click();
+    await page.getByLabel("名前", { exact: true }).fill("1件のToDo");
+    await page.getByLabel("カテゴリー（任意）").selectOption({ label: "スワイプ用" });
+    await page.getByRole("button", { name: "追加する", exact: true }).click();
+    await expect(page.getByText("1件のToDo", { exact: true })).toBeVisible();
+
+    const filter = page.getByRole("group", { name: "カテゴリーで絞り込み" });
+    const region = page.getByRole("region", { name: "ToDo一覧", exact: true });
+    const cdp = await context.newCDPSession(page);
+    const blankPoint = async (content: Locator, fillViewport = false) => {
+      await content.evaluate((element) =>
+        element.scrollIntoView({ block: "center", behavior: "instant" }),
+      );
+      const contentBox = (await content.boundingBox())!;
+      const regionBox = (await region.boundingBox())!;
+      // Start well below the rendered item/empty message, on the visible blank background.
+      const point = {
+        x: regionBox.x + regionBox.width / 2,
+        y: contentBox.y + contentBox.height + 80,
+      };
+      if (fillViewport) {
+        const addButtonBox = (await page
+          .getByRole("button", { name: "追加", exact: true })
+          .boundingBox())!;
+        point.y = Math.max(point.y, addButtonBox.y - 80);
+      }
+      expect(regionBox.y + regionBox.height).toBeGreaterThan(point.y);
+      expect(
+        await region.evaluate(
+          (element, { x, y }) => document.elementFromPoint(x, y) === element,
+          point,
+        ),
+      ).toBe(true);
+      return point;
+    };
+    const swipe = async (start: { x: number; y: number }, dx: number, dy = 0) => {
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchStart",
+        touchPoints: [{ ...start, id: 1 }],
+      });
+      for (let step = 1; step <= 6; step++) {
+        await cdp.send("Input.dispatchTouchEvent", {
+          type: "touchMove",
+          touchPoints: [{ x: start.x + (dx * step) / 6, y: start.y + (dy * step) / 6, id: 1 }],
+        });
+      }
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    };
+    try {
+      for (const route of ["/todos", "/"]) {
+        await page.goto(route);
+        await filter.getByRole("button", { name: "スワイプ用", exact: true }).click();
+        const item = region.getByRole("listitem");
+        await expect(item).toHaveCount(1);
+        await expect(item.getByText("1件のToDo", { exact: true })).toBeVisible();
+        const start = await blankPoint(item, route === "/todos");
+        await page.screenshot({
+          path: testInfo.outputPath(route === "/" ? "home-one-todo.png" : "todos-one-todo.png"),
+        });
+        await swipe(start, -100);
+        await expect(
+          filter.getByRole("button", { name: "空のカテゴリー", exact: true }),
+        ).toHaveAttribute("aria-pressed", "true");
+        await expect(item).toHaveCount(0);
+        const empty = region.getByText("このカテゴリーのToDoはありません。", { exact: true });
+        await expect(empty).toBeVisible();
+        await swipe(await blankPoint(empty, route === "/todos"), 100);
+        await expect(
+          filter.getByRole("button", { name: "スワイプ用", exact: true }),
+        ).toHaveAttribute("aria-pressed", "true");
+        await expect(item.getByText("1件のToDo", { exact: true })).toBeVisible();
+        if (route === "/") {
+          const scrollStart = await blankPoint(item);
+          const { before, maximum } = await page.evaluate(() => ({
+            before: window.scrollY,
+            maximum: document.documentElement.scrollHeight - window.innerHeight,
+          }));
+          await swipe(scrollStart, 0, before > 0 ? 80 : -80);
+          if (maximum > 0) {
+            if (before > 0) {
+              await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(before);
+            } else {
+              await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(before);
+            }
+          }
+          await expect(
+            filter.getByRole("button", { name: "スワイプ用", exact: true }),
+          ).toHaveAttribute("aria-pressed", "true");
+        }
+      }
+    } finally {
+      await cdp.detach();
+    }
+  });
 });
 
 test("persists category order including unclassified with mouse, touch and keyboard", async ({
