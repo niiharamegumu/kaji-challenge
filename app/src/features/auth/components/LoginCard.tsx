@@ -1,6 +1,7 @@
 import { LogIn } from "lucide-react";
 
 import { useMarkInitialScreenReady } from "../../../app/boot";
+import appLogo from "../../../shared/assets/app-logo.png?inline";
 import { PAGE_SECTION_CHROMELESS_CLASS_NAME } from "../../../shared/styles/pageSection";
 
 type Props = {
@@ -19,7 +20,7 @@ export function LoginCard({ status, onLogin }: Props) {
         <section className="mx-auto max-w-2xl px-2 md:px-0">
           <div className="flex items-center justify-center gap-3 md:justify-start">
             <img
-              src="/icons/pwa-192x192.png"
+              src={appLogo}
               alt="KajiChalleのアプリアイコン"
               width={128}
               height={128}
