@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+
 import type { TodoCategoriesQuery } from "../hooks/useTodoCategories";
 import { TodoCategoryQueryStatus } from "./TodoCategoryQueryStatus";
 
@@ -15,6 +17,22 @@ export function TodoCategoryFilter({
   value: TodoCategorySelection;
   onChange: (value: TodoCategorySelection) => void;
 }) {
+  const groupRef = useRef<HTMLDivElement>(null);
+  const selectedButtonRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const group = groupRef.current;
+    const button = selectedButtonRef.current;
+    if (!group || !button) return;
+    const groupBounds = group.getBoundingClientRect();
+    const buttonBounds = button.getBoundingClientRect();
+    // Scroll only the tab row, keeping the page at the user's current position.
+    if (buttonBounds.left < groupBounds.left) {
+      group.scrollLeft -= groupBounds.left - buttonBounds.left;
+    } else if (buttonBounds.right > groupBounds.right) {
+      group.scrollLeft += buttonBounds.right - groupBounds.right;
+    }
+  }, [value, categoriesQuery.data]);
+
   const options: { value: TodoCategorySelection; label: string }[] = [
     { value: { kind: "all" }, label: "すべて" },
     ...(categoriesQuery.data ?? []).map((category) => ({
@@ -28,6 +46,7 @@ export function TodoCategoryFilter({
   return (
     <>
       <div
+        ref={groupRef}
         role="group"
         aria-label="カテゴリーで絞り込み"
         className="mt-2 flex w-full min-w-0 max-w-full gap-2 overflow-x-auto overscroll-x-contain px-2 pb-1 md:px-0"
@@ -39,6 +58,7 @@ export function TodoCategoryFilter({
               (option.value.kind === "category" && value.id === option.value.id));
           return (
             <button
+              ref={selected ? selectedButtonRef : undefined}
               key={
                 option.value.kind === "category" ? `category:${option.value.id}` : option.value.kind
               }
