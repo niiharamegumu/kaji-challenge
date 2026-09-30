@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useNavigate, useSearchParams } from "../../../shared/router/navigation";
 import { useBootFlow, useMarkInitialScreenReady } from "../../../app/boot";
 import { BootScreen } from "../../../shared/components/BootScreen";
+import appLogo from "../../../shared/assets/app-logo.png?inline";
 import { authClient } from "../api/authClient";
 import { writeFlashStatus } from "../state/flash";
 export async function authCallbackLoader() {
@@ -37,7 +38,7 @@ export function AuthCallbackPage() {
     return (
       <main className="ios-safe-main flex min-h-screen items-center justify-center bg-[color:var(--color-washi-50)] px-4 py-8 text-stone-800">
         <section className="w-full max-w-lg rounded-2xl border border-stone-200 bg-white p-6 shadow-sm sm:p-8">
-          <img src="/icons/pwa-192x192.png" alt="" width={64} height={64} className="h-12 w-12" />
+          <img src={appLogo} alt="" width={64} height={64} className="h-12 w-12" />
           <p className="mt-4 text-sm font-semibold text-stone-600">KajiChalle</p>
           <h1 className="mt-2 text-2xl font-bold text-stone-900">ログインできませんでした</h1>
           <p className="mt-4 text-sm leading-7 text-stone-700">
