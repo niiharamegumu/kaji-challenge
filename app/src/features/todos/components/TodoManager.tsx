@@ -30,6 +30,7 @@ import {
 } from "../../../shared/utils/sortableAnimation";
 
 import { TodoCategoryInput } from "./TodoCategoryInput";
+import { TodoCategorySwipeArea, type TodoCategorySwipeDirection } from "./TodoCategorySwipeArea";
 
 import type { TodoCategoriesQuery } from "../hooks/useTodoCategories";
 import {
@@ -42,6 +43,7 @@ type Props = Pick<
   TodoItemsSectionProps,
   | "emptyMessage"
   | "filters"
+  | "onCategorySwipe"
   | "categoriesQuery"
   | "items"
   | "isReordering"
@@ -53,6 +55,7 @@ type Props = Pick<
 
 type TodoItemsSectionProps = {
   filters?: ReactNode;
+  onCategorySwipe?: (direction: TodoCategorySwipeDirection) => void;
   categoriesQuery: TodoCategoriesQuery;
   items: TodoItem[];
   isReordering: boolean;
@@ -327,6 +330,7 @@ export function TodoItemForm({
 
 export function TodoItemsSection({
   filters,
+  onCategorySwipe,
   categoriesQuery,
   items,
   isReordering,
@@ -451,39 +455,41 @@ export function TodoItemsSection({
         ) : null}
 
         {filters}
-        {optimisticItems.length === 0 ? (
-          <div className={emptyClassName}>{emptyMessage}</div>
-        ) : (
-          <DndContext
-            sensors={sensors}
-            modifiers={[restrictToVerticalAxis]}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
-            <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
-              <ul className={`grid gap-2 ${listClassName}`}>
-                {optimisticItems.map((item) => (
-                  <SortableTodoItem
-                    categoriesQuery={categoriesQuery}
-                    key={item.id}
-                    item={item}
-                    isEditing={editingItemId === item.id}
-                    isSaving={isUpdating}
-                    isReordering={isReordering}
-                    editState={editState}
-                    onStartEdit={startEdit}
-                    onChangeEditState={setEditState}
-                    onCancelEdit={cancelEdit}
-                    onSaveEdit={(itemId) => {
-                      void saveEdit(itemId);
-                    }}
-                    onComplete={() => setPendingCompleteItem({ id: item.id, name: item.name })}
-                  />
-                ))}
-              </ul>
-            </SortableContext>
-          </DndContext>
-        )}
+        <TodoCategorySwipeArea onSwipe={onCategorySwipe}>
+          {optimisticItems.length === 0 ? (
+            <div className={emptyClassName}>{emptyMessage}</div>
+          ) : (
+            <DndContext
+              sensors={sensors}
+              modifiers={[restrictToVerticalAxis]}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
+                <ul className={`grid gap-2 ${listClassName}`}>
+                  {optimisticItems.map((item) => (
+                    <SortableTodoItem
+                      categoriesQuery={categoriesQuery}
+                      key={item.id}
+                      item={item}
+                      isEditing={editingItemId === item.id}
+                      isSaving={isUpdating}
+                      isReordering={isReordering}
+                      editState={editState}
+                      onStartEdit={startEdit}
+                      onChangeEditState={setEditState}
+                      onCancelEdit={cancelEdit}
+                      onSaveEdit={(itemId) => {
+                        void saveEdit(itemId);
+                      }}
+                      onComplete={() => setPendingCompleteItem({ id: item.id, name: item.name })}
+                    />
+                  ))}
+                </ul>
+              </SortableContext>
+            </DndContext>
+          )}
+        </TodoCategorySwipeArea>
       </article>
 
       <ConfirmModal
@@ -509,6 +515,7 @@ export function TodoItemsSection({
 export function TodoManager({
   emptyMessage,
   filters,
+  onCategorySwipe,
   categoriesQuery,
   items,
   isReordering,
@@ -527,6 +534,7 @@ export function TodoManager({
       <div className="mt-4 border-t border-stone-200 pt-4">
         <TodoItemsSection
           filters={filters}
+          onCategorySwipe={onCategorySwipe}
           emptyMessage={emptyMessage}
           categoriesQuery={categoriesQuery}
           items={items}
