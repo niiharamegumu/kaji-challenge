@@ -15,7 +15,8 @@ import { restoreTodoOrder } from "../utils/restoreTodoOrder";
 import { emptyTodoItemForm, useTodoItemFormState } from "../hooks/useTodoItemFormState";
 
 export function TodoPage() {
-  const { categoriesQuery, selection, setSelection, filterItems } = useTodoCategoryFilter();
+  const { categoriesQuery, selection, setSelection, filterItems, switchCategory } =
+    useTodoCategoryFilter();
   const todoItemsQuery = useTodoItemsQuery();
   const setStatus = useSetAtom(statusMessageAtom);
   const { createItem, updateItem, removeItem, reorderItems } = useTodoItemMutations(setStatus);
@@ -41,6 +42,7 @@ export function TodoPage() {
   return (
     <section className="mt-2 w-full pb-1 md:mt-4">
       <TodoManager
+        onCategorySwipe={switchCategory}
         emptyMessage={selection.kind === "all" ? undefined : "このカテゴリーのToDoはありません。"}
         filters={
           <TodoCategoryFilter
