@@ -56,7 +56,9 @@ export function TodoCategorySwipeArea({
 
   return (
     <div
-      className="[touch-action:pan-y_pinch-zoom]"
+      role="region"
+      aria-label="ToDo一覧"
+      className="min-h-64 flex-1 [touch-action:pan-y_pinch-zoom]"
       onPointerDownCapture={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}

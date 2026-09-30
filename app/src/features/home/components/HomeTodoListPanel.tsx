@@ -30,7 +30,7 @@ export function HomeTodoListPanel({
   const { categoriesQuery, selection, setSelection, filterItems, switchCategory } =
     useTodoCategoryFilter();
   return (
-    <article className={`min-w-0 ${HOME_PANEL_CLASS_NAME}`}>
+    <article className={`flex min-w-0 flex-col ${HOME_PANEL_CLASS_NAME}`}>
       <div className="flex items-center justify-between gap-2 px-2 md:px-0">
         <h2 className="text-lg font-semibold">ToDo</h2>
         <Link
@@ -56,7 +56,7 @@ export function HomeTodoListPanel({
         onReorder={(itemIds) => onReorder(restoreTodoOrder(items, itemIds))}
         onUpdate={onUpdate}
         showSectionChrome={false}
-        articleClassName="mt-2"
+        articleClassName="mt-2 flex flex-1 flex-col"
         listClassName=""
         emptyMessage={
           selection.kind === "all"

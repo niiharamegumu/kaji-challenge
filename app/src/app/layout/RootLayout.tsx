@@ -247,7 +247,7 @@ export function RootLayout() {
   }
 
   return (
-    <main className="ios-safe-main min-h-screen bg-[color:var(--color-washi-50)] px-2 py-2.5 pb-36 text-stone-800 md:px-8 md:pt-8 md:pb-44">
+    <main className="ios-safe-main flex min-h-dvh flex-col bg-[color:var(--color-washi-50)] px-2 py-2.5 pb-36 text-stone-800 md:px-8 md:pt-8 md:pb-44">
       <StatusToast
         message={status}
         onDismiss={() => {
@@ -255,7 +255,7 @@ export function RootLayout() {
         }}
       />
 
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col">
         <header className="app-glass-header sticky top-[calc(env(safe-area-inset-top)+12px)] z-30 mb-3 flex items-start justify-between gap-3 rounded-3xl border border-white/40 p-2.5 md:items-center md:p-4">
           <div className="flex min-w-0 flex-1 flex-col gap-0.5 md:flex-row md:items-center md:justify-between md:gap-3">
             <h1

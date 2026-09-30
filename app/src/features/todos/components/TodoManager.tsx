@@ -526,12 +526,12 @@ export function TodoManager({
 }: Props) {
   return (
     <article
-      className={`animate-enter rounded-xl px-0 py-3 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
+      className={`animate-enter flex flex-1 flex-col rounded-xl px-0 py-3 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
     >
       <div className="flex items-center justify-between gap-3 px-2 md:px-0">
         <h2 className="text-lg font-semibold text-stone-900">ToDo</h2>
       </div>
-      <div className="mt-4 border-t border-stone-200 pt-4">
+      <div className="mt-4 flex flex-1 flex-col border-t border-stone-200 pt-4">
         <TodoItemsSection
           filters={filters}
           onCategorySwipe={onCategorySwipe}
@@ -543,7 +543,7 @@ export function TodoManager({
           onDelete={onDelete}
           onReorder={onReorder}
           onUpdate={onUpdate}
-          articleClassName=""
+          articleClassName="flex flex-1 flex-col"
           headerContent={
             <span className="rounded-full border border-stone-200 bg-stone-50 px-3 py-1 text-xs text-stone-700">
               <span className="whitespace-nowrap">{items.length}件</span>

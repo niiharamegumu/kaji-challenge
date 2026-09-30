@@ -40,7 +40,7 @@ export function TodoPage() {
   };
 
   return (
-    <section className="mt-2 w-full pb-1 md:mt-4">
+    <section className="mt-2 flex w-full flex-1 flex-col pb-1 md:mt-4">
       <TodoManager
         onCategorySwipe={switchCategory}
         emptyMessage={selection.kind === "all" ? undefined : "このカテゴリーのToDoはありません。"}
