@@ -457,7 +457,8 @@ test("retains three weekly completions after stale refetch, summary navigation a
   expect((await refetched).ok()).toBe(true);
   await expectComplete();
   await page.getByRole("button", { name: "サマリー", exact: true }).click();
-  await expect(page.getByText("週間3回の保持確認", { exact: true })).toBeVisible();
+  // 月またぎ週は翌月に計上されるため、タスク名ではなく遷移先を確認する。
+  await expect(page.getByRole("heading", { name: "月次サマリー", exact: true })).toBeVisible();
   // Expire the unmounted home cache, then fetch from the server again.
   await page.clock.fastForward(301000);
   await page.getByRole("button", { name: "ホーム", exact: true }).click();
