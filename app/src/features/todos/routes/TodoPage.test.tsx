@@ -95,6 +95,49 @@ describe("ToDo pages", () => {
       errorMessage: "ToDo画面の読み込みに失敗しました。",
     });
 
+  it("swipes through the saved category order, including empty tabs, without wrapping", async () => {
+    mockListTodoCategories.mockResolvedValue(
+      resolvedData({ categories: order("仕事", null, "空") }),
+    );
+    mockListTodoItems.mockResolvedValue(
+      resolvedData({ items: [fixture("work", "仕事のToDo", "仕事")] }),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    const filter = await screen.findByRole("group", { name: "カテゴリーで絞り込み" });
+    await within(filter).findByRole("button", { name: "仕事" });
+    const swipe = async (direction: "left" | "right") => {
+      const target =
+        screen.queryByText("仕事のToDo") ?? screen.getByText("このカテゴリーのToDoはありません。");
+      await user.pointer([
+        { keys: "[TouchA>]", target, coords: { clientX: 160, clientY: 100 } },
+        {
+          pointerName: "TouchA",
+          coords: { clientX: direction === "left" ? 60 : 260, clientY: 105 },
+        },
+        { keys: "[/TouchA]" },
+      ]);
+    };
+    const expectSelected = (name: string) =>
+      expect(within(filter).getByRole("button", { name })).toHaveAttribute("aria-pressed", "true");
+
+    await swipe("right");
+    expectSelected("すべて");
+    for (const name of ["仕事", "未分類", "空", "空"]) {
+      await swipe("left");
+      expectSelected(name);
+    }
+    expect(screen.queryByText("仕事のToDo")).not.toBeInTheDocument();
+    await swipe("right");
+    expectSelected("未分類");
+    await swipe("right");
+    expectSelected("仕事");
+    expect(screen.getByText("仕事のToDo")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "追加" }));
+    expect(screen.getByRole("combobox")).toHaveValue(cid("仕事"));
+    expect(mockPostTodoItemsReorder).not.toHaveBeenCalled();
+  });
+
   it("creates a todo item from the form", async () => {
     const user = userEvent.setup();
     renderPage();

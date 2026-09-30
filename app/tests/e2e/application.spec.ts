@@ -1,4 +1,4 @@
-import { test, expect, type BrowserContext } from "@playwright/test";
+import { test, expect, type BrowserContext, type Locator } from "@playwright/test";
 import { createHmac } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { createTestDatabase } from "../helpers/d1";
@@ -457,7 +457,8 @@ test("retains three weekly completions after stale refetch, summary navigation a
   expect((await refetched).ok()).toBe(true);
   await expectComplete();
   await page.getByRole("button", { name: "サマリー", exact: true }).click();
-  await expect(page.getByText("週間3回の保持確認", { exact: true })).toBeVisible();
+  // 月またぎ週は翌月に計上されるため、タスク名ではなく遷移先を確認する。
+  await expect(page.getByRole("heading", { name: "月次サマリー", exact: true })).toBeVisible();
   // Expire the unmounted home cache, then fetch from the server again.
   await page.clock.fastForward(301000);
   await page.getByRole("button", { name: "ホーム", exact: true }).click();
@@ -588,6 +589,76 @@ test("ToDo categories persist, filter and detach without deleting items", async 
     await expect(page.getByText(name, { exact: true })).toBeVisible();
   }
   const filter = page.getByRole("group", { name: "カテゴリーで絞り込み" });
+  const verifyCategorySwipes = async (checkPageScroll = false) => {
+    const cdp = await context.newCDPSession(page);
+    const swipe = async (target: Locator, dx: number, dy = 0) => {
+      await target.evaluate((element) =>
+        element.scrollIntoView({ block: "center", behavior: "instant" }),
+      );
+      const box = (await target.boundingBox())!;
+      const start = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchStart",
+        touchPoints: [{ ...start, id: 1 }],
+      });
+      for (let step = 1; step <= 6; step++) {
+        await cdp.send("Input.dispatchTouchEvent", {
+          type: "touchMove",
+          touchPoints: [{ x: start.x + (dx * step) / 6, y: start.y + (dy * step) / 6, id: 1 }],
+        });
+      }
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    };
+    const content = () => page.getByRole("listitem").filter({ hasText: "分類テスト" }).first();
+    try {
+      await filter.getByRole("button", { name: "すべて", exact: true }).click();
+      const names = await filter.getByRole("button").allTextContents();
+      // The tab row retains native horizontal scrolling, without changing selection.
+      await swipe(filter, -100);
+      await expect.poll(() => filter.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+      await expect(filter.getByRole("button", { name: "すべて", exact: true })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+      for (let index = 1; index < names.length; index++) {
+        const target =
+          (await content().count()) > 0
+            ? content()
+            : page.getByText("このカテゴリーのToDoはありません。", { exact: true });
+        await swipe(target, -100);
+        const selected = filter.getByRole("button", { name: names[index], exact: true });
+        await expect(selected).toHaveAttribute("aria-pressed", "true");
+        const rowBox = (await filter.boundingBox())!;
+        const selectedBox = (await selected.boundingBox())!;
+        expect(selectedBox.x).toBeGreaterThanOrEqual(rowBox.x - 1);
+        expect(selectedBox.x + selectedBox.width).toBeLessThanOrEqual(rowBox.x + rowBox.width + 1);
+      }
+      await swipe(page.getByText("このカテゴリーのToDoはありません。", { exact: true }), -100);
+      await expect(
+        filter.getByRole("button", { name: names.at(-1)!, exact: true }),
+      ).toHaveAttribute("aria-pressed", "true");
+      await swipe(page.getByText("このカテゴリーのToDoはありません。", { exact: true }), 100);
+      await expect(
+        filter.getByRole("button", { name: names.at(-2)!, exact: true }),
+      ).toHaveAttribute("aria-pressed", "true");
+      await filter.getByRole("button", { name: "すべて", exact: true }).click();
+      await content().evaluate((element) =>
+        element.scrollIntoView({ block: "center", behavior: "instant" }),
+      );
+      const beforeScroll = await page.evaluate(() => window.scrollY);
+      await swipe(content(), 0, 80);
+      await expect(filter.getByRole("button", { name: "すべて", exact: true })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+      if (checkPageScroll) {
+        expect(beforeScroll).toBeGreaterThan(0);
+        await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(beforeScroll);
+      }
+    } finally {
+      await cdp.detach();
+    }
+  };
   await filter.getByRole("button", { name: category, exact: true }).click();
   await expect(page.getByText("分類テスト未分類", { exact: true })).toHaveCount(0);
   const reorderFilteredItems = async () => {
@@ -680,6 +751,7 @@ test("ToDo categories persist, filter and detach without deleting items", async 
       element.scrollLeft = element.scrollWidth;
     });
     expect(await filter.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+    await verifyCategorySwipes();
   }
   await filter.getByRole("button", { name: "あとで確認すること", exact: true }).click();
   await expect(page.getByText("このカテゴリーのToDoはありません。")).toBeVisible();
@@ -703,6 +775,8 @@ test("ToDo categories persist, filter and detach without deleting items", async 
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true);
+    await verifyCategorySwipes(true);
+    await filter.getByRole("button", { name: category, exact: true }).click();
   }
   await reorderFilteredItems();
   await page.reload();

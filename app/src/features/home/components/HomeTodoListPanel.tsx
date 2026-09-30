@@ -27,7 +27,8 @@ export function HomeTodoListPanel({
   onReorder,
   onUpdate,
 }: Props) {
-  const { categoriesQuery, selection, setSelection, filterItems } = useTodoCategoryFilter();
+  const { categoriesQuery, selection, setSelection, filterItems, switchCategory } =
+    useTodoCategoryFilter();
   return (
     <article className={`min-w-0 ${HOME_PANEL_CLASS_NAME}`}>
       <div className="flex items-center justify-between gap-2 px-2 md:px-0">
@@ -46,6 +47,7 @@ export function HomeTodoListPanel({
         onChange={setSelection}
       />
       <TodoItemsSection
+        onCategorySwipe={switchCategory}
         categoriesQuery={categoriesQuery}
         items={filterItems(items)}
         isReordering={isReordering}
