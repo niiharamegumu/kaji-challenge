@@ -1,20 +1,6 @@
 import { HeadContent, Scripts } from "@tanstack/react-router";
 import App from "../App";
 import stylesheet from "../tailwind.css?url";
-import appLogo from "../shared/assets/app-logo.png?inline";
-const splash = `<div id="boot-splash" class="boot-splash" role="status" aria-live="polite">
-      <img
-        class="boot-splash__icon"
-        src="${appLogo}"
-        alt=""
-        width="80"
-        height="80"
-      />
-      <span class="boot-splash__sr-only">読み込み中</span>
-    </div>
-    <script>
-      window.performance?.mark?.("boot:html-splash-visible");
-    </script>`;
 export function Document() {
   return (
     <html lang="ja">
@@ -41,62 +27,19 @@ export function Document() {
         background: #f6f4ef;
       }
 
-      .boot-splash {
-        position: fixed;
-        inset: 0;
-        z-index: 9999;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: #f6f4ef;
-        opacity: 1;
-        transition: opacity 180ms ease;
-      }
-
-      .boot-splash--fade {
-        opacity: 0;
-        pointer-events: none;
-      }
-
-      .boot-splash__icon {
-        width: 80px;
-        height: 80px;
-        animation: boot-splash-pulse 1.6s ease-in-out infinite;
-      }
-
-      .boot-splash__sr-only {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        padding: 0;
-        margin: -1px;
-        overflow: hidden;
-        clip: rect(0, 0, 0, 0);
-        white-space: nowrap;
-        border: 0;
-      }
-
-      @keyframes boot-splash-pulse {
-        0%,
-        100% {
-          opacity: 1;
-          transform: scale(1);
-        }
-
-        50% {
-          opacity: 0.8;
-          transform: scale(0.98);
-        }
-      }
     `}
         </style>
         <HeadContent />
       </head>
       <body>
-        <div dangerouslySetInnerHTML={{ __html: splash }} />
         <div id="root">
           <App />
         </div>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: 'window.performance?.mark?.("boot:html-splash-visible");',
+          }}
+        />
         <Scripts />
       </body>
     </html>
