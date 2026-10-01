@@ -49,7 +49,7 @@ html {
   scroll-padding-top: calc(env(safe-area-inset-top) + 7rem);
 }
 
-.app-glass-header {
+.app-glass-surface {
   /* ぼかし非対応の環境でも文字の背後に本文が重ならないようにする。 */
   background: var(--color-washi-50);
   box-shadow:
@@ -59,8 +59,85 @@ html {
     inset 0 0 0 1px rgba(158, 150, 138, 0.12);
 }
 
+.app-header-slot {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  top: calc(env(safe-area-inset-top) + 12px);
+  /* 縮小しても本文の位置・ページの高さを変えず、scroll anchoringの揺れを防ぐ。 */
+  height: 4.25rem;
+  pointer-events: none;
+}
+
+.app-header-content {
+  min-width: 0;
+  flex-grow: 1;
+}
+
+.app-header-info {
+  position: relative;
+  pointer-events: auto;
+}
+
+.app-header-members {
+  pointer-events: auto;
+}
+
+.app-header-title {
+  max-height: 1.75rem;
+  margin-bottom: 0.125rem;
+}
+
+@media (width < 48rem) {
+  .app-header-surface {
+    /* 文字やボタンのレイアウトを変えず、背景だけを縮める。 */
+    transition:
+      width 280ms cubic-bezier(0.22, 1, 0.36, 1),
+      height 280ms cubic-bezier(0.22, 1, 0.36, 1),
+      transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+    transform: translate3d(0, 0, 0);
+  }
+
+  .app-header-info {
+    transition:
+      opacity 120ms ease-out 140ms,
+      transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .app-header-members {
+    transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .app-header-slot[data-compact="true"] .app-header-surface {
+    width: calc(var(--app-header-members-width, 60px) + 22px);
+    height: 46px;
+    transform: translate3d(0, -8px, 0);
+    transition-delay: 40ms;
+  }
+
+  .app-header-slot[data-compact="true"] .app-header-info {
+    opacity: 0;
+    transform: translateY(-4px);
+    pointer-events: none;
+    transition-delay: 0ms;
+  }
+
+  .app-header-slot[data-compact="true"] .app-header-members {
+    transform: translate3d(0, -10px, 0);
+    transition-delay: 40ms;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-header-surface,
+  .app-header-info,
+  .app-header-members {
+    transition: none;
+  }
+}
+
 @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
-  .app-glass-header {
+  .app-glass-surface {
     /* 下部ナビと同じ色・ぼかし・光沢で、スクロールする本文を透かす。 */
     background: linear-gradient(180deg, rgba(244, 242, 238, 0.52), rgba(225, 221, 214, 0.22));
     -webkit-backdrop-filter: blur(30px) saturate(220%) brightness(0.94) contrast(1.08);
@@ -68,8 +145,17 @@ html {
   }
 }
 
-@media (min-width: 768px) {
+@media (width >= 48rem) {
   .ios-safe-main {
     padding-top: calc(env(safe-area-inset-top) + 24px);
+  }
+
+  .app-header-slot {
+    height: auto;
+  }
+
+  .app-header-title {
+    max-height: none;
+    margin-bottom: 0;
   }
 }

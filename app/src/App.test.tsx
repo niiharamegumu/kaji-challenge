@@ -176,6 +176,7 @@ describe("App", () => {
       ).toBeInTheDocument();
       expect(screen.getByRole("img", { name: "KajiChalleのアプリアイコン" })).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Googleでログイン" })).toBeInTheDocument();
+      expect(screen.queryAllByTestId("boot-screen")).toHaveLength(0);
     });
   });
 
@@ -210,6 +211,7 @@ describe("App", () => {
       expect(primaryNav.getByRole("button", { name: "カレンダー" })).toBeInTheDocument();
       expect(primaryNav.getByRole("button", { name: "サマリー" })).toBeInTheDocument();
       expect(floatingNav.getByRole("button", { name: "その他" })).toBeInTheDocument();
+      expect(screen.queryAllByTestId("boot-screen")).toHaveLength(0);
     });
 
     await user.click(floatingNav.getByRole("button", { name: "その他" }));

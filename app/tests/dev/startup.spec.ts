@@ -34,7 +34,7 @@ test("development entry hydrates and runtime writes do not reload the page", asy
     // A missing session is expected; broken runtime settings or origin checks are not.
     expect(await (await sessionResponse).text()).toContain("unauthorized");
     await expect(page.getByRole("button", { name: "Googleでログイン", exact: true })).toBeVisible();
-    await expect(page.locator("#boot-splash")).toHaveCount(0);
+    await expect(page.getByTestId("boot-screen")).toHaveCount(0);
     for (let index = 0; index < 5; index++) {
       await writeFile(runtimeFile, `runtime-update-${index}`);
       await request.get("/health");
@@ -44,7 +44,7 @@ test("development entry hydrates and runtime writes do not reload the page", asy
     expect(reloads).toEqual([]);
     await page.reload();
     await expect(page.getByRole("button", { name: "Googleでログイン", exact: true })).toBeVisible();
-    await expect(page.locator("#boot-splash")).toHaveCount(0);
+    await expect(page.getByTestId("boot-screen")).toHaveCount(0);
     expect(errors).toEqual([]);
     expect(reloads).toEqual([]);
   } finally {

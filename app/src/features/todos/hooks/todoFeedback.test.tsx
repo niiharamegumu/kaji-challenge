@@ -89,7 +89,7 @@ it("hides completed items before the response and restores only the failed item"
   const { client, user, status } = setup();
   await user.click(screen.getByRole("button", { name: "A" }));
   await waitFor(() => expect(screen.queryByRole("button", { name: "A" })).not.toBeInTheDocument());
-  expect(screen.getByText("保存中…")).toBeVisible();
+  expect(screen.getByRole("status", { name: "保存中" })).toBeVisible();
   expect(client.getQueryData<TodoItem[]>(queryKeys.todoItems)).toHaveLength(2);
   await user.click(screen.getByRole("button", { name: "B" }));
   await act(async () => {
@@ -100,7 +100,9 @@ it("hides completed items before the response and restores only the failed item"
   });
   expect(await screen.findByRole("button", { name: "A" })).toBeVisible();
   expect(screen.queryByRole("button", { name: "B" })).not.toBeInTheDocument();
-  await waitFor(() => expect(screen.queryByText("保存中…")).not.toBeInTheDocument());
+  await waitFor(() =>
+    expect(screen.queryByRole("status", { name: "保存中" })).not.toBeInTheDocument(),
+  );
   expect(status).toHaveBeenCalledWith(expect.stringContaining("失敗"));
 });
 

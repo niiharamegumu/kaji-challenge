@@ -65,27 +65,6 @@ function reportBootMetrics() {
   console.info("[boot] timings (ms)", summary);
 }
 
-function hideBootSplash() {
-  if (typeof document === "undefined") {
-    return;
-  }
-
-  const splash = document.getElementById("boot-splash");
-  if (splash == null || splash.dataset.state === "hidden") {
-    return;
-  }
-
-  splash.dataset.state = "hidden";
-  splash.classList.add("boot-splash--fade");
-
-  const remove = () => {
-    splash.remove();
-  };
-
-  splash.addEventListener("transitionend", remove, { once: true });
-  window.setTimeout(remove, 220);
-}
-
 export function BootFlowProvider({ children }: PropsWithChildren) {
   const [isInitialBootPending, setIsInitialBootPending] = useState(true);
   const reactMountedRef = useRef(false);
@@ -97,7 +76,6 @@ export function BootFlowProvider({ children }: PropsWithChildren) {
       return;
     }
 
-    hideBootSplash();
     setIsInitialBootPending(false);
   }, []);
 

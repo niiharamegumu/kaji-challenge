@@ -54,7 +54,7 @@ test("denied OAuth login shows an explanation and a way back to login", async ({
   await page.goto("/auth/callback?error=signup_forbidden");
   await expect(page.getByRole("heading", { name: "ログインできませんでした" })).toBeVisible();
   await expect(page.getByText(/このアカウントは現在の利用対象に登録されていません/)).toBeVisible();
-  await expect(page.locator("#boot-splash")).toHaveCount(0);
+  await expect(page.getByTestId("boot-screen")).toHaveCount(0);
   await page.getByRole("link", { name: "ログイン画面に戻る" }).click();
   await expect(page.getByRole("button", { name: "Googleでログイン" })).toBeVisible();
 });
@@ -386,7 +386,9 @@ test("completion responds before a delayed request and rolls back when it fails"
     // リクエストをまだ送っていない段階で、完了表示と保存中表示が出る。
     await expect(card.getByRole("img")).toHaveAttribute("aria-label", "1回目: テストユーザー");
     await expect(card).toBeDisabled();
-    await expect(page.getByText("保存中…", { exact: true })).toBeVisible();
+    const saving = page.getByRole("status", { name: "保存中", exact: true });
+    await expect(saving).toBeVisible();
+    await expect(saving).toHaveText("");
   } finally {
     release();
   }
