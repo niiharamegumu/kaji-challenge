@@ -28,6 +28,7 @@ import {
 import { statusMessageAtom } from "../../shared/state/status";
 import { isLoggedInAtom, sessionAtom } from "../../state/session";
 import { useBootFlow } from "../boot";
+import { AppHeader } from "./AppHeader";
 import {
   preloadSettingsPageChunk,
   preloadPenaltiesPageChunk,
@@ -256,24 +257,13 @@ export function RootLayout() {
       />
 
       <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col">
-        <header className="app-glass-header sticky top-[calc(env(safe-area-inset-top)+12px)] z-30 mb-3 flex items-start justify-between gap-3 rounded-3xl border border-white/40 p-2.5 md:items-center md:p-4">
-          <div className="flex min-w-0 flex-1 flex-col gap-0.5 md:flex-row md:items-center md:justify-between md:gap-3">
-            <h1
-              title={currentTeamName}
-              className="min-w-0 truncate text-xl font-semibold tracking-normal md:text-2xl md:font-bold md:tracking-wide"
-            >
-              {currentTeamName}
-            </h1>
-            <span className="shrink-0 whitespace-nowrap text-xs text-stone-700 md:text-sm">
-              {todayLabel}
-            </span>
-          </div>
+        <AppHeader teamName={currentTeamName} todayLabel={todayLabel}>
           <ConnectedMembers
             members={cachedMembersQuery.data ?? []}
             userIds={realtime.userIds}
             connected={realtime.connected}
           />
-        </header>
+        </AppHeader>
 
         <MonthCloseBanner />
 
