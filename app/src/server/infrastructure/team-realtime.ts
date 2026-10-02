@@ -4,7 +4,7 @@ import { z } from "zod";
 import { createDb } from "./database";
 import { session } from "./auth-schema";
 import { teamMembers } from "./schema";
-import type { RealtimeMessage } from "../../contracts/realtime";
+import type { RealtimeMessage, TeamChangeScope } from "../../contracts/realtime";
 
 const connectionIdentitySchema = z.object({
   userId: z.string().min(1),
@@ -37,8 +37,8 @@ export class TeamRealtime extends DurableObject<Env> {
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  async notify(): Promise<void> {
-    await this.broadcast(true);
+  async notify(changes?: TeamChangeScope[]): Promise<void> {
+    await this.broadcast(true, changes);
   }
 
   async webSocketClose(socket: WebSocket, code: number): Promise<void> {
@@ -98,7 +98,7 @@ export class TeamRealtime extends DurableObject<Env> {
     });
   }
 
-  private async broadcast(dataChanged: boolean): Promise<void> {
+  private async broadcast(dataChanged: boolean, changes?: TeamChangeScope[]): Promise<void> {
     // D1への認証照会は外部I/O。照会中の入退室・別通知を直列化し、未検証の接続への
     // 配信や、古い接続一覧による上書きを防ぐ。業務更新を直列化するものではない。
     await this.ctx.blockConcurrencyWhile(async () => {
@@ -109,7 +109,7 @@ export class TeamRealtime extends DurableObject<Env> {
           userIds: [...new Set(connections.map(({ identity }) => identity.userId))].sort(),
         };
         const messages: RealtimeMessage[] = [presence];
-        if (dataChanged) messages.push({ type: "team-changed" });
+        if (dataChanged) messages.push({ type: "team-changed", ...(changes && { changes }) });
         const payloads = messages.map((message) => JSON.stringify(message));
 
         for (const { socket } of connections) {
