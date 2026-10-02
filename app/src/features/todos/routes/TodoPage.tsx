@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useSetAtom } from "jotai";
 import { Plus } from "lucide-react";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
@@ -6,7 +7,11 @@ import type { CreateTodoItemRequest, UpdateTodoItemRequest } from "../../../lib/
 import { FooterQuickAction } from "../../../shared/components/FooterQuickAction";
 import { statusMessageAtom } from "../../../shared/state/status";
 import { TodoItemForm, TodoManager } from "../components/TodoManager";
-import { useTodoItemMutations, useTodoItemsQuery } from "../hooks/useTodoList";
+import {
+  createTodoItemMutationKey,
+  useTodoItemMutations,
+  useTodoItemsQuery,
+} from "../hooks/useTodoList";
 
 import { TodoCategoryFilter } from "../components/TodoCategoryFilter";
 import { useTodoCategoryFilter } from "../hooks/useTodoCategoryFilter";
@@ -15,6 +20,7 @@ import { restoreTodoOrder } from "../utils/restoreTodoOrder";
 import { emptyTodoItemForm, useTodoItemFormState } from "../hooks/useTodoItemFormState";
 
 export function TodoPage() {
+  const queryClient = useQueryClient();
   const { categoriesQuery, selection, setSelection, filterItems, switchCategory } =
     useTodoCategoryFilter();
   const todoItemsQuery = useTodoItemsQuery();
@@ -33,7 +39,9 @@ export function TodoPage() {
   }, [isCreateOpen, createItem.isPending, createItem.data]);
 
   const handleCreate = async (keepOpen = false) => {
-    if (createItem.isPending || submitDisabled) return;
+    // The cache updates synchronously, before the saving UI has rendered.
+    if (queryClient.isMutating({ mutationKey: createTodoItemMutationKey }) > 0 || submitDisabled)
+      return;
     const payload: CreateTodoItemRequest = {
       categoryId: form.categoryId || null,
       name: form.name.trim(),
