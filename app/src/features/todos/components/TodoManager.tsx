@@ -364,18 +364,6 @@ export function TodoItemsSection({
   const [editState, setEditState] = useTodoItemFormState(categoriesQuery.data);
   const { pendingActions, schedule, undo } = useDelayedActions();
   const completionDeadlines = new Map(pendingActions.map((item) => [item.id, item.deadline]));
-  const [optimisticItemIds, setOptimisticItemIds] = useState<string[] | null>(null);
-
-  const itemsById = new Map(items.map((item) => [item.id, item]));
-  const pendingOrder =
-    isReordering && optimisticItemIds?.length === items.length
-      ? optimisticItemIds.map((id) => itemsById.get(id))
-      : null;
-  // A category switch or deletion can change the list while an order is being saved.
-  const optimisticItems = pendingOrder?.every((item): item is TodoItem => item !== undefined)
-    ? pendingOrder
-    : items;
-
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 8 },
@@ -391,20 +379,19 @@ export function TodoItemsSection({
     }),
   );
 
-  const itemIds = optimisticItems.map((item) => item.id);
+  const itemIds = items.map((item) => item.id);
 
   const applyReorder = (activeId: string, overId: string) => {
     if (isReordering || activeId === overId) {
       return;
     }
-    const oldIndex = optimisticItems.findIndex((item) => item.id === activeId);
-    const newIndex = optimisticItems.findIndex((item) => item.id === overId);
+    const oldIndex = items.findIndex((item) => item.id === activeId);
+    const newIndex = items.findIndex((item) => item.id === overId);
     if (oldIndex < 0 || newIndex < 0) {
       return;
     }
-    const nextItems = arrayMove(optimisticItems, oldIndex, newIndex);
+    const nextItems = arrayMove(items, oldIndex, newIndex);
     const nextIds = nextItems.map((item) => item.id);
-    setOptimisticItemIds(nextIds);
     onReorder(nextIds);
   };
 
@@ -470,7 +457,7 @@ export function TodoItemsSection({
 
         {filters}
         <TodoCategorySwipeArea onSwipe={onCategorySwipe}>
-          {optimisticItems.length === 0 ? (
+          {items.length === 0 ? (
             <div className={emptyClassName}>{emptyMessage}</div>
           ) : (
             <DndContext
@@ -481,7 +468,7 @@ export function TodoItemsSection({
             >
               <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
                 <ul className={`grid gap-2 ${listClassName}`}>
-                  {optimisticItems.map((item) => (
+                  {items.map((item) => (
                     <SortableTodoItem
                       categoriesQuery={categoriesQuery}
                       key={item.id}
