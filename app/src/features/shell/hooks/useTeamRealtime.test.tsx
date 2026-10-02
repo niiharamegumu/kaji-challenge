@@ -170,3 +170,44 @@ it("stops retries and ignores late socket events after unmount", async () => {
   expect(Socket.instances).toHaveLength(1);
   expect(hook.invalidate).not.toHaveBeenCalled();
 });
+
+it("unions scoped notifications during a save without invalidating identity or summaries", async () => {
+  const hook = mount();
+  let finish!: () => void;
+  const mutation = hook.client.getMutationCache().build(hook.client, {
+    mutationFn: () =>
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      }),
+  });
+  let execution: Promise<void>;
+  await act(async () => {
+    execution = mutation.execute(undefined);
+  });
+  act(() => {
+    Socket.instances[0].message({ type: "team-changed", changes: ["todos"] });
+    Socket.instances[0].message({ type: "team-changed", changes: ["todo-categories"] });
+    Socket.instances[0].message({ type: "team-changed", changes: ["todos"] });
+  });
+  expect(hook.invalidate).not.toHaveBeenCalled();
+  await act(async () => {
+    finish();
+    await execution;
+  });
+  expect(hook.invalidate.mock.calls.map(([arg]) => arg?.queryKey)).toEqual([
+    queryKeys.todoItems,
+    queryKeys.todoCategories,
+  ]);
+  hook.unmount();
+});
+
+it("lets a reconnect supersede scoped notifications with a full refresh", async () => {
+  const hook = mount();
+  act(() => Socket.instances[0].message({ type: "team-changed", changes: ["todos"] }));
+  expect(hook.invalidate).toHaveBeenCalledTimes(1);
+  hook.invalidate.mockClear();
+  act(() => Socket.instances[0].open());
+  expect(hook.invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.me });
+  expect(hook.invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.monthlySummary });
+  hook.unmount();
+});
