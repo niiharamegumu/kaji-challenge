@@ -1,4 +1,5 @@
 import {
+  queryOptions,
   keepPreviousData,
   useMutation,
   useQuery,
@@ -22,23 +23,33 @@ import { monthEndDateKey, monthStartDateKey } from "../utils/date";
 
 type StatusSetter = (message: string) => void;
 
-export function useReminderDefinitionsQuery() {
-  return useSuspenseQuery({
-    queryKey: queryKeys.reminderDefinitions,
-    queryFn: async () => (await listReminderDefinitions()).data.items ?? [],
+export const reminderDefinitionsQueryOptions = queryOptions({
+  queryKey: queryKeys.reminderDefinitions,
+  queryFn: async ({ signal }) => (await listReminderDefinitions({ signal })).data.items,
+});
+
+export const reminderCalendarQueryOptions = (monthKey: string) =>
+  queryOptions({
+    queryKey: [...queryKeys.reminders, monthKey],
+    queryFn: async ({ signal }) =>
+      (
+        await listReminders(
+          {
+            from: monthStartDateKey(monthKey),
+            to: monthEndDateKey(monthKey),
+          },
+          { signal },
+        )
+      ).data.days,
   });
+
+export function useReminderDefinitionsQuery() {
+  return useSuspenseQuery(reminderDefinitionsQueryOptions);
 }
 
 export function useReminderCalendarQuery(monthKey: string) {
   return useQuery({
-    queryKey: [...queryKeys.reminders, monthKey],
-    queryFn: async () =>
-      (
-        await listReminders({
-          from: monthStartDateKey(monthKey),
-          to: monthEndDateKey(monthKey),
-        })
-      ).data.days ?? [],
+    ...reminderCalendarQueryOptions(monthKey),
     placeholderData: keepPreviousData,
   });
 }
