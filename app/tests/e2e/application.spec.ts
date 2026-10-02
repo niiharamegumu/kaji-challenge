@@ -1,4 +1,4 @@
-import { test, expect, type BrowserContext, type Locator } from "@playwright/test";
+import { test, expect, type BrowserContext, type Locator, type Request } from "@playwright/test";
 import { createHmac } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { createTestDatabase } from "../helpers/d1";
@@ -555,6 +555,68 @@ test("summary immediately saves past daily and weekly changes without confirmati
     weekly.getByRole("button", { name: "1回目: サマリー検証: 1回取り消す" }),
   ).toBeVisible();
   expect(completionRequests).toHaveLength(6);
+});
+
+test("summary previews daily and consecutive weekly changes before saving and rolls back one failure", async ({
+  page,
+  context,
+}, testInfo) => {
+  await authenticate(context, summaryToken);
+  await page.goto("/summary?month=2020-05");
+  const day = page.getByRole("heading", { name: "5月11日（月）", exact: true }).locator("..");
+  const daily = day.getByRole("listitem").filter({ hasText: "サマリー検証日間" });
+  const weekly = day.getByRole("listitem").filter({ hasText: "サマリー検証週間" });
+  const requests: Request[] = [];
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/_serverFn/**", async (route) => {
+    if (!route.request().postData()?.includes("postTaskCompletion")) {
+      await route.continue();
+      return;
+    }
+    const index = requests.push(route.request()) - 1;
+    await held;
+    if (index === 2) await route.abort("failed");
+    else await route.continue();
+  });
+  try {
+    await daily.getByRole("button", { name: "過去日タスクを完了にする" }).click();
+    for (const slot of [1, 2, 3]) {
+      await weekly.getByRole("button", { name: `${slot}回目: 未完了: 1回追加` }).click();
+      await expect(
+        weekly.getByRole("button", { name: `${slot}回目: サマリー検証: 1回取り消す` }),
+      ).toBeVisible();
+    }
+    // All requests are still held: these changes must come from the optimistic preview.
+    await expect.poll(() => requests.length).toBe(4);
+    await expect(daily.getByText("完了", { exact: true })).toBeVisible();
+    await expect(daily.getByRole("img", { name: "1回目: サマリー検証" })).toBeVisible();
+    await expect(weekly.getByText("完了", { exact: true })).toBeVisible();
+    await expect(day.getByText("保存中…")).toHaveCount(0);
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await day.screenshot({ path: testInfo.outputPath("summary-optimistic-pending.png") });
+  } finally {
+    release();
+  }
+  const responses = await Promise.all(requests.map((request) => request.response()));
+  expect(responses.filter((response) => response !== null)).toHaveLength(3);
+  for (const response of responses) {
+    if (!response) continue;
+    expect(response.ok()).toBe(true);
+    await response.finished();
+  }
+  await expect(page.getByText(/更新失敗:/)).toBeVisible();
+  await expect(page.getByRole("status", { name: "保存中", exact: true })).not.toBeVisible();
+  await expect(daily.getByText("完了", { exact: true })).toBeVisible();
+  await expect(weekly.getByRole("button", { name: /サマリー検証: 1回取り消す/ })).toHaveCount(2);
+  await expect(weekly.getByRole("button", { name: "3回目: 未完了: 1回追加" })).toBeVisible();
+  await page.unrouteAll({ behavior: "wait" });
+  await page.reload();
+  await expect(daily.getByText("完了", { exact: true })).toBeVisible();
+  await expect(weekly.getByRole("button", { name: /サマリー検証: 1回取り消す/ })).toHaveCount(2);
+  await expect(weekly.getByRole("button", { name: "3回目: 未完了: 1回追加" })).toBeVisible();
 });
 
 test("real WebSockets synchronize two users, deduplicate tabs and isolate teams", async ({

@@ -9,6 +9,7 @@ import { appQueryClient } from "../../../shared/query/queryClient";
 import { dateStringInJST } from "../../../shared/utils/dates";
 import { withExpectedConsoleError } from "../../../test/console";
 import { SummaryPage } from "./SummaryPage";
+import { RootLayoutContext } from "../../../shared/router/rootLayoutContext";
 
 const mockGetPenaltySummaryMonthly = vi.fn();
 const mockListPenaltyRules = vi.fn();
@@ -76,7 +77,16 @@ describe("SummaryPage", () => {
       },
     });
     mockListPenaltyRules.mockResolvedValue({ data: { items: [] } });
-    mockPostTaskCompletionToggle.mockResolvedValue({ data: {} });
+    mockPostTaskCompletionToggle.mockImplementation((taskId, body) =>
+      Promise.resolve({
+        data: {
+          taskId,
+          targetDate: body.targetDate,
+          completed: body.action === "complete",
+          weeklyCompletedCount: 0,
+        },
+      }),
+    );
     mockGetMonthCloseCandidate.mockResolvedValue({
       data: { candidate: null, pendingMonthCount: 0 },
     });
@@ -93,7 +103,17 @@ describe("SummaryPage", () => {
       <AppProviders>
         <MemoryRouter initialEntries={[initialEntry]}>
           <SuspenseQueryBoundary errorMessage="サマリー画面の読み込みに失敗しました。">
-            <SummaryPage />
+            <RootLayoutContext
+              value={{
+                currentUserId: "me",
+                currentTeamId: "team",
+                currentTeamName: "テスト",
+                displayName: "自分",
+                colorHex: "#123456",
+              }}
+            >
+              <SummaryPage />
+            </RootLayoutContext>
           </SuspenseQueryBoundary>
         </MemoryRouter>
       </AppProviders>,
@@ -311,8 +331,8 @@ describe("SummaryPage", () => {
       await act(async () => {
         const button = screen.getByRole("button", { name: label });
         fireEvent.click(button);
-        // The saving render has not happened yet; a second activation must not resubmit.
-        fireEvent.click(button);
+        // Single-state operations reject duplicates before the pending UI renders.
+        if (taskId.startsWith("daily")) fireEvent.click(button);
       });
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
       expect(screen.queryByRole("button", { name: "変更を取り消す" })).not.toBeInTheDocument();
@@ -365,7 +385,8 @@ describe("SummaryPage", () => {
       targetDate: "2026-03-16",
       action: "complete",
     });
-    expect(within(secondRow).getByText("保存中…")).toBeVisible();
+    expect(within(secondRow).queryByText("保存中…")).not.toBeInTheDocument();
+    expect(within(secondRow).getByText("完了", { exact: true })).toBeVisible();
     expect(within(secondRow).getByRole("button")).toHaveAttribute("aria-disabled", "true");
     expect(
       within(firstRow).getByRole("button", { name: "過去日タスクを完了にする" }),

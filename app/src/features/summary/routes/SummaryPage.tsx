@@ -1,12 +1,8 @@
-import {
-  useMutation,
-  useMutationState,
-  useQueryClient,
-  useSuspenseQueries,
-} from "@tanstack/react-query";
+import { useMutation, useQueryClient, useSuspenseQueries } from "@tanstack/react-query";
 import { CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Circle } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
-import { useSearchParams } from "../../../shared/router/navigation";
+import { useOutletContext, useSearchParams } from "../../../shared/router/navigation";
+import type { RootLayoutOutletContext } from "../../../shared/router/rootLayoutContext";
 import { CompletionSlots } from "../../../shared/components/CompletionSlots";
 import { ConfirmModal } from "../../../shared/components/ConfirmModal";
 import { TriggeredPenaltiesList } from "../../../shared/components/TriggeredPenaltiesList";
@@ -19,20 +15,9 @@ import { PAGE_SECTION_CHROMELESS_CLASS_NAME } from "../../../shared/styles/pageS
 import { dateStringInJST } from "../../../shared/utils/dates";
 import { formatError } from "../../../shared/utils/errors";
 import { closeMonth as closeMonthRequest, useMonthCloseCandidate } from "../../month-close";
-import {
-  completePastDailyTask as completePastDailyTaskRequest,
-  decrementPastDailyTask as decrementPastDailyTaskRequest,
-  decrementPastWeeklyTask as decrementPastWeeklyTaskRequest,
-  incrementPastWeeklyTask as incrementPastWeeklyTaskRequest,
-} from "../api/summaryApi";
+import { PastTaskCompletionControl } from "../components/PastTaskCompletionControl";
+import { usePastTaskCompletion } from "../hooks/usePastTaskCompletion";
 
-import {
-  PastTaskCompletionControl,
-  pastTaskActionId,
-  type PastTaskUpdate,
-} from "../components/PastTaskCompletionControl";
-
-const pastTaskMutationKey = ["summary-task-completion"];
 const monthPattern = /^\d{4}-\d{2}$/;
 
 const initialMonth = () => dateStringInJST().slice(0, 7);
@@ -95,7 +80,14 @@ export function SummaryPage() {
     queries: [monthlyPenaltySummaryQueryOptions(month), penaltyRulesWithDeletedQueryOptions],
   });
 
-  const summaryData = summary.data;
+  const { currentUserId, displayName, colorHex } = useOutletContext<RootLayoutOutletContext>();
+  const completion = usePastTaskCompletion(
+    month,
+    summary.data,
+    currentUserId ? { userId: currentUserId, effectiveName: displayName, colorHex } : undefined,
+    setStatus,
+  );
+  const summaryData = completion.data;
   const monthCloseCandidate = useMonthCloseCandidate();
   const closeCandidate = monthCloseCandidate.data?.candidate;
   const monthlyTaskStatusGroups = summaryData.taskStatusByDate;
@@ -132,34 +124,6 @@ export function SummaryPage() {
     },
   });
 
-  const pendingUpdates = useMutationState({
-    filters: { mutationKey: pastTaskMutationKey, status: "pending" },
-    select: (mutation) => mutation.state.variables as PastTaskUpdate,
-  });
-  const savingActionIds = new Set(pendingUpdates.map(pastTaskActionId));
-
-  const updatePastTaskCompletion = useMutation({
-    mutationKey: pastTaskMutationKey,
-    mutationFn: async ({ taskId, targetDate, type, action }: PastTaskUpdate) =>
-      type === "daily"
-        ? action === "complete"
-          ? completePastDailyTaskRequest(taskId, targetDate)
-          : decrementPastDailyTaskRequest(taskId, targetDate)
-        : action === "increment"
-          ? incrementPastWeeklyTaskRequest(taskId, targetDate)
-          : decrementPastWeeklyTaskRequest(taskId, targetDate),
-    onSuccess: async () => {
-      setStatus("過去分のタスクを更新しました");
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.monthlySummary }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.home }),
-      ]);
-    },
-    onError: async (error) => {
-      setStatus(`更新失敗: ${formatError(error)}`);
-    },
-  });
-
   const updateMonth = (nextMonth: string) => {
     if (!monthPattern.test(nextMonth) || nextMonth === month) {
       return;
@@ -174,17 +138,6 @@ export function SummaryPage() {
         { replace: true },
       );
     });
-  };
-
-  const handlePastTaskUpdate = (target: PastTaskUpdate) => {
-    // Read the cache at the event boundary as the pending UI update is asynchronous.
-    const isSaving =
-      queryClient.isMutating({
-        mutationKey: pastTaskMutationKey,
-        predicate: (mutation) =>
-          pastTaskActionId(mutation.state.variables as PastTaskUpdate) === pastTaskActionId(target),
-      }) > 0;
-    if (!isSaving) updatePastTaskCompletion.mutate(target);
   };
 
   const [currentYear, currentMonth] = month.split("-").map(Number);
@@ -458,14 +411,12 @@ export function SummaryPage() {
                                     <PastTaskCompletionControl
                                       item={item}
                                       targetDate={group.date}
-                                      isSaving={savingActionIds.has(
-                                        pastTaskActionId({
-                                          taskId: item.taskId,
-                                          targetDate: group.date,
-                                          type: item.type,
-                                        }),
-                                      )}
-                                      onUpdate={handlePastTaskUpdate}
+                                      isSaving={completion.isSaving({
+                                        taskId: item.taskId,
+                                        targetDate: group.date,
+                                        type: item.type,
+                                      })}
+                                      onUpdate={completion.update}
                                     />
                                   ) : (
                                     <CompletionSlots
