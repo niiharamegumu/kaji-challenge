@@ -1,4 +1,9 @@
-import { useSuspenseQueries, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  queryOptions,
+  useSuspenseQueries,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   getTeamCurrentInvite,
   type InviteCodeResponse,
@@ -14,12 +19,12 @@ import { teamMembersQueryOptions } from "../../../shared/query/teamMembersQuery"
 import { extractHttpStatus, formatError } from "../../../shared/utils/errors";
 import { INVITE_CODE_EXPIRES_IN_HOURS } from "../constants/invite";
 
-function currentInviteQueryOptions() {
-  return {
+export function currentInviteQueryOptions() {
+  return queryOptions({
     queryKey: queryKeys.currentInvite,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       try {
-        return (await getTeamCurrentInvite()).data;
+        return (await getTeamCurrentInvite({ signal })).data;
       } catch (error) {
         if (extractHttpStatus(error) === 404) {
           return null;
@@ -27,7 +32,7 @@ function currentInviteQueryOptions() {
         throw error;
       }
     },
-  } as const;
+  });
 }
 
 export function useTeamSettingsQueries() {
