@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
-import { realtimeMessageSchema } from "../../../contracts/realtime";
+import { realtimeMessageSchema, type TeamChangeScope } from "../../../contracts/realtime";
 import {
   refreshTeamState,
   teamStateRefreshQueryKeys,
@@ -56,18 +56,25 @@ function startTeamRealtime({
   let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
   let reconnectDelayMs = INITIAL_RECONNECT_DELAY_MS;
   let refreshPending = false;
+  let refreshAll = false;
+  const pendingChanges = new Set<TeamChangeScope>();
 
   // 再取得：保存中の楽観表示を守り、複数の通知は保存終了後の1回にまとめる。
   function flushPendingRefresh() {
     if (disposed || !refreshPending || queryClient.isMutating() > 0) return;
 
     refreshPending = false;
-    void refreshTeamState(queryClient);
+    const changes = refreshAll ? undefined : [...pendingChanges];
+    refreshAll = false;
+    pendingChanges.clear();
+    void refreshTeamState(queryClient, changes);
   }
 
-  function requestRefresh() {
+  function requestRefresh(changes?: TeamChangeScope[]) {
     if (disposed) return;
     refreshPending = true;
+    if (changes === undefined) refreshAll = true;
+    else for (const change of changes) pendingChanges.add(change);
     flushPendingRefresh();
   }
 
@@ -89,7 +96,7 @@ function startTeamRealtime({
         onStateChange({ ...identity, userIds: result.data.userIds, connected: true });
         break;
       case "team-changed":
-        requestRefresh();
+        requestRefresh(result.data.changes);
         break;
     }
   }
