@@ -3,6 +3,7 @@ import {
   eq,
   ne,
   lt,
+  lte,
   gte,
   or,
   isNull,
@@ -871,11 +872,28 @@ export class D1Repository implements P.Repository {
     const rows = await this.db.select(reminderFields).from(reminders).where(eq(reminders.id, id));
     return required(rows, "GetReminderByID");
   }
-  async ListRemindersByTeamID(teamID: string): Promise<P.Reminder[]> {
+  async ListRemindersByTeamID(teamID: string, period?: P.ReminderPeriod): Promise<P.Reminder[]> {
     return this.db
       .select(reminderFields)
       .from(reminders)
-      .where(eq(reminders.team_id, teamID))
+      .where(
+        and(
+          eq(reminders.team_id, teamID),
+          period
+            ? and(
+                lte(reminders.start_date, period.to),
+                or(isNull(reminders.end_date), gte(reminders.end_date, period.from)),
+                or(
+                  eq(reminders.kind, "recurring"),
+                  gte(
+                    reminders.start_date,
+                    period.from > period.today ? period.from : period.today,
+                  ),
+                ),
+              )
+            : undefined,
+        ),
+      )
       .orderBy(reminders.created_at, reminders.id);
   }
   async UpdateReminder(arg: P.UpdateReminderParams): Promise<void> {
