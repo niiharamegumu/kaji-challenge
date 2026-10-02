@@ -1,3 +1,4 @@
+import { todoItemsQueryOptions } from "../../../shared/query/todoQueries";
 import {
   queryOptions,
   useMutation,
@@ -8,7 +9,6 @@ import {
 
 import {
   getTaskOverview,
-  listTodoItems,
   postTaskCompletion,
   type TaskCompletionActor,
   type TaskCompletionRequest,
@@ -22,7 +22,7 @@ import { queryKeys } from "../../../shared/query/queryKeys";
 import { dateStringInJST } from "../../../shared/utils/dates";
 import { formatError } from "../../../shared/utils/errors";
 import { previousMonthKey } from "../utils/month";
-import { usePendingTodoRemovals } from "../../todos";
+import { useOptimisticTodoItems } from "../../todos";
 
 type CompletionAction = TaskCompletionRequest["action"];
 type CompletionIntent = { taskId: string; action?: "toggle" | "increment" | "decrement" };
@@ -124,17 +124,13 @@ export const homeQueryOptions = queryOptions({
   queryFn: async ({ signal }) => (await getTaskOverview({ signal })).data,
 });
 
-export const homeTodoItemsQueryOptions = queryOptions({
-  queryKey: queryKeys.todoItems,
-  queryFn: async ({ signal }) => (await listTodoItems({ signal })).data.items ?? [],
-});
+export const homeTodoItemsQueryOptions = todoItemsQueryOptions;
 
 export const previousMonthPenaltySummaryQueryOptions = () =>
   monthlyPenaltySummaryQueryOptions(previousMonthKey(dateStringInJST().slice(0, 7)));
 
 export function useHomePageQueries() {
   const pendingCompletions = usePendingCompletions();
-  const pendingTodoIds = usePendingTodoRemovals();
   const previousMonth = previousMonthKey(dateStringInJST().slice(0, 7));
   const [homeQuery, todoItemsQuery, previousMonthPenaltySummaryQuery, penaltyRulesQuery] =
     useSuspenseQueries({
@@ -146,11 +142,13 @@ export function useHomePageQueries() {
       ],
     });
 
+  const todoItems = useOptimisticTodoItems(todoItemsQuery.data);
+
   return {
     homeQuery: { ...homeQuery, data: pendingCompletions.reduce(applyChange, homeQuery.data) },
     todoItemsQuery: {
       ...todoItemsQuery,
-      data: todoItemsQuery.data.filter((item) => !pendingTodoIds.includes(item.id)),
+      data: todoItems,
     },
     previousMonth,
     previousMonthPenaltySummaryQuery,
