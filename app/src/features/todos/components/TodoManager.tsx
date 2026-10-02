@@ -17,7 +17,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Check, GripVertical, Pencil, CircleCheck, X } from "lucide-react";
-import type { ChangeEvent, ReactNode } from "react";
+import type { ChangeEvent, KeyboardEventHandler, ReactNode, Ref } from "react";
 import { useId, useState } from "react";
 
 import type { TodoItem, UpdateTodoItemRequest } from "../../../lib/api/operations";
@@ -287,10 +287,14 @@ export function TodoItemForm({
   categoriesQuery,
   form,
   onFormChange,
+  nameInputRef,
+  onInputKeyDown,
 }: {
   categoriesQuery: TodoCategoriesQuery;
   form: TodoItemFormState;
   onFormChange: (updater: (prev: TodoItemFormState) => TodoItemFormState) => void;
+  nameInputRef?: Ref<HTMLInputElement>;
+  onInputKeyDown?: KeyboardEventHandler<HTMLInputElement>;
 }) {
   const formId = useId();
   const handleChange = (key: keyof TodoItemFormState) => (event: ChangeEvent<HTMLInputElement>) => {
@@ -304,9 +308,11 @@ export function TodoItemForm({
       </label>
       <input
         id={`${formId}-name`}
+        ref={nameInputRef}
         className="h-10 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
         value={form.name}
         onChange={handleChange("name")}
+        onKeyDown={onInputKeyDown}
         placeholder="例: 牛乳"
       />
       <label className="text-xs text-stone-700 sm:text-sm" htmlFor={`${formId}-notes`}>
@@ -317,6 +323,7 @@ export function TodoItemForm({
         className="h-10 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
         value={form.notes}
         onChange={handleChange("notes")}
+        onKeyDown={onInputKeyDown}
         placeholder="例: 低脂肪乳"
       />
       <TodoCategoryInput
