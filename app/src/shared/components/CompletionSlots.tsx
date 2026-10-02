@@ -19,6 +19,7 @@ type Props = {
   onSlotClick?: (slot: TaskCompletionSlot) => void;
   getSlotActionLabel?: (slot: TaskCompletionSlot) => string;
   showEmptyCheck?: boolean;
+  disabled?: boolean;
 };
 
 export function CompletionSlots({
@@ -28,6 +29,7 @@ export function CompletionSlots({
   onSlotClick,
   getSlotActionLabel,
   showEmptyCheck = false,
+  disabled = false,
 }: Props) {
   if (slots.length === 0) {
     return null;
@@ -85,9 +87,12 @@ export function CompletionSlots({
             type="button"
             title={actionLabel == null ? title : `${title}: ${actionLabel}`}
             aria-label={actionLabel == null ? title : `${title}: ${actionLabel}`}
-            className={`${slotClassName} cursor-pointer transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--color-matcha-500)]`}
+            aria-disabled={disabled}
+            className={`${slotClassName} cursor-pointer transition-opacity hover:opacity-80 aria-disabled:cursor-wait aria-disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--color-matcha-500)]`}
             style={slotStyle}
-            onClick={() => onSlotClick(slot)}
+            onClick={() => {
+              if (!disabled) onSlotClick(slot);
+            }}
           >
             {slotContent}
           </button>
