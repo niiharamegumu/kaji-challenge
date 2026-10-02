@@ -581,17 +581,50 @@ test("ToDo categories persist, filter and detach without deleting items", async 
   await expect(page.getByRole("button", { name: `${category} を削除` })).toBeVisible();
   await page.goto("/todos");
   await expect(page).toHaveURL(/\/todos$/);
+  await page.getByRole("button", { name: "追加", exact: true }).click();
+  const createDialog = page.getByRole("dialog", { name: "ToDoを追加" });
+  const nameInput = createDialog.getByLabel("名前", { exact: true });
+  const notesInput = createDialog.getByLabel("メモ", { exact: true });
+  await expect(nameInput).toBeFocused();
   for (const [name, value] of [
     ["分類テストA", category],
     ["分類テスト未分類", ""],
     ["分類テストB", category],
   ]) {
-    await page.getByRole("button", { name: "追加", exact: true }).click();
-    await page.getByLabel("名前", { exact: true }).fill(name);
+    await nameInput.fill(name);
+    if (name === "分類テストA") await notesInput.fill("最初のToDoだけのメモ");
     await page.getByLabel("カテゴリー（任意）").selectOption({ label: value || "未分類" });
-    await page.getByRole("button", { name: "追加する", exact: true }).click();
+    const selectedCategory = await page.getByLabel("カテゴリー（任意）").inputValue();
+    const saved = page.waitForResponse(
+      (response) =>
+        response.url().includes("/_serverFn/") &&
+        (response.request().postData()?.includes("postTodoItem") ?? false),
+    );
+    if (name === "分類テストA") {
+      await createDialog.getByRole("button", { name: "続けて追加", exact: true }).click();
+    } else if (name === "分類テスト未分類") {
+      await nameInput.press("Enter");
+    } else {
+      await createDialog.getByRole("button", { name: "追加する", exact: true }).click();
+    }
+    expect((await saved).ok()).toBe(true);
     await expect(page.getByText(name, { exact: true })).toBeVisible();
+    if (name !== "分類テストB") {
+      await expect(createDialog).toBeVisible();
+      await expect(nameInput).toHaveValue("");
+      await expect(nameInput).toBeFocused();
+      await expect(notesInput).toHaveValue("");
+      await expect(page.getByLabel("カテゴリー（任意）")).toHaveValue(selectedCategory);
+      await expect(createDialog.getByRole("status")).toHaveText(`「${name}」を追加しました`);
+      expect(
+        await createDialog.evaluate((element) => element.scrollWidth <= element.clientWidth),
+      ).toBe(true);
+      if (name === "分類テストA") {
+        await page.screenshot({ path: testInfo.outputPath("todos-continuous-add.png") });
+      }
+    }
   }
+  await expect(createDialog).toHaveCount(0);
   const filter = page.getByRole("group", { name: "カテゴリーで絞り込み" });
   const verifyCategorySwipes = async (checkPageScroll = false) => {
     const cdp = await context.newCDPSession(page);
