@@ -21,6 +21,7 @@ import { queryKeys } from "../../../shared/query/queryKeys";
 import { formatError } from "../../../shared/utils/errors";
 
 type StatusSetter = (message: string) => void;
+export const createTodoItemMutationKey = ["todo-create"];
 const removeMutationKey = ["todo-remove"];
 
 export function usePendingTodoRemovals() {
@@ -53,6 +54,7 @@ export function useTodoItemMutations(setStatus: StatusSetter) {
   };
 
   const createItem = useMutation({
+    mutationKey: createTodoItemMutationKey,
     mutationFn: async (payload: CreateTodoItemRequest) => postTodoItem(payload),
     onSuccess: async (response) => {
       setStatus("ToDoを追加しました");
@@ -93,10 +95,10 @@ export function useTodoItemMutations(setStatus: StatusSetter) {
       queryClient.setQueryData<TodoItem[]>(queryKeys.todoItems, (items) =>
         items?.filter((item) => item.id !== itemId),
       );
-      setStatus("ToDoを削除しました");
+      setStatus("ToDoを完了しました");
     },
     onError: (error) => {
-      setStatus(`ToDoの削除に失敗しました: ${formatError(error)}`);
+      setStatus(`ToDoの完了に失敗しました: ${formatError(error)}`);
     },
     onSettled: () => {
       if (queryClient.isMutating({ mutationKey: removeMutationKey }) === 1) void invalidate();
