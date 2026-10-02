@@ -1,8 +1,11 @@
-import { act, cleanup, render, screen, within } from "@testing-library/react";
+import { act, cleanup, render as renderUi, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { TodoManager } from "./TodoManager";
+import { DelayedActionProvider } from "../../../shared/state/DelayedActionProvider";
+
+const render = (ui: ReactNode) => renderUi(ui, { wrapper: DelayedActionProvider });
 
 type MockDragEndEvent = {
   active: { id: string };
