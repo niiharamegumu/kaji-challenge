@@ -1,3 +1,4 @@
+import { prefetchRouteData } from "../route-preload";
 import { ConnectedMembers } from "../../features/shell/components/ConnectedMembers";
 import { useTeamRealtime } from "../../features/shell/hooks/useTeamRealtime";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -202,33 +203,38 @@ export function RootLayout() {
     });
   }, [isAuthenticated, isInitialBootPending, location.pathname, prefetchHomeDataOnce]);
 
-  const handleRouteIntent = useCallback((path: string) => {
-    switch (path) {
-      case "/tasks":
-        void preloadTasksPageChunk();
-        break;
-      case "/summary":
-        void preloadSummaryPageChunk();
-        break;
-      case "/penalties":
-        void preloadPenaltiesPageChunk();
-        break;
-      case "/settings":
-        void preloadSettingsPageChunk();
-        break;
-      case "/calendar":
-        void preloadReminderCalendarPageChunk();
-        break;
-      case "/todo-categories":
-        void preloadTodoCategoriesPageChunk();
-        break;
-      case "/todos":
-        void preloadTodoPageChunk();
-        break;
-      default:
-        break;
-    }
-  }, []);
+  const handleRouteIntent = useCallback(
+    (path: string) => {
+      if (!isAuthenticated) return;
+      void prefetchRouteData(queryClient, path);
+      switch (path) {
+        case "/tasks":
+          void preloadTasksPageChunk();
+          break;
+        case "/summary":
+          void preloadSummaryPageChunk();
+          break;
+        case "/penalties":
+          void preloadPenaltiesPageChunk();
+          break;
+        case "/settings":
+          void preloadSettingsPageChunk();
+          break;
+        case "/calendar":
+          void preloadReminderCalendarPageChunk();
+          break;
+        case "/todo-categories":
+          void preloadTodoCategoriesPageChunk();
+          break;
+        case "/todos":
+          void preloadTodoPageChunk();
+          break;
+        default:
+          break;
+      }
+    },
+    [isAuthenticated, queryClient],
+  );
 
   if (isAuthChecking) {
     return <BootScreen />;
