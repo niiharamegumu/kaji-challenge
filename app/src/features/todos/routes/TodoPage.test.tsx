@@ -8,11 +8,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { resetApiMocks, resolvedData } from "../../../test/apiMock";
 import { withExpectedConsoleError } from "../../../test/console";
-import { renderWithProviders, resetTestQueryClient } from "../../../test/render";
+import {
+  renderWithProviders as renderWithAppProviders,
+  resetTestQueryClient,
+} from "../../../test/render";
+import { DelayedActionProvider } from "../../../shared/state/DelayedActionProvider";
 import { appQueryClient } from "../../../shared/query/queryClient";
 import { queryKeys } from "../../../shared/query/queryKeys";
 import { TodoPage } from "./TodoPage";
 import { TodoCategoriesPage } from "./TodoCategoriesPage";
+
+const renderWithProviders: typeof renderWithAppProviders = (ui, options) => {
+  const view = renderWithAppProviders(<DelayedActionProvider>{ui}</DelayedActionProvider>, options);
+  return {
+    ...view,
+    rerender: (next) => view.rerender(<DelayedActionProvider>{next}</DelayedActionProvider>),
+  };
+};
 
 const mockListTodoItems = vi.fn();
 const mockListTodoCategories = vi.fn();
@@ -88,6 +100,7 @@ describe("ToDo pages", () => {
 
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
   });
 
   const renderPage = () =>
@@ -261,6 +274,33 @@ describe("ToDo pages", () => {
       "卵",
     ]);
     expect(screen.getAllByRole("listitem")).toHaveLength(2);
+  });
+
+  it("sends one create request when Enter and a button arrive before the saving render", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole("button", { name: "追加" }));
+    const name = screen.getByLabelText("名前");
+    await user.type(name, "牛乳");
+    let resolve!: (response: unknown) => void;
+    mockPostTodoItem.mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          resolve = done;
+        }),
+    );
+    vi.useFakeTimers();
+    await act(async () => {
+      fireEvent.keyDown(name, { key: "Enter" });
+      fireEvent.click(screen.getByRole("button", { name: "追加する" }));
+    });
+    expect(mockPostTodoItem).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      resolve(resolvedData(fixture("created", "牛乳", null)));
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(screen.getByRole("dialog", { name: "ToDoを追加" })).toBeVisible();
+    expect(name).toHaveValue("");
   });
 
   it.each(["名前", "メモ"])("ignores IME confirmation and held Enter in %s", async (label) => {
@@ -444,7 +484,7 @@ describe("ToDo pages", () => {
     });
   });
 
-  it("confirms before deleting a completed item", async () => {
+  it("counts down three seconds in the row and allows undo without a bottom banner", async () => {
     mockListTodoItems.mockResolvedValue({
       data: {
         items: [
@@ -460,17 +500,56 @@ describe("ToDo pages", () => {
         ],
       },
     });
-    const user = userEvent.setup();
     renderPage();
+    const complete = await screen.findByRole("button", { name: "完了にする" });
+    const row = complete.closest("li")!;
+    vi.useFakeTimers();
+    fireEvent.click(within(row).getByRole("button", { name: "完了にする" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "ToDoの完了待ち" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /取り消す/ })).toHaveLength(1);
+    expect(within(row).getByText("完了待ち")).toBeVisible();
+    expect(within(row).getByRole("button", { name: "編集" })).toBeDisabled();
+    expect(within(row).getByRole("button", { name: "牛乳 をドラッグして並び替え" })).toBeDisabled();
+    const undo = within(row).getByRole("button", { name: "取り消す" });
+    expect(within(undo).getByRole("img", { name: "完了まで3秒" })).toBeVisible();
+    act(() => vi.advanceTimersByTime(1_000));
+    expect(within(undo).getByRole("img", { name: "完了まで2秒" })).toBeVisible();
+    act(() => vi.advanceTimersByTime(1_000));
+    expect(within(undo).getByRole("img", { name: "完了まで1秒" })).toBeVisible();
+    act(() => vi.advanceTimersByTime(999));
+    expect(mockDeleteTodoItem).not.toHaveBeenCalled();
+    fireEvent.click(undo);
+    expect(within(row).queryByRole("img", { name: /完了まで/ })).not.toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(3_000));
+    expect(mockDeleteTodoItem).not.toHaveBeenCalled();
+    expect(within(row).getByRole("button", { name: "編集" })).toBeEnabled();
+    mockListTodoItems.mockResolvedValue(resolvedData({ items: [] }));
+    fireEvent.click(within(row).getByRole("button", { name: "完了にする" }));
+    expect(within(row).getByRole("img", { name: "完了まで3秒" })).toBeVisible();
+    await act(async () => vi.advanceTimersByTimeAsync(3_000));
+    expect(mockDeleteTodoItem).toHaveBeenCalledExactlyOnceWith("item-1");
+    // Flush the query notification scheduled by the completed mutation.
+    await act(async () => vi.advanceTimersByTimeAsync(1));
+    vi.useRealTimers();
+    await waitFor(() =>
+      expect(screen.queryByText("牛乳", { exact: true })).not.toBeInTheDocument(),
+    );
+  });
 
-    await user.click(await screen.findByRole("button", { name: "完了にする" }));
-    expect(await screen.findByText("完了にしますか？")).toBeInTheDocument();
-
-    await user.click(screen.getAllByRole("button", { name: "完了にする" })[1]);
-
-    await waitFor(() => {
-      expect(mockDeleteTodoItem).toHaveBeenCalledWith("item-1");
-    });
+  it("restores a ToDo when completion fails after the undo window", async () => {
+    mockListTodoItems.mockResolvedValue(resolvedData({ items: [fixture("milk", "牛乳", null)] }));
+    mockDeleteTodoItem.mockRejectedValueOnce(new Error("offline"));
+    renderPage();
+    const button = await screen.findByRole("button", { name: "完了にする" });
+    vi.useFakeTimers();
+    fireEvent.click(button);
+    await act(async () => vi.advanceTimersByTimeAsync(3_000));
+    vi.useRealTimers();
+    expect(mockDeleteTodoItem).toHaveBeenCalledExactlyOnceWith("milk");
+    expect(await screen.findByText("牛乳", { exact: true })).toBeVisible();
+    expect(screen.getByRole("button", { name: "完了にする" })).toBeEnabled();
+    expect(screen.queryByRole("img", { name: /完了まで/ })).not.toBeInTheDocument();
   });
 
   it("prevents duplicate inline saves and keeps the draft when saving fails", async () => {
