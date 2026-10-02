@@ -127,7 +127,7 @@ describe("transport transaction with D1", () => {
     expect(result).toMatchObject({ ok: true, data: { title: "Transport task" } });
     expect(result).not.toHaveProperty("state");
     expect(await connection.repository.ListTasksByTeamID(teamId)).toHaveLength(1);
-    expect(mocks.notify).toHaveBeenCalledWith(expect.anything(), [teamId]);
+    expect(mocks.notify).toHaveBeenCalledWith(expect.anything(), [teamId], ["tasks"]);
   });
   it("returns a safe error on malformed output without claiming that committed data was rolled back", async () => {
     const parse = vi.spyOn(responseSchemas.postTask, "parse").mockImplementationOnce(() => {
