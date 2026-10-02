@@ -2,7 +2,7 @@ export { TodoItemsSection } from "./components/TodoManager";
 export {
   useTodoItemMutations,
   useTodoItemsQuery,
-  usePendingTodoRemovals,
+  useOptimisticTodoItems,
 } from "./hooks/useTodoList";
 
 export { TodoCategoryFilter } from "./components/TodoCategoryFilter";
