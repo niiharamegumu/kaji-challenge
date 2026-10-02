@@ -1,5 +1,10 @@
-import { useMutation, useQueryClient, useSuspenseQueries } from "@tanstack/react-query";
-import { Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Circle } from "lucide-react";
+import {
+  useMutation,
+  useMutationState,
+  useQueryClient,
+  useSuspenseQueries,
+} from "@tanstack/react-query";
+import { CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Circle } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useSearchParams } from "../../../shared/router/navigation";
 import { CompletionSlots } from "../../../shared/components/CompletionSlots";
@@ -21,6 +26,13 @@ import {
   incrementPastWeeklyTask as incrementPastWeeklyTaskRequest,
 } from "../api/summaryApi";
 
+import {
+  PastTaskCompletionControl,
+  pastTaskActionId,
+  type PastTaskUpdate,
+} from "../components/PastTaskCompletionControl";
+
+const pastTaskMutationKey = ["summary-task-completion"];
 const monthPattern = /^\d{4}-\d{2}$/;
 
 const initialMonth = () => dateStringInJST().slice(0, 7);
@@ -75,13 +87,6 @@ export function SummaryPage() {
   const monthPickerRef = useRef<HTMLDivElement>(null);
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
   const [status, setStatus] = useState("");
-  const [confirmTarget, setConfirmTarget] = useState<{
-    taskId: string;
-    taskTitle: string;
-    date: string;
-    type: "daily" | "weekly";
-    action: "complete" | "increment" | "decrement";
-  } | null>(null);
   const monthFromUrl = searchParams.get("month");
   const month =
     monthFromUrl != null && monthPattern.test(monthFromUrl) ? monthFromUrl : initialMonth();
@@ -127,18 +132,15 @@ export function SummaryPage() {
     },
   });
 
+  const pendingUpdates = useMutationState({
+    filters: { mutationKey: pastTaskMutationKey, status: "pending" },
+    select: (mutation) => mutation.state.variables as PastTaskUpdate,
+  });
+  const savingActionIds = new Set(pendingUpdates.map(pastTaskActionId));
+
   const updatePastTaskCompletion = useMutation({
-    mutationFn: async ({
-      taskId,
-      targetDate,
-      type,
-      action,
-    }: {
-      taskId: string;
-      targetDate: string;
-      type: "daily" | "weekly";
-      action: "complete" | "increment" | "decrement";
-    }) =>
+    mutationKey: pastTaskMutationKey,
+    mutationFn: async ({ taskId, targetDate, type, action }: PastTaskUpdate) =>
       type === "daily"
         ? action === "complete"
           ? completePastDailyTaskRequest(taskId, targetDate)
@@ -148,7 +150,6 @@ export function SummaryPage() {
           : decrementPastWeeklyTaskRequest(taskId, targetDate),
     onSuccess: async () => {
       setStatus("過去分のタスクを更新しました");
-      setConfirmTarget(null);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.monthlySummary }),
         queryClient.invalidateQueries({ queryKey: queryKeys.home }),
@@ -173,6 +174,17 @@ export function SummaryPage() {
         { replace: true },
       );
     });
+  };
+
+  const handlePastTaskUpdate = (target: PastTaskUpdate) => {
+    // Read the cache at the event boundary as the pending UI update is asynchronous.
+    const isSaving =
+      queryClient.isMutating({
+        mutationKey: pastTaskMutationKey,
+        predicate: (mutation) =>
+          pastTaskActionId(mutation.state.variables as PastTaskUpdate) === pastTaskActionId(target),
+      }) > 0;
+    if (!isSaving) updatePastTaskCompletion.mutate(target);
   };
 
   const [currentYear, currentMonth] = month.split("-").map(Number);
@@ -342,6 +354,11 @@ export function SummaryPage() {
 
         <div className="mt-4 border-t border-stone-200 pt-3">
           <h3 className="px-2 text-base font-semibold md:px-0">日次サマリー</h3>
+          {summaryData.isClosed ? (
+            <p className="mt-2 px-2 text-xs text-stone-600 md:px-0">
+              締め済み月のタスクを変更すると、操作対象外を含め、現在設定で月全体の合計減点と発動ペナルティを再計算します。
+            </p>
+          ) : null}
 
           {monthlyTaskStatusGroups.length === 0 ? (
             <p className="mt-3 px-2 text-sm text-stone-500 md:px-0">
@@ -437,50 +454,18 @@ export function SummaryPage() {
                                   ) : null}
                                 </div>
                                 <div className="flex shrink-0 items-center gap-1.5">
-                                  {canAdjustPastDaily ? (
-                                    <button
-                                      type="button"
-                                      aria-label={
-                                        item.completed
-                                          ? "過去日タスクを未完了に戻す"
-                                          : "過去日タスクを完了にする"
-                                      }
-                                      title={item.completed ? "未完了に戻す" : "完了にする"}
-                                      className={`inline-flex items-center justify-center rounded-full transition-opacity hover:opacity-80 ${item.completed ? "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-500" : "h-5 w-5 border border-[color:var(--color-matcha-400)] bg-white text-[color:var(--color-matcha-700)] hover:bg-[color:var(--color-matcha-50)]"}`}
-                                      onClick={() =>
-                                        setConfirmTarget({
+                                  {canAdjustPastDaily || canAdjustPastWeekly ? (
+                                    <PastTaskCompletionControl
+                                      item={item}
+                                      targetDate={group.date}
+                                      isSaving={savingActionIds.has(
+                                        pastTaskActionId({
                                           taskId: item.taskId,
-                                          taskTitle: item.title,
-                                          date: group.date,
-                                          type: "daily",
-                                          action: item.completed ? "decrement" : "complete",
-                                        })
-                                      }
-                                    >
-                                      {item.completed ? (
-                                        <CompletionSlots compact slots={item.completionSlots} />
-                                      ) : (
-                                        <Check size={12} aria-hidden="true" />
+                                          targetDate: group.date,
+                                          type: item.type,
+                                        }),
                                       )}
-                                    </button>
-                                  ) : canAdjustPastWeekly ? (
-                                    <CompletionSlots
-                                      compact
-                                      className="justify-end"
-                                      slots={item.completionSlots}
-                                      showEmptyCheck
-                                      getSlotActionLabel={(slot) =>
-                                        slot.actor == null ? "1回追加" : "1回取り消す"
-                                      }
-                                      onSlotClick={(slot) =>
-                                        setConfirmTarget({
-                                          taskId: item.taskId,
-                                          taskTitle: item.title,
-                                          date: group.date,
-                                          type: "weekly",
-                                          action: slot.actor == null ? "increment" : "decrement",
-                                        })
-                                      }
+                                      onUpdate={handlePastTaskUpdate}
                                     />
                                   ) : (
                                     <CompletionSlots
@@ -503,53 +488,6 @@ export function SummaryPage() {
           )}
         </div>
       </article>
-      <ConfirmModal
-        isOpen={confirmTarget != null}
-        tone={summaryData.isClosed ? "warning" : "default"}
-        title={
-          confirmTarget?.action === "increment"
-            ? "過去週のタスクに1回分を追加しますか？"
-            : confirmTarget?.action === "decrement"
-              ? confirmTarget.type === "weekly"
-                ? "過去週のタスクを1回分取り消しますか？"
-                : "過去日のタスクを未完了に戻しますか？"
-              : "過去日のタスクを完了に変更しますか？"
-        }
-        message={
-          confirmTarget == null
-            ? ""
-            : confirmTarget.action === "increment"
-              ? `${confirmTarget.date} の週の「${confirmTarget.taskTitle}」に1回分を追加します。終了済みの週を操作できます。${summaryData.isClosed ? " 操作対象外を含め、現在設定で月全体の合計減点と発動ペナルティを再計算します。" : ""}`
-              : confirmTarget.action === "decrement"
-                ? confirmTarget.type === "weekly"
-                  ? `${confirmTarget.date} の週の「${confirmTarget.taskTitle}」から1回分を取り消します。終了済みの週を操作できます。${summaryData.isClosed ? " 操作対象外を含め、現在設定で月全体の合計減点と発動ペナルティを再計算します。" : ""}`
-                  : `${confirmTarget.date} の「${confirmTarget.taskTitle}」を未完了に戻します。過去日を操作できます。${summaryData.isClosed ? " 操作対象外を含め、現在設定で月全体の合計減点と発動ペナルティを再計算します。" : ""}`
-                : `${confirmTarget.date} の「${confirmTarget.taskTitle}」を完了済みに変更します。過去日を操作できます。${summaryData.isClosed ? " 操作対象外を含め、現在設定で月全体の合計減点と発動ペナルティを再計算します。" : ""}`
-        }
-        confirmLabel={
-          summaryData.isClosed
-            ? "再計算して変更"
-            : confirmTarget?.action === "increment"
-              ? "1回追加"
-              : confirmTarget?.action === "decrement"
-                ? confirmTarget.type === "weekly"
-                  ? "1回減らす"
-                  : "未完了に戻す"
-                : "完了にする"
-        }
-        onCancel={() => setConfirmTarget(null)}
-        onConfirm={() => {
-          if (confirmTarget == null || updatePastTaskCompletion.isPending) {
-            return;
-          }
-          void updatePastTaskCompletion.mutateAsync({
-            taskId: confirmTarget.taskId,
-            targetDate: confirmTarget.date,
-            type: confirmTarget.type,
-            action: confirmTarget.action,
-          });
-        }}
-      />
       <ConfirmModal
         isOpen={closeRequested}
         tone="warning"

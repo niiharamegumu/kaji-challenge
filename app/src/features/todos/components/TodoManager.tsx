@@ -17,11 +17,10 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Check, GripVertical, Pencil, CircleCheck, X } from "lucide-react";
-import type { ChangeEvent, ReactNode } from "react";
+import type { ChangeEvent, KeyboardEventHandler, ReactNode, Ref } from "react";
 import { useId, useState } from "react";
 
 import type { TodoItem, UpdateTodoItemRequest } from "../../../lib/api/operations";
-import { ConfirmModal } from "../../../shared/components/ConfirmModal";
 import { PAGE_SECTION_CHROMELESS_CLASS_NAME } from "../../../shared/styles/pageSection";
 import {
   restrictToVerticalAxis,
@@ -31,6 +30,8 @@ import {
 
 import { TodoCategoryInput } from "./TodoCategoryInput";
 import { TodoCategorySwipeArea, type TodoCategorySwipeDirection } from "./TodoCategorySwipeArea";
+import { useDelayedActions } from "../../../shared/state/DelayedActionProvider";
+import { ActionCountdown } from "../../../shared/components/ActionCountdown";
 
 import type { TodoCategoriesQuery } from "../hooks/useTodoCategories";
 import {
@@ -71,11 +72,6 @@ type TodoItemsSectionProps = {
   listClassName?: string;
   emptyClassName?: string;
   emptyMessage?: string;
-};
-
-type PendingCompleteItem = {
-  id: string;
-  name: string;
 };
 
 const MOBILE_SORT_DELAY_MS = 220;
@@ -149,6 +145,7 @@ function SortableTodoItem({
   isEditing,
   isSaving,
   isReordering,
+  completionDeadline,
   editState,
   onStartEdit,
   onChangeEditState,
@@ -161,6 +158,7 @@ function SortableTodoItem({
   isEditing: boolean;
   isSaving: boolean;
   isReordering: boolean;
+  completionDeadline?: number;
   editState: TodoItemFormState;
   onStartEdit: (item: TodoItem) => void;
   onChangeEditState: (updater: (prev: TodoItemFormState) => TodoItemFormState) => void;
@@ -168,9 +166,10 @@ function SortableTodoItem({
   onSaveEdit: (itemId: string) => void;
   onComplete: () => void;
 }) {
+  const isCompleting = completionDeadline !== undefined;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id,
-    disabled: isEditing || isReordering,
+    disabled: isEditing || isReordering || isCompleting,
     animateLayoutChanges: smoothSortableLayoutChanges,
     transition: smoothSortableTransition,
   });
@@ -250,6 +249,7 @@ function SortableTodoItem({
                 type="button"
                 className="flex h-7 cursor-pointer items-center gap-1 rounded-md border border-stone-300 bg-white px-2 py-1 text-[11px] text-stone-700 transition-colors hover:bg-stone-100 sm:h-8 sm:text-xs"
                 onClick={() => onStartEdit(item)}
+                disabled={isCompleting}
                 aria-label="編集"
                 onPointerDown={(event) => event.stopPropagation()}
               >
@@ -259,11 +259,17 @@ function SortableTodoItem({
                 type="button"
                 className="flex h-7 cursor-pointer items-center gap-1 rounded-md border border-[color:var(--color-matcha-300)] bg-[color:var(--color-matcha-50)] px-2 py-1 text-[11px] text-[color:var(--color-matcha-700)] transition-colors hover:bg-[color:var(--color-matcha-100)] sm:h-8 sm:text-xs"
                 onClick={onComplete}
+                aria-label={isCompleting ? "取り消す" : "完了にする"}
                 onPointerDown={(event) => event.stopPropagation()}
               >
-                <CircleCheck size={12} aria-hidden="true" />
-                <span>完了にする</span>
+                {completionDeadline !== undefined ? (
+                  <ActionCountdown key={completionDeadline} deadline={completionDeadline} />
+                ) : (
+                  <CircleCheck size={12} aria-hidden="true" />
+                )}
+                <span>{isCompleting ? "取り消す" : "完了にする"}</span>
               </button>
+              {isCompleting ? <span className="text-xs text-stone-600">完了待ち</span> : null}
             </div>
           </div>
         </div>
@@ -274,7 +280,7 @@ function SortableTodoItem({
           className="absolute top-1/2 right-2 flex h-8 w-8 -translate-y-1/2 cursor-grab touch-none select-none items-center justify-center rounded-md text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700 active:cursor-grabbing focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-400 sm:right-3"
           onPointerDown={(event) => event.stopPropagation()}
           {...dragProps}
-          disabled={isReordering}
+          disabled={isReordering || isCompleting}
         >
           <GripVertical size={16} aria-hidden="true" />
         </button>
@@ -287,10 +293,14 @@ export function TodoItemForm({
   categoriesQuery,
   form,
   onFormChange,
+  nameInputRef,
+  onInputKeyDown,
 }: {
   categoriesQuery: TodoCategoriesQuery;
   form: TodoItemFormState;
   onFormChange: (updater: (prev: TodoItemFormState) => TodoItemFormState) => void;
+  nameInputRef?: Ref<HTMLInputElement>;
+  onInputKeyDown?: KeyboardEventHandler<HTMLInputElement>;
 }) {
   const formId = useId();
   const handleChange = (key: keyof TodoItemFormState) => (event: ChangeEvent<HTMLInputElement>) => {
@@ -304,9 +314,11 @@ export function TodoItemForm({
       </label>
       <input
         id={`${formId}-name`}
+        ref={nameInputRef}
         className="h-10 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
         value={form.name}
         onChange={handleChange("name")}
+        onKeyDown={onInputKeyDown}
         placeholder="例: 牛乳"
       />
       <label className="text-xs text-stone-700 sm:text-sm" htmlFor={`${formId}-notes`}>
@@ -317,6 +329,7 @@ export function TodoItemForm({
         className="h-10 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
         value={form.notes}
         onChange={handleChange("notes")}
+        onKeyDown={onInputKeyDown}
         placeholder="例: 低脂肪乳"
       />
       <TodoCategoryInput
@@ -349,7 +362,8 @@ export function TodoItemsSection({
 }: TodoItemsSectionProps) {
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editState, setEditState] = useTodoItemFormState(categoriesQuery.data);
-  const [pendingCompleteItem, setPendingCompleteItem] = useState<PendingCompleteItem | null>(null);
+  const { pendingActions, schedule, undo } = useDelayedActions();
+  const completionDeadlines = new Map(pendingActions.map((item) => [item.id, item.deadline]));
   const [optimisticItemIds, setOptimisticItemIds] = useState<string[] | null>(null);
 
   const itemsById = new Map(items.map((item) => [item.id, item]));
@@ -475,6 +489,7 @@ export function TodoItemsSection({
                       isEditing={editingItemId === item.id}
                       isSaving={isUpdating}
                       isReordering={isReordering}
+                      completionDeadline={completionDeadlines.get(`todo:${item.id}`)}
                       editState={editState}
                       onStartEdit={startEdit}
                       onChangeEditState={setEditState}
@@ -482,7 +497,11 @@ export function TodoItemsSection({
                       onSaveEdit={(itemId) => {
                         void saveEdit(itemId);
                       }}
-                      onComplete={() => setPendingCompleteItem({ id: item.id, name: item.name })}
+                      onComplete={() => {
+                        const actionId = `todo:${item.id}`;
+                        if (completionDeadlines.has(actionId)) undo(actionId);
+                        else schedule(actionId, () => onDelete(item.id));
+                      }}
                     />
                   ))}
                 </ul>
@@ -491,23 +510,6 @@ export function TodoItemsSection({
           )}
         </TodoCategorySwipeArea>
       </article>
-
-      <ConfirmModal
-        isOpen={pendingCompleteItem != null}
-        title="完了にしますか？"
-        message={
-          pendingCompleteItem == null ? "" : `「${pendingCompleteItem.name}」をToDoから削除します。`
-        }
-        confirmLabel="完了にする"
-        onCancel={() => setPendingCompleteItem(null)}
-        onConfirm={() => {
-          if (pendingCompleteItem == null) {
-            return;
-          }
-          onDelete(pendingCompleteItem.id);
-          setPendingCompleteItem(null);
-        }}
-      />
     </>
   );
 }

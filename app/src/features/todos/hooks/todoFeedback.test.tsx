@@ -95,6 +95,7 @@ it("hides completed items before the response and restores only the failed item"
   await act(async () => {
     resolveB({ data: {} });
   });
+  expect(status).toHaveBeenCalledWith("ToDoを完了しました");
   await act(async () => {
     rejectA(new Error("offline"));
   });

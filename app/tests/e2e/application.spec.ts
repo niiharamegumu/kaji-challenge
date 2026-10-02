@@ -9,7 +9,8 @@ const userId = crypto.randomUUID(),
 const peerToken = crypto.randomUUID(),
   outsiderToken = crypto.randomUUID(),
   categoryOrderToken = crypto.randomUUID(),
-  swipeAreaToken = crypto.randomUUID();
+  swipeAreaToken = crypto.randomUUID(),
+  summaryToken = crypto.randomUUID();
 test.beforeAll(async () => {
   const path = process.env.KAJI_D1_TEST_PATH;
   if (!path) throw new Error("Run browser tests via bun run test:local for isolated D1 storage");
@@ -31,12 +32,21 @@ test.beforeAll(async () => {
       ["別チーム", outsiderToken],
       ["カテゴリー順序", categoryOrderToken],
       ["スワイプ領域", swipeAreaToken],
+      ["サマリー検証", summaryToken],
     ]) {
       const id = crypto.randomUUID();
       await connection.query(
         sql`INSERT INTO auth_user(id,name,email) VALUES (${id},${name},${id + "@example.com"})`,
       );
       await provisionUser(connection.repository, id, new Date());
+      if (accessToken === summaryToken) {
+        const summaryTeam = (await connection.repository.ListMembershipsByUserID(id))[0].TeamID;
+        for (const type of ["daily", "weekly"]) {
+          await connection.query(sql`INSERT INTO tasks
+            (id,team_id,title,type,penalty_points,required_completions_per_week,sort_key,created_at,updated_at)
+            VALUES (${crypto.randomUUID()},${summaryTeam},${type === "daily" ? "サマリー検証日間" : "サマリー検証週間"},${type},1,${type === "daily" ? 1 : 3},100,'2020-05-01T00:00:00.000Z','2020-05-01T00:00:00.000Z')`);
+        }
+      }
       if (accessToken === peerToken)
         await connection.query(
           sql`UPDATE team_members SET team_id=${team},role='member' WHERE user_id=${id}`,
@@ -471,6 +481,82 @@ test("retains three weekly completions after stale refetch, summary navigation a
   await expectComplete();
 });
 
+test("summary immediately saves past daily and weekly changes without confirmation", async ({
+  page,
+  context,
+}, testInfo) => {
+  test.setTimeout(60_000);
+  await authenticate(context, summaryToken);
+  await page.goto("/summary?month=2020-05");
+  const day = page.getByRole("heading", { name: "5月4日（月）", exact: true }).locator("..");
+  const daily = day.getByRole("listitem").filter({ hasText: "サマリー検証日間" });
+  const weekly = day.getByRole("listitem").filter({ hasText: "サマリー検証週間" });
+  const completionRequests: string[] = [];
+  page.on("request", (request) => {
+    const body = request.postData();
+    if (request.url().includes("/_serverFn/") && body?.includes("postTaskCompletion"))
+      completionRequests.push(body);
+  });
+  const waitForSave = () =>
+    page.waitForResponse(
+      (response) =>
+        response.url().includes("/_serverFn/") &&
+        (response.request().postData()?.includes("postTaskCompletion") ?? false),
+    );
+  const savedDaily = waitForSave();
+  await daily.getByRole("button", { name: "過去日タスクを完了にする" }).click();
+  await page.getByRole("button", { name: "翌月へ移動" }).click();
+  expect((await savedDaily).ok()).toBe(true);
+  expect(completionRequests[0]).toContain("2020-05-04");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.getByRole("button", { name: "前月へ移動" }).click();
+  await expect(daily.getByRole("button", { name: "過去日タスクを未完了に戻す" })).toBeVisible();
+
+  for (const slot of [1, 2, 3]) {
+    const savedWeekly = waitForSave();
+    const add = weekly.getByRole("button", { name: `${slot}回目: 未完了: 1回追加` });
+    if (testInfo.project.name === "desktop") {
+      if (slot === 1) await add.focus();
+      else await page.keyboard.press("Tab");
+      await expect(add).toBeFocused();
+      await expect(add).toBeEnabled();
+      await page.keyboard.press("Enter");
+    } else {
+      await add.click();
+    }
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(weekly.getByRole("button", { name: "変更を取り消す" })).toHaveCount(0);
+    expect((await savedWeekly).ok()).toBe(true);
+    await expect(
+      weekly.getByRole("button", { name: `${slot}回目: サマリー検証: 1回取り消す` }),
+    ).toBeVisible();
+    if (testInfo.project.name === "desktop") {
+      await expect(
+        weekly.getByRole("button", { name: `${slot}回目: サマリー検証: 1回取り消す` }),
+      ).toBeFocused();
+    }
+  }
+  await page.reload();
+  await expect(daily.getByText("完了", { exact: true })).toBeVisible();
+  await expect(weekly.getByText("完了", { exact: true })).toBeVisible();
+
+  await day.screenshot({ path: testInfo.outputPath("summary-immediate-completion.png") });
+  const removedWeekly = waitForSave();
+  await weekly.getByRole("button", { name: "3回目: サマリー検証: 1回取り消す" }).click();
+  expect((await removedWeekly).ok()).toBe(true);
+  await expect(weekly.getByRole("button", { name: "3回目: 未完了: 1回追加" })).toBeVisible();
+  const removedDaily = waitForSave();
+  await daily.getByRole("button", { name: "過去日タスクを未完了に戻す" }).click();
+  expect((await removedDaily).ok()).toBe(true);
+  await page.reload();
+  await expect(daily.getByText("未完了", { exact: true })).toBeVisible();
+  await expect(weekly.getByText("未完了", { exact: true })).toBeVisible();
+  await expect(
+    weekly.getByRole("button", { name: "1回目: サマリー検証: 1回取り消す" }),
+  ).toBeVisible();
+  expect(completionRequests).toHaveLength(6);
+});
+
 test("real WebSockets synchronize two users, deduplicate tabs and isolate teams", async ({
   browser,
   page,
@@ -537,10 +623,9 @@ test("real WebSockets synchronize two users, deduplicate tabs and isolate teams"
     await peer.getByRole("button", { name: "保存", exact: true }).click();
     await expect(page.getByText("共有メモ", { exact: true })).toBeVisible();
     await item.getByRole("button", { name: "完了にする" }).click();
-    await peer
-      .getByRole("dialog", { name: "完了にしますか？" })
-      .getByRole("button", { name: "完了にする", exact: true })
-      .click();
+    await expect(peer.getByRole("dialog", { name: "完了にしますか？" })).toHaveCount(0);
+    await expect(item.getByRole("button", { name: "取り消す", exact: true })).toBeVisible();
+    await expect(page.getByText("リアルタイムのToDo", { exact: true })).toBeVisible();
     await expect(page.getByText("リアルタイムのToDo", { exact: true })).toHaveCount(0);
     expect(connections).toBe(1);
 
@@ -581,17 +666,50 @@ test("ToDo categories persist, filter and detach without deleting items", async 
   await expect(page.getByRole("button", { name: `${category} を削除` })).toBeVisible();
   await page.goto("/todos");
   await expect(page).toHaveURL(/\/todos$/);
+  await page.getByRole("button", { name: "追加", exact: true }).click();
+  const createDialog = page.getByRole("dialog", { name: "ToDoを追加" });
+  const nameInput = createDialog.getByLabel("名前", { exact: true });
+  const notesInput = createDialog.getByLabel("メモ", { exact: true });
+  await expect(nameInput).toBeFocused();
   for (const [name, value] of [
     ["分類テストA", category],
     ["分類テスト未分類", ""],
     ["分類テストB", category],
   ]) {
-    await page.getByRole("button", { name: "追加", exact: true }).click();
-    await page.getByLabel("名前", { exact: true }).fill(name);
+    await nameInput.fill(name);
+    if (name === "分類テストA") await notesInput.fill("最初のToDoだけのメモ");
     await page.getByLabel("カテゴリー（任意）").selectOption({ label: value || "未分類" });
-    await page.getByRole("button", { name: "追加する", exact: true }).click();
+    const selectedCategory = await page.getByLabel("カテゴリー（任意）").inputValue();
+    const saved = page.waitForResponse(
+      (response) =>
+        response.url().includes("/_serverFn/") &&
+        (response.request().postData()?.includes("postTodoItem") ?? false),
+    );
+    if (name === "分類テストA") {
+      await createDialog.getByRole("button", { name: "続けて追加", exact: true }).click();
+    } else if (name === "分類テスト未分類") {
+      await nameInput.press("Enter");
+    } else {
+      await createDialog.getByRole("button", { name: "追加する", exact: true }).click();
+    }
+    expect((await saved).ok()).toBe(true);
     await expect(page.getByText(name, { exact: true })).toBeVisible();
+    if (name !== "分類テストB") {
+      await expect(createDialog).toBeVisible();
+      await expect(nameInput).toHaveValue("");
+      await expect(nameInput).toBeFocused();
+      await expect(notesInput).toHaveValue("");
+      await expect(page.getByLabel("カテゴリー（任意）")).toHaveValue(selectedCategory);
+      await expect(createDialog.getByRole("status")).toHaveText(`「${name}」を追加しました`);
+      expect(
+        await createDialog.evaluate((element) => element.scrollWidth <= element.clientWidth),
+      ).toBe(true);
+      if (name === "分類テストA") {
+        await page.screenshot({ path: testInfo.outputPath("todos-continuous-add.png") });
+      }
+    }
   }
+  await expect(createDialog).toHaveCount(0);
   const filter = page.getByRole("group", { name: "カテゴリーで絞り込み" });
   const verifyCategorySwipes = async (checkPageScroll = false) => {
     const cdp = await context.newCDPSession(page);
@@ -812,14 +930,36 @@ test("ToDo categories persist, filter and detach without deleting items", async 
   await page.goto("/");
   const item = page.getByRole("listitem").filter({ hasText: "分類テストA" });
   await expect(item.getByText("未分類", { exact: true })).toBeVisible();
+  let completionRequests = 0;
+  page.on("request", (request) => {
+    if (request.url().includes("/_serverFn/") && request.postData()?.includes("deleteTodoItem")) {
+      completionRequests += 1;
+    }
+  });
+  await item.getByRole("button", { name: "完了にする", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "完了にしますか？" })).toHaveCount(0);
+  await expect(item.getByText("完了待ち", { exact: true })).toBeVisible();
+  await expect(item.getByRole("img", { name: "完了まで3秒" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "ToDoの完了待ち" })).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath("todo-completion-undo.png") });
+  await item.getByRole("button", { name: "取り消す", exact: true }).click();
+  // Wait beyond the undo window to prove the cancelled timer sends no request.
+  await page.waitForTimeout(3_100);
+  expect(completionRequests).toBe(0);
+  await expect(item.getByRole("button", { name: "完了にする", exact: true })).toBeEnabled();
+  await page.reload();
+  await expect(item.getByText("分類テストA", { exact: true })).toBeVisible();
   const completed = page.waitForResponse(
     (response) =>
       response.url().includes("/_serverFn/") &&
       (response.request().postData()?.includes("deleteTodoItem") ?? false),
   );
   await item.getByRole("button", { name: "完了にする", exact: true }).click();
-  await page.getByRole("dialog").getByRole("button", { name: "完了にする", exact: true }).click();
+  await page.getByRole("button", { name: "ToDo", exact: true }).click();
+  await expect(item.getByRole("button", { name: "取り消す", exact: true })).toBeVisible();
   expect((await completed).ok()).toBe(true);
+  expect(completionRequests).toBe(1);
+  await expect(page.getByText("ToDoを完了しました", { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByText("分類テストA", { exact: true })).toHaveCount(0);
   await expect(page.getByText("分類テストB", { exact: true })).toBeVisible();

@@ -14,6 +14,7 @@ import {
 } from "../../features/auth";
 import { prefetchHomeData } from "../../features/home/preload";
 import { MonthCloseBanner } from "../../features/month-close";
+import { DelayedActionProvider } from "../../shared/state/DelayedActionProvider";
 import { teamMembersQueryOptions } from "../../shared/query/teamMembersQuery";
 import { StatusToast } from "../../features/shell/components/StatusToast";
 import { useAuthGate } from "../../features/shell/hooks/useAuthGate";
@@ -268,7 +269,9 @@ export function RootLayout() {
         <MonthCloseBanner />
 
         <RootLayoutContext value={outletContext}>
-          <Outlet />
+          <DelayedActionProvider key={`${currentUserId}:${currentTeamId}`}>
+            <Outlet />
+          </DelayedActionProvider>
         </RootLayoutContext>
       </div>
 

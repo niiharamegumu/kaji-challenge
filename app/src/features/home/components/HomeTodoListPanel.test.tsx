@@ -7,6 +7,7 @@ import { renderWithProviders, resetTestQueryClient } from "../../../test/render"
 import { MemoryRouter } from "../../../test/router";
 import { categoryIdFixture, categoryOrderFixture } from "../../../test/todoCategories";
 import { HomeTodoListPanel } from "./HomeTodoListPanel";
+import { DelayedActionProvider } from "../../../shared/state/DelayedActionProvider";
 
 const mockListTodoCategories = vi.fn();
 vi.mock("../../../lib/api/operations", async () => ({
@@ -28,37 +29,39 @@ it("filters the home ToDos by swipe and still supports category button clicks", 
   const onReorder = vi.fn();
   const onDelete = vi.fn();
   renderWithProviders(
-    <MemoryRouter>
-      <HomeTodoListPanel
-        items={[
-          {
-            id: "work",
-            categoryId: categoryIdFixture("仕事"),
-            name: "仕事のToDo",
-            teamId: "team-1",
-            notes: null,
-            sortKey: 1,
-            createdAt: "2026-09-30T00:00:00Z",
-            updatedAt: "2026-09-30T00:00:00Z",
-          },
-          {
-            id: "unclassified",
-            categoryId: null,
-            name: "未分類のToDo",
-            teamId: "team-1",
-            notes: null,
-            sortKey: 2,
-            createdAt: "2026-09-30T00:00:00Z",
-            updatedAt: "2026-09-30T00:00:00Z",
-          },
-        ]}
-        isReordering={false}
-        isUpdating={false}
-        onDelete={onDelete}
-        onReorder={onReorder}
-        onUpdate={vi.fn()}
-      />
-    </MemoryRouter>,
+    <DelayedActionProvider>
+      <MemoryRouter>
+        <HomeTodoListPanel
+          items={[
+            {
+              id: "work",
+              categoryId: categoryIdFixture("仕事"),
+              name: "仕事のToDo",
+              teamId: "team-1",
+              notes: null,
+              sortKey: 1,
+              createdAt: "2026-09-30T00:00:00Z",
+              updatedAt: "2026-09-30T00:00:00Z",
+            },
+            {
+              id: "unclassified",
+              categoryId: null,
+              name: "未分類のToDo",
+              teamId: "team-1",
+              notes: null,
+              sortKey: 2,
+              createdAt: "2026-09-30T00:00:00Z",
+              updatedAt: "2026-09-30T00:00:00Z",
+            },
+          ]}
+          isReordering={false}
+          isUpdating={false}
+          onDelete={onDelete}
+          onReorder={onReorder}
+          onUpdate={vi.fn()}
+        />
+      </MemoryRouter>
+    </DelayedActionProvider>,
   );
   const filter = await screen.findByRole("group", { name: "カテゴリーで絞り込み" });
   await within(filter).findByRole("button", { name: "仕事" });

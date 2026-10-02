@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "../../../test/router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -85,6 +85,7 @@ describe("SummaryPage", () => {
 
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
   });
 
   const renderPage = (initialEntry = "/summary?month=2026-02") =>
@@ -163,13 +164,12 @@ describe("SummaryPage", () => {
     expect(screen.getByText("発動ペナルティはありません。")).toBeInTheDocument();
   });
 
-  it("shows complete action only for current-month past daily incomplete items and confirms before submit", async () => {
+  it("immediately applies past daily and weekly changes without confirmation or a countdown", async () => {
     const month = "2026-03";
     const yesterdayKey = dateStringInJST(new Date("2026-03-16T00:00:00+09:00"));
     const todayKey = dateStringInJST(new Date("2026-03-17T00:00:00+09:00"));
     const pastWeekKey = dateStringInJST(new Date("2026-03-09T00:00:00+09:00"));
 
-    const user = userEvent.setup();
     mockGetPenaltySummaryMonthly.mockResolvedValue({
       data: {
         totalPenalty: 2,
@@ -300,48 +300,93 @@ describe("SummaryPage", () => {
     expect(screen.getAllByTestId("completion-slot-empty-check")).toHaveLength(2);
     expect(screen.getByRole("img", { name: "1回目: 花子" })).toBeInTheDocument();
 
-    await user.click(screen.getAllByRole("button", { name: "過去日タスクを完了にする" })[0]);
-    expect(await screen.findByText("過去日のタスクを完了に変更しますか？")).toBeInTheDocument();
-    expect(screen.queryByText(/この操作は確定後に未完了へ戻せません。/)).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "完了にする" }));
-
-    await waitFor(() => {
-      expect(mockPostTaskCompletionToggle).toHaveBeenCalledWith("daily-past", {
-        targetDate: yesterdayKey,
-        action: "complete",
+    vi.useFakeTimers();
+    for (const [label, taskId, targetDate, action] of [
+      ["過去日タスクを完了にする", "daily-past", yesterdayKey, "complete"],
+      ["2回目: 未完了: 1回追加", "weekly-past", pastWeekKey, "increment"],
+      ["過去日タスクを未完了に戻す", "daily-past-completed", yesterdayKey, "incomplete"],
+      ["1回目: 太郎: 1回取り消す", "weekly-past-completed", pastWeekKey, "decrement"],
+    ]) {
+      const callsBefore = mockPostTaskCompletionToggle.mock.calls.length;
+      await act(async () => {
+        const button = screen.getByRole("button", { name: label });
+        fireEvent.click(button);
+        // The saving render has not happened yet; a second activation must not resubmit.
+        fireEvent.click(button);
       });
-    });
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "変更を取り消す" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("img", { name: /変更まで/ })).not.toBeInTheDocument();
+      // No timer advancement: each click must send its request immediately.
+      expect(mockPostTaskCompletionToggle).toHaveBeenLastCalledWith(taskId, { targetDate, action });
+      expect(mockPostTaskCompletionToggle).toHaveBeenCalledTimes(callsBefore + 1);
+      await act(async () => vi.advanceTimersByTimeAsync(1));
+    }
+  });
 
-    await user.click(screen.getByRole("button", { name: "2回目: 未完了: 1回追加" }));
-    expect(await screen.findByText("過去週のタスクに1回分を追加しますか？")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "1回追加" }));
-    await waitFor(() => {
-      expect(mockPostTaskCompletionToggle).toHaveBeenCalledWith("weekly-past", {
-        targetDate: pastWeekKey,
-        action: "increment",
-      });
+  it("keeps dates independent and restores controls after a failed request", async () => {
+    mockGetPenaltySummaryMonthly.mockResolvedValue({
+      data: {
+        totalPenalty: 0,
+        dailyPenaltyTotal: 0,
+        weeklyPenaltyTotal: 0,
+        isClosed: false,
+        triggeredPenaltyRuleIds: [],
+        taskStatusByDate: ["2026-03-15", "2026-03-16"].map((date) => ({
+          date,
+          items: [
+            {
+              taskId: "same-task",
+              title: date,
+              type: "daily",
+              penaltyPoints: 1,
+              completed: false,
+              isDeleted: false,
+              completionSlots: [{ slot: 1 }],
+            },
+          ],
+        })),
+      },
     });
-
-    await user.click(screen.getByRole("button", { name: "過去日タスクを未完了に戻す" }));
-    expect(await screen.findByText("過去日のタスクを未完了に戻しますか？")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "未完了に戻す" }));
-    await waitFor(() => {
-      expect(mockPostTaskCompletionToggle).toHaveBeenCalledWith("daily-past-completed", {
-        targetDate: yesterdayKey,
-        action: "incomplete",
-      });
+    let reject!: (error: Error) => void;
+    mockPostTaskCompletionToggle.mockImplementationOnce(
+      () =>
+        new Promise((_, no) => {
+          reject = no;
+        }),
+    );
+    renderPage("/summary?month=2026-03");
+    const firstRow = (await screen.findByText("2026-03-15")).closest("li")!;
+    const secondRow = screen.getByText("2026-03-16").closest("li")!;
+    await userEvent.click(
+      within(secondRow).getByRole("button", { name: "過去日タスクを完了にする" }),
+    );
+    expect(mockPostTaskCompletionToggle).toHaveBeenCalledExactlyOnceWith("same-task", {
+      targetDate: "2026-03-16",
+      action: "complete",
     });
-
-    await user.click(screen.getByRole("button", { name: "1回目: 太郎: 1回取り消す" }));
-    expect(await screen.findByText("過去週のタスクを1回分取り消しますか？")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "1回減らす" }));
-    await waitFor(() => {
-      expect(mockPostTaskCompletionToggle).toHaveBeenCalledWith("weekly-past-completed", {
-        targetDate: pastWeekKey,
-        action: "decrement",
-      });
+    expect(within(secondRow).getByText("保存中…")).toBeVisible();
+    expect(within(secondRow).getByRole("button")).toHaveAttribute("aria-disabled", "true");
+    expect(
+      within(firstRow).getByRole("button", { name: "過去日タスクを完了にする" }),
+    ).toBeEnabled();
+    await userEvent.click(
+      within(firstRow).getByRole("button", { name: "過去日タスクを完了にする" }),
+    );
+    expect(mockPostTaskCompletionToggle).toHaveBeenLastCalledWith("same-task", {
+      targetDate: "2026-03-15",
+      action: "complete",
     });
+    expect(mockPostTaskCompletionToggle).toHaveBeenCalledTimes(2);
+    await act(async () => {
+      reject(new Error("offline"));
+    });
+    expect(await screen.findByText("更新失敗: 通信エラー")).toBeVisible();
+    await waitFor(() =>
+      expect(
+        within(secondRow).getByRole("button", { name: "過去日タスクを完了にする" }),
+      ).toHaveAttribute("aria-disabled", "false"),
+    );
   });
 
   it("allows a closed past month correction with a recalculation warning", async () => {
@@ -390,6 +435,11 @@ describe("SummaryPage", () => {
     await screen.findByRole("heading", { name: "月次サマリー" });
     await userEvent.click(screen.getByRole("button", { name: "過去日タスクを完了にする" }));
     expect(await screen.findByText(/操作対象外を含め、現在設定で月全体/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "再計算して変更" })).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "変更を取り消す" })).not.toBeInTheDocument();
+    expect(mockPostTaskCompletionToggle).toHaveBeenCalledExactlyOnceWith("daily-past", {
+      targetDate: "2026-03-16",
+      action: "complete",
+    });
   });
 });

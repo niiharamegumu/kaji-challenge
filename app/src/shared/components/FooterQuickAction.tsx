@@ -11,6 +11,7 @@ type Props = {
   isSubmitting: boolean;
   submitFailed?: boolean;
   children: ReactNode;
+  footerStart?: ReactNode;
   onClose: () => void;
   onOpen: () => void;
   onSubmit: () => void | Promise<void>;
@@ -25,6 +26,7 @@ export function FooterQuickAction({
   isSubmitting,
   submitFailed,
   children,
+  footerStart,
   onClose,
   onOpen,
   onSubmit,
@@ -43,6 +45,7 @@ export function FooterQuickAction({
         submitDisabled={submitDisabled}
         isSubmitting={isSubmitting}
         submitFailed={submitFailed}
+        footerStart={footerStart}
         onClose={onClose}
         onSubmit={onSubmit}
       >
