@@ -1,4 +1,6 @@
+import { todoItemsQueryOptions } from "../../../shared/query/todoQueries";
 import {
+  useIsMutating,
   useMutation,
   useMutationState,
   useQueryClient,
@@ -8,7 +10,6 @@ import {
 import {
   type CreateTodoItemRequest,
   deleteTodoItem,
-  listTodoItems,
   patchTodoItem,
   postTodoItem,
   postTodoItemsReorder,
@@ -23,6 +24,48 @@ import { formatError } from "../../../shared/utils/errors";
 type StatusSetter = (message: string) => void;
 export const createTodoItemMutationKey = ["todo-create"];
 const removeMutationKey = ["todo-remove"];
+const updateMutationKey = ["todo-update"];
+const reorderMutationKey = ["todo-reorder"];
+type TodoUpdate = { itemId: string; payload: UpdateTodoItemRequest };
+
+/** 確定キャッシュを保持し、画面をまたいで保存中の編集・順序・完了を共有する。 */
+export function useOptimisticTodoItems(items: TodoItem[]) {
+  const removed = new Set(usePendingTodoRemovals());
+  const updates = useMutationState({
+    filters: { mutationKey: updateMutationKey, status: "pending" },
+    select: (mutation) => mutation.state.variables as TodoUpdate,
+  });
+  const orders = useMutationState({
+    filters: { mutationKey: reorderMutationKey, status: "pending" },
+    select: (mutation) => mutation.state.variables as ReorderTodoItemsRequest,
+  });
+  let result = items;
+  for (const { itemId, payload } of updates) {
+    result = result.map((item) =>
+      item.id === itemId
+        ? {
+            ...item,
+            name: payload.name ?? item.name,
+            notes: payload.notes === undefined ? item.notes : payload.notes,
+            categoryId: payload.categoryId === undefined ? item.categoryId : payload.categoryId,
+          }
+        : item,
+    );
+  }
+  const order = orders.at(-1);
+  if (order) {
+    const byId = new Map(result.map((item) => [item.id, item]));
+    const ordered = order.itemIds.flatMap((id) => {
+      const item = byId.get(id);
+      return item ? [item] : [];
+    });
+    const ids = new Set(order.itemIds);
+    let index = 0;
+    // 並べ替え中に追加された項目の位置は保持し、削除された項目は復活させない。
+    result = result.map((item) => (ids.has(item.id) ? ordered[index++] : item));
+  }
+  return result.filter((item) => !removed.has(item.id));
+}
 
 export function usePendingTodoRemovals() {
   return useMutationState({
@@ -32,16 +75,14 @@ export function usePendingTodoRemovals() {
 }
 
 export function useTodoItemsQuery() {
-  const pendingIds = usePendingTodoRemovals();
-  const query = useSuspenseQuery({
-    queryKey: queryKeys.todoItems,
-    queryFn: async ({ signal }) => (await listTodoItems({ signal })).data.items,
-  });
-  return { ...query, data: query.data.filter((item) => !pendingIds.includes(item.id)) };
+  const query = useSuspenseQuery(todoItemsQueryOptions);
+  const data = useOptimisticTodoItems(query.data);
+  return { ...query, data };
 }
 
 export function useTodoItemMutations(setStatus: StatusSetter) {
   const queryClient = useQueryClient();
+  const isReordering = useIsMutating({ mutationKey: reorderMutationKey }) > 0;
 
   const invalidate = async () => {
     await queryClient.invalidateQueries({ queryKey: queryKeys.todoItems });
@@ -72,8 +113,9 @@ export function useTodoItemMutations(setStatus: StatusSetter) {
   });
 
   const updateItem = useMutation({
-    mutationFn: async ({ itemId, payload }: { itemId: string; payload: UpdateTodoItemRequest }) =>
-      patchTodoItem(itemId, payload),
+    mutationKey: updateMutationKey,
+    onMutate: () => queryClient.cancelQueries({ queryKey: queryKeys.todoItems }),
+    mutationFn: async ({ itemId, payload }: TodoUpdate) => patchTodoItem(itemId, payload),
     onSuccess: async ({ data }) => {
       await queryClient.cancelQueries({ queryKey: queryKeys.todoItems });
       queryClient.setQueryData<TodoItem[]>(queryKeys.todoItems, (items) =>
@@ -106,12 +148,32 @@ export function useTodoItemMutations(setStatus: StatusSetter) {
   });
 
   const reorderItems = useMutation({
+    mutationKey: reorderMutationKey,
+    onMutate: () => queryClient.cancelQueries({ queryKey: queryKeys.todoItems }),
     mutationFn: async (payload: ReorderTodoItemsRequest) => {
       const response = await postTodoItemsReorder(payload);
       return response.data.items;
     },
-    onSuccess: (items) => {
-      queryClient.setQueryData<TodoItem[]>(queryKeys.todoItems, items);
+    onSuccess: async (items, payload) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.todoItems });
+      queryClient.setQueryData<TodoItem[]>(queryKeys.todoItems, (current) => {
+        if (!current) return items;
+        const byId = new Map(current.map((item) => [item.id, item]));
+        const ids = new Set(items.map((item) => item.id));
+        const requested = new Set(payload.itemIds);
+        // 応答待ち中の別の編集・追加・完了を古い一覧DTOで上書きしない。
+        return [
+          ...current.filter((item) => !ids.has(item.id)),
+          ...items.flatMap((item) => {
+            const saved = byId.get(item.id);
+            return saved
+              ? [{ ...saved, sortKey: item.sortKey }]
+              : requested.has(item.id)
+                ? []
+                : [item];
+          }),
+        ];
+      });
       setStatus("並び順を更新しました");
     },
     onError: (error) => {
@@ -120,5 +182,10 @@ export function useTodoItemMutations(setStatus: StatusSetter) {
     },
   });
 
-  return { createItem, updateItem, removeItem, reorderItems };
+  return {
+    createItem,
+    updateItem,
+    removeItem,
+    reorderItems: { ...reorderItems, isPending: isReordering },
+  };
 }
