@@ -1,4 +1,4 @@
-import { useSuspenseQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { queryOptions, useSuspenseQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   listPenaltyRules,
   type CreatePenaltyRuleRequest,
@@ -11,11 +11,13 @@ import {
 import { queryKeys } from "../../../shared/query/queryKeys";
 import { formatError } from "../../../shared/utils/errors";
 
+export const penaltyRulesQueryOptions = queryOptions({
+  queryKey: queryKeys.rules,
+  queryFn: async ({ signal }) => (await listPenaltyRules(undefined, { signal })).data.items,
+});
+
 export function usePenaltyRulesQuery() {
-  return useSuspenseQuery({
-    queryKey: queryKeys.rules,
-    queryFn: async () => (await listPenaltyRules()).data.items,
-  });
+  return useSuspenseQuery(penaltyRulesQueryOptions);
 }
 
 type StatusSetter = (message: string) => void;
