@@ -2,7 +2,7 @@ import {
   categoryOrderFixture as order,
   categoryIdFixture as cid,
 } from "../../../test/todoCategories";
-import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -59,7 +59,7 @@ describe("ToDo pages", () => {
     mockPostTodoItem.mockImplementation((payload) =>
       Promise.resolve(
         resolvedData({
-          id: "item-created",
+          id: `item-created-${mockPostTodoItem.mock.calls.length}`,
           teamId: "team-1",
           name: "item",
           sortKey: 1,
@@ -165,6 +165,119 @@ describe("ToDo pages", () => {
     await waitFor(() => {
       expect(screen.queryByRole("dialog", { name: "ToDoを追加" })).not.toBeInTheDocument();
     });
+  });
+
+  it.each([null, "買い物"])(
+    "adds consecutive todos by button and Enter, retaining category %s, then finishes normally",
+    async (category) => {
+      mockListTodoCategories.mockResolvedValue(resolvedData({ categories: order(null, "買い物") }));
+      const user = userEvent.setup();
+      renderPage();
+      await user.click(await screen.findByRole("button", { name: "追加" }));
+      const dialog = screen.getByRole("dialog", { name: "ToDoを追加" });
+      const name = within(dialog).getByLabelText("名前");
+      const notes = within(dialog).getByLabelText("メモ");
+      const select = within(dialog).getByRole("combobox");
+      expect(name).toHaveFocus();
+      expect(within(dialog).getByRole("button", { name: "続けて追加" })).toBeDisabled();
+      await user.type(name, "   {Enter}");
+      expect(mockPostTodoItem).not.toHaveBeenCalled();
+      await user.clear(name);
+      if (category) await user.selectOptions(select, cid(category));
+      await user.type(name, " 牛乳 ");
+      await user.type(notes, " 低脂肪 ");
+      await user.click(within(dialog).getByRole("button", { name: "続けて追加" }));
+      await waitFor(() => expect(name).toHaveValue(""));
+      expect(dialog).toBeVisible();
+      expect(name).toHaveFocus();
+      expect(notes).toHaveValue("");
+      expect(select).toHaveValue(category ? cid(category) : "");
+      expect(within(dialog).getByRole("status")).toHaveTextContent("「牛乳」を追加しました");
+
+      await user.keyboard("卵{Enter}");
+      await waitFor(() => expect(name).toHaveValue(""));
+      expect(name).toHaveFocus();
+      expect(select).toHaveValue(category ? cid(category) : "");
+      expect(within(dialog).getByRole("status")).toHaveTextContent("「卵」を追加しました");
+
+      await user.keyboard("パン");
+      await user.click(within(dialog).getByRole("button", { name: "追加する" }));
+      await waitFor(() => expect(dialog).not.toBeInTheDocument());
+      expect(mockPostTodoItem.mock.calls).toEqual([
+        [{ name: "牛乳", notes: "低脂肪", categoryId: category ? cid(category) : null }],
+        [{ name: "卵", notes: undefined, categoryId: category ? cid(category) : null }],
+        [{ name: "パン", notes: undefined, categoryId: category ? cid(category) : null }],
+      ]);
+      expect(screen.getAllByRole("listitem")).toHaveLength(3);
+    },
+  );
+
+  it("keeps the next draft on failure, blocks duplicate submissions, and retries only that todo", async () => {
+    mockListTodoCategories.mockResolvedValue(resolvedData({ categories: order(null, "買い物") }));
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole("button", { name: "追加" }));
+    const dialog = screen.getByRole("dialog", { name: "ToDoを追加" });
+    const name = within(dialog).getByLabelText("名前");
+    const notes = within(dialog).getByLabelText("メモ");
+    const select = within(dialog).getByRole("combobox");
+    await user.selectOptions(select, cid("買い物"));
+    await user.type(name, "牛乳{Enter}");
+    await waitFor(() => expect(name).toHaveValue(""));
+
+    let reject!: (error: Error) => void;
+    mockPostTodoItem.mockImplementationOnce(
+      () =>
+        new Promise((_, no) => {
+          reject = no;
+        }),
+    );
+    await user.type(name, "卵");
+    await user.type(notes, "6個入り{Enter}");
+    expect(await within(dialog).findByRole("button", { name: "保存中…" })).toBeDisabled();
+    expect(name).toBeDisabled();
+    expect(notes).toBeDisabled();
+    expect(select).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "続けて追加" })).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "閉じる" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "ToDoを追加を閉じる" })).toBeDisabled();
+    await user.click(within(dialog).getByRole("button", { name: "続けて追加" }));
+    await user.keyboard("{Enter}");
+    expect(mockPostTodoItem).toHaveBeenCalledTimes(2);
+
+    await act(async () => reject(new Error("offline")));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("保存できませんでした");
+    expect(name).toHaveValue("卵");
+    expect(notes).toHaveValue("6個入り");
+    expect(select).toHaveValue(cid("買い物"));
+    expect(screen.getByText("牛乳", { exact: true })).toBeVisible();
+    await user.click(within(dialog).getByRole("button", { name: "続けて追加" }));
+    await waitFor(() => expect(name).toHaveValue(""));
+    expect(name).toHaveFocus();
+    expect(within(dialog).queryByRole("alert")).not.toBeInTheDocument();
+    expect(mockPostTodoItem.mock.calls.map(([payload]) => payload.name)).toEqual([
+      "牛乳",
+      "卵",
+      "卵",
+    ]);
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+  });
+
+  it.each(["名前", "メモ"])("ignores IME confirmation and held Enter in %s", async (label) => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole("button", { name: "追加" }));
+    await user.type(screen.getByLabelText("名前"), "牛乳");
+    const input = screen.getByLabelText(label);
+    fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+    // Safari can end composition before dispatching the confirming keydown.
+    fireEvent.keyDown(input, { key: "Enter", keyCode: 229 });
+    fireEvent.keyDown(input, { key: "Enter", repeat: true });
+    expect(mockPostTodoItem).not.toHaveBeenCalled();
+    await user.click(input);
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(screen.getByLabelText("名前")).toHaveValue(""));
+    expect(mockPostTodoItem).toHaveBeenCalledTimes(1);
   });
 
   it("defaults each new form to the active tab while preserving the text draft", async () => {
@@ -570,6 +683,10 @@ describe("ToDo pages", () => {
     );
     expect(within(dialog).getByRole("combobox")).toBeDisabled();
     expect(within(dialog).getByRole("button", { name: "追加する" })).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "続けて追加" })).toBeDisabled();
+    await user.click(within(dialog).getByLabelText("名前"));
+    await user.keyboard("{Enter}");
+    expect(mockPostTodoItem).not.toHaveBeenCalled();
     mockListTodoCategories.mockResolvedValue(resolvedData({ categories: order(null, "やること") }));
     await user.click(within(dialog).getByRole("button", { name: "再試行" }));
     await waitFor(() => expect(within(dialog).getByRole("combobox")).toBeEnabled());
