@@ -88,7 +88,7 @@ export function CompletionSlots({
             title={actionLabel == null ? title : `${title}: ${actionLabel}`}
             aria-label={actionLabel == null ? title : `${title}: ${actionLabel}`}
             aria-disabled={disabled}
-            className={`${slotClassName} cursor-pointer transition-opacity hover:opacity-80 aria-disabled:cursor-wait aria-disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--color-matcha-500)]`}
+            className={`${slotClassName} cursor-pointer transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--color-matcha-500)]`}
             style={slotStyle}
             onClick={() => {
               if (!disabled) onSlotClick(slot);
