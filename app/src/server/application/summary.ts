@@ -75,9 +75,8 @@ export async function reminderOccurrences(
   to: string,
   today: string = from,
 ): Promise<M.ReminderOccurrence[]> {
-  const records = await repo.ListRemindersByTeamID(teamId);
+  const records = await repo.ListRemindersByTeamID(teamId, { from, to, today });
   return records
-    .filter((row) => row.Kind !== "one_time" || row.StartDate >= today)
     .flatMap((row) => {
       const r = map.reminder(row);
       return occurrenceDates(r, from, to).map((date) => ({

@@ -1,9 +1,9 @@
+import { todoCategoriesQueryOptions } from "../../../shared/query/todoQueries";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   type TodoItem,
   type TodoCategoryOrder,
   deleteTodoCategory,
-  listTodoCategories,
   postTodoCategory,
   patchTodoCategory,
   postTodoCategoriesReorder,
@@ -12,10 +12,7 @@ import { queryKeys } from "../../../shared/query/queryKeys";
 import { formatError } from "../../../shared/utils/errors";
 
 export function useTodoCategoriesQuery() {
-  return useQuery({
-    queryKey: queryKeys.todoCategories,
-    queryFn: async ({ signal }) => (await listTodoCategories({ signal })).data.categories,
-  });
+  return useQuery(todoCategoriesQueryOptions);
 }
 
 export type TodoCategoriesQuery = Pick<

@@ -18,6 +18,7 @@ const api = vi.hoisted(() => ({
   create: vi.fn(),
   load: vi.fn(),
   categories: vi.fn(),
+  reorder: vi.fn(),
 }));
 vi.mock("../../../lib/api/operations", async (original) => ({
   ...(await original<object>()),
@@ -26,13 +27,21 @@ vi.mock("../../../lib/api/operations", async (original) => ({
   listTodoItems: api.load,
   listTodoCategories: api.categories,
   postTodoItem: api.create,
+  postTodoItemsReorder: api.reorder,
 }));
 function Probe({ status }: { status: (message: string) => void }) {
   const { data } = useTodoItemsQuery();
   useTodoCategoriesQuery();
-  const { removeItem, updateItem, createItem } = useTodoItemMutations(status);
+  const { removeItem, updateItem, createItem, reorderItems } = useTodoItemMutations(status);
   return (
     <>
+      <output data-testid="todo-order">{data.map((item) => item.name).join(",")}</output>
+      <button
+        disabled={reorderItems.isPending}
+        onClick={() => reorderItems.mutate({ itemIds: ["B", "A"] })}
+      >
+        逆順にする
+      </button>
       {data.map((item) => (
         <button key={item.id} onClick={() => removeItem.mutate(item.id)}>
           {item.name}
@@ -66,12 +75,12 @@ function setup() {
     .mockReset()
     .mockResolvedValue({ data: { categories: order(null, "登録済み", "新規") } });
   const status = vi.fn();
-  render(
+  const view = render(
     <QueryClientProvider client={client}>
       <Probe status={status} />
     </QueryClientProvider>,
   );
-  return { client, status, items, user: userEvent.setup() };
+  return { ...view, client, status, items, user: userEvent.setup() };
 }
 
 it("hides completed items before the response and restores only the failed item", async () => {
@@ -146,4 +155,85 @@ it("refreshes category choices after a stale category conflict without changing 
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();
+});
+
+it("shows edits before the response and rolls back only the failed edit", async () => {
+  let rejectEdit!: (error: Error) => void;
+  api.update.mockImplementation(
+    () =>
+      new Promise((_, reject) => {
+        rejectEdit = reject;
+      }),
+  );
+  const { client, items, user } = setup();
+  await user.click(screen.getByRole("button", { name: "編集を保存" }));
+  expect(await screen.findByRole("button", { name: "更新済み" })).toBeVisible();
+  expect(client.getQueryData(queryKeys.todoItems)).toEqual(items);
+  api.remove.mockResolvedValueOnce({ data: {} });
+  await user.click(screen.getByRole("button", { name: "B" }));
+  await waitFor(() => expect(client.getQueryData<TodoItem[]>(queryKeys.todoItems)).toHaveLength(1));
+  await act(async () => rejectEdit(new Error("failed edit")));
+  expect(await screen.findByRole("button", { name: "A" })).toBeVisible();
+  expect(screen.queryByRole("button", { name: "B" })).not.toBeInTheDocument();
+});
+
+it("shares a pending reorder across remounts and restores order without losing another save", async () => {
+  let rejectOrder!: (error: Error) => void;
+  api.reorder.mockImplementation(
+    () =>
+      new Promise((_, reject) => {
+        rejectOrder = reject;
+      }),
+  );
+  const { client, items, user, status, unmount } = setup();
+  await user.click(screen.getByRole("button", { name: "逆順にする" }));
+  await waitFor(() => expect(screen.getByTestId("todo-order")).toHaveTextContent("B,A"));
+  expect(client.getQueryData(queryKeys.todoItems)).toEqual(items);
+  unmount();
+  render(
+    <QueryClientProvider client={client}>
+      <Probe status={status} />
+    </QueryClientProvider>,
+  );
+  expect(screen.getByTestId("todo-order")).toHaveTextContent("B,A");
+  expect(screen.getByRole("button", { name: "逆順にする" })).toBeDisabled();
+  api.create.mockResolvedValueOnce({ data: { ...items[0], id: "C", name: "C" } });
+  await user.click(screen.getByRole("button", { name: "新規保存" }));
+  await waitFor(() => expect(screen.getByTestId("todo-order")).toHaveTextContent("C,B,A"));
+  await act(async () => rejectOrder(new Error("stale order")));
+  await waitFor(() => expect(screen.getByTestId("todo-order")).toHaveTextContent("C,A,B"));
+});
+
+it("merges a delayed reorder response without reviving a completion or overwriting a saved edit", async () => {
+  let resolveOrder!: (value: unknown) => void;
+  api.reorder.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        resolveOrder = resolve;
+      }),
+  );
+  const { client, items, user } = setup();
+  await user.click(screen.getByRole("button", { name: "逆順にする" }));
+  api.update.mockResolvedValueOnce({ data: { ...items[0], name: "更新済み" } });
+  await user.click(screen.getByRole("button", { name: "編集を保存" }));
+  await waitFor(() =>
+    expect(client.getQueryData<TodoItem[]>(queryKeys.todoItems)?.[0].name).toBe("更新済み"),
+  );
+  api.remove.mockResolvedValueOnce({ data: {} });
+  await user.click(screen.getByRole("button", { name: "B" }));
+  await waitFor(() => expect(client.getQueryData<TodoItem[]>(queryKeys.todoItems)).toHaveLength(1));
+  await act(async () =>
+    resolveOrder({
+      data: {
+        items: [
+          { ...items[1], sortKey: 100 },
+          { ...items[0], sortKey: 200 },
+        ],
+      },
+    }),
+  );
+  await waitFor(() => expect(screen.getByRole("button", { name: "逆順にする" })).toBeEnabled());
+  expect(client.getQueryData<TodoItem[]>(queryKeys.todoItems)).toEqual([
+    { ...items[0], name: "更新済み", sortKey: 200 },
+  ]);
 });

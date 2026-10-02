@@ -329,6 +329,12 @@ export interface DeleteExpiredOneTimeRemindersByTeamParams {
   StartDate: string;
 }
 
+export interface ReminderPeriod {
+  from: string;
+  to: string;
+  today: string;
+}
+
 export interface UpdateReminderParams {
   ID: string;
   Title?: string;
@@ -603,7 +609,7 @@ export interface Repository {
   ): Promise<number>;
   DeleteReminder(id: string): Promise<number>;
   GetReminderByID(id: string): Promise<Reminder>;
-  ListRemindersByTeamID(teamID: string): Promise<Reminder[]>;
+  ListRemindersByTeamID(teamID: string, period?: ReminderPeriod): Promise<Reminder[]>;
   UpdateReminder(arg: UpdateReminderParams): Promise<void>;
   CreatePenaltyRule(arg: CreatePenaltyRuleParams): Promise<void>;
   GetUndeletedPenaltyRuleByID(id: string): Promise<PenaltyRule>;

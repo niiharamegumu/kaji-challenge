@@ -1,3 +1,4 @@
+import type { TeamChangeScope } from "../../contracts/realtime";
 import { env, waitUntil } from "cloudflare:workers";
 import { createDatabase } from "../infrastructure/database";
 import { createAuth } from "../infrastructure/auth";
@@ -25,7 +26,11 @@ export function createRuntime(bindings: RuntimeBindings) {
   return { ...connection, auth: createAuth(connection.db, settings), bindings };
 }
 
-export function notifyChanges(bindings: RuntimeBindings, teamIds: string[]) {
+export function notifyChanges(
+  bindings: RuntimeBindings,
+  teamIds: string[],
+  changes?: TeamChangeScope[],
+) {
   // Cloudflare公式のwaitUntilで、HTTP応答後も通知の実行を継続する。
-  waitUntil(notifyTeams(bindings, teamIds));
+  waitUntil(notifyTeams(bindings, teamIds, changes));
 }

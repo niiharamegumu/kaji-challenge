@@ -1,3 +1,4 @@
+import { operationChanges } from "./operation-changes";
 import type { Operation } from "../../contracts/operations";
 import type { Repository } from "./ports";
 import { invariant } from "../domain/errors";
@@ -24,23 +25,8 @@ export interface OperationContext {
   now: Date;
   vapidPublicKey: string;
 }
-const readOperations = new Set<Operation["operation"]>([
-  "getMe",
-  "getPushSubscriptionsMe",
-  "getTeamCurrentInvite",
-  "getTeamCurrentMembers",
-  "listTasks",
-  "listReminders",
-  "listReminderDefinitions",
-  "listPenaltyRules",
-  "listTodoItems",
-  "listTodoCategories",
-  "getTaskOverview",
-  "getPenaltySummaryMonthly",
-  "getMonthCloseCandidate",
-]);
 export function isTeamMutation(operation: Operation["operation"]) {
-  return !readOperations.has(operation);
+  return operationChanges[operation].length > 0;
 }
 const requiredText = (value: string) => {
   const text = value.trim();

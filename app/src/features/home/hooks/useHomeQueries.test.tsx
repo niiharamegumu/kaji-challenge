@@ -87,9 +87,12 @@ describe("useHomePageQueries", () => {
       expect(mockGetTaskOverview).toHaveBeenCalledOnce();
       expect(mockListTodoItems).toHaveBeenCalledOnce();
       expect(mockGetPenaltySummaryMonthly).toHaveBeenCalledOnce();
-      expect(mockGetPenaltySummaryMonthly).toHaveBeenCalledWith({
-        month: "2026-07",
-      });
+      expect(mockGetPenaltySummaryMonthly).toHaveBeenCalledWith(
+        {
+          month: "2026-07",
+        },
+        { signal: expect.any(AbortSignal) },
+      );
       expect(mockListPenaltyRules).toHaveBeenCalledOnce();
     });
 

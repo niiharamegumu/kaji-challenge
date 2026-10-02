@@ -1,3 +1,4 @@
+import { todoCategoriesQueryOptions } from "../../shared/query/todoQueries";
 import type { QueryClient } from "@tanstack/react-query";
 import { penaltyRulesWithDeletedQueryOptions } from "../../shared/query/monthlyPenaltyQueries";
 import {
@@ -8,9 +9,10 @@ import {
 
 export function prefetchHomeData(queryClient: QueryClient) {
   return Promise.all([
-    queryClient.ensureQueryData(homeQueryOptions),
-    queryClient.ensureQueryData(homeTodoItemsQueryOptions),
-    queryClient.ensureQueryData(previousMonthPenaltySummaryQueryOptions()),
-    queryClient.ensureQueryData(penaltyRulesWithDeletedQueryOptions),
+    queryClient.prefetchQuery(todoCategoriesQueryOptions),
+    queryClient.prefetchQuery(homeQueryOptions),
+    queryClient.prefetchQuery(homeTodoItemsQueryOptions),
+    queryClient.prefetchQuery(previousMonthPenaltySummaryQueryOptions()),
+    queryClient.prefetchQuery(penaltyRulesWithDeletedQueryOptions),
   ]);
 }

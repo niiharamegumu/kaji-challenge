@@ -10,7 +10,8 @@ const peerToken = crypto.randomUUID(),
   outsiderToken = crypto.randomUUID(),
   categoryOrderToken = crypto.randomUUID(),
   swipeAreaToken = crypto.randomUUID(),
-  summaryToken = crypto.randomUUID();
+  summaryToken = crypto.randomUUID(),
+  performanceToken = crypto.randomUUID();
 test.beforeAll(async () => {
   const path = process.env.KAJI_D1_TEST_PATH;
   if (!path) throw new Error("Run browser tests via bun run test:local for isolated D1 storage");
@@ -33,6 +34,7 @@ test.beforeAll(async () => {
       ["カテゴリー順序", categoryOrderToken],
       ["スワイプ領域", swipeAreaToken],
       ["サマリー検証", summaryToken],
+      ["キャッシュ検証", performanceToken],
     ]) {
       const id = crypto.randomUUID();
       await connection.query(
@@ -1243,4 +1245,82 @@ test("persists category order including unclassified with mouse, touch and keybo
     .getByRole("button", { name: "未分類", exact: true })
     .click();
   await expect(page.getByText("順序変更後の未分類ToDo", { exact: true })).toBeVisible();
+});
+
+test("shares optimistic ToDo order across navigation, rolls back failure, and persists a retry", async ({
+  page,
+  context,
+}, testInfo) => {
+  await authenticate(context, performanceToken);
+  await page.goto("/todos");
+  for (const name of ["順序検証A", "順序検証B"]) {
+    await page.getByRole("button", { name: "追加", exact: true }).click();
+    await page.getByPlaceholder("例: 牛乳", { exact: true }).fill(name);
+    const saved = page.waitForResponse(
+      (response) => response.request().postData()?.includes('"postTodoItem"') ?? false,
+    );
+    await page.getByRole("button", { name: "追加する", exact: true }).click();
+    expect((await saved).ok()).toBe(true);
+    await expect(page.getByText(name, { exact: true })).toBeVisible();
+  }
+  const handles = page.getByRole("button", { name: /順序検証.*をドラッグして並び替え/ });
+  const order = () =>
+    handles.evaluateAll((elements) =>
+      elements.map((element) => element.getAttribute("aria-label")),
+    );
+  const firstOrder = ["順序検証B をドラッグして並び替え", "順序検証A をドラッグして並び替え"];
+  const nextOrder = [...firstOrder].reverse();
+  const moveAFirst = async () => {
+    const handle = page.getByRole("button", { name: "順序検証A をドラッグして並び替え" });
+    const target = page.getByRole("button", { name: "順序検証B をドラッグして並び替え" });
+    await handle.focus();
+    await page.keyboard.press("Space", { delay: 100 });
+    await expect(handle).toHaveAttribute("aria-pressed", "true");
+    await page.keyboard.press("ArrowUp");
+    await expect
+      .poll(async () => {
+        const from = await handle.boundingBox();
+        const to = await target.boundingBox();
+        return from !== null && to !== null && from.y < to.y;
+      })
+      .toBe(true);
+    await page.keyboard.press("Space");
+  };
+  await expect.poll(order).toEqual(firstOrder);
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let requests = 0;
+  await page.route("**/_serverFn/**", async (route) => {
+    if (!route.request().postData()?.includes("postTodoItemsReorder")) return route.continue();
+    requests++;
+    await held;
+    await route.abort("failed");
+  });
+  try {
+    await moveAFirst();
+    await expect.poll(() => requests).toBe(1);
+    await expect.poll(order).toEqual(nextOrder);
+    await page.getByRole("button", { name: "ホーム", exact: true }).click();
+    await expect.poll(order).toEqual(nextOrder);
+    await expect(handles.first()).toBeDisabled();
+    await page.screenshot({
+      path: testInfo.outputPath("todo-shared-optimistic-order.png"),
+      fullPage: true,
+    });
+  } finally {
+    release();
+  }
+  await expect.poll(order).toEqual(firstOrder);
+  await expect(handles.first()).toBeEnabled();
+  await page.unrouteAll({ behavior: "wait" });
+  const saved = page.waitForResponse(
+    (response) => response.request().postData()?.includes("postTodoItemsReorder") ?? false,
+  );
+  await moveAFirst();
+  expect((await saved).ok()).toBe(true);
+  await expect.poll(order).toEqual(nextOrder);
+  await page.reload();
+  await expect.poll(order).toEqual(nextOrder);
 });

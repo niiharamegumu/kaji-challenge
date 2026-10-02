@@ -1,3 +1,4 @@
+import { operationChanges } from "../application/operation-changes";
 import type { z } from "zod";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeaders } from "@tanstack/react-start/server";
@@ -47,7 +48,8 @@ export const invokeOperation = createServerFn({ method: "POST" })
           vapidPublicKey: runtime.bindings.VAPID_PUBLIC_KEY,
         });
         // D1の保存はここで完了済み。通知はwaitUntilで実行し、HTTP応答を待たせない。
-        if (result.changedTeams.length) notifyChanges(runtime.bindings, result.changedTeams);
+        if (result.changedTeams.length)
+          notifyChanges(runtime.bindings, result.changedTeams, operationChanges[input.operation]);
         const validated = responseSchemas[input.operation].parse(result.data);
         return { ok: true, data: validated };
       });

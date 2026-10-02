@@ -169,7 +169,7 @@ describe("TodoManager", () => {
     rerender(
       <TodoManager
         categoriesQuery={{ data: [null], isPending: false, isError: false, refetch: vi.fn() }}
-        items={items}
+        items={[items[1], items[0]]}
         isUpdating={false}
         isReordering
         onDelete={() => undefined}

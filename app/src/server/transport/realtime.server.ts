@@ -1,3 +1,4 @@
+import type { TeamChangeScope } from "../../contracts/realtime";
 import type { RuntimeBindings } from "./runtime.server";
 
 export async function connectRealtime(
@@ -32,11 +33,15 @@ export async function connectRealtime(
 }
 
 /** 通知失敗を保存失敗にしない。次回接続・復帰時にも最新データを取得する。 */
-export async function notifyTeams(bindings: RuntimeBindings, teamIds: string[]): Promise<void> {
+export async function notifyTeams(
+  bindings: RuntimeBindings,
+  teamIds: string[],
+  changes?: TeamChangeScope[],
+): Promise<void> {
   await Promise.all(
     [...new Set(teamIds)].map(async (teamId) => {
       try {
-        await bindings.TEAM_REALTIME.getByName(teamId).notify();
+        await bindings.TEAM_REALTIME.getByName(teamId).notify(changes);
       } catch {
         console.error(JSON.stringify({ event: "team_notification_failed", teamId }));
       }

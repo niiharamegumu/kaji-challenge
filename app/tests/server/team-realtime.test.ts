@@ -76,6 +76,18 @@ it("never delivers to a connection outside the authorization snapshot", async ()
   expect(unchecked.messages).toEqual([]);
 });
 
+it("delivers scoped changes only after authorizing the connection", async () => {
+  const valid = new Socket({ userId: "a", sessionId: "a", teamId });
+  const invalid = new Socket({ userId: "unknown", sessionId: "unknown", teamId });
+  await restoreObject(() => [valid, invalid]).notify(["todos"]);
+  expect(valid.messages).toEqual([
+    { type: "presence", userIds: ["a"] },
+    { type: "team-changed", changes: ["todos"] },
+  ]);
+  expect(invalid.messages).toEqual([]);
+  expect(invalid.close).toHaveBeenCalled();
+});
+
 it("rejects missing attachments without publishing an unverified identity", async () => {
   const invalid = new Socket(null);
   const valid = new Socket({ userId: "a", sessionId: "a", teamId });

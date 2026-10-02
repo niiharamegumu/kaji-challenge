@@ -1,4 +1,4 @@
-import { useSuspenseQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { queryOptions, useSuspenseQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   listTasks,
   type CreateTaskRequest,
@@ -13,11 +13,13 @@ import {
 import { queryKeys } from "../../../shared/query/queryKeys";
 import { formatError } from "../../../shared/utils/errors";
 
+export const tasksQueryOptions = queryOptions({
+  queryKey: queryKeys.tasks,
+  queryFn: async ({ signal }) => (await listTasks(undefined, { signal })).data.items,
+});
+
 export function useTasksQuery() {
-  return useSuspenseQuery({
-    queryKey: queryKeys.tasks,
-    queryFn: async () => (await listTasks()).data.items,
-  });
+  return useSuspenseQuery(tasksQueryOptions);
 }
 
 type StatusSetter = (message: string) => void;

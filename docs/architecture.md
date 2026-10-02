@@ -18,7 +18,7 @@
 
 feature adapter → 共通client → Server Function → Application → Repositoryという構成は、Startのserver-only処理とUIの分離に従う。TanStack Queryがキャッシュ・再取得・mutationを管理する。単一のdiscriminated unionによるoperation入口はこのアプリの設計であり、Startの必須形式ではない。routeのbeforeLoadだけを認証境界にしない。
 
-共通Server FunctionはPOST。読み取りoperationはD1を更新しない。期限切れ単発予定は表示時に除外し、日次ジョブで削除する。集計の保存は締め・過去の完了修正時だけ行う。Startのredirectを返さず既存のエラー処理を使うため、共通clientから静的importした関数を直接呼ぶ。`useServerFn` はredirect等をRouterと連携するときに検討する。Server Function応答はWorker入口でno-storeにする。
+共通Server FunctionはPOST。読み取りoperationはD1を更新しない。予定の発生日取得では、既存のチーム/開始日indexを使い、対象期間に重ならない定義と期限切れ単発予定をD1で除外してから発生日を展開する。期限切れ単発予定は表示時に除外し、日次ジョブで削除する。集計の保存は締め・過去の完了修正時だけ行う。Startのredirectを返さず既存のエラー処理を使うため、共通clientから静的importした関数を直接呼ぶ。`useServerFn` はredirect等をRouterと連携するときに検討する。Server Function応答はWorker入口でno-storeにする。
 
 ## UIの境界
 
@@ -36,11 +36,15 @@ ToDo完了は確認モーダルを表示せず、押下から3秒間は完了待
 
 ToDo追加とサマリー更新は、送信直前にもQueryキャッシュのpending mutationを確認する。サマリーの日間・週1回は同じ対象の重複操作を防ぎ、週複数回は楽観表示の上限・下限内で連続タップを受け付ける。別日付・別タスクは独立して操作できる。保存中も操作ボタンを保持し、日間・週1回の抑止にはaria-disabledとイベント側のガードを使ってフォーカスを維持する。
 
-家事の完了・ToDo完了は、TanStack Queryの未完了mutationの入力を取得結果に重ねて即時表示する。保存済みキャッシュは成功応答で更新し、失敗時はそのmutationの表示だけが消える。他の操作やメンバーの完了を一括rollbackしない。日間・週1回の保存中の連打は抑止する。週複数回は連続タップを受け付け、increment/decrementを送り、D1内の件数条件で上限・下限を守る。追加・編集フォームはPromiseを返し、共通FormSheetとインライン編集は呼出元mutationの `isPending` / `isError` を表示に使う。別のref/stateへ保存状態を複製せず、保存中の入力・閉じる操作・重複送信を抑止する。失敗時は入力を保持し、再表示時にmutationをresetする。全体の保存中表示は `shared/components/MutationFeedback.tsx` が担当する。
+家事の完了・ToDo完了/編集/並べ替えは、TanStack Queryの未完了mutationの入力を取得結果に重ねて即時表示する。ToDoはホームと専用画面で同じhookから楽観表示を導出し、コンポーネント内に順序stateを複製しない。並べ替え保存中は画面を移動しても重複操作を抑止する。保存済みキャッシュは成功応答で更新し、失敗時はそのmutationの表示だけが消える。他の操作やメンバーの完了を一括rollbackしない。日間・週1回の保存中の連打は抑止する。週複数回は連続タップを受け付け、increment/decrementを送り、D1内の件数条件で上限・下限を守る。追加・編集フォームはPromiseを返し、共通FormSheetとインライン編集は呼出元mutationの `isPending` / `isError` を表示に使う。別のref/stateへ保存状態を複製せず、保存中の入力・閉じる操作・重複送信を抑止する。失敗時は入力を保持し、再表示時にmutationをresetする。全体の保存中表示は `shared/components/MutationFeedback.tsx` が担当する。
 
 API応答の実行時検証は共通clientの出力schemaで行う。feature hookで再検証したり、不正なDTOを一覧再取得で隠したりしない。保存応答のDTOを一覧に反映し、派生データの再取得はバックグラウンドで行う。家事完了の一覧同期は最後のpending mutationが終了するときにまとめる。楽観表示をDB保存済みの証拠として扱わず、再読込の検証では保存応答も待つ。
 
 `lib/api/serverClient.ts` は待ち行列を持たずServer Functionsへ送信する。日間・週1回はcomplete/incomplete、週複数回はincrement/decrementという意図を送る。mutationは `networkMode: "always"` / `retry: false` とし、オフラインでも一度試みて失敗を返す。更新を自動再送しない。ログアウト・所属変更ではAbortControllerで古い通信を打ち切り、Queryキャッシュと接続を破棄する。
+
+### 画面遷移とキャッシュ
+
+`app/route-preload.ts` はナビゲーションのタッチ・ホバー・フォーカスで画面コードと並列にデータを先読みする。画面と先読みは同じquery optionsを使い、30秒の鮮度判定と実行中の通信をQueryClientで共有する。ToDo一覧・カテゴリーは `shared/query/todoQueries.ts` に集約する。先読みは `prefetchQuery` を使い、失敗でナビゲーションを止めず再試行できる。読み取りのAbortSignalは共通clientへ渡し、所属変更後の遅い応答でキャッシュを再作成しない。
 
 ## D1の更新
 
@@ -58,9 +62,9 @@ Better Authのnickname/colorHexは追加項目（input:false）としてアプ�
 
 `infrastructure/team-realtime.ts` のTeamRealtimeは公式WebSocket Hibernation APIを使い、認証済みuserId/sessionId/teamIdをattachmentに保存する。復帰時は `getWebSockets()` と `deserializeAttachment()` から一覧を作る。接続一覧・業務データをDOのSQLに保存しない。通知時にセッション期限・失効・所属を検査し、不正な接続を閉じる。D1への認可照会と配信は公式`blockConcurrencyWhile`内で実行し、その間の入退室による未検証接続への配信・presenceの順序逆転を防ぐ。この範囲に業務データの更新は含めない。認可照会失敗時はログを残して接続を閉じ、再接続へ戻す。複数タブはuserIdでまとめ、最後の接続を閉じたときにpresenceの接続中一覧から外す。
 
-メッセージは `contracts/realtime.ts` のpresence（userIdsの全置換）とteam-changed（再取得通知）。Server FunctionsとジョブはD1保存後に通知し、失敗は構造化ログへ記録する。通知失敗を保存失敗にしない。
+メッセージは `contracts/realtime.ts` のpresence（userIdsの全置換）とteam-changed（再取得通知）。team-changedの任意のchangesには業務上の変更範囲を載せ、関連するQueryだけを無効化する。`application/operation-changes.ts` が全operationの読み取り/変更範囲を型付きで定義する。changesのない旧形式・定期ジョブの通知は全体再取得として扱う。Server FunctionsとジョブはD1保存後に通知し、失敗は構造化ログへ記録する。通知失敗を保存失敗にしない。
 
-`useTeamRealtime.ts` は共通レイアウトに1接続を持ち、ページ移動では再接続しない。接続・復帰・team-changedで関連Queryを再取得する。mutation中の通知は終了までまとめ、楽観表示を上書きしない。切断時は接続中ユーザーIDの一覧を空にして再接続状態へ切り替え、指数バックオフで接続だけを再試行する。業務更新は再送しない。
+`useTeamRealtime.ts` は共通レイアウトに1接続を持ち、ページ移動では再接続しない。接続・復帰では全体を同期し、team-changedでは変更範囲に対応するQueryを再取得する。mutation中の通知は変更範囲の和集合として終了までまとめ、全体通知を優先する。楽観表示を上書きしない。切断時は接続中ユーザーIDの一覧を空にして再接続状態へ切り替え、指数バックオフで接続だけを再試行する。業務更新は再送しない。
 
 ヘッダーのConnectedMembersは自分を含むチームメンバーを接続の有無にかかわらず表示する。接続中は通常色、未接続は彩度・不透明度を下げたグレー寄りの表示とする。自分の通信が切れた場合もアイコンは残し、全員を薄い色の「接続確認中」として古いpresenceを表示に使わない。スマートフォンは左にチーム名と日付、右上にメンバーのアイコンを置き、PCでは横一列にする。アイコンは先頭2人まで表示し、残りは「+人数」に集約してタップで全員の名前・状態・アイコンを確認できる。名前と接続状態はタップ、ホバー、キーボードフォーカスで確認でき、Escapeまたはフォーカスが外れると閉じる。閲覧ページや操作中状態は収集しない。他メンバーの通信断・強制終了ではサーバーの切断検知まで接続中表示が残る。
 

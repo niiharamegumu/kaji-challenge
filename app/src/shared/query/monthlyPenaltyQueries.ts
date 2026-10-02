@@ -6,10 +6,11 @@ import { queryKeys } from "./queryKeys";
 export const monthlyPenaltySummaryQueryOptions = (month: string) =>
   queryOptions({
     queryKey: [...queryKeys.monthlySummary, month],
-    queryFn: async () => (await getPenaltySummaryMonthly({ month })).data,
+    queryFn: async ({ signal }) => (await getPenaltySummaryMonthly({ month }, { signal })).data,
   });
 
 export const penaltyRulesWithDeletedQueryOptions = queryOptions({
   queryKey: [...queryKeys.rules, "withDeleted"],
-  queryFn: async () => (await listPenaltyRules({ includeDeleted: true })).data.items,
+  queryFn: async ({ signal }) =>
+    (await listPenaltyRules({ includeDeleted: true }, { signal })).data.items,
 });
