@@ -35,7 +35,7 @@ it.each(["daily", "weekly"] as const)(
     view.rerender(<PastTaskCompletionControl {...props} isSaving />);
     expect(button).toHaveFocus();
     expect(button).toHaveAttribute("aria-disabled", "true");
-    expect(screen.getByRole("status")).toHaveTextContent("保存中…");
+    expect(screen.queryByText("保存中…")).not.toBeInTheDocument();
     await user.keyboard("{Enter}");
     await user.click(button);
     expect(onUpdate).toHaveBeenCalledTimes(1);
@@ -63,7 +63,7 @@ it.each(["daily", "weekly"] as const)(
       taskId: item.taskId,
       targetDate: props.targetDate,
       type,
-      action: "decrement",
+      action: type === "daily" ? "incomplete" : "decrement",
     });
   },
 );
