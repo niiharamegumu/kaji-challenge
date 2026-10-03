@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Suspense } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -64,6 +64,7 @@ function Probe({ status }: { status: (message: string) => void }) {
   const mutation = useToggleCompletionMutation(status, actor);
   return (
     <>
+      <button onClick={() => mutation.toggleAllDaily()}>一括切り替え</button>
       {homeQuery.data.dailyTasks.map((item) => (
         <button
           key={item.task.id}
@@ -83,11 +84,11 @@ function Probe({ status }: { status: (message: string) => void }) {
     </>
   );
 }
-function setup() {
+function setup(home = fixture()) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity }, mutations: { retry: false } },
   });
-  client.setQueryData(queryKeys.home, fixture());
+  client.setQueryData(queryKeys.home, home);
   client.setQueryData(queryKeys.todoItems, []);
   client.setQueryData([...queryKeys.rules, "withDeleted"], []);
   client.setQueryData(
@@ -109,6 +110,106 @@ function setup() {
 beforeEach(() => {
   api.save.mockReset();
   api.load.mockReset().mockReturnValue(new Promise(() => {}));
+});
+
+it("bulk completes only unfinished daily tasks and then clears all daily completions", async () => {
+  const home = fixture();
+  const other = { userId: "other", effectiveName: "別の人" };
+  home.dailyTasks[0] = { ...home.dailyTasks[0], completedToday: true, completedBy: other };
+  api.save.mockImplementation((_id, body) =>
+    Promise.resolve({ data: { completed: body.action === "complete", weeklyCompletedCount: 0 } }),
+  );
+  const { client, user } = setup(home);
+  await user.click(screen.getByRole("button", { name: "一括切り替え" }));
+  await waitFor(() => expect(client.isMutating()).toBe(0));
+  expect(api.save).toHaveBeenCalledTimes(1);
+  expect(api.save).toHaveBeenCalledWith("B", { targetDate: home.today, action: "complete" });
+  expect(screen.getByRole("button", { name: "A:完了" })).toBeVisible();
+  expect(screen.getByRole("button", { name: "B:完了" })).toBeVisible();
+  const saved = client.getQueryData<TaskOverviewResponse>(queryKeys.home)!;
+  expect(saved.dailyTasks[0].completedBy).toEqual(other);
+  expect(saved.dailyTasks[1].completedBy).toEqual(actor);
+  expect(saved.weeklyTasks).toEqual(home.weeklyTasks);
+
+  api.save.mockClear();
+  await user.click(screen.getByRole("button", { name: "一括切り替え" }));
+  await waitFor(() => expect(client.isMutating()).toBe(0));
+  expect(api.save.mock.calls).toEqual([
+    ["A", { targetDate: home.today, action: "incomplete" }],
+    ["B", { targetDate: home.today, action: "incomplete" }],
+  ]);
+  expect(screen.getByRole("button", { name: "A:未完了" })).toBeVisible();
+  expect(screen.getByRole("button", { name: "B:未完了" })).toBeVisible();
+  expect(
+    client
+      .getQueryData<TaskOverviewResponse>(queryKeys.home)
+      ?.dailyTasks.every((item) => item.completedBy === null),
+  ).toBe(true);
+});
+
+it("previews bulk completion, blocks duplicate taps before rendering, and retries only failed tasks", async () => {
+  const a = deferred<{ data: { completed: boolean } }>();
+  const b = deferred<{ data: { completed: boolean } }>();
+  api.save.mockImplementation((id: string) => (id === "A" ? a.promise : b.promise));
+  const { client, status, user } = setup();
+  const button = screen.getByRole("button", { name: "一括切り替え" });
+  act(() => {
+    fireEvent.click(button);
+    fireEvent.click(button);
+    fireEvent.click(screen.getByRole("button", { name: "A:未完了" }));
+  });
+  await waitFor(() => expect(api.save).toHaveBeenCalledTimes(2));
+  expect(await screen.findByRole("button", { name: "A:完了" })).toBeVisible();
+  expect(screen.getByRole("button", { name: "B:完了" })).toBeVisible();
+  await act(async () => a.resolve({ data: { completed: true } }));
+  await user.click(button);
+  expect(api.save).toHaveBeenCalledTimes(2);
+  await act(async () => b.reject(new Error("offline")));
+  await waitFor(() => expect(client.isMutating()).toBe(0));
+  expect(screen.getByRole("button", { name: "A:完了" })).toBeVisible();
+  expect(screen.getByRole("button", { name: "B:未完了" })).toBeVisible();
+  expect(status).toHaveBeenCalledWith(expect.stringContaining("更新失敗"));
+
+  api.save.mockClear().mockResolvedValue({ data: { completed: true } });
+  await user.click(button);
+  await waitFor(() => expect(client.isMutating()).toBe(0));
+  expect(api.save.mock.calls).toEqual([
+    ["B", { targetDate: dateStringInJST(), action: "complete" }],
+  ]);
+});
+
+it("does not start a bulk change during an individual daily save", async () => {
+  const saved = deferred<never>();
+  api.save.mockReturnValue(saved.promise);
+  const { user } = setup();
+  await user.click(screen.getByRole("button", { name: "A:未完了" }));
+  await user.click(screen.getByRole("button", { name: "一括切り替え" }));
+  expect(api.save).toHaveBeenCalledTimes(1);
+  await act(async () => saved.reject(new Error("offline")));
+});
+
+it("does not save when the daily list is empty", async () => {
+  const { user } = setup({ ...fixture(), dailyTasks: [] });
+  await user.click(screen.getByRole("button", { name: "一括切り替え" }));
+  expect(api.save).not.toHaveBeenCalled();
+});
+
+it("refreshes a previous day's task overview before allowing a bulk update", async () => {
+  const { client, status, user } = setup({ ...fixture(), today: "2000-01-01" });
+  const button = screen.getByRole("button", { name: "一括切り替え" });
+  api.save.mockResolvedValue({ data: { completed: true } });
+  await user.click(button);
+  expect(api.save).not.toHaveBeenCalled();
+  expect(status).toHaveBeenCalledWith(expect.stringContaining("日付が変わりました"));
+  await waitFor(() => expect(api.load).toHaveBeenCalledTimes(1));
+
+  act(() => client.setQueryData(queryKeys.home, fixture()));
+  await user.click(button);
+  await waitFor(() => expect(client.isMutating()).toBe(0));
+  expect(api.save.mock.calls).toEqual([
+    ["A", { targetDate: dateStringInJST(), action: "complete" }],
+    ["B", { targetDate: dateStringInJST(), action: "complete" }],
+  ]);
 });
 
 it("shows completion before the response, rejects duplicate taps, and keeps other pending changes on failure", async () => {
