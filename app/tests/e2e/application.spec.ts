@@ -11,6 +11,7 @@ const peerToken = crypto.randomUUID(),
   categoryOrderToken = crypto.randomUUID(),
   swipeAreaToken = crypto.randomUUID(),
   summaryToken = crypto.randomUUID(),
+  bulkDailyToken = crypto.randomUUID(),
   performanceToken = crypto.randomUUID();
 test.beforeAll(async () => {
   const path = process.env.KAJI_D1_TEST_PATH;
@@ -34,6 +35,7 @@ test.beforeAll(async () => {
       ["カテゴリー順序", categoryOrderToken],
       ["スワイプ領域", swipeAreaToken],
       ["サマリー検証", summaryToken],
+      ["日間一括検証", bulkDailyToken],
       ["キャッシュ検証", performanceToken],
     ]) {
       const id = crypto.randomUUID();
@@ -276,6 +278,75 @@ test("creates tasks, reorders with real drag sensors, and preserves navigation",
   await expect(page).toHaveURL(/calendar/);
   await page.goBack();
   await expect(page.getByText("操作確認A", { exact: true })).toBeVisible();
+});
+
+test("bulk toggles daily tasks only on home and persists both states", async ({
+  page,
+  context,
+}, testInfo) => {
+  await authenticate(context, bulkDailyToken);
+  await page.goto("/tasks");
+  await expect(page.getByRole("button", { name: /^すべて(完了|未完了)$/ })).toHaveCount(0);
+  for (const title of ["一括確認の掃除", "一括確認の洗濯"]) {
+    await page.getByRole("button", { name: "追加", exact: true }).click();
+    await page.getByLabel("タスク名", { exact: true }).fill(title);
+    await page.getByRole("button", { name: "追加する", exact: true }).click();
+    await expect(page.getByText(title, { exact: true })).toBeVisible();
+  }
+  await page.getByRole("button", { name: "ホーム", exact: true }).click();
+  const dailyPanel = page.getByRole("article").filter({
+    has: page.getByRole("heading", { name: "日間タスク" }),
+  });
+  const cards = dailyPanel.getByRole("button", { name: /一括確認.*日間/ });
+  const weeklyPanel = page.getByRole("article").filter({
+    has: page.getByRole("heading", { name: "週間タスク" }),
+  });
+  await expect(weeklyPanel.getByRole("button", { name: /^すべて(完了|未完了)$/ })).toHaveCount(0);
+
+  // 一部完了の状態から、残りだけを一括で完了できる。
+  const individualSaved = page.waitForResponse(
+    (response) =>
+      response.url().includes("/_serverFn/") &&
+      (response.request().postData()?.includes("postTaskCompletion") ?? false),
+  );
+  await cards.first().click();
+  expect((await individualSaved).ok()).toBe(true);
+  await expect(cards.first()).toHaveAttribute("aria-busy", "false");
+  const bulk = dailyPanel.getByRole("button", { name: "すべて完了", exact: true });
+  await expect(bulk).toBeEnabled();
+  await bulk.focus();
+  await page.keyboard.press("Enter");
+  const undo = dailyPanel.getByRole("button", { name: "すべて未完了", exact: true });
+  await expect(undo).toBeEnabled();
+  await expect(undo).toBeFocused();
+  await page.reload();
+  await expect(undo).toBeEnabled();
+  await expect(cards.getByRole("img", { name: "1回目: 日間一括検証", exact: true })).toHaveCount(2);
+  await page.screenshot({
+    path: testInfo.outputPath("home-daily-all-complete.png"),
+    fullPage: true,
+  });
+
+  await undo.click();
+  const complete = dailyPanel.getByRole("button", { name: "すべて完了", exact: true });
+  await expect(complete).toBeEnabled();
+  await page.reload();
+  await expect(complete).toBeEnabled();
+  await expect(cards.getByRole("img", { name: "1回目: 未完了", exact: true })).toHaveCount(2);
+  await page.screenshot({
+    path: testInfo.outputPath("home-daily-all-incomplete.png"),
+    fullPage: true,
+  });
+  if (testInfo.project.name === "mobile") {
+    await page.setViewportSize({ width: 320, height: 800 });
+    await expect(complete).toBeInViewport();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
+    await page.screenshot({ path: testInfo.outputPath("home-daily-narrow.png"), fullPage: true });
+  }
+
+  await page.getByRole("button", { name: "サマリー", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "月次サマリー" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^すべて(完了|未完了)$/ })).toHaveCount(0);
 });
 
 test("completed home cards release their animation layer before opening todo", async ({
