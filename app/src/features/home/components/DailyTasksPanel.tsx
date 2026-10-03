@@ -1,3 +1,4 @@
+import { Check } from "lucide-react";
 import type { TaskOverviewDailyTask } from "../../../lib/api/operations";
 import { CompletionSlots } from "../../../shared/components/CompletionSlots";
 import { HOME_PANEL_CLASS_NAME } from "./panelStyles";
@@ -6,29 +7,48 @@ type Props = {
   items: TaskOverviewDailyTask[];
   pendingTaskIds?: string[];
   onToggle: (taskId: string) => void;
+  onToggleAll: () => void;
 };
 
-export function DailyTasksPanel({ items, onToggle, pendingTaskIds = [] }: Props) {
+export function DailyTasksPanel({ items, onToggle, onToggleAll, pendingTaskIds = [] }: Props) {
   const completedCount = items.filter((item) => item.completedToday).length;
   const incompleteCount = items.length - completedCount;
+  const allCompleted = items.length > 0 && incompleteCount === 0;
+  const isSaving = items.some((item) => pendingTaskIds.includes(item.task.id));
 
   return (
     <article className={HOME_PANEL_CLASS_NAME}>
       <h2 className="px-2 text-lg font-semibold md:px-0">日間タスク</h2>
-      <dl className="mt-2 flex flex-wrap items-center gap-1.5 px-2 text-xs md:px-0">
-        <div className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-stone-700">
-          <dt className="text-[11px] text-stone-500">件数</dt>
-          <dd className="font-medium">{items.length}件</dd>
-        </div>
-        <div className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-stone-700">
-          <dt className="text-[11px] text-stone-500">完了</dt>
-          <dd className="font-medium">{completedCount}件</dd>
-        </div>
-        <div className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-stone-700">
-          <dt className="text-[11px] text-stone-500">未完了</dt>
-          <dd className="font-medium">{incompleteCount}件</dd>
-        </div>
-      </dl>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 pl-2 pr-2.5 md:pl-0">
+        <dl className="flex flex-wrap items-center gap-1.5 text-xs">
+          <div className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-stone-700">
+            <dt className="text-[11px] text-stone-500">件数</dt>
+            <dd className="font-medium">{items.length}件</dd>
+          </div>
+          <div className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-stone-700">
+            <dt className="text-[11px] text-stone-500">完了</dt>
+            <dd className="font-medium">{completedCount}件</dd>
+          </div>
+          <div className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-stone-700">
+            <dt className="text-[11px] text-stone-500">未完了</dt>
+            <dd className="font-medium">{incompleteCount}件</dd>
+          </div>
+        </dl>
+        <button
+          type="button"
+          aria-label={allCompleted ? "すべて未完了" : "すべて完了"}
+          title={allCompleted ? "すべて未完了" : "すべて完了"}
+          disabled={items.length === 0}
+          aria-disabled={items.length === 0 || isSaving}
+          aria-busy={isSaving}
+          className={`ml-auto inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 ${allCompleted ? "border-transparent bg-[color:var(--color-matcha-700)] text-white focus-visible:outline-rose-500" : "border-[color:var(--color-matcha-400)] bg-white text-[color:var(--color-matcha-700)] hover:bg-[color:var(--color-matcha-50)] focus-visible:outline-[color:var(--color-matcha-700)]"}`}
+          onClick={() => {
+            if (!isSaving) onToggleAll();
+          }}
+        >
+          <Check size={12} aria-hidden="true" />
+        </button>
+      </div>
       <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
         {items.length === 0 ? (
           <p className="px-2 text-sm text-stone-500 md:px-0">日間タスクはありません。</p>

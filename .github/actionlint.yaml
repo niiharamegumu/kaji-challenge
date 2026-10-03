@@ -1,0 +1,6 @@
+# actionlint 1.7.12's bundled runner list predates this GitHub-hosted image.
+# This extends label validation only; the workflows still use GitHub-hosted runners.
+# https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2604-Readme.md
+self-hosted-runner:
+  labels:
+    - ubuntu-26.04

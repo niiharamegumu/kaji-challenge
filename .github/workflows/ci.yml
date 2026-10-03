@@ -6,7 +6,7 @@ permissions:
   contents: read
 jobs:
   cloudflare-quality:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     defaults:
       run:
         working-directory: app
@@ -16,7 +16,7 @@ jobs:
           persist-credentials: false
       - name: Validate GitHub Actions workflows
         working-directory: .
-        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.11 -color
+        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12 -color
       - uses: actions/setup-node@v6
         with:
           node-version: 24
@@ -28,7 +28,7 @@ jobs:
       - run: bunx playwright install --with-deps chromium
       - name: Verify build, SPA shell, D1, and browser behavior
         run: bun run test:local
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: local-verification-results

@@ -30,7 +30,7 @@
 
 一括検証は一時ディレクトリにソースをコピーし、テスト専用の認証設定とD1保存先を使う。普段の `.dev.vars` / `.env*` / `.wrangler` はコピーしない。終了時に一時DBを破棄し、成功・失敗結果とブラウザー証跡を `app/test-results/` に保存する。
 
-Alchemyのbootstrap/plan/deployは `--help` でCLI起動を確認し、アプリのbuildだけでは検出できない実行時peer依存の欠落・RC版の不整合を検出する。`ALCHEMY_HOME` は一時ディレクトリへ向け、実資格情報の読み込みやクラウドへの配備を行わない。Effectとplatform-bun/platform-node、およびoverrideしたplatform-node-sharedは対応する同じRC版で更新する。
+Alchemyのbootstrap/plan/deployは `--help` でCLI起動を確認し、アプリのbuildだけでは検出できない実行時peer依存の欠落・バージョンの不整合を検出する。`ALCHEMY_HOME` は一時ディレクトリへ向け、実資格情報の読み込みやクラウドへの配備を行わない。Effectとplatform-bun/platform-node、およびoverrideしたplatform-node-sharedはAlchemyのpeer要件を満たす同じバージョンで更新する。依存更新時も監査の除外を追加せず `bun audit --audit-level moderate` を実行し、配備ツール更新の本番確認は [Issue #153](https://github.com/niiharamegumu/kaji-challenge/issues/153) で追跡する。
 
 PRのCIは `test:local` で、Cloudflare公式pluginによる `vp build` と `vp preview` を検証する。build時は実資格情報だけでなくテスト用 `.dev.vars` も用意せず、CD同様に秘密値なしでSPA shellを生成する。build後に入口・assetsディレクトリ・PWAのshell登録を確認し、テスト用認証設定を追加してD1/E2Eを行う。Alchemyの内部APIや別プラグインによる代替buildは使用しない。本番はAlchemyの公開 `Worker` APIでこの形式の生成物を再bundleせず配備する。本番binding・権限・公開ドメイン・リソース更新はCDで別途確認する。
 
