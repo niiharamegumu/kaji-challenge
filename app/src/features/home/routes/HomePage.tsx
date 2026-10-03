@@ -105,6 +105,7 @@ export function HomePage() {
         <DailyTasksPanel
           items={home.dailyTasks}
           pendingTaskIds={toggleMutation.pendingTaskIds}
+          onToggleAll={toggleMutation.toggleAllDaily}
           onToggle={(taskId) => {
             toggleMutation.toggle({ taskId, action: "toggle" });
           }}
