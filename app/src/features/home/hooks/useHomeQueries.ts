@@ -193,6 +193,38 @@ export function useToggleCompletionMutation(
     pendingTaskIds: pending
       .filter((change) => change.action === "complete" || change.action === "incomplete")
       .map((change) => change.taskId),
+    toggleAllDaily: () => {
+      const home = queryClient.getQueryData<TaskOverviewResponse>(queryKeys.home);
+      if (!home || home.dailyTasks.length === 0) return;
+      const targetDate = dateStringInJST();
+      if (home.today !== targetDate) {
+        setStatus("日付が変わりました。最新のタスクを読み込み直しています。");
+        void queryClient.invalidateQueries({ queryKey: queryKeys.home });
+        return;
+      }
+      const dailyTaskIds = new Set(home.dailyTasks.map((item) => item.task.id));
+      // 再描画前の連打や個別操作との競合も、送信直前のpending確認で防ぐ。
+      if (
+        queryClient.isMutating({
+          mutationKey: completionMutationKey,
+          predicate: (item) => dailyTaskIds.has((item.state.variables as CompletionChange).taskId),
+        }) > 0
+      )
+        return;
+
+      const completed = home.dailyTasks.some((item) => !item.completedToday);
+      for (const item of home.dailyTasks) {
+        if (item.completedToday === completed) continue;
+        mutation.mutate({
+          taskId: item.task.id,
+          action: completed ? "complete" : "incomplete",
+          targetDate,
+          actor,
+          completed,
+          count: 0,
+        });
+      }
+    },
     toggle: (intent: CompletionIntent) => {
       const home = queryClient.getQueryData<TaskOverviewResponse>(queryKeys.home);
       if (!home) return;
