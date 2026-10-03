@@ -1343,16 +1343,21 @@ test("shares optimistic ToDo order across navigation, rolls back failure, and pe
   const nextOrder = [...firstOrder].reverse();
   const moveAFirst = async () => {
     const handle = page.getByRole("button", { name: "順序検証A をドラッグして並び替え" });
-    const target = page.getByRole("button", { name: "順序検証B をドラッグして並び替え" });
     await handle.focus();
     await page.keyboard.press("Space", { delay: 100 });
     await expect(handle).toHaveAttribute("aria-pressed", "true");
     await page.keyboard.press("ArrowUp");
+    // Animated coordinates can move before the actual drop target is updated.
+    // Wait for the accessible announcement to confirm a different target before dropping.
     await expect
       .poll(async () => {
-        const from = await handle.boundingBox();
-        const to = await target.boundingBox();
-        return from !== null && to !== null && from.y < to.y;
+        const announcements = await page.getByRole("status").allTextContents();
+        return announcements.some((message) => {
+          const match = /^Draggable item (\S+) was moved over droppable area (\S+)\.$/.exec(
+            message,
+          );
+          return match !== null && match[1] !== match[2];
+        });
       })
       .toBe(true);
     await page.keyboard.press("Space");
