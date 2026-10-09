@@ -7,8 +7,10 @@ import {
   approvedMigrations,
   assertNoBootstrap,
   deploymentPlanOnly,
+  deploymentPlanningPhase,
   deploymentPlanSummary,
   routeMatchesHostname,
+  safeDeploymentFailure,
   validateDeploymentPlan,
   validateMigrationFiles,
   validateMigrationLedger,
@@ -17,6 +19,83 @@ import {
 type Snapshot = {
   -readonly [K in "stack" | "summary" | "resources" | "actions"]: Stack.PlanSnapshot[K];
 };
+
+describe("safe deployment failure diagnostics", () => {
+  it("classifies preview failures without disclosing response bodies or credentials", () => {
+    const failure = {
+      reasons: [
+        {
+          _tag: "Fail",
+          error: {
+            _tag: "EdgeSessionError",
+            message: "Secret probe returned 403: private-token-value",
+            cause: { _tag: "Forbidden", status: 403, body: "private-token-value" },
+          },
+        },
+      ],
+    };
+    expect(safeDeploymentFailure(failure)).toEqual({
+      tags: ["EdgeSessionError", "Forbidden"],
+      classifications: ["preview_probe_http_failure"],
+      statuses: [403],
+      codes: [],
+    });
+    expect(JSON.stringify(safeDeploymentFailure(failure))).not.toContain("private-token-value");
+  });
+  it("reports only known SDK authentication classifications", () => {
+    expect(
+      safeDeploymentFailure({
+        _tag: "AuthError",
+        message: "Cloudflare State store not found. Run arbitrary-private-suffix",
+      }).classifications,
+    ).toEqual(["state_store_unavailable"]);
+    expect(
+      safeDeploymentFailure({
+        _tag: "private-token-value",
+        message: "private-token-value",
+        status: 403,
+        code: 10000,
+      }),
+    ).toEqual({ tags: [], classifications: [], statuses: [], codes: [] });
+  });
+  it("keeps safe API codes while ignoring request, headers, annotations and getters", () => {
+    const failure = {
+      _tag: "CloudflareHttpError",
+      code: 10000,
+      status: 403,
+      request: { _tag: "Forbidden" },
+      annotations: { _tag: "Unauthorized" },
+      get cause() {
+        throw new Error("must not evaluate getters");
+      },
+    };
+    expect(safeDeploymentFailure(failure)).toEqual({
+      tags: ["CloudflareHttpError"],
+      classifications: [],
+      statuses: [403],
+      codes: [10000],
+    });
+  });
+  it("bounds cyclic or large cause trees", () => {
+    const failure: { _tag: string; cause?: unknown } = { _tag: "TimeoutError" };
+    failure.cause = failure;
+    expect(safeDeploymentFailure(failure).tags).toEqual(["TimeoutError"]);
+    expect(
+      safeDeploymentFailure({ reasons: Array.from({ length: 100 }, () => failure) }).tags,
+    ).toEqual(["TimeoutError"]);
+  });
+  it("exposes only the fixed planning phases", () => {
+    expect(deploymentPlanningPhase({ _tag: "plan.phase", phase: "loading-state" })).toBe(
+      "loading-state",
+    );
+    expect(
+      deploymentPlanningPhase({ _tag: "plan.phase", phase: "private-token-value" }),
+    ).toBeUndefined();
+    expect(
+      deploymentPlanningPhase({ _tag: "different-event", phase: "loading-state" }),
+    ).toBeUndefined();
+  });
+});
 function plan(): Snapshot {
   return {
     stack: { name: "kaji-challenge", stage: "production" },

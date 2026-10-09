@@ -9,8 +9,10 @@ import {
   assertNoBootstrap,
   DeploymentGuardError,
   deploymentPlanOnly,
+  deploymentPlanningPhase,
   deploymentPlanSummary,
   routeMatchesHostname,
+  safeDeploymentFailure,
   validateDeploymentPlan,
   validateMigrationFiles,
   validateMigrationLedger,
@@ -283,12 +285,14 @@ async function main() {
     yield* Alchemy.Stack.apply(snapshot);
     console.log("Approved production snapshot applied.");
   });
-  await Effect.runPromise(
+  const exit = await Effect.runPromiseExit(
     program.pipe(
       Effect.provideService(Alchemy.Progress, (event) =>
         Effect.sync(() => {
           try {
             assertNoBootstrap(event);
+            const planningPhase = deploymentPlanningPhase(event);
+            if (planningPhase) phase = `plan: ${planningPhase}`;
           } catch (error) {
             recordGuardFailure(error);
           }
@@ -301,6 +305,12 @@ async function main() {
       Effect.provideService(References.MinimumLogLevel, "None"),
     ),
   );
+  if (exit._tag === "Failure") {
+    console.error(
+      JSON.stringify({ event: "deployment_failure", ...safeDeploymentFailure(exit.cause) }),
+    );
+    throw new DeploymentGuardError("Deployment failed; inspect the safe diagnostic summary.");
+  }
 }
 
 void main().catch((error: unknown) => {

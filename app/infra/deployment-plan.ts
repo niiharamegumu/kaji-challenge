@@ -2,6 +2,138 @@ import type { Stack } from "alchemy/Alchemist";
 
 export class DeploymentGuardError extends Error {}
 
+const diagnosticTags = new Set([
+  "AuthError",
+  "EdgeSessionError",
+  "StateStoreError",
+  "StateStoreVersionNotReady",
+  "Unauthorized",
+  "Forbidden",
+  "NotFound",
+  "WorkerNotFound",
+  "WorkerHasNoVersions",
+  "StoreNotFound",
+  "SecretNotFound",
+  "InvalidRoute",
+  "CloudflareHttpError",
+  "UnknownCloudflareError",
+  "CloudflareParseError",
+  "HttpClientError",
+  "TransportError",
+  "StatusCodeError",
+  "DecodeError",
+  "EmptyBodyError",
+  "TimeoutError",
+  "ConfigError",
+  "StackEntrypointError",
+  "TerminalCancelled",
+  "NonInteractiveTerminal",
+  "BadRequest",
+  "TooManyRequests",
+  "InternalServerError",
+  "GatewayTimeout",
+  "UnknownError",
+  "Effect.UnknownError",
+]);
+
+/** Do not serialize exceptions: provider errors may contain secret response bodies. */
+export function safeDeploymentFailure(value: unknown) {
+  const tags = new Set<string>();
+  const classifications = new Set<string>();
+  const statuses = new Set<number>();
+  const codes = new Set<number>();
+  const seen = new WeakSet<object>();
+  let visited = 0;
+  function visit(item: unknown, depth: number) {
+    if (!item || typeof item !== "object" || depth > 6 || visited >= 24 || seen.has(item)) return;
+    seen.add(item);
+    visited++;
+    if (Array.isArray(item)) {
+      for (const reason of item.slice(0, 8)) visit(reason, depth + 1);
+      return;
+    }
+    const fields = Object.getOwnPropertyDescriptors(item);
+    const read = (key: string): unknown => fields[key]?.value;
+    const tag = read("_tag") ?? read("name");
+    if (typeof tag === "string" && diagnosticTags.has(tag)) {
+      tags.add(tag);
+      const status = read("status");
+      if (typeof status === "number" && Number.isInteger(status) && status >= 100 && status <= 599)
+        statuses.add(status);
+      const code = read("code");
+      if (
+        tag.includes("Cloudflare") &&
+        typeof code === "number" &&
+        Number.isSafeInteger(code) &&
+        code >= 0 &&
+        code <= 1_000_000
+      )
+        codes.add(code);
+      const message = read("message");
+      if (tag === "AuthError" && typeof message === "string") {
+        if (message === "No Secrets Store found on this account. Deploy the state store first.")
+          classifications.add("secrets_store_missing");
+        if (
+          message === "Cloudflare State store authentication failed, after refreshing credentials."
+        )
+          classifications.add("state_store_auth_failed");
+        if (message.startsWith("Cloudflare State store is out of date (expected v"))
+          classifications.add("state_store_version_mismatch");
+        if (message.startsWith("Cloudflare State store not found. Run "))
+          classifications.add("state_store_unavailable");
+      }
+      if (tag === "EdgeSessionError" && typeof message === "string") {
+        const probe = /^Secret probe returned ([1-5][0-9]{2}): /.exec(message);
+        if (probe) {
+          classifications.add("preview_probe_http_failure");
+          statuses.add(Number(probe[1]));
+        }
+        if (message === "Failed to create edge preview session")
+          classifications.add("preview_session_failed");
+        if (message === "Failed to read secret") classifications.add("preview_secret_read_failed");
+      }
+      // Only these known error shapes carry an HTTP status in a nested response.
+      if (tag === "StateStoreError" || tag === "StatusCodeError") {
+        const response = read(tag === "StateStoreError" ? "http" : "response");
+        if (response && typeof response === "object") {
+          const nested = Object.getOwnPropertyDescriptor(response, "status")?.value;
+          if (
+            typeof nested === "number" &&
+            Number.isInteger(nested) &&
+            nested >= 100 &&
+            nested <= 599
+          )
+            statuses.add(nested);
+        }
+      }
+    }
+    for (const key of ["cause", "reasons", "error", "defect", "reason"])
+      visit(read(key), depth + 1);
+  }
+  visit(value, 0);
+  return {
+    tags: [...tags].sort(),
+    classifications: [...classifications].sort(),
+    statuses: [...statuses].sort(),
+    codes: [...codes].sort(),
+  };
+}
+
+export function deploymentPlanningPhase(event: { _tag: string; phase?: unknown }) {
+  const phases = [
+    "importing-module",
+    "resolving-services",
+    "loading-state",
+    "computing-plan",
+    "plan-ready",
+  ];
+  return event._tag === "plan.phase" &&
+    typeof event.phase === "string" &&
+    phases.includes(event.phase)
+    ? event.phase
+    : undefined;
+}
+
 function requireCondition(condition: unknown, message: string): asserts condition {
   if (!condition) throw new DeploymentGuardError(message);
 }
