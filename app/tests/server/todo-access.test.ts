@@ -139,6 +139,14 @@ describe("ToDo repository membership boundary", () => {
     },
   );
 
+  it("does not return another team's categories through a scoped repository", async () => {
+    const category = { id: crypto.randomUUID(), name: "Private foreign category" };
+    await connection.repository.CreateTodoCategory(otherTeamId, category);
+    const scoped = connection.repository.forMember(teamId, member);
+    await expect(scoped.ListTodoCategories(otherTeamId)).rejects.toMatchObject({ status: 404 });
+    expect(await connection.repository.ListTodoCategories(otherTeamId)).toContainEqual(category);
+  });
+
   it.each(["membership removed", "item deleted"])(
     "rejects completion if %s between the application read and DELETE",
     async (change) => {
