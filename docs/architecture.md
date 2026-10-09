@@ -12,6 +12,20 @@
 - browserからserver実装を直接importしない。例外は `serverClient.ts` から変換対象Server Functionへの入口と、契約schemaが利用する純粋な日付検証だけ。型importは許可する。
 - `make architecture-check` はUIとTS serverの依存境界を検査する。
 
+## MCP連携
+
+`src/server/transport/mcp-worker.ts` は独立したCloudflare Workerで、Agents SDKのstateless `createMcpHandler` とStreamable HTTPを使う。公開操作は `contracts/mcp.ts` の `list_todos`・`add_todo`・`complete_todo` のみ。userId/teamIdをツール引数として受け取らず、ToDoの返却DTOにもteamIdを含めない。完了は既存の物理削除を再利用し、破壊的操作のannotationを付ける。
+
+既存アプリの `mcp-oauth.ts` がworkers-oauth-providerのOAuthAuthorizationServerを `/api/mcp/oauth` に配置し、同じoriginのBetter Authセッションで同意者を確認する。既存Google callback・セッション・trustedOriginsは変更しない。S256 PKCE、正確なresource、許可したscopeを要求する。認可コード・access token・refresh token・クライアント登録はproviderのOAUTH_KVへ保存する。同意はproviderのnonceに加え、D1の一回限りのclaimを本人・現在のセッションに結び付ける。Google tokenやログインCookieをMCP tokenとして流用しない。
+
+MCP WorkerはOAuthResourceServerとして、片方向の `KAJI_APPLICATION` Service Bindingから既存Workerのnamed entrypoint `McpApplication` を呼ぶ。通常HTTP入口にRPCは公開しない。KVを持つ既存Workerでtokenを検証し、検証済みuserId/clientId/audience/scope/expiryとconnectionIdだけを内部RPCで渡す。任意のHTTPヘッダーによる本人指定はない。このbindingを付与できる配備権限は信頼境界に含む。MCP WorkerにはDB・KV・Google/Better Authの秘密情報をbindしない。
+
+Applicationの `mcp-operations.ts` は毎回、連携の所有者・grant・期限・失効・実tokenのscopeと現在の所属1件・roleを検査する。追加/完了は既存 `executeOperation` を使う。ToDo SQLでも対象teamIdと現在の所属、連携状態、許可scopeを検査し、他チームの項目IDや検証後の解除を拒否する。保存後は既存のToDo変更通知を再利用し、応答不明の書き込みは自動再送しない。
+
+連携は最大30日、access tokenは最大15分。`offline_access` を選択した場合のみrefreshでき、ログアウトでは解除されない。`/api/mcp/connections` で本人が解除するとD1を先に失効させ、続いてproviderのgrantを失効させる。標準RFC 7009失効も、providerがclient認証・token真正性・所有者を確認した後、管理patchのcallbackでD1を先に失効させる。access/refreshのどちらでも対応する連携全体を止める。KV削除失敗や並行refreshでtokenが残っても、D1で業務操作を拒否する。D1更新に失敗した失効要求は503とし、成功扱いしない。依存patchの範囲と更新手順は [mcp-oauth-provider-patch.md](mcp-oauth-provider-patch.md) に従う。チーム移動後は現在所属するチームが対象となり、この挙動を同意画面に表示する。
+
+AlchemyではMCP_ORIGIN設定時だけMCP WorkerとOAuth KVを追加し、MCP_ENABLEDは受付の停止/再開だけを制御する。未設定の既存配備では追加資源を作らない。KVはretain方針で、MCP_ORIGINの削除は管理資源の除去となるため停止手段として使わない。
+
 ## Server Functions
 
 `operations.functions.ts` は静的importできる `createServerFn` の入口。`validator` でZod検証し、handlerでsession/originを検証、Applicationでチーム認可を実施する。入力不正・業務エラーは型付き結果で返し、SQLや認証情報を返さない。入力と認可の検証後、用途別Repository操作で保存する。返却DTOも出力schemaで検証するが、既にcommitした保存は応答検証の失敗では取り消せない。結果はStartのシリアライズへ渡し、手動のJSON stringify/parseは行わない。

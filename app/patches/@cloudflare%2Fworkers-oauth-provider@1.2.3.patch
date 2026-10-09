@@ -1,0 +1,100 @@
+diff --git a/dist/oauth-provider.d.ts b/dist/oauth-provider.d.ts
+index 26fea07ff2cba75cf4c1d93e57f0cec518a4a680..005eb43d96c1a9ce02f9971c2d82e19e560a03be 100644
+--- a/dist/oauth-provider.d.ts
++++ b/dist/oauth-provider.d.ts
+@@ -774,6 +774,17 @@ interface TokenExchangeCallbackResult {
+    */
+   allowCrossClientExchange?: boolean;
+ }
++/**
++ * Verified identity for an RFC 7009 token revocation request.
++ * Raw tokens and secrets are deliberately not exposed to the application.
++ */
++interface TokenRevocationCallbackOptions<Env = Cloudflare.Env> {
++  tokenType: 'access_token' | 'refresh_token';
++  userId: string;
++  clientId: string;
++  grantId: string;
++  env: Env;
++}
+ /**
+  * Options for token exchange callback functions
+  */
+@@ -1066,6 +1077,17 @@ interface OAuthProviderOptions<Env = Cloudflare.Env> {
+    * If the callback returns nothing or undefined for a props field, the original props will be used.
+    */
+   tokenExchangeCallback?: (options: TokenExchangeCallbackOptions<Env>) => Promise<TokenExchangeCallbackResult | void> | TokenExchangeCallbackResult | void;
++  /**
++   * Called only after HTTP client authentication, token hash validation, and
++   * client ownership validation, before any token/grant KV deletion.
++   * Awaited for both access and current/previous refresh tokens. The application
++   * may revoke the entire associated connection for either token type.
++   * Must be idempotent: retries and concurrent revocations can call it again.
++   * Any exception stops KV deletion and returns a generic 503
++   * temporarily_unavailable response without exposing the exception.
++   * Trusted administrative OAuthHelpers.revokeGrant() does not call this hook.
++   */
++  tokenRevocationCallback?: (options: TokenRevocationCallbackOptions<Env>) => Promise<void> | void;
+   /**
+    * Optional callback called when a provided bearer credential was not found
+    * in the internal KV. It can validate an external OAuth access token, opaque
+@@ -2017,4 +2039,4 @@ declare class CimdFetchError extends Error {
+   constructor(metadataUrl: string, cause: unknown);
+ }
+ //#endregion
+-export { type ApprovedConsent, AuthRequest, AuthorizationError, type AuthorizationErrorCode, type AuthorizationErrorOptions, AuthorizationServerBinding, CimdFetchError, ClientInfo, ClientRegistrationCallbackOptions, ClientRegistrationCallbackResult, CompleteAuthorizationOptions, type ConsentDescription, type ConsentTransaction, type DeniedConsent, type EmaClaimsMapper, type EmaClaimsMapperInput, type EmaClaimsMapperResult, type EmaIdJagClaims, type EmaOptions, type EmaTrustedIssuer, type EmaTrustedIssuerResolver, type EmaTrustedIssuerResolverInput, type EmaValidationError, ExchangeTokenOptions, ExternalTokenError, ExternalTokenErrorOptions, Grant, GrantSummary, GrantType, ListOptions, ListResult, OAuthAuthorizationServer, OAuthAuthorizationServerOptions, OAuthError, type OAuthErrorInternal, type OAuthErrorOptions, OAuthHelpers, OAuthProtectedResourceMetadata, OAuthProvider, OAuthProvider as default, OAuthProviderOptions, OAuthResourceAuth, OAuthResourceContext, OAuthResourceHandler, OAuthResourceMetadata, OAuthResourceServer, OAuthResourceServerOptions, OAuthResourceTokenValidation, OAuthResourceTokenValidator, OAuthTokenErrorCode, PurgeOptions, PurgeResult, type RememberConsentOptions, ResolveExternalTokenInput, ResolveExternalTokenResult, type ResumedUpstream, Token, TokenBase, TokenExchangeCallbackOptions, TokenExchangeCallbackResult, TokenSummary, type UpstreamTransaction, ValidatedAccessToken, authorizationErrorRedirect, getOAuthApi, insufficientScope };
+\ No newline at end of file
++export { type ApprovedConsent, AuthRequest, AuthorizationError, type AuthorizationErrorCode, type AuthorizationErrorOptions, AuthorizationServerBinding, CimdFetchError, ClientInfo, ClientRegistrationCallbackOptions, ClientRegistrationCallbackResult, CompleteAuthorizationOptions, type ConsentDescription, type ConsentTransaction, type DeniedConsent, type EmaClaimsMapper, type EmaClaimsMapperInput, type EmaClaimsMapperResult, type EmaIdJagClaims, type EmaOptions, type EmaTrustedIssuer, type EmaTrustedIssuerResolver, type EmaTrustedIssuerResolverInput, type EmaValidationError, ExchangeTokenOptions, ExternalTokenError, ExternalTokenErrorOptions, Grant, GrantSummary, GrantType, ListOptions, ListResult, OAuthAuthorizationServer, OAuthAuthorizationServerOptions, OAuthError, type OAuthErrorInternal, type OAuthErrorOptions, OAuthHelpers, OAuthProtectedResourceMetadata, OAuthProvider, OAuthProvider as default, OAuthProviderOptions, OAuthResourceAuth, OAuthResourceContext, OAuthResourceHandler, OAuthResourceMetadata, OAuthResourceServer, OAuthResourceServerOptions, OAuthResourceTokenValidation, OAuthResourceTokenValidator, OAuthTokenErrorCode, PurgeOptions, PurgeResult, type RememberConsentOptions, ResolveExternalTokenInput, ResolveExternalTokenResult, type ResumedUpstream, Token, TokenBase, TokenExchangeCallbackOptions, TokenExchangeCallbackResult, TokenRevocationCallbackOptions, TokenSummary, type UpstreamTransaction, ValidatedAccessToken, authorizationErrorRedirect, getOAuthApi, insufficientScope };
+diff --git a/dist/oauth-provider.js b/dist/oauth-provider.js
+index c12a1c7aee8320c923c86f7fd9c69d7046b1c92d..a0c1434ff26232935507098534c12633820ae3c4 100644
+--- a/dist/oauth-provider.js
++++ b/dist/oauth-provider.js
+@@ -2926,7 +2926,19 @@ var OAuthProviderImpl = class {
+ 			const parsed = await this.parseTokenEndpointRequest(request, env);
+ 			if (parsed instanceof Response) return withCorsHeaders(parsed, request);
+ 			let response;
+-			if (parsed.isRevocationRequest) response = await this.revokeToken(parsed.body, parsed.clientInfo, env);
++			if (parsed.isRevocationRequest) {
++				try {
++					response = await this.revokeToken(parsed.body, parsed.clientInfo, env);
++				} catch {
++					response = this.createErrorResponse("temporarily_unavailable", {
++						description: "Token revocation is temporarily unavailable",
++						statusCode: 503
++					}, {
++						category: "token-revocation",
++						reason: "revocation_unavailable"
++					});
++				}
++			}
+ 			else response = await this.handleTokenRequest(parsed.body, parsed.clientInfo, parsed.clientAuthMethod, env, url, request);
+ 			if (response.ok && !this.errorResponses.has(response)) await this.renewClientRegistrationIfDue(env, parsed.clientInfo, Math.floor(Date.now() / 1e3));
+ 			return withCorsHeaders(response, request);
+@@ -4273,6 +4285,13 @@ var OAuthProviderImpl = class {
+ 		if (tokenClientId !== void 0) {
+ 			if (tokenClientId !== clientInfo.clientId) return false;
+ 		} else if ((await env.OAUTH_KV.get(`grant:${userId}:${grantId}`, { type: "json" }))?.clientId !== clientInfo.clientId) return false;
++		await this.options.tokenRevocationCallback?.({
++			tokenType: "access_token",
++			userId,
++			clientId: clientInfo.clientId,
++			grantId,
++			env
++		});
+ 		await this.revokeSpecificAccessToken(tokenId, userId, grantId, env);
+ 		return true;
+ 	}
+@@ -4282,6 +4301,13 @@ var OAuthProviderImpl = class {
+ 		if (!grantData) return false;
+ 		if (!(grantData.refreshTokenId === tokenId || grantData.previousRefreshTokenId === tokenId)) return false;
+ 		if (grantData.clientId !== clientInfo.clientId) return false;
++		await this.options.tokenRevocationCallback?.({
++			tokenType: "refresh_token",
++			userId,
++			clientId: clientInfo.clientId,
++			grantId,
++			env
++		});
+ 		await this.createOAuthHelpers(env).revokeGrant(grantId, userId);
+ 		return true;
+ 	}

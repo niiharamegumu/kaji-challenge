@@ -44,6 +44,8 @@ Google実OAuth、Cloudflare本番D1の性能・権限、iPhone実機Pushは配�
 
 本番配備の回帰検証では、production以外のstageの拒否、healthの旧release・異常HTTP・不正JSON・接続失敗への再試行と上限を確認する。workflowの構文はactionlintで検証する。実Cloudflareへのplan/deployはローカルテストでは実行しない。
 
+`deployment-plan.test.ts` は本番配備の許可範囲を検証する。資源・bindingの削除、置換、未知の追加、過去migrationの改変・再適用、状態保存先のbootstrapを拒否する。CDは公開Alchemy APIで検査した同じ計画を適用し、`DEPLOY_PLAN_ONLY=true` の場合は適用しない。SDKの生ログは抑止し、値を含まない計画要約と既知のエラーだけを出す。新しい資源やmigrationを追加する際は、この許可範囲とテストもレビューする。
+
 ## 登録制限・認証境界
 
 `tests/server/auth-access.test.ts` は実D1とBetter AuthのOAuth保存処理で、許可外/類似メールの拒否とDB無変更、許可メールの正規化、既存ユーザーの再ログイン、同じメールを使う別Google subjectの連結拒否を検証する。未確認メール、password認証の無効化、期限切れ/失効/改ざんセッション、認証のorigin/redirect制約も確認する。Googleによる署名検証・実OAuthは別途必要で、fixtureがそこを検証したとは扱わない。
@@ -93,3 +95,16 @@ ToDo完了の取り消しはfake timerで2999ms時点の未実行と3000ms時点
 `todoFeedback.test.tsx` は応答前の編集/並べ替え、画面の再mountでの共有、部分失敗、別操作の追加/編集/完了を遅い並べ替え応答で消さないことを確認する。E2Eでは保存リクエストを保留した状態でToDoからホームへ移動し、順序の即時共有・失敗後の復元・再試行とリロード後の保存をdesktop/mobileで検証する。
 
 `reminder-period.test.ts` は実D1で期間に重ならない予定の除外、開始/終了日の包含、期限切れ単発予定と繰り返し予定の区別、別チーム分離を確認する。取得行数の減少は検証するが、本番D1のレイテンシ改善率としては扱わない。
+
+
+## MCP / OAuth / Workers RPC
+
+`mcp-connections.test.ts` は実D1で単回同意・grant結合・本人限定の失効・期限・FKを検証する。`mcp-operations.test.ts` と `todo-access.test.ts` は現在所属、他チームID、scope、SQL直前の解除、既存ToDo処理の再利用を確認する。
+
+`mcp-oauth.test.ts` は実provider・KV・D1とテスト専用Better Authセッションで、S256、resource、同意scope縮小、CSRF、セッション結合、code再利用、refreshと解除を検証する。実Google OAuthやChatGPTアカウントの権限は検証しない。`mcp-worker.test.ts` は実SDKのHTTP要求で3ツール・厳密な入力・scope challenge・並行利用者の分離・本文制限を検証する。
+
+`mcp-workers.test.ts` は2つの実workerd Workerとnamed Service Bindingを使い、OAuthからMCP読み書き・解除までを隔離D1/KVで確認する。外部通信と本番の認証情報を使用しない。全体 `test:local` では既存アプリのMCP設定を無効にし、buildにMCP bundleとnamed exportが含まれ、MCP側にDB/KV/秘密情報がbindされないことも確認する。
+
+RFC 7009失効はaccess/refresh両方でD1先行を確認し、別client・不正tokenでD1が変わらないこと、D1障害時の503、KV削除障害後や並行refresh後もlist/add/completeと以後のrefreshが拒否されることを検証する。障害注入はテストfixtureに限定する。`check-oauth-provider-patch.mjs` はbuildと一括検証で依存versionとpatch登録を確認する。上流更新時の確認範囲は [mcp-oauth-provider-patch.md](mcp-oauth-provider-patch.md) を参照する。
+
+実ChatGPT/Codex接続では先に公開先とOAuth権限の承認を得る。読み取り、承認済みテスト項目の追加、同じ項目だけの完了、解除後の拒否を順に確認し、サーバーのHTTP/認可失敗とクライアントプランの制約を分けて記録する。

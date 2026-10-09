@@ -1,6 +1,6 @@
 # データベースの責務
 
-Cloudflare D1に19テーブルを持つ。ユーザー情報の正本はBetter Authの `auth_user`。旧アプリ用 `users` は削除し、メール・表示名・作成日時の二重保存と同期処理をなくした。
+Cloudflare D1に21テーブルを持つ。ユーザー情報の正本はBetter Authの `auth_user`。旧アプリ用 `users` は削除し、メール・表示名・作成日時の二重保存と同期処理をなくした。
 
 | 領域 | テーブル | 残す理由 |
 | --- | --- | --- |
@@ -70,3 +70,12 @@ ToDoは `todo_items.category_id` でカテゴリーを参照する。未分類�
 並べ替えリクエストは固定IDとnullを含む `categoryIds` 配列。nullちょうど1件とID重複なしを契約で検証し、チーム所属と保存済みID集合の一致を単一UPDATEで検査する。保存時にIDから現在のカテゴリーオブジェクトを取得するため、並べ替え前後で名前が変わっても古い名前で上書きしない。途中で追加・削除された古い一覧は409で拒否し、同じ集合の並べ替え同士は最後に保存した順序を採用する。
 
 `0006_todo_category_order.sql` は過去の位置カラム追加SQLとして保持する。`0007_todo_category_ids.sql` は `category` → `category_id` の改名と `todo_unclassified_sort_key` の削除だけ。カテゴリー名からIDへの業務データ変換はmigrationに含めず、独立した手動スクリプトで行う。**既存DBは0007の適用前に、旧Workerの書き込みを停止して変換する必要がある。** 手順と再実行・復旧条件は [カテゴリーID変換手順](todo-category-id-conversion.md) を参照。
+
+
+## MCPの認可状態
+
+`0008_mcp_connections.sql` は既存のToDo・カテゴリーを変更せず、連携状態用の `mcp_connections` と単回同意用の `mcp_consent_claims` を追加する。買い物/ToDoの重複テーブルは作らない。
+
+連携はauth_userの本人ID・clientId・resource・同意scope・provider grant ID・有効期限・解除日時を持つ。grant IDは最初の認可コード交換時だけ原子的に結合し、同じコードの並行交換を拒否する。同意claimはhandleのSHA-256だけを保存し、本人と現在のauth_session・期限と未消費を条件に単回UPDATEで消費する。ユーザー/セッション削除はFKで反映する。認可コードとbearer/refresh token自体はD1へ保存せず、workers-oauth-providerのKVで管理する。
+
+D1連携解除はKV失効より先に行う。access tokenがKVで一時的に有効でも、Applicationと書き込みSQLのD1検査で拒否する。D1とKVの分散transactionは持たず、失敗時は安全側に拒否して新しい同意か解除の再実行で回復する。放棄された同意claim・期限切れ連携の保持期間と定期削除は、運用量に応じて別途決める。

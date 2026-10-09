@@ -17,5 +17,5 @@
     "noFallthroughCasesInSwitch": true,
     "types": ["vitest/globals", "@testing-library/jest-dom", "@cloudflare/workers-types"]
   },
-  "include": ["src", "worker-configuration.d.ts"]
+  "include": ["src", "worker-configuration.d.ts", "mcp-worker-configuration.d.ts"]
 }

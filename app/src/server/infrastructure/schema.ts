@@ -9,9 +9,51 @@ import {
   uniqueIndex,
   check,
 } from "drizzle-orm/sqlite-core";
-import { user } from "./auth-schema";
+import { session, user } from "./auth-schema";
 
 // Runtime mapping of the deployed D1 schema. SQL migrations remain the DDL source of truth.
+export const mcpConnections = sqliteTable(
+  "mcp_connections",
+  {
+    id: text("id").primaryKey().notNull(),
+    user_id: text("user_id").notNull(),
+    client_id: text("client_id").notNull(),
+    client_name: text("client_name").notNull(),
+    resource: text("resource").notNull(),
+    scopes: text("scopes", { mode: "json" }).$type<string[]>().notNull(),
+    grant_id: text("grant_id"),
+    created_at: text("created_at").notNull(),
+    expires_at: text("expires_at").notNull(),
+    revoked_at: text("revoked_at"),
+  },
+  (t) => [
+    foreignKey({ columns: [t.user_id], foreignColumns: [user.id] }).onDelete("cascade"),
+    index("mcp_connections_user_idx").on(t.user_id, t.created_at),
+    uniqueIndex("mcp_connections_grant_uq").on(t.grant_id),
+    check(
+      "mcp_connections_scopes_check",
+      sql`json_valid(${t.scopes}) AND json_type(${t.scopes}) = 'array'`,
+    ),
+    check("mcp_connections_expiry_check", sql`${t.expires_at} > ${t.created_at}`),
+  ],
+);
+
+export const mcpConsentClaims = sqliteTable(
+  "mcp_consent_claims",
+  {
+    handle_hash: text("handle_hash").primaryKey().notNull(),
+    user_id: text("user_id").notNull(),
+    session_id: text("session_id").notNull(),
+    expires_at: text("expires_at").notNull(),
+    consumed_at: text("consumed_at"),
+  },
+  (t) => [
+    foreignKey({ columns: [t.user_id], foreignColumns: [user.id] }).onDelete("cascade"),
+    foreignKey({ columns: [t.session_id], foreignColumns: [session.id] }).onDelete("cascade"),
+    index("mcp_consent_claims_expiry_idx").on(t.expires_at),
+  ],
+);
+
 export const teams = sqliteTable("teams", {
   id: text("id").primaryKey().notNull(),
   name: text("name").notNull(),

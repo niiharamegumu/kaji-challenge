@@ -1,0 +1,20 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "kaji-mcp",
+  "main": "src/server/transport/mcp-worker.ts",
+  "compatibility_date": "2026-09-14",
+  "compatibility_flags": ["nodejs_compat"],
+  "services": [
+    { "binding": "KAJI_APPLICATION", "service": "kaji-app", "entrypoint": "McpApplication" },
+  ],
+  "vars": {
+    "APP_ORIGIN": "http://localhost:5174",
+    "APP_RELEASE": "cloudflare-v1",
+    "MCP_ENABLED": "false",
+    "MCP_ORIGIN": "http://localhost:5176",
+    "MAINTENANCE_MODE": "false",
+  },
+  "secrets": { "required": [] },
+  "observability": { "enabled": true },
+  "dev": { "port": 5176 },
+}
