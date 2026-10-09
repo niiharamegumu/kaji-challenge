@@ -249,6 +249,29 @@ describe("MCP application authorization and ToDos", () => {
     expect(moved.categories).toEqual([null, category]);
   });
 
+  it("does not reveal whether a forbidden ToDo ID exists", async () => {
+    const own = await identity();
+    const other = await identity();
+    const hidden = await createTodo(other.principal.userId);
+    const before = await connection.repository.ListTodoItemsByTeamID(other.teamId);
+    const errors = [];
+    for (const itemId of [hidden.id, crypto.randomUUID()]) {
+      const result = await Promise.allSettled([
+        run(own.principal, { tool: "complete_todo", arguments: { itemId } }),
+      ]);
+      expect(result[0].status).toBe("rejected");
+      if (result[0].status === "rejected") {
+        const { status, code, message } = result[0].reason;
+        errors.push({ status, code, message });
+      }
+    }
+    expect(errors).toHaveLength(2);
+    expect(errors[0]).toEqual(errors[1]);
+    expect(errors[0]).toMatchObject({ status: 404 });
+    expect(JSON.stringify(errors)).not.toContain(hidden.id);
+    expect(await connection.repository.ListTodoItemsByTeamID(other.teamId)).toEqual(before);
+  });
+
   it.each(["revoked", "expired", "pending", "scope removed"])(
     "rechecks %s connections inside the Todo SQL after initial authorization",
     async (failure) => {
@@ -294,29 +317,50 @@ describe("MCP application authorization and ToDos", () => {
     await expect(scoped.GetTodoItemByID(item.id)).rejects.toMatchObject({ status: 404 });
   });
 
-  it.each(["add_todo", "complete_todo"] as const)(
-    "rejects a revoke immediately before %s's SQL write without changing ToDos",
-    async (tool) => {
+  it.each(
+    (["add_todo", "complete_todo"] as const).flatMap((tool) =>
+      (["revoked", "expired", "scope removed", "moved"] as const).map((change) => ({
+        tool,
+        change,
+      })),
+    ),
+  )(
+    "rejects $change immediately before $tool's SQL write without changing ToDos",
+    async ({ tool, change }) => {
       const { principal, teamId } = await identity();
+      const other = await identity();
       const item = await createTodo(principal.userId);
       const before = await connection.repository.ListTodoItemsByTeamID(teamId);
+      const otherBefore = await connection.repository.ListTodoItemsByTeamID(other.teamId);
       const guarded = repository(principal, "todos:write");
       const scoped = guarded.forMember(teamId, principal.userId);
       const memberBoundary = vi.spyOn(guarded, "forMember").mockReturnValue(scoped);
-      const revoke = () =>
-        mcp.revokeConnection(principal.connectionId, principal.userId, now.toISOString());
+      const invalidate = async () => {
+        if (change === "revoked") {
+          await mcp.revokeConnection(principal.connectionId, principal.userId, now.toISOString());
+        } else if (change === "expired") {
+          await connection.query(sql`UPDATE mcp_connections SET expires_at=${now.toISOString()}
+            WHERE id=${principal.connectionId}`);
+        } else if (change === "scope removed") {
+          await connection.query(sql`UPDATE mcp_connections SET scopes='["todos:read"]'
+            WHERE id=${principal.connectionId}`);
+        } else {
+          await connection.query(sql`UPDATE team_members SET team_id=${other.teamId},role='member'
+            WHERE user_id=${principal.userId}`);
+        }
+      };
       const create = scoped.CreateTodoItem.bind(scoped);
       const complete = scoped.DeleteTodoItem.bind(scoped);
       const createBoundary = vi
         .spyOn(scoped, "CreateTodoItem")
         .mockImplementationOnce(async (arg) => {
-          await revoke();
+          await invalidate();
           return create(arg);
         });
       const completeBoundary = vi
         .spyOn(scoped, "DeleteTodoItem")
         .mockImplementationOnce(async (id) => {
-          await revoke();
+          await invalidate();
           return complete(id);
         });
       try {
@@ -330,8 +374,13 @@ describe("MCP application authorization and ToDos", () => {
             principal,
             context,
           ),
-        ).rejects.toMatchObject({ status: 401 });
+        ).rejects.toMatchObject({
+          status: change === "scope removed" || change === "moved" ? 403 : 401,
+        });
         expect(await connection.repository.ListTodoItemsByTeamID(teamId)).toEqual(before);
+        expect(await connection.repository.ListTodoItemsByTeamID(other.teamId)).toEqual(
+          otherBefore,
+        );
       } finally {
         createBoundary.mockRestore();
         completeBoundary.mockRestore();
