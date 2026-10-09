@@ -678,7 +678,7 @@ export class D1Repository implements P.Repository {
     const rows = await this.db
       .select({ categories: teams.todo_categories })
       .from(teams)
-      .where(and(eq(teams.id, teamId), this.access()));
+      .where(and(eq(teams.id, teamId), this.todoAccess(teams.id)));
     const { categories } = required(rows, "ListTodoCategories");
     return categories.length === 0 ? [null] : categories;
   }
