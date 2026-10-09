@@ -81,9 +81,12 @@ export function mcpConsentPage(
         `<label><input type="checkbox" name="scope" value="${escape(scope)}" checked> ${escape(scopeLabels[scope] ?? scope)} <code>(${escape(scope)})</code></label>`,
     )
     .join("");
+  const duration = details.scope.includes("offline_access")
+    ? "アクセスはトークン発行から最大15分間です。継続アクセスを許可すると、連携先がトークンを更新して初回同意から最大30日間利用できます。継続アクセスはログアウトでは解除されません。"
+    : "この連携先は継続アクセスを要求していません。アクセスはトークン発行から最大15分間で、自動更新されません。期限後は連携先から再接続して許可してください。";
   return page(
     "ToDo の連携を許可",
-    `<p><strong>${escape(details.clientName)}</strong> が、${escape(userName)} さんの権限でアクセスを求めています。</p><p>${publisher}</p><p>認可の送信先: <strong>${escape(details.redirectHost)}</strong></p>${details.redirectIsLoopback ? "<p><strong>この端末で動くアプリへアクセスを渡します。</strong> 自分で開始した接続か確認してください。表示された名前だけではアプリを確認できません。</p>" : ""}<p>現在のチーム: <strong>${escape(teamName)}</strong>。アクセス時点の所属チームと権限を毎回確認します。チームを移ると連携先がアクセスするチームも変わります。</p><form method="post" action="/api/mcp/oauth/authorize"><input type="hidden" name="handle" value="${escape(handle)}">${scopes}<p>継続アクセスを許可しない場合は最大15分間です。継続アクセスはログアウトでは解除されません。<a href="/api/mcp/connections">連携の管理</a>からいつでも解除できます。</p><button name="decision" value="approve">選んだ操作を許可</button><button name="decision" value="deny">拒否</button></form>`,
+    `<p><strong>${escape(details.clientName)}</strong> が、${escape(userName)} さんの権限でアクセスを求めています。</p><p>${publisher}</p><p>認可の送信先: <strong>${escape(details.redirectHost)}</strong></p>${details.redirectIsLoopback ? "<p><strong>この端末で動くアプリへアクセスを渡します。</strong> 自分で開始した接続か確認してください。表示された名前だけではアプリを確認できません。</p>" : ""}<p>現在のチーム: <strong>${escape(teamName)}</strong>。アクセス時点の所属チームと権限を毎回確認します。チームを移ると連携先がアクセスするチームも変わります。</p><form method="post" action="/api/mcp/oauth/authorize"><input type="hidden" name="handle" value="${escape(handle)}">${scopes}<p>${duration}<a href="/api/mcp/connections">連携の管理</a>からいつでも解除できます。</p><button name="decision" value="approve">選んだ操作を許可</button><button name="decision" value="deny">拒否</button></form>`,
   );
 }
 
@@ -96,15 +99,18 @@ export function mcpConnectionsPage(
       const status = connection.revokedAt
         ? "解除済み"
         : connection.expiresAt <= now
-          ? "期限切れ"
+          ? "許可期限切れ"
           : connection.grantId
-            ? "連携中"
+            ? "許可済み"
             : "認可コードの交換待ち";
-      return `<article><h2>${escape(connection.clientName)}</h2><p>${status} ／ 有効期限: ${escape(connection.expiresAt)}</p><p>${connection.scopes.map((scope) => escape(scopeLabels[scope] ?? scope)).join("、")}</p><form method="post" action="/api/mcp/connections/revoke"><input type="hidden" name="connectionId" value="${escape(connection.id)}"><input type="hidden" name="handle" value="${escape(handle)}"><button type="submit">${connection.revokedAt ? "トークンの失効を再実行" : "連携を解除"}</button></form></article>`;
+      const duration = connection.scopes.includes("offline_access")
+        ? `<p>継続アクセスの許可期限: ${escape(connection.expiresAt)}（初回同意から最大30日）。アクセスはトークン発行から最大15分間です。未解除かつ許可期限内の場合に限り、連携先が更新できます。</p>`
+        : "<p>短期アクセス（自動更新なし）。トークン発行から最大15分間で終了します。期限後は連携先から再接続して許可してください。</p>";
+      return `<article><h2>${escape(connection.clientName)}</h2><p>${status}</p>${duration}<p>${connection.scopes.map((scope) => escape(scopeLabels[scope] ?? scope)).join("、")}</p><form method="post" action="/api/mcp/connections/revoke"><input type="hidden" name="connectionId" value="${escape(connection.id)}"><input type="hidden" name="handle" value="${escape(handle)}"><button type="submit">${connection.revokedAt ? "トークンの失効を再実行" : "連携を解除"}</button></form></article>`;
     })
     .join("");
   return page(
     "MCP 連携の管理",
-    `<p>解除すると、この連携先からのアクセスを拒否します。継続アクセスはログアウト後も期限まで有効です。</p>${rows || "<p>連携はありません。</p>"}`,
+    `<p>ここには過去の許可も表示されます。現在の接続状態を示すものではありません。解除すると、この連携先からのアクセスを拒否します。継続アクセスはログアウトでは解除されません。</p>${rows || "<p>連携はありません。</p>"}`,
   );
 }
