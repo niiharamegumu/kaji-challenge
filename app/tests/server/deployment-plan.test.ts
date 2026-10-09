@@ -1,5 +1,10 @@
 import type { Stack } from "alchemy/Alchemist";
+import * as Cause from "effect/Cause";
+import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
+import * as HttpClientError from "effect/http/HttpClientError";
+import * as HttpClientRequest from "effect/http/HttpClientRequest";
+import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import * as Logger from "effect/Logger";
 import * as References from "effect/References";
 import { describe, expect, it, vi } from "vitest";
@@ -75,6 +80,76 @@ describe("safe deployment failure diagnostics", () => {
       statuses: [403],
       codes: [10000],
     });
+  });
+  it.each([
+    HttpClientError.StatusCodeError,
+    HttpClientError.DecodeError,
+    HttpClientError.EmptyBodyError,
+  ])("reads the HTTP status from a real Effect response (%#)", (ResponseError) => {
+    const request = HttpClientRequest.get("https://example.invalid/private-token-value");
+    const response = HttpClientResponse.fromWeb(
+      request,
+      new Response("private-token-value", {
+        status: 403,
+        headers: { "x-private": "private-token-value" },
+      }),
+    );
+    class PreviewError extends Data.TaggedError("EdgeSessionError")<{
+      message: string;
+      cause: unknown;
+    }> {}
+    const failure = Cause.fail(
+      new PreviewError({
+        message: "Failed to read secret",
+        cause: new HttpClientError.HttpClientError({
+          reason: new ResponseError({ request, response }),
+        }),
+      }),
+    );
+    const diagnostic = safeDeploymentFailure(failure);
+    expect(diagnostic.statuses).toEqual([403]);
+    expect(diagnostic.tags).toContain(new ResponseError({ request, response })._tag);
+    expect(diagnostic.classifications).toEqual(["preview_secret_read_failed"]);
+    expect(JSON.stringify(diagnostic)).not.toContain("private-token-value");
+  });
+  it("uses the captured native getter without reading response overrides, body or headers", () => {
+    const getter = vi.fn(() => {
+      throw new Error("must not evaluate arbitrary response getters");
+    });
+    const request = HttpClientRequest.get("https://example.invalid");
+    const source = new Response("private-token-value", { status: 502 });
+    const response = HttpClientResponse.fromWeb(request, source);
+    for (const key of ["status", "body", "headers"]) {
+      Object.defineProperty(source, key, { get: getter });
+      Object.defineProperty(response, key, { get: getter });
+    }
+    expect(
+      safeDeploymentFailure(new HttpClientError.StatusCodeError({ request, response })).statuses,
+    ).toEqual([502]);
+    expect(getter).not.toHaveBeenCalled();
+  });
+  it("rejects response impostors and does not evaluate a source getter", () => {
+    const getter = vi.fn(() => {
+      throw new Error("must not evaluate arbitrary response getters");
+    });
+    for (const response of [
+      { source: Object.create(Response.prototype) },
+      {
+        source: {
+          get status() {
+            return getter();
+          },
+        },
+      },
+      {
+        get source() {
+          return getter();
+        },
+      },
+    ]) {
+      expect(safeDeploymentFailure({ _tag: "StatusCodeError", response }).statuses).toEqual([]);
+    }
+    expect(getter).not.toHaveBeenCalled();
   });
   it("bounds cyclic or large cause trees", () => {
     const failure: { _tag: string; cause?: unknown } = { _tag: "TimeoutError" };

@@ -36,6 +36,21 @@ const diagnosticTags = new Set([
   "Effect.UnknownError",
 ]);
 
+const nativeResponseStatus = Object.getOwnPropertyDescriptor(Response.prototype, "status")?.get;
+
+function readResponseStatus(response: object): unknown {
+  const status = Object.getOwnPropertyDescriptor(response, "status");
+  if (status && "value" in status) return status.value;
+  // Effect's WebHttpClientResponse keeps the native Response in an own data field.
+  // Bypass all user-defined getters; the captured built-in rejects non-Responses.
+  const source = Object.getOwnPropertyDescriptor(response, "source")?.value;
+  try {
+    return nativeResponseStatus?.call(source);
+  } catch {
+    return undefined;
+  }
+}
+
 /** Do not serialize exceptions: provider errors may contain secret response bodies. */
 export function safeDeploymentFailure(value: unknown) {
   const tags = new Set<string>();
@@ -93,10 +108,18 @@ export function safeDeploymentFailure(value: unknown) {
         if (message === "Failed to read secret") classifications.add("preview_secret_read_failed");
       }
       // Only these known error shapes carry an HTTP status in a nested response.
-      if (tag === "StateStoreError" || tag === "StatusCodeError") {
+      if (
+        tag === "StateStoreError" ||
+        tag === "StatusCodeError" ||
+        tag === "DecodeError" ||
+        tag === "EmptyBodyError"
+      ) {
         const response = read(tag === "StateStoreError" ? "http" : "response");
         if (response && typeof response === "object") {
-          const nested = Object.getOwnPropertyDescriptor(response, "status")?.value;
+          const nested =
+            tag === "StateStoreError"
+              ? Object.getOwnPropertyDescriptor(response, "status")?.value
+              : readResponseStatus(response);
           if (
             typeof nested === "number" &&
             Number.isInteger(nested) &&
