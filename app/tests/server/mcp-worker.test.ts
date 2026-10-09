@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { readFile } from "node:fs/promises";
 import {
   CLIENT_CAPABILITIES_META_KEY,
   CLIENT_INFO_META_KEY,
   PROTOCOL_VERSION_META_KEY,
+  SERVER_INFO_META_KEY,
 } from "@modelcontextprotocol/server";
 import type { ValidatedAccessToken } from "@cloudflare/workers-oauth-provider";
 import type { McpPrincipal, McpRequest, McpWireResult } from "../../src/contracts/mcp";
@@ -81,6 +83,52 @@ beforeEach(() => {
 });
 
 describe("MCP HTTP authentication boundary", () => {
+  it.each(["GET", "HEAD"])(
+    "serves the fixed brand PNG without credentials for %s",
+    async (method) => {
+      const response = await worker.fetch(
+        new Request(`${mcpOrigin}/icons/kajichalle-192.png`, { method }),
+        { MCP_ORIGIN: mcpOrigin } as McpWorkerBindings,
+        context(),
+      );
+      expect(response.status).toBe(200);
+      expect(response.headers.get("Content-Type")).toBe("image/png");
+      expect(response.headers.get("Cache-Control")).toBe("public, max-age=3600");
+      expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
+      expect(response.headers.has("Set-Cookie")).toBe(false);
+      expect(response.headers.has("Access-Control-Allow-Origin")).toBe(false);
+      const original = await readFile(
+        new URL("../../public/icons/pwa-192x192.png", import.meta.url),
+      );
+      expect(response.headers.get("Content-Length")).toBe(String(original.byteLength));
+      const body = Buffer.from(await response.arrayBuffer());
+      expect(body).toEqual(method === "HEAD" ? Buffer.alloc(0) : original);
+      expect(validateToken).not.toHaveBeenCalled();
+      expect(invoke).not.toHaveBeenCalled();
+    },
+  );
+
+  it("keeps the public icon route limited to its own origin and read methods", async () => {
+    for (const request of [
+      new Request(`https://other.example.com/icons/kajichalle-192.png`),
+      new Request(`${mcpOrigin}/icons/kajichalle-192.png`, {
+        headers: { Host: "other.example.com" },
+      }),
+    ]) {
+      expect((await worker.fetch(request, env(), context())).status).toBe(403);
+    }
+    const denied = await worker.fetch(
+      new Request(`${mcpOrigin}/icons/kajichalle-192.png`, { method: "POST" }),
+      env(),
+      context(),
+    );
+    expect(denied.status).toBe(405);
+    expect(denied.headers.get("Allow")).toBe("GET, HEAD");
+    expect(validateToken).not.toHaveBeenCalled();
+    expect(invoke).not.toHaveBeenCalled();
+    expect((await call("list_todos", {}, { Authorization: "" })).status).toBe(401);
+  });
+
   it("advertises read and write scopes for the initial authorization", async () => {
     const response = await worker.fetch(
       new Request(`${mcpOrigin}/.well-known/oauth-protected-resource/mcp`),
@@ -290,6 +338,54 @@ describe("MCP HTTP authentication boundary", () => {
 });
 
 describe("MCP tool adapter", () => {
+  it.each(["2025-11-25", "2026-07-28"])(
+    "advertises the brand icon through standard %s metadata",
+    async (protocolVersion) => {
+      const modern = protocolVersion === "2026-07-28";
+      const method = modern ? "server/discover" : "initialize";
+      const clientInfo = { name: "metadata-test", version: "1.0" };
+      const response = await worker.fetch(
+        request(
+          method,
+          modern
+            ? {
+                _meta: {
+                  [PROTOCOL_VERSION_META_KEY]: protocolVersion,
+                  [CLIENT_INFO_META_KEY]: clientInfo,
+                  [CLIENT_CAPABILITIES_META_KEY]: {},
+                },
+              }
+            : { protocolVersion, capabilities: {}, clientInfo },
+          {
+            "MCP-Protocol-Version": protocolVersion,
+            ...(modern ? { "Mcp-Method": method } : {}),
+          },
+        ),
+        env(),
+        context(),
+      );
+      expect(response.status).toBe(200);
+      const body = (await payload(response)) as {
+        result: { serverInfo?: unknown; _meta?: Record<string, unknown> };
+      };
+      const serverInfo = modern
+        ? body.result._meta?.[SERVER_INFO_META_KEY]
+        : body.result.serverInfo;
+      expect(serverInfo).toMatchObject({
+        name: "KajiChalle",
+        version: "test-release",
+        icons: [
+          {
+            src: `${mcpOrigin}/icons/kajichalle-192.png`,
+            mimeType: "image/png",
+            sizes: ["192x192"],
+          },
+        ],
+      });
+      expect(invoke).not.toHaveBeenCalled();
+    },
+  );
+
   it("serves modern stateless requests as well as the legacy Streamable HTTP lane", async () => {
     const response = await worker.fetch(
       request(
