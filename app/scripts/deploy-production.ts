@@ -9,11 +9,14 @@ import {
   assertNoBootstrap,
   DeploymentGuardError,
   deploymentPlanOnly,
+  deploymentPlanningPhase,
   deploymentPlanSummary,
   routeMatchesHostname,
+  safeDeploymentFailure,
   validateDeploymentPlan,
   validateMigrationFiles,
   validateMigrationLedger,
+  validateWorkerPlanProps,
 } from "../infra/deployment-plan";
 
 // Never print raw provider failures, plan.native, plan.session, credentials or binding values.
@@ -128,13 +131,9 @@ async function validatePreflight(
   for (const id of ["Application", ...(configuration.mcp ? ["Mcp"] : [])]) {
     const node = nativeResource(snapshot, id);
     const desired = node.action === "noop" ? node.state.props : node.props;
-    const { env: _env, ...workerProps } = desired;
-    check(
-      isDeepStrictEqual(
-        workerProps,
-        id === "Application" ? configuration.worker : configuration.mcp!.worker,
-      ),
-      "Worker configuration is outside this approval",
+    validateWorkerPlanProps(
+      desired,
+      id === "Application" ? configuration.worker : configuration.mcp!.worker,
     );
   }
   if (configuration.mcp) {
@@ -283,12 +282,14 @@ async function main() {
     yield* Alchemy.Stack.apply(snapshot);
     console.log("Approved production snapshot applied.");
   });
-  await Effect.runPromise(
+  const exit = await Effect.runPromiseExit(
     program.pipe(
       Effect.provideService(Alchemy.Progress, (event) =>
         Effect.sync(() => {
           try {
             assertNoBootstrap(event);
+            const planningPhase = deploymentPlanningPhase(event);
+            if (planningPhase) phase = `plan: ${planningPhase}`;
           } catch (error) {
             recordGuardFailure(error);
           }
@@ -301,6 +302,12 @@ async function main() {
       Effect.provideService(References.MinimumLogLevel, "None"),
     ),
   );
+  if (exit._tag === "Failure") {
+    console.error(
+      JSON.stringify({ event: "deployment_failure", ...safeDeploymentFailure(exit.cause) }),
+    );
+    throw new DeploymentGuardError("Deployment failed; inspect the safe diagnostic summary.");
+  }
 }
 
 void main().catch((error: unknown) => {

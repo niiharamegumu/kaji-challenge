@@ -1,5 +1,10 @@
 import type { Stack } from "alchemy/Alchemist";
+import * as Cause from "effect/Cause";
+import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
+import * as HttpClientError from "effect/http/HttpClientError";
+import * as HttpClientRequest from "effect/http/HttpClientRequest";
+import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import * as Logger from "effect/Logger";
 import * as References from "effect/References";
 import { describe, expect, it, vi } from "vitest";
@@ -7,16 +12,166 @@ import {
   approvedMigrations,
   assertNoBootstrap,
   deploymentPlanOnly,
+  deploymentPlanningPhase,
   deploymentPlanSummary,
   routeMatchesHostname,
+  safeDeploymentFailure,
   validateDeploymentPlan,
   validateMigrationFiles,
   validateMigrationLedger,
+  validateWorkerPlanProps,
 } from "../../infra/deployment-plan";
 
 type Snapshot = {
   -readonly [K in "stack" | "summary" | "resources" | "actions"]: Stack.PlanSnapshot[K];
 };
+
+describe("safe deployment failure diagnostics", () => {
+  it("classifies preview failures without disclosing response bodies or credentials", () => {
+    const failure = {
+      reasons: [
+        {
+          _tag: "Fail",
+          error: {
+            _tag: "EdgeSessionError",
+            message: "Secret probe returned 403: private-token-value",
+            cause: { _tag: "Forbidden", status: 403, body: "private-token-value" },
+          },
+        },
+      ],
+    };
+    expect(safeDeploymentFailure(failure)).toEqual({
+      tags: ["EdgeSessionError", "Forbidden"],
+      classifications: ["preview_probe_http_failure"],
+      statuses: [403],
+      codes: [],
+    });
+    expect(JSON.stringify(safeDeploymentFailure(failure))).not.toContain("private-token-value");
+  });
+  it("reports only known SDK authentication classifications", () => {
+    expect(
+      safeDeploymentFailure({
+        _tag: "AuthError",
+        message: "Cloudflare State store not found. Run arbitrary-private-suffix",
+      }).classifications,
+    ).toEqual(["state_store_unavailable"]);
+    expect(
+      safeDeploymentFailure({
+        _tag: "private-token-value",
+        message: "private-token-value",
+        status: 403,
+        code: 10000,
+      }),
+    ).toEqual({ tags: [], classifications: [], statuses: [], codes: [] });
+  });
+  it("keeps safe API codes while ignoring request, headers, annotations and getters", () => {
+    const failure = {
+      _tag: "CloudflareHttpError",
+      code: 10000,
+      status: 403,
+      request: { _tag: "Forbidden" },
+      annotations: { _tag: "Unauthorized" },
+      get cause() {
+        throw new Error("must not evaluate getters");
+      },
+    };
+    expect(safeDeploymentFailure(failure)).toEqual({
+      tags: ["CloudflareHttpError"],
+      classifications: [],
+      statuses: [403],
+      codes: [10000],
+    });
+  });
+  it.each([
+    HttpClientError.StatusCodeError,
+    HttpClientError.DecodeError,
+    HttpClientError.EmptyBodyError,
+  ])("reads the HTTP status from a real Effect response (%#)", (ResponseError) => {
+    const request = HttpClientRequest.get("https://example.invalid/private-token-value");
+    const response = HttpClientResponse.fromWeb(
+      request,
+      new Response("private-token-value", {
+        status: 403,
+        headers: { "x-private": "private-token-value" },
+      }),
+    );
+    class PreviewError extends Data.TaggedError("EdgeSessionError")<{
+      message: string;
+      cause: unknown;
+    }> {}
+    const failure = Cause.fail(
+      new PreviewError({
+        message: "Failed to read secret",
+        cause: new HttpClientError.HttpClientError({
+          reason: new ResponseError({ request, response }),
+        }),
+      }),
+    );
+    const diagnostic = safeDeploymentFailure(failure);
+    expect(diagnostic.statuses).toEqual([403]);
+    expect(diagnostic.tags).toContain(new ResponseError({ request, response })._tag);
+    expect(diagnostic.classifications).toEqual(["preview_secret_read_failed"]);
+    expect(JSON.stringify(diagnostic)).not.toContain("private-token-value");
+  });
+  it("uses the captured native getter without reading response overrides, body or headers", () => {
+    const getter = vi.fn(() => {
+      throw new Error("must not evaluate arbitrary response getters");
+    });
+    const request = HttpClientRequest.get("https://example.invalid");
+    const source = new Response("private-token-value", { status: 502 });
+    const response = HttpClientResponse.fromWeb(request, source);
+    for (const key of ["status", "body", "headers"]) {
+      Object.defineProperty(source, key, { get: getter });
+      Object.defineProperty(response, key, { get: getter });
+    }
+    expect(
+      safeDeploymentFailure(new HttpClientError.StatusCodeError({ request, response })).statuses,
+    ).toEqual([502]);
+    expect(getter).not.toHaveBeenCalled();
+  });
+  it("rejects response impostors and does not evaluate a source getter", () => {
+    const getter = vi.fn(() => {
+      throw new Error("must not evaluate arbitrary response getters");
+    });
+    for (const response of [
+      { source: Object.create(Response.prototype) },
+      {
+        source: {
+          get status() {
+            return getter();
+          },
+        },
+      },
+      {
+        get source() {
+          return getter();
+        },
+      },
+    ]) {
+      expect(safeDeploymentFailure({ _tag: "StatusCodeError", response }).statuses).toEqual([]);
+    }
+    expect(getter).not.toHaveBeenCalled();
+  });
+  it("bounds cyclic or large cause trees", () => {
+    const failure: { _tag: string; cause?: unknown } = { _tag: "TimeoutError" };
+    failure.cause = failure;
+    expect(safeDeploymentFailure(failure).tags).toEqual(["TimeoutError"]);
+    expect(
+      safeDeploymentFailure({ reasons: Array.from({ length: 100 }, () => failure) }).tags,
+    ).toEqual(["TimeoutError"]);
+  });
+  it("exposes only the fixed planning phases", () => {
+    expect(deploymentPlanningPhase({ _tag: "plan.phase", phase: "loading-state" })).toBe(
+      "loading-state",
+    );
+    expect(
+      deploymentPlanningPhase({ _tag: "plan.phase", phase: "private-token-value" }),
+    ).toBeUndefined();
+    expect(
+      deploymentPlanningPhase({ _tag: "different-event", phase: "loading-state" }),
+    ).toBeUndefined();
+  });
+});
 function plan(): Snapshot {
   return {
     stack: { name: "kaji-challenge", stage: "production" },
@@ -59,6 +214,23 @@ function plan(): Snapshot {
 }
 
 describe("production plan approval boundary", () => {
+  it("accepts only the SDK external Worker marker and the exact approved properties", () => {
+    const expected = { main: "dist/mcp/index.js", bundle: false, workersDev: false };
+    expect(() =>
+      validateWorkerPlanProps({ ...expected, env: {}, isExternal: true }, expected),
+    ).not.toThrow();
+    for (const isExternal of [undefined, false, "true"]) {
+      expect(() => validateWorkerPlanProps({ ...expected, isExternal }, expected)).toThrow(
+        "runtime mode",
+      );
+    }
+    expect(() =>
+      validateWorkerPlanProps({ ...expected, isExternal: true, workersDev: true }, expected),
+    ).toThrow("outside this approval");
+    expect(() =>
+      validateWorkerPlanProps({ ...expected, isExternal: true, unexpected: true }, expected),
+    ).toThrow("outside this approval");
+  });
   it("accepts the bounded MCP rollout and a subsequent no-change plan", () => {
     expect(() => validateDeploymentPlan(plan(), true)).not.toThrow();
     const repeat = plan();
