@@ -55,7 +55,7 @@ jobs:
       - name: Build application
         if: steps.current.outputs.deploy == 'true'
         run: bun run build
-      - name: Validate settings, check deployment plan and apply
+      - name: Validate settings, ensure state store, plan and deploy
         if: steps.current.outputs.deploy == 'true'
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
@@ -66,7 +66,6 @@ jobs:
           MAINTENANCE_MODE: ${{ vars.MAINTENANCE_MODE || 'false' }}
           MCP_ENABLED: ${{ vars.MCP_ENABLED || 'false' }}
           MCP_ORIGIN: ${{ vars.MCP_ORIGIN || '' }}
-          DEPLOY_PLAN_ONLY: ${{ vars.DEPLOY_PLAN_ONLY || 'false' }}
           BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
           GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
@@ -85,9 +84,11 @@ jobs:
             const result = deploymentSchema.safeParse({ stage: "production", origin: process.env.APP_ORIGIN, release: process.env.APP_RELEASE, jobs: process.env.JOBS_ENABLED, maintenance: process.env.MAINTENANCE_MODE, mcpEnabled: process.env.MCP_ENABLED, mcpOrigin: process.env.MCP_ORIGIN });
             if (!result.success) throw new Error("Invalid production origin, release, or boolean setting");
           '
-          bun scripts/deploy-production.ts
+          bun run infra:bootstrap --no-input
+          bun run infra:plan --stage production --no-input
+          bun run deploy --stage production --yes --no-input
       - name: Verify deployed release
-        if: steps.current.outputs.deploy == 'true' && vars.DEPLOY_PLAN_ONLY != 'true'
+        if: steps.current.outputs.deploy == 'true'
         env:
           APP_ORIGIN: ${{ vars.APP_ORIGIN }}
           APP_RELEASE: ${{ github.sha }}

@@ -160,7 +160,6 @@ Alchemyはビルド済みの `dist/server/index.js` と `dist/client` を、公�
 | Variable | `MAINTENANCE_MODE` | 通常 `false`、停止時のみ `true` |
 | Variable | `MCP_ORIGIN` | 未設定ならMCPリソースを作成しない。設定時は `APP_ORIGIN` と異なるHTTPS origin。パス・ポートなし |
 | Variable | `MCP_ENABLED` | 未設定は `false`。MCP/OAuthの受付を有効にする場合だけ `true` |
-| Variable | `DEPLOY_PLAN_ONLY` | 計画だけを確認する場合は `true`。未設定は `false`。`true` の実行では配備・公開health検証を行わない |
 
 `APP_RELEASE` の登録は不要です。Cloudflare tokenには、CDが状態保存先の資格情報を取得するためのSecrets Store Editも必要です。権限不足を解消するために全権限tokenへ置き換えるのではなく、失敗したAPIとscopeを確認します。
 
@@ -168,12 +167,12 @@ MCP追加配備前に、公開originのドメイン、新WorkerとOAuth用KVを�
 
 OAuthの標準失効もD1先行にするため、providerの固定versionにBun patchを適用します。`bun install --frozen-lockfile` を使い、依存更新時は [patchの保守手順](docs/mcp-oauth-provider-patch.md) と失効の回帰検証を実施します。access tokenだけを失効した場合も、Kajiでは対応する連携全体を停止します。
 
-6. **CDを実行。** 設定を済ませ、CIが成功したPRを `main` へマージするか、Actions → Deploy production → Run workflow → branch `main` を選びます。CDは既存のAlchemy状態保存先を再利用し、その新設・自動更新を拒否します。新しいアカウントへの初回導入や状態保存先の更新には、Worker/DO/Secrets Storeと資格情報の変更を別途確認してbootstrapする手順が必要です（[AlchemyのCI状態管理](https://alchemy.run/state-store/)）。`.alchemy` をアップロードしないでください。初回はジョブ無効で配備し、下記のブラウザー確認後、`JOBS_ENABLED=true` にして同じworkflowを手動実行し、5本のCronを有効にします。
+6. **初回CDを実行。** 設定を済ませ、CIが成功したPRを `main` へマージするか、Actions → Deploy production → Run workflow → branch `main` を選びます。CDは初回にAlchemyの状態保存用Worker/DO/Secrets Storeを作り、その後アプリ本体と業務D1を配備します。以降は既存の状態保存先を再利用します。ローカルでのbootstrapや `.alchemy` のアップロードは不要です（[AlchemyのCI状態管理](https://alchemy.run/state-store/)）。初回はジョブ無効で配備されます。下記のブラウザー確認後、`JOBS_ENABLED=true` にして同じworkflowを手動実行し、5本のCronを有効にします。
 
 ### 毎回のリリース
 
 1. PRのCI成功を確認して `main` へマージします。CIが失敗しているPRはマージしません。
-2. Actionsの **Deploy production** を開き、`deploy` の成功を確認します。配備スクリプトは資源・binding・migrationの許可範囲を検査し、削除・置換・未知の変更を拒否した上で、検査した同じ計画を適用します。計画だけを先に確認する場合は `DEPLOY_PLAN_ONLY=true` にし、確認後に `false` で同じmainのworkflowを再実行します。許可範囲を変える際はSQL・IaC・配備チェックを一緒にレビューしてください。
+2. Actionsの **Deploy production** を開き、`deploy` の成功を確認します。planはログに出力され、その後deployを自動実行します。**plan確認の手動停止はありません。** SQLやIaCの意図しない変更はPRで確認してください。
 3. 公開先 `/health` の `status: ok` と `release: 対象SHA` はCDが確認します。`MCP_ORIGIN` 設定時はMCP Workerも確認します。伝播待ちのため最大12回・各5秒タイムアウトで再試行します。health確認は実OAuthやMCPツールの動作確認を代替しません。
 4. ブラウザーでログイン、家事・ToDo・予定の保存と再読込、ログアウトを確認します。認証/PWA/Push変更時は新規登録許可・拒否、PWA更新、iPhone実機Pushも確認します。これはCDのhealth確認では代替しません。
 5. CloudflareのWorkerログでエラー・締め・通知結果を確認します。通常の更新では鍵の再作成・手動bootstrap・ジョブ無効化は不要です。
