@@ -14,6 +14,7 @@ import {
   deploymentPlanOnly,
   deploymentPlanningPhase,
   deploymentPlanSummary,
+  deploymentResourceProgress,
   routeMatchesHostname,
   safeDeploymentFailure,
   validateDeploymentPlan,
@@ -27,6 +28,19 @@ type Snapshot = {
 };
 
 describe("safe deployment failure diagnostics", () => {
+  it("records resource progress using only exact approved identities", () => {
+    const event = { _tag: "plan.resource.started", fqn: "McpOAuthKV", logicalId: "McpOAuthKV" };
+    expect(deploymentResourceProgress(event)).toEqual({ id: "McpOAuthKV", completed: false });
+    expect(deploymentResourceProgress({ ...event, _tag: "plan.resource.completed" })).toEqual({
+      id: "McpOAuthKV",
+      completed: true,
+    });
+    expect(deploymentResourceProgress({ ...event, _tag: "different-event" })).toBeUndefined();
+    expect(deploymentResourceProgress({ ...event, fqn: "private-value" })).toBeUndefined();
+    expect(
+      deploymentResourceProgress({ ...event, fqn: "private-value", logicalId: "private-value" }),
+    ).toBeUndefined();
+  });
   it("classifies preview failures without disclosing response bodies or credentials", () => {
     const failure = {
       reasons: [

@@ -187,6 +187,22 @@ const resources = {
   Mcp: "Cloudflare.Worker",
   McpOAuthKV: "Cloudflare.KV.Namespace",
 } as const;
+
+export function deploymentResourceProgress(event: {
+  _tag: string;
+  fqn?: unknown;
+  logicalId?: unknown;
+}) {
+  if (
+    (event._tag !== "plan.resource.started" && event._tag !== "plan.resource.completed") ||
+    typeof event.logicalId !== "string" ||
+    !Object.hasOwn(resources, event.logicalId) ||
+    event.fqn !== event.logicalId
+  )
+    return;
+  return { id: event.logicalId, completed: event._tag === "plan.resource.completed" };
+}
+
 const applicationBindings = new Set([
   "DB",
   "TEAM_REALTIME",

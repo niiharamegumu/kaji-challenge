@@ -11,6 +11,7 @@ import {
   deploymentPlanOnly,
   deploymentPlanningPhase,
   deploymentPlanSummary,
+  deploymentResourceProgress,
   routeMatchesHostname,
   safeDeploymentFailure,
   validateDeploymentPlan,
@@ -212,6 +213,7 @@ async function validatePreflight(
 }
 
 async function main() {
+  const pendingResources = new Set<string>();
   const planOnly = deploymentPlanOnly(process.env.DEPLOY_PLAN_ONLY);
   const configuration = deploymentResources({
     stage: "production",
@@ -290,6 +292,9 @@ async function main() {
             assertNoBootstrap(event);
             const planningPhase = deploymentPlanningPhase(event);
             if (planningPhase) phase = `plan: ${planningPhase}`;
+            const resource = deploymentResourceProgress(event);
+            if (resource?.completed) pendingResources.delete(resource.id);
+            else if (resource) pendingResources.add(resource.id);
           } catch (error) {
             recordGuardFailure(error);
           }
@@ -304,7 +309,11 @@ async function main() {
   );
   if (exit._tag === "Failure") {
     console.error(
-      JSON.stringify({ event: "deployment_failure", ...safeDeploymentFailure(exit.cause) }),
+      JSON.stringify({
+        event: "deployment_failure",
+        ...safeDeploymentFailure(exit.cause),
+        pendingResources: [...pendingResources].sort(),
+      }),
     );
     throw new DeploymentGuardError("Deployment failed; inspect the safe diagnostic summary.");
   }
