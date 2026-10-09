@@ -1,4 +1,5 @@
 import type { Stack } from "alchemy/Alchemist";
+import { isDeepStrictEqual } from "node:util";
 
 export class DeploymentGuardError extends Error {}
 
@@ -167,6 +168,17 @@ export function deploymentPlanOnly(value: string | undefined) {
     "Invalid DEPLOY_PLAN_ONLY",
   );
   return value === "true";
+}
+
+export function validateWorkerPlanProps(desired: unknown, expected: object) {
+  requireCondition(desired && typeof desired === "object", "Missing Worker configuration");
+  const { env: _env, isExternal, ...props } = desired as Record<string, unknown>;
+  // Alchemy marks Workers supplied through a main file as external to its inline runtime.
+  requireCondition(isExternal === true, "Unexpected Worker runtime mode");
+  requireCondition(
+    isDeepStrictEqual(props, expected),
+    "Worker configuration is outside this approval",
+  );
 }
 
 const resources = {

@@ -16,6 +16,7 @@ import {
   validateDeploymentPlan,
   validateMigrationFiles,
   validateMigrationLedger,
+  validateWorkerPlanProps,
 } from "../infra/deployment-plan";
 
 // Never print raw provider failures, plan.native, plan.session, credentials or binding values.
@@ -130,13 +131,9 @@ async function validatePreflight(
   for (const id of ["Application", ...(configuration.mcp ? ["Mcp"] : [])]) {
     const node = nativeResource(snapshot, id);
     const desired = node.action === "noop" ? node.state.props : node.props;
-    const { env: _env, ...workerProps } = desired;
-    check(
-      isDeepStrictEqual(
-        workerProps,
-        id === "Application" ? configuration.worker : configuration.mcp!.worker,
-      ),
-      "Worker configuration is outside this approval",
+    validateWorkerPlanProps(
+      desired,
+      id === "Application" ? configuration.worker : configuration.mcp!.worker,
     );
   }
   if (configuration.mcp) {

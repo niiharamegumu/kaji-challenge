@@ -19,6 +19,7 @@ import {
   validateDeploymentPlan,
   validateMigrationFiles,
   validateMigrationLedger,
+  validateWorkerPlanProps,
 } from "../../infra/deployment-plan";
 
 type Snapshot = {
@@ -213,6 +214,23 @@ function plan(): Snapshot {
 }
 
 describe("production plan approval boundary", () => {
+  it("accepts only the SDK external Worker marker and the exact approved properties", () => {
+    const expected = { main: "dist/mcp/index.js", bundle: false, workersDev: false };
+    expect(() =>
+      validateWorkerPlanProps({ ...expected, env: {}, isExternal: true }, expected),
+    ).not.toThrow();
+    for (const isExternal of [undefined, false, "true"]) {
+      expect(() => validateWorkerPlanProps({ ...expected, isExternal }, expected)).toThrow(
+        "runtime mode",
+      );
+    }
+    expect(() =>
+      validateWorkerPlanProps({ ...expected, isExternal: true, workersDev: true }, expected),
+    ).toThrow("outside this approval");
+    expect(() =>
+      validateWorkerPlanProps({ ...expected, isExternal: true, unexpected: true }, expected),
+    ).toThrow("outside this approval");
+  });
   it("accepts the bounded MCP rollout and a subsequent no-change plan", () => {
     expect(() => validateDeploymentPlan(plan(), true)).not.toThrow();
     const repeat = plan();
