@@ -122,14 +122,31 @@ export class D1Repository implements P.Repository {
   constructor(
     private readonly db: Database,
     private readonly member?: { teamId: string; userId: string },
+    private readonly authorization?: {
+      connectionId: string;
+      userId: string;
+      scope: string;
+      now: string;
+    },
   ) {}
   forMember(teamId: string, userId: string): P.Repository {
-    return new D1Repository(this.db, { teamId, userId });
+    return new D1Repository(this.db, { teamId, userId }, this.authorization);
   }
   private access() {
-    return this.member
+    const membership = this.member
       ? sql`EXISTS (SELECT 1 FROM team_members WHERE team_id=${this.member.teamId} AND user_id=${this.member.userId})`
       : sql`1`;
+    if (!this.authorization) return membership;
+    const authorization = this.authorization;
+    const actor = this.member ? sql`${this.member.userId}=${authorization.userId}` : sql`1`;
+    return sql`(${membership}) AND (${actor}) AND EXISTS (
+      SELECT 1 FROM mcp_connections AS mcp
+      WHERE mcp.id=${authorization.connectionId} AND mcp.user_id=${authorization.userId}
+        AND mcp.grant_id IS NOT NULL AND length(mcp.grant_id)>0
+        AND mcp.revoked_at IS NULL AND mcp.expires_at>${authorization.now}
+        AND EXISTS (SELECT 1 FROM json_each(mcp.scopes)
+          WHERE type='text' AND value=${authorization.scope})
+    )`;
   }
   async GetTaskCompletionWeeklyEntryCount(
     arg: P.GetTaskCompletionWeeklyEntryCountParams,
@@ -723,8 +740,15 @@ export class D1Repository implements P.Repository {
     )`;
   }
 
+  private todoAccess(teamId: string | SQLWrapper) {
+    return and(this.access(), this.member ? sql`${teamId}=${this.member.teamId}` : undefined);
+  }
+
   async CreateTodoItem(arg: P.CreateTodoItemParams): Promise<boolean> {
-    const allowed = and(this.access(), this.todoCategoryExists(arg.TeamID, arg.CategoryID));
+    const allowed = and(
+      this.todoAccess(arg.TeamID),
+      this.todoCategoryExists(arg.TeamID, arg.CategoryID),
+    );
     const [, inserted] = await this.db.batch([
       this.db
         .update(todoItems)
@@ -743,19 +767,22 @@ export class D1Repository implements P.Repository {
   async DeleteTodoItem(id: string): Promise<number> {
     return this.db
       .delete(todoItems)
-      .where(and(eq(todoItems.id, id), this.access()))
+      .where(and(eq(todoItems.id, id), this.todoAccess(todoItems.team_id)))
       .returning()
       .then((rows) => rows.length);
   }
   async GetTodoItemByID(id: string): Promise<P.TodoItem> {
-    const rows = await this.db.select(todoFields).from(todoItems).where(eq(todoItems.id, id));
+    const rows = await this.db
+      .select(todoFields)
+      .from(todoItems)
+      .where(and(eq(todoItems.id, id), this.todoAccess(todoItems.team_id)));
     return required(rows, "GetTodoItemByID");
   }
   async ListTodoItemsByTeamID(teamID: string): Promise<P.TodoItem[]> {
     return this.db
       .select(todoFields)
       .from(todoItems)
-      .where(eq(todoItems.team_id, teamID))
+      .where(and(eq(todoItems.team_id, teamID), this.todoAccess(todoItems.team_id)))
       .orderBy(todoItems.sort_key, todoItems.created_at, todoItems.id);
   }
   async UpdateTodoItem(arg: P.UpdateTodoItemParams): Promise<boolean> {
@@ -771,7 +798,7 @@ export class D1Repository implements P.Repository {
         and(
           eq(todoItems.id, arg.ID),
           eq(todoItems.team_id, arg.TeamID),
-          this.access(),
+          this.todoAccess(todoItems.team_id),
           this.todoCategoryExists(arg.TeamID, arg.CategoryID),
         ),
       )

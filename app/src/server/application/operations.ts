@@ -341,7 +341,7 @@ export async function executeOperation(
     case "deleteTodoItem": {
       const item = await repo.GetTodoItemByID(input.params.itemId);
       invariant(item.TeamID === teamId, "item not found", 404);
-      await repo.DeleteTodoItem(item.ID);
+      invariant((await repo.DeleteTodoItem(item.ID)) === 1, "item not found", 404);
       data = {};
       break;
     }

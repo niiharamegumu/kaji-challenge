@@ -80,7 +80,9 @@ function violationsFor(path, imports) {
     const inCore = /^src\/server\/(application|domain)\//.test(file);
     if (
       inCore &&
-      (/^(react|@tanstack|drizzle-orm|better-auth|cloudflare:)/.test(resolved) ||
+      (/^(react|@tanstack|drizzle-orm|better-auth|cloudflare:|agents(?:\/|$)|@modelcontextprotocol\/|@cloudflare\/workers-oauth-provider)/.test(
+        resolved,
+      ) ||
         /^src\/server\/(infrastructure|transport)\//.test(resolved) ||
         /^src\/(features|app|lib)\//.test(resolved))
     )

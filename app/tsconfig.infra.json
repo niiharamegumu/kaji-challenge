@@ -11,12 +11,14 @@
   },
   "include": [
     "alchemy.run.ts",
+    "scripts/deploy-production.ts",
     "vitest.server.config.ts",
     "playwright.config.ts",
     "playwright.dev.config.ts",
     "tests/server",
     "tests/e2e",
     "tests/dev",
-    "worker-configuration.d.ts"
+    "worker-configuration.d.ts",
+    "mcp-worker-configuration.d.ts"
   ]
 }

@@ -76,6 +76,9 @@ try {
   });
   await symlink(join(source, "node_modules"), join(appDirectory, "node_modules"), "dir");
   await copyFile(new URL("../../.gitignore", import.meta.url), join(temp, ".gitignore"));
+  await run("OAuth provider patch registration", process.execPath, [
+    "scripts/check-oauth-provider-patch.mjs",
+  ]);
   await run("Formatting", "node_modules/.bin/vp", ["fmt", "--check"]);
   // Exercise CLI-only peer dependencies without credentials or cloud mutations.
   for (const args of [["provider", "cloudflare", "bootstrap"], ["plan"], ["deploy"]]) {
@@ -105,10 +108,25 @@ try {
   );
   assert.equal(built.exports.TeamRealtime.type, "durable-object");
   assert.equal(built.exports.TeamRealtime.storage, "sqlite");
+  assert.equal(built.exports.McpApplication.type, "worker");
+  assert(built.kv_namespaces.some((binding) => binding.binding === "OAUTH_KV"));
   assert.match(
     await readFile(join(appDirectory, "dist/server/index.js"), "utf8"),
     /export[\s\S]*TeamRealtime/,
   );
+  assert.match(
+    await readFile(join(appDirectory, "dist/server/index.js"), "utf8"),
+    /export[\s\S]*McpApplication/,
+  );
+  const mcpBuilt = JSON.parse(await readFile(join(appDirectory, "dist/mcp/wrangler.json"), "utf8"));
+  assert.equal(mcpBuilt.main, "index.js", "Alchemy main must match the built MCP Worker entry");
+  await access(join(appDirectory, "dist/mcp/index.js"));
+  assert.deepEqual(mcpBuilt.services, [
+    { binding: "KAJI_APPLICATION", service: "kaji-app", entrypoint: "McpApplication" },
+  ]);
+  assert.equal(mcpBuilt.d1_databases?.length ?? 0, 0);
+  assert.equal(mcpBuilt.kv_namespaces?.length ?? 0, 0);
+  assert.equal(mcpBuilt.secrets?.required?.length ?? 0, 0);
   const shell = await readFile(join(appDirectory, "dist/client/_shell.html"), "utf8");
   assert.match(shell, /<html\b/);
   assert.match(shell, /<script\b/);

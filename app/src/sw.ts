@@ -20,7 +20,7 @@ cleanupOutdatedCaches();
 
 registerRoute(
   new NavigationRoute(createHandlerBoundToURL("/_shell.html"), {
-    denylist: [/^\/api\//, /^\/_serverFn(?:\/|$)/, /^\/health$/],
+    denylist: [/^\/api\//, /^\/\.well-known\//, /^\/_serverFn(?:\/|$)/, /^\/health$/],
   }),
 );
 
