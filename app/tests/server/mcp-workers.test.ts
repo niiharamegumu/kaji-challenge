@@ -3,6 +3,7 @@ import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { build } from "esbuild";
+import { chromium } from "@playwright/test";
 import { Log, LogLevel, Miniflare, convertV4MiniflareOptions } from "miniflare";
 import { unstable_splitSqlQuery } from "wrangler";
 import { afterAll, beforeAll, expect, it } from "vitest";
@@ -208,11 +209,7 @@ function cookies(response: WorkerResponse) {
     .join("; ");
 }
 
-async function issueTokens(
-  person: Awaited<ReturnType<typeof identity>>,
-  scopes = ["todos:read", "todos:write", "offline_access"],
-  tokenScopes?: string[],
-) {
+async function authorizationRequest(scopes: string[]) {
   const registration = await app.fetch(`${issuer}/register`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -240,6 +237,15 @@ async function issueTokens(
     code_challenge: challenge,
     code_challenge_method: "S256",
   }).toString();
+  return { authorization, clientId, verifier, state };
+}
+
+async function issueTokens(
+  person: Awaited<ReturnType<typeof identity>>,
+  scopes = ["todos:read", "todos:write", "offline_access"],
+  tokenScopes?: string[],
+) {
+  const { authorization, clientId, verifier, state } = await authorizationRequest(scopes);
   const page = await app.fetch(authorization.href, { headers: { cookie: person.cookie } });
   expect(page.status).toBe(200);
   const handle = hidden(await page.text(), "handle");
@@ -396,6 +402,143 @@ async function expectBusinessAccessDenied(token: string, itemId: string) {
     ).toBe(401);
   }
 }
+
+it("accepts native browser consent, revocation and login forms without rewriting their Origin", async () => {
+  const person = await identity();
+  const { authorization, clientId } = await authorizationRequest(["todos:read"]);
+  const browser = await chromium.launch({
+    proxy: { server: "http://127.0.0.1:9" },
+    args: ["--proxy-bypass-list=<-loopback>"],
+  });
+  try {
+    const context = await browser.newContext({ serviceWorkers: "block" });
+    const separator = person.cookie.indexOf("=");
+    await context.addCookies([
+      {
+        name: person.cookie.slice(0, separator),
+        value: person.cookie.slice(separator + 1),
+        url: appOrigin,
+        httpOnly: true,
+        secure: true,
+        sameSite: "Lax",
+      },
+    ]);
+    const page = await context.newPage();
+    const session = await context.newCDPSession(page);
+    const posts: { path: string; origin: string | null; status: number }[] = [];
+    const externalReferrers: (string | null)[] = [];
+    let consentRequest: { headers: Record<string, string>; body: string } | undefined;
+    let internalReferrerMatchesAuthorization = false;
+    let bridgeFailed = false;
+    let unexpectedRequests = 0;
+    // As in mcp-consent-csp.spec.ts, intercept every redirect hop. The dead proxy
+    // and the Worker's outboundService prevent any real Google/client traffic.
+    session.on("Fetch.requestPaused", async ({ requestId, request }) => {
+      try {
+        const url = new URL(request.url);
+        const headers = new Headers(request.headers);
+        let response: Response | WorkerResponse;
+        if (url.origin === appOrigin) {
+          // Forward the browser's actual headers and body, including Origin and
+          // cookies. Never replace the production browserPost check with a stub.
+          response = await app.fetch(request.url, {
+            method: request.method,
+            headers: request.headers,
+            body: request.postData,
+            redirect: "manual",
+          });
+          if (request.method === "POST") {
+            posts.push({
+              path: url.pathname,
+              origin: headers.get("origin"),
+              status: response.status,
+            });
+            if (url.pathname === "/api/mcp/oauth/authorize") {
+              consentRequest = { headers: request.headers, body: request.postData! };
+              // Compare only: do not print a Referer carrying OAuth query values.
+              internalReferrerMatchesAuthorization = headers.get("referer") === authorization.href;
+            }
+          }
+        } else if (
+          url.origin + url.pathname === redirectUri ||
+          url.origin === "https://accounts.google.com"
+        ) {
+          externalReferrers.push(headers.get("referer"));
+          response = new Response("Local OAuth destination", {
+            headers: { "Content-Type": "text/plain", "Referrer-Policy": "no-referrer" },
+          });
+        } else {
+          unexpectedRequests += 1;
+          await session.send("Fetch.failRequest", { requestId, errorReason: "Aborted" });
+          return;
+        }
+        await session.send("Fetch.fulfillRequest", {
+          requestId,
+          responseCode: response.status,
+          responseHeaders: [
+            ...[...response.headers]
+              .filter(([name]) => name.toLowerCase() !== "set-cookie")
+              .map(([name, value]) => ({ name, value })),
+            ...response.headers.getSetCookie().map((value) => ({ name: "Set-Cookie", value })),
+          ],
+          body: Buffer.from(await response.arrayBuffer()).toString("base64"),
+        });
+      } catch {
+        bridgeFailed = true;
+        await session.send("Fetch.failRequest", { requestId, errorReason: "Aborted" });
+      }
+    });
+    await session.send("Fetch.enable", {
+      patterns: [{ urlPattern: "*", requestStage: "Request" }],
+    });
+
+    await page.goto(authorization.href);
+    const approved = page.waitForResponse(
+      (response) =>
+        response.url() === `${issuer}/authorize` && response.request().method() === "POST",
+    );
+    await page.getByRole("button", { name: "選んだ操作を許可" }).click();
+    expect((await approved).status(), JSON.stringify(posts)).toBe(303);
+    await page.getByText("Local OAuth destination").waitFor();
+    expect(internalReferrerMatchesAuthorization).toBe(true);
+    expect(new URL(page.url()).searchParams.has("code")).toBe(true);
+    const connection = await db
+      .prepare("SELECT id FROM mcp_connections WHERE user_id=? AND client_id=?")
+      .bind(person.userId, clientId)
+      .first<{ id: string }>();
+    expect(connection).not.toBeNull();
+    expect(
+      (
+        await app.fetch(`${issuer}/authorize`, {
+          method: "POST",
+          headers: consentRequest!.headers,
+          body: consentRequest!.body,
+          redirect: "manual",
+        })
+      ).status,
+    ).toBe(400);
+
+    await page.goto(`${appOrigin}/api/mcp/connections`);
+    await page.getByRole("button", { name: "連携を解除", exact: true }).click();
+    await page.getByText("解除済み", { exact: false }).waitFor();
+    expect(await revokedAt(connection!.id)).not.toBeNull();
+
+    await context.clearCookies();
+    await page.goto(authorization.href);
+    await page.getByRole("button", { name: "Google でログイン" }).click();
+    await page.getByText("Local OAuth destination").waitFor();
+    expect(posts).toEqual(
+      ["/api/mcp/oauth/authorize", "/api/mcp/connections/revoke", "/api/mcp/oauth/login"].map(
+        (path) => ({ path, origin: appOrigin, status: 303 }),
+      ),
+    );
+    expect(externalReferrers).toEqual([null, null]);
+    expect(bridgeFailed).toBe(false);
+    expect(unexpectedRequests).toBe(0);
+  } finally {
+    await browser.close();
+  }
+}, 60_000);
 
 it("uses real OAuth, RPC and D1 for list/add/complete, then rejects the revoked grant", async () => {
   const discovery = await app.fetch(

@@ -17,6 +17,7 @@ async function interceptAll(
   respond: (
     url: string,
     method: string,
+    headers: Headers,
   ) => {
     status: number;
     headers?: Record<string, string>;
@@ -25,7 +26,7 @@ async function interceptAll(
 ) {
   const session = await page.context().newCDPSession(page);
   session.on("Fetch.requestPaused", async ({ requestId, request }) => {
-    const response = respond(request.url, request.method);
+    const response = respond(request.url, request.method, new Headers(request.headers));
     if (!response) {
       await session.send("Fetch.failRequest", { requestId, errorReason: "Aborted" });
       return;
@@ -96,10 +97,11 @@ for (const destination of [
       destination.uri,
     );
     const html = await document.text();
-    const submitted: string[] = [];
+    const submitted: { url: string; origin: string | null; referer: string | null }[] = [];
+    const callbackReferers: (string | null)[] = [];
     // All URLs are fulfilled or aborted in this isolated browser. No external
     // OAuth server, logged-in profile, grant or local callback listener is used.
-    await interceptAll(page, (url, method) => {
+    await interceptAll(page, (url, method, headers) => {
       if (url === authorizeUrl && method === "GET")
         return {
           status: 200,
@@ -107,11 +109,16 @@ for (const destination of [
           body: html,
         };
       if (method === "POST" && url.startsWith(`${appOrigin}/api/mcp/oauth/`)) {
-        submitted.push(url);
-        return { status: 303, headers: { Location: destination.uri } };
+        submitted.push({ url, origin: headers.get("origin"), referer: headers.get("referer") });
+        return {
+          status: 303,
+          headers: { Location: destination.uri, "Referrer-Policy": "no-referrer" },
+        };
       }
-      if (url === destination.uri)
+      if (url === destination.uri) {
+        callbackReferers.push(headers.get("referer"));
         return { status: 200, headers: { "Content-Type": "text/html" }, body: "Callback reached" };
+      }
       return null;
     });
     await page.goto(authorizeUrl);
@@ -121,8 +128,13 @@ for (const destination of [
     await expect(page).toHaveURL(destination.uri);
     await expect(page.locator("body")).toHaveText("Callback reached");
     expect(submitted).toEqual([
-      `${appOrigin}/api/mcp/oauth/${destination.login ? "login" : "authorize"}`,
+      {
+        url: `${appOrigin}/api/mcp/oauth/${destination.login ? "login" : "authorize"}`,
+        origin: appOrigin,
+        referer: authorizeUrl,
+      },
     ]);
+    expect(callbackReferers).toEqual([null]);
   });
 }
 
@@ -144,7 +156,7 @@ test("MCP consent CSP blocks a redirect to an origin that was not approved", asy
         body: html,
       };
     if (url === `${appOrigin}/api/mcp/oauth/authorize`)
-      return { status: 303, headers: { Location: unexpected } };
+      return { status: 303, headers: { Location: unexpected, "Referrer-Policy": "no-referrer" } };
     if (url === unexpected) reachedUntrusted = true;
     return null;
   });

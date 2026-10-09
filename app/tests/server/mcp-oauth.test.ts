@@ -149,17 +149,21 @@ function post(
   path: string,
   form: URLSearchParams,
   cookie: string,
-  extra: Record<string, string> = {},
+  extra: Record<string, string | null> = {},
 ) {
+  const headers = new Headers({
+    Origin: origin,
+    "Content-Type": "application/x-www-form-urlencoded",
+    Cookie: cookie,
+  });
+  for (const [name, value] of Object.entries(extra)) {
+    if (value === null) headers.delete(name);
+    else headers.set(name, value);
+  }
   return handleMcpHttp(
     new Request(origin + path, {
       method: "POST",
-      headers: {
-        Origin: origin,
-        "Content-Type": "application/x-www-form-urlencoded",
-        Cookie: cookie,
-        ...extra,
-      },
+      headers,
       body: form,
     }),
     bindings,
@@ -443,9 +447,11 @@ it("rejects IPv6 literal callbacks before login because Chromium cannot allow th
   expect(await response.text()).toContain("IPv6 アドレスの戻り先には対応していません");
 });
 
-it.each<Record<string, string>>([
+it.each<Record<string, string | null>>([
   { Origin: "https://evil.example" },
   { Origin: "" },
+  { Origin: "null" },
+  { Origin: null },
   { "Sec-Fetch-Site": "cross-site" },
 ])("rejects forged browser POST before consuming consent: %j", async (headers) => {
   const auth = await consent();
