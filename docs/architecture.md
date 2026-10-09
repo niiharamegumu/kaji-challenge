@@ -16,6 +16,8 @@
 
 `src/server/transport/mcp-worker.ts` は独立したCloudflare Workerで、Agents SDKのstateless `createMcpHandler` とStreamable HTTPを使う。公開操作は `contracts/mcp.ts` の `list_todos`・`add_todo`・`complete_todo` のみ。userId/teamIdをツール引数として受け取らず、ToDoの返却DTOにもteamIdを含めない。完了は既存の物理削除を再利用し、破壊的操作のannotationを付ける。
 
+サーバーアイコンは標準のserverInfo `icons` に設定する。既存の `public/icons/pwa-192x192.png` をbundleし、MCP originの `/icons/kajichalle-192.png` で認証不要のGET/HEADとして返す。追加のasset binding・外部画像取得・CORS許可は不要で、ツールの認証境界は維持する。OAuth画面は本体の配色に合わせた静的HTML/CSSとテキストのブランド名を使い、画像・外部フォント・scriptを読み込まず、既存CSPを維持する。クライアントがアイコンを表示するかどうかはクライアント側の実装とmetadata更新に依存する。
+
 既存アプリの `mcp-oauth.ts` がworkers-oauth-providerのOAuthAuthorizationServerを `/api/mcp/oauth` に配置し、同じoriginのBetter Authセッションで同意者を確認する。既存Google callback・セッション・trustedOriginsは変更しない。S256 PKCE、正確なresource、許可したscopeを要求する。認可コード・access token・refresh token・クライアント登録はproviderのOAUTH_KVへ保存する。同意はproviderのnonceに加え、D1の一回限りのclaimを本人・現在のセッションに結び付ける。Google tokenやログインCookieをMCP tokenとして流用しない。
 
 MCP WorkerはOAuthResourceServerとして、片方向の `KAJI_APPLICATION` Service Bindingから既存Workerのnamed entrypoint `McpApplication` を呼ぶ。通常HTTP入口にRPCは公開しない。KVを持つ既存Workerでtokenを検証し、検証済みuserId/clientId/audience/scope/expiryとconnectionIdだけを内部RPCで渡す。任意のHTTPヘッダーによる本人指定はない。このbindingを付与できる配備権限は信頼境界に含む。MCP WorkerにはDB・KV・Google/Better Authの秘密情報をbindしない。
