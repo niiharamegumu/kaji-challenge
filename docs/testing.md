@@ -44,8 +44,6 @@ Google実OAuth、Cloudflare本番D1の性能・権限、iPhone実機Pushは配�
 
 本番配備の回帰検証では、production以外のstageの拒否、healthの旧release・異常HTTP・不正JSON・接続失敗への再試行と上限を確認する。workflowの構文はactionlintで検証する。実Cloudflareへのplan/deployはローカルテストでは実行しない。
 
-`deployment-plan.test.ts` は本番配備の許可範囲を検証する。資源・bindingの削除、置換、未知の追加、過去migrationの改変・再適用、状態保存先のbootstrapを拒否する。CDは公開Alchemy APIで検査した同じ計画を適用し、`DEPLOY_PLAN_ONLY=true` の場合は適用しない。SDKの生ログは抑止し、値を含まない計画要約と既知のエラーだけを出す。新しい資源やmigrationを追加する際は、この許可範囲とテストもレビューする。
-
 ## 登録制限・認証境界
 
 `tests/server/auth-access.test.ts` は実D1とBetter AuthのOAuth保存処理で、許可外/類似メールの拒否とDB無変更、許可メールの正規化、既存ユーザーの再ログイン、同じメールを使う別Google subjectの連結拒否を検証する。未確認メール、password認証の無効化、期限切れ/失効/改ざんセッション、認証のorigin/redirect制約も確認する。Googleによる署名検証・実OAuthは別途必要で、fixtureがそこを検証したとは扱わない。
