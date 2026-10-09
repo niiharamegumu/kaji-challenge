@@ -239,7 +239,7 @@ export default {
           authorization_servers: [`${appOrigin}/api/mcp/oauth`],
           resource_name: "KajiChalle",
         },
-        requiredScopes: ["todos:read"],
+        requiredScopes: ["todos:read", "todos:write"],
         validateToken: (bindings) => (resource, token) =>
           bindings.KAJI_APPLICATION.validateToken(resource, token),
         handler: { fetch: handleMcp },
