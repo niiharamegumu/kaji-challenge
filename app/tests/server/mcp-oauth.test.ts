@@ -20,7 +20,7 @@ import {
   handleMcpHttp,
   isMcpHttpPath,
 } from "../../src/server/transport/mcp-oauth";
-import { mcpConsentPage, mcpHtml } from "../../src/server/transport/mcp-pages";
+import { mcpConnectionsPage, mcpConsentPage, mcpHtml } from "../../src/server/transport/mcp-pages";
 import type { RuntimeBindings } from "../../src/server/transport/runtime.server";
 import { createTestDatabase } from "../helpers/d1";
 
@@ -236,6 +236,28 @@ async function grant(scopes?: string[]) {
     scope: string;
   };
   return { auth, token, code };
+}
+
+function refreshGrant(
+  clientId: string,
+  refreshToken: string,
+  overrides: Record<string, string> = {},
+) {
+  return handleMcpHttp(
+    new Request(`${base}/token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "refresh_token",
+        client_id: clientId,
+        refresh_token: refreshToken,
+        resource,
+        ...overrides,
+      }),
+    }),
+    bindings,
+    ctx,
+  );
 }
 
 function revokeToken(
@@ -569,6 +591,70 @@ it("issues audience-bound, scoped 15-minute access with optional fixed-lifetime 
   expect(withoutOffline.token.scope).toBe("todos:read");
 });
 
+it("explains when the client did not request continued access", async () => {
+  const auth = await consent("todos:read todos:write");
+  expect(auth.html).toContain("この連携先は継続アクセスを要求していません");
+  expect(auth.html).toContain("トークン発行から最大15分間");
+  expect(auth.html).not.toContain('value="offline_access"');
+  const approved = await post(
+    "/api/mcp/oauth/authorize",
+    approval(auth.handle, ["todos:read", "todos:write"]),
+    auth.cookie,
+  );
+  const code = new URL(approved.headers.get("Location")!).searchParams.get("code")!;
+  const response = await exchange(auth, code);
+  expect(response.status).toBe(200);
+  const token = (await response.json()) as { expires_in: number; refresh_token?: string };
+  expect(token.expires_in).toBeLessThanOrEqual(900);
+  expect(token.refresh_token).toBeUndefined();
+  const connection = (await repository.listConnections(auth.person.userId))[0];
+  const page = await handleMcpHttp(
+    new Request(`${origin}/api/mcp/connections`, { headers: { Cookie: auth.person.cookie } }),
+    bindings,
+    ctx,
+  );
+  const html = await page.text();
+  expect(html).toContain("短期アクセス（自動更新なし）");
+  expect(html).toContain("トークン発行から最大15分間");
+  expect(html).not.toContain("連携中");
+  expect(html).not.toContain(connection.expiresAt);
+});
+
+it("shows consent records without claiming that tokens remain active for 30 days", () => {
+  const connection = {
+    id: "connection",
+    userId: "user",
+    clientId: "client",
+    clientName: "<untrusted client>",
+    resource,
+    scopes: ["todos:read", "offline_access"],
+    grantId: "grant",
+    createdAt: "2026-09-01T00:00:00.000Z",
+    expiresAt: "2026-10-01T00:00:00.000Z",
+    revokedAt: null,
+  };
+  const render = (changes = {}) =>
+    mcpConnectionsPage(
+      [{ connection: { ...connection, ...changes }, handle: "handle" }],
+      "2026-09-15T00:00:00.000Z",
+    );
+  expect(render()).toContain("許可済み");
+  expect(render()).toContain("初回同意から最大30日");
+  expect(render()).toContain("継続アクセスの許可期限");
+  expect(render()).toContain(connection.expiresAt);
+  expect(render()).not.toContain("連携中");
+  expect(render()).not.toContain("<untrusted client>");
+  expect(render({ grantId: null })).toContain("認可コードの交換待ち");
+  expect(render({ expiresAt: "2026-09-02T00:00:00.000Z" })).toContain("許可期限切れ");
+  expect(render({ revokedAt: "2026-09-03T00:00:00.000Z" })).toContain("解除済み");
+  expect(render({ revokedAt: "2026-09-03T00:00:00.000Z" })).toContain(
+    "未解除かつ許可期限内の場合に限り",
+  );
+  // An old short-lived token must never appear connected just because its D1 record remains.
+  expect(render({ scopes: ["todos:read"] })).toContain("短期アクセス（自動更新なし）");
+  expect(render({ scopes: ["todos:read"] })).not.toContain(connection.expiresAt);
+});
+
 it("caps access and refresh grant expiry at the D1 connection's original deadline", async () => {
   const auth = await consent();
   const approved = await post("/api/mcp/oauth/authorize", approval(auth.handle), auth.cookie);
@@ -589,6 +675,82 @@ it("caps access and refresh grant expiry at the D1 connection's original deadlin
     .listUserGrants(auth.person.userId);
   expect(grants.items).toHaveLength(1);
   expect(grants.items[0].expiresAt).toBeLessThanOrEqual(Math.floor(deadline.getTime() / 1000));
+  const refreshed = await refreshGrant(auth.clientId, token.refresh_token!);
+  expect(refreshed.status).toBe(200);
+  const refreshedToken = (await refreshed.json()) as { expires_in: number; refresh_token: string };
+  expect(refreshedToken.expires_in).toBeGreaterThan(0);
+  expect(refreshedToken.expires_in).toBeLessThanOrEqual(120);
+  expect(refreshedToken.refresh_token).toBeTruthy();
+  const afterRefresh = await createMcpAuthorizationServer(bindings)
+    .getOAuthApi(bindings)
+    .listUserGrants(auth.person.userId);
+  expect(afterRefresh.items[0].expiresAt).toBe(grants.items[0].expiresAt);
+  expect((await repository.getConnection(connection.id))?.expiresAt).toBe(deadline.toISOString());
+});
+
+it.each(["resource", "client_id", "scope"] as const)(
+  "rejects refresh with invalid %s without consuming the valid refresh token",
+  async (key) => {
+    const { auth, token } = await grant();
+    const value =
+      key === "client_id"
+        ? (await registration()).client_id
+        : key === "resource"
+          ? "https://other.example.com/mcp"
+          : "admin";
+    const denied = await refreshGrant(auth.clientId, token.refresh_token!, { [key]: value });
+    expect([400, 401]).toContain(denied.status);
+    const body = await denied.json();
+    if (key === "client_id") expect(body).toMatchObject({ error: "invalid_grant" });
+    expect(body).not.toHaveProperty("access_token");
+    expect(body).not.toHaveProperty("refresh_token");
+    expect(JSON.stringify(body)).not.toContain(token.refresh_token);
+    expect((await refreshGrant(auth.clientId, token.refresh_token!)).status).toBe(200);
+  },
+);
+
+it("does not elevate a read-only grant when refresh requests write access", async () => {
+  const { auth, token } = await grant(["todos:read", "offline_access"]);
+  const refreshed = await refreshGrant(auth.clientId, token.refresh_token!, {
+    scope: "todos:read todos:write",
+  });
+  // The provider may grant the valid subset; the security boundary is the issued scope.
+  expect(refreshed.status).toBe(200);
+  const result = (await refreshed.json()) as { access_token: string; scope: string };
+  expect(result.scope).toBe("todos:read");
+  const context = await createMcpAuthorizationServer(bindings).validateToken(
+    resource,
+    result.access_token,
+    bindings,
+  );
+  expect(context?.scope).toEqual(["todos:read"]);
+});
+
+// Characterize the upstream limitation, not a strict replay-protection guarantee.
+// Provider upgrades must revisit these expectations against RFC 9700 section 4.14.2.
+it("documents provider acceptance of repeated previous-refresh use before its replacement is used", async () => {
+  const { auth, token } = await grant();
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const response = await refreshGrant(auth.clientId, token.refresh_token!);
+    expect(response.status).toBe(200);
+    const result = (await response.json()) as { refresh_token: string; expires_in: number };
+    expect(result.refresh_token).not.toBe(token.refresh_token);
+    expect(result.expires_in).toBeLessThanOrEqual(900);
+  }
+});
+
+it("documents that rejecting an older refresh token does not revoke the active provider grant", async () => {
+  const { auth, token } = await grant();
+  const first = await refreshGrant(auth.clientId, token.refresh_token!);
+  expect(first.status).toBe(200);
+  const r1 = ((await first.json()) as { refresh_token: string }).refresh_token;
+  const second = await refreshGrant(auth.clientId, r1);
+  expect(second.status).toBe(200);
+  const r2 = ((await second.json()) as { refresh_token: string }).refresh_token;
+  const replay = await refreshGrant(auth.clientId, token.refresh_token!);
+  expect(replay.status).toBe(400);
+  expect(await replay.json()).toMatchObject({ error: "invalid_grant" });
+  expect((await refreshGrant(auth.clientId, r2)).status).toBe(200);
 });
 
 it.each(["code_verifier", "client_id", "resource"])(
