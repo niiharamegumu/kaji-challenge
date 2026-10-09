@@ -49,7 +49,7 @@ export function mcpHtml(
     "Content-Security-Policy",
     `default-src 'none'; style-src 'unsafe-inline'; form-action 'self'${redirectSource}; frame-ancestors 'none'; base-uri 'none'`,
   );
-  headers.set("Referrer-Policy", "no-referrer");
+  headers.set("Referrer-Policy", "same-origin");
   headers.set("X-Frame-Options", "DENY");
   headers.set("X-Content-Type-Options", "nosniff");
   return new Response(html, { status, headers });
