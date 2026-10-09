@@ -81,7 +81,7 @@ beforeEach(() => {
 });
 
 describe("MCP HTTP authentication boundary", () => {
-  it("publishes only the canonical protected resource metadata and baseline scope", async () => {
+  it("advertises read and write scopes for the initial authorization", async () => {
     const response = await worker.fetch(
       new Request(`${mcpOrigin}/.well-known/oauth-protected-resource/mcp`),
       env(),
@@ -91,7 +91,7 @@ describe("MCP HTTP authentication boundary", () => {
     expect(await payload(response)).toMatchObject({
       resource,
       authorization_servers: [`${appOrigin}/api/mcp/oauth`],
-      scopes_supported: ["todos:read"],
+      scopes_supported: ["todos:read", "todos:write"],
     });
     expect(validateToken).not.toHaveBeenCalled();
   });
@@ -104,6 +104,7 @@ describe("MCP HTTP authentication boundary", () => {
     );
     expect(response.status).toBe(401);
     expect(response.headers.get("WWW-Authenticate")).toContain("resource_metadata=");
+    expect(response.headers.get("WWW-Authenticate")).toContain('scope="todos:read todos:write"');
     expect(invoke).not.toHaveBeenCalled();
   });
 
@@ -173,6 +174,19 @@ describe("MCP HTTP authentication boundary", () => {
     expect(validateToken).not.toHaveBeenCalled();
   });
 
+  it("allows list_todos with a read-only token despite the advertised read/write scopes", async () => {
+    validateToken.mockResolvedValue({ ...tokenContext(), scope: ["todos:read"] });
+    const response = await call("list_todos");
+    expect(response.status).toBe(200);
+    expect(await payload(response)).toMatchObject({
+      result: { structuredContent: { items: [], categories: [null] } },
+    });
+    expect(invoke).toHaveBeenCalledWith(expect.objectContaining({ scopes: ["todos:read"] }), {
+      tool: "list_todos",
+      arguments: {},
+    });
+  });
+
   it.each(["add_todo", "complete_todo"])(
     "challenges the actual read-only token for %s",
     async (name) => {
@@ -192,7 +206,7 @@ describe("MCP HTTP authentication boundary", () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 
-  it("allows add_todo with a write-only token despite the advertised read baseline", async () => {
+  it("allows add_todo with a write-only token despite the advertised read/write scopes", async () => {
     validateToken.mockResolvedValue({ ...tokenContext(), scope: ["todos:write"] });
     invoke.mockResolvedValue({
       ok: true,
