@@ -35,6 +35,18 @@ CI/CDの `bun install --frozen-lockfile` でlockとpatchを再現し、型検査
 
 patchは上流への採用や互換性を保証するものではない。上流更新時の再reviewはこのリポジトリで引き受ける。
 
+## Refresh tokenの既知の制約
+
+provider 1.2.3はcurrentとpreviousのrefresh tokenを受け付ける。previousには時間制限がなく、後継tokenが初めて使われるまで繰り返し利用できる。さらに古いtokenを`invalid_grant`で拒否しても、現行refresh tokenやgrant全体は失効しない。これは[providerの公開仕様](https://github.com/cloudflare/workers-oauth-provider/blob/v1.2.3/docs/authorization-server.md#pkce-and-token-lifecycle)の挙動であり、[RFC 9700 §4.14.2](https://www.rfc-editor.org/rfc/rfc9700.html#section-4.14.2)がpublic client向けrotationで示す厳密な旧token無効化・replay検出時の現行token失効を保証するものではない。
+
+`mcp-oauth.test.ts` の2つのcharacterization testは、この制約を合成tokenで再現する。テスト成功を完全なreplay耐性と解釈しない。既存のD1先行失効patchはRFC 7009の明示解除に対応するもので、このrefresh動作を変更しない。厳格化には公式対応版・公式hookまたは方式の選定が必要であり、追加patchやtokenの独自解析で暗黙に補わない。
+
+2026-10-09確認時点で上流の[Issue #43](https://github.com/cloudflare/workers-oauth-provider/issues/43)は未解決。maintainerは2026-02-23に、public clientのstrict rotationをbreaking changeとして将来majorで扱うため[PR #149](https://github.com/cloudflare/workers-oauth-provider/pull/149)を閉じたと説明している。[KV競合のIssue #214](https://github.com/cloudflare/workers-oauth-provider/issues/214)も未解決である。直列化だけではprevious tokenを受理する意味論は変わらず、`tokenExchangeCallback`はmismatch拒否より後なのでその拒否を検知できない。`onError`の未検証IDからgrantを失効すると第三者による強制解除を招くため、このcallbackを失効経路として使わない。
+
+Kaji側ではaccess tokenを最大15分とし、要求・同意された`offline_access`にだけrefreshを発行する。refreshも初回同意時のD1期限（最大30日）を越えず、`refreshTokenIdleTTL`による期限延長は設定しない。解除・所属喪失はD1で再検査する。KVの多拠点競合はローカル試験では証明できない。
+
+MCP [2026-07-28 Refresh Tokens](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization#refresh-tokens)はAS metadataで`offline_access`を広告し、clientが要求へ追加できるとする一方、RSのPRM・401 challengeには含めないことを推奨する。ASが広告してもclientの要求・更新対応は保証されない。要求外scopeは付与せず、短期利用と継続許可を画面で区別する。
+
 ## 関連するMCP SDKの限定peer例外
 
 Agents 0.27.0の安定版はclient 2.0.0・sdk 1.30.0・server 2.0.0を完全固定のpeerとして宣言している。一方、[GHSA-6qxp-vccf-f47h](https://github.com/modelcontextprotocol/typescript-sdk/security/advisories/GHSA-6qxp-vccf-f47h) の修正下限はclient 2.2.0・sdk 1.31.0である。
