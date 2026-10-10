@@ -926,7 +926,7 @@ it.each(["access_token", "refresh_token"] as const)(
     expect(response.status).toBe(200);
     const revoked = await repository.getConnection(principal.connectionId);
     expect(revoked?.revokedAt).toBeTruthy();
-    await expect(authorizeMcpConnection(repository, principal, new Date())).rejects.toMatchObject({
+    await expect(authorizeMcpConnection(repository, principal)).rejects.toMatchObject({
       status: 401,
     });
     expect((await revokeToken(token[tokenType]!, auth.clientId, tokenType)).status).toBe(200);
@@ -963,7 +963,7 @@ it.each(["access_token", "refresh_token"] as const)(
       200,
     );
     expect((await repository.getConnection(principal.connectionId))?.revokedAt).toBeNull();
-    await expect(authorizeMcpConnection(repository, principal, new Date())).resolves.toMatchObject({
+    await expect(authorizeMcpConnection(repository, principal)).resolves.toMatchObject({
       clientId: auth.clientId,
       revokedAt: null,
     });
@@ -1003,7 +1003,7 @@ it.each(["access_token", "refresh_token"] as const)(
       await database.db.run(sql`DROP TRIGGER reject_mcp_revocation`);
     }
     expect((await revokeToken(token[tokenType]!, auth.clientId, tokenType)).status).toBe(200);
-    await expect(authorizeMcpConnection(repository, principal, new Date())).rejects.toMatchObject({
+    await expect(authorizeMcpConnection(repository, principal)).rejects.toMatchObject({
       status: 401,
     });
   },
@@ -1047,7 +1047,7 @@ it.each(["access_token", "refresh_token"] as const)(
         bindings,
       ),
     ).not.toBeNull();
-    await expect(authorizeMcpConnection(repository, principal, new Date())).rejects.toMatchObject({
+    await expect(authorizeMcpConnection(repository, principal)).rejects.toMatchObject({
       status: 401,
     });
     expect((await revokeToken(token[tokenType]!, auth.clientId, tokenType)).status).toBe(200);
