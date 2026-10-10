@@ -20,7 +20,7 @@ import { responseSchemas } from "../../src/contracts/operations";
 describe("MCP application authorization and ToDos", () => {
   let connection: Awaited<ReturnType<typeof createTestDatabase>>;
   let mcp: D1McpRepository;
-  const now = new Date("2026-10-09T12:00:00Z");
+  const now = new Date();
   const context = { now, vapidPublicKey: "" };
   const list: McpRequest = { tool: "list_todos", arguments: {} };
 
@@ -32,7 +32,11 @@ describe("MCP application authorization and ToDos", () => {
     await connection?.close();
   });
 
-  async function identity(scopes = ["todos:read", "todos:write"], active = true) {
+  async function identity(
+    scopes = ["todos:read", "todos:write"],
+    active = true,
+    expiry: { token?: number; connection?: string } = {},
+  ) {
     const userId = crypto.randomUUID();
     await connection.query(sql`INSERT INTO auth_user(id,name,email)
       VALUES (${userId},'MCP tester',${userId + "@example.com"})`);
@@ -44,7 +48,7 @@ describe("MCP application authorization and ToDos", () => {
       clientId: crypto.randomUUID(),
       resource: "https://mcp.example.com/mcp",
       scopes,
-      expiresAt: now.getTime() / 1000 + 3600,
+      expiresAt: expiry.token ?? Date.now() / 1000 + 3600,
     };
     await mcp.createConnection({
       id: principal.connectionId,
@@ -53,8 +57,8 @@ describe("MCP application authorization and ToDos", () => {
       clientName: "Test client",
       resource: principal.resource,
       scopes,
-      createdAt: "2026-10-08T12:00:00.000Z",
-      expiresAt: "2026-10-10T12:00:00.000Z",
+      createdAt: new Date(now.getTime() - 86_400_000).toISOString(),
+      expiresAt: expiry.connection ?? new Date(Date.now() + 86_400_000).toISOString(),
     });
     if (active)
       expect(
@@ -74,7 +78,7 @@ describe("MCP application authorization and ToDos", () => {
       connectionId: principal.connectionId,
       userId: principal.userId,
       scope,
-      now: now.toISOString(),
+      tokenExpiresAt: new Date(principal.expiresAt * 1000).toISOString(),
     });
   }
   function run(principal: McpPrincipal, request: McpRequest) {
@@ -94,6 +98,167 @@ describe("MCP application authorization and ToDos", () => {
     );
     return responseSchemas.postTodoItem.parse(result.data);
   }
+
+  it.each(["token", "connection"] as const)(
+    "rejects natural %s expiry while fetching the connection",
+    async (kind) => {
+      const deadline = Date.now() + 60_000;
+      const { principal } = await identity(undefined, true, {
+        [kind]: kind === "token" ? deadline / 1000 : new Date(deadline).toISOString(),
+      });
+      const read = mcp.getConnection.bind(mcp);
+      const boundary = vi.spyOn(mcp, "getConnection").mockImplementationOnce(async (id) => {
+        const value = await read(id);
+        vi.setSystemTime(deadline);
+        return value;
+      });
+      vi.useFakeTimers({ toFake: ["Date"] });
+      try {
+        await expect(authorizeMcpConnection(mcp, principal)).rejects.toMatchObject({
+          status: 401,
+        });
+      } finally {
+        boundary.mockRestore();
+        vi.useRealTimers();
+      }
+    },
+  );
+
+  it.each(["token", "connection"] as const)(
+    "rechecks natural %s expiry before returning a list",
+    async (kind) => {
+      const deadline = Date.now() + 60_000;
+      const { principal, teamId } = await identity(undefined, true, {
+        [kind]: kind === "token" ? deadline / 1000 : new Date(deadline).toISOString(),
+      });
+      await createTodo(principal.userId);
+      const guarded = repository(principal, "todos:read");
+      const scoped = guarded.forMember(teamId, principal.userId);
+      const memberBoundary = vi.spyOn(guarded, "forMember").mockReturnValue(scoped);
+      const read = scoped.ListTodoCategories.bind(scoped);
+      const boundary = vi.spyOn(scoped, "ListTodoCategories").mockImplementationOnce(async (id) => {
+        const value = await read(id);
+        // Only the application clock advances; the D1 clock is tested separately below.
+        vi.setSystemTime(deadline);
+        return value;
+      });
+      vi.useFakeTimers({ toFake: ["Date"] });
+      try {
+        await expect(
+          executeMcpOperation(guarded, mcp, list, principal, context),
+        ).rejects.toMatchObject({
+          status: 401,
+        });
+      } finally {
+        boundary.mockRestore();
+        memberBoundary.mockRestore();
+        vi.useRealTimers();
+      }
+    },
+  );
+
+  it.each(["token", "connection"] as const)(
+    "rejects natural %s expiry before a write response without retrying the committed write",
+    async (kind) => {
+      const deadline = Date.now() + 60_000;
+      const { principal, teamId } = await identity(undefined, true, {
+        [kind]: kind === "token" ? deadline / 1000 : new Date(deadline).toISOString(),
+      });
+      const guarded = repository(principal, "todos:write");
+      const scoped = guarded.forMember(teamId, principal.userId);
+      const memberBoundary = vi.spyOn(guarded, "forMember").mockReturnValue(scoped);
+      const create = scoped.CreateTodoItem.bind(scoped);
+      const boundary = vi.spyOn(scoped, "CreateTodoItem").mockImplementationOnce(async (item) => {
+        const created = await create(item);
+        vi.setSystemTime(deadline);
+        return created;
+      });
+      vi.useFakeTimers({ toFake: ["Date"] });
+      try {
+        await expect(
+          executeMcpOperation(
+            guarded,
+            mcp,
+            {
+              tool: "add_todo",
+              arguments: { name: "Already saved" },
+            },
+            principal,
+            context,
+          ),
+        ).rejects.toMatchObject({ status: 401 });
+        expect(boundary).toHaveBeenCalledTimes(1);
+        expect(await connection.repository.ListTodoItemsByTeamID(teamId)).toEqual([
+          expect.objectContaining({ Name: "Already saved" }),
+        ]);
+      } finally {
+        boundary.mockRestore();
+        memberBoundary.mockRestore();
+        vi.useRealTimers();
+      }
+    },
+  );
+
+  it.each(["token", "connection"] as const)(
+    "blocks a prepared batch and subsequent reads/deletes after natural %s expiry in D1",
+    async (kind) => {
+      const sampledAt = Date.now();
+      const clock = await connection.db.get<{ now: string }>(
+        sql`SELECT strftime('%Y-%m-%dT%H:%M:%fZ','now') AS now`,
+      );
+      expect(Date.parse(clock!.now)).toBeGreaterThanOrEqual(sampledAt);
+      expect(Date.parse(clock!.now)).toBeLessThanOrEqual(Date.now());
+      const deadline = new Date(Date.parse(clock!.now) + 1500).toISOString();
+      const { principal, teamId } = await identity(undefined, true, {
+        [kind]: kind === "token" ? Date.parse(deadline) / 1000 : deadline,
+      });
+      const item = await createTodo(principal.userId);
+      const before = await connection.repository.ListTodoItemsByTeamID(teamId);
+      const connectionBefore = await mcp.getConnection(principal.connectionId);
+      await authorizeMcpConnection(mcp, principal);
+      const scoped = repository(principal, "todos:write").forMember(teamId, principal.userId);
+      await scoped.assertAccess();
+      const batch = connection.db.batch.bind(connection.db);
+      const boundary = vi.spyOn(connection.db, "batch").mockImplementationOnce(async (queries) => {
+        const start = await connection.db.get<{ now: string }>(
+          sql`SELECT strftime('%Y-%m-%dT%H:%M:%fZ','now') AS now`,
+        );
+        expect(start!.now < deadline).toBe(true);
+        // Hold already-built SQL until the real database clock crosses the unchanged deadline.
+        await vi.waitFor(
+          async () => {
+            const row = await connection.db.get<{ now: string }>(
+              sql`SELECT strftime('%Y-%m-%dT%H:%M:%fZ','now') AS now`,
+            );
+            expect(row!.now >= deadline).toBe(true);
+          },
+          { timeout: 5000, interval: 25 },
+        );
+        return batch(queries);
+      });
+      try {
+        expect(
+          await scoped.CreateTodoItem({
+            ID: crypto.randomUUID(),
+            TeamID: teamId,
+            Name: "Must not persist",
+            Notes: null,
+            CategoryID: null,
+            SortKey: 100,
+            CreatedAt: now.toISOString(),
+            UpdatedAt: now.toISOString(),
+          }),
+        ).toBe(false);
+        expect(await scoped.DeleteTodoItem(item.id)).toBe(0);
+        expect(await scoped.ListTodoItemsByTeamID(teamId)).toEqual([]);
+        await expect(scoped.assertAccess()).rejects.toMatchObject({ status: 401 });
+        expect(await connection.repository.ListTodoItemsByTeamID(teamId)).toEqual(before);
+        expect(await mcp.getConnection(principal.connectionId)).toEqual(connectionBefore);
+      } finally {
+        boundary.mockRestore();
+      }
+    },
+  );
 
   it("reuses existing ToDos and categories for a non-owner without exposing team IDs", async () => {
     const { principal, teamId } = await identity(["todos:read", "todos:write", "offline_access"]);
@@ -277,7 +442,7 @@ describe("MCP application authorization and ToDos", () => {
     async (failure) => {
       const { principal, teamId } = await identity();
       const item = await createTodo(principal.userId);
-      await authorizeMcpConnection(mcp, principal, now);
+      await authorizeMcpConnection(mcp, principal);
       const scoped = repository(principal, "todos:write").forMember(teamId, principal.userId);
       switch (failure) {
         case "revoked":
