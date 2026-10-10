@@ -39,13 +39,17 @@ patchは上流への採用や互換性を保証するものではない。上流
 
 provider 1.2.3はcurrentとpreviousのrefresh tokenを受け付ける。previousには時間制限がなく、後継tokenが初めて使われるまで繰り返し利用できる。さらに古いtokenを`invalid_grant`で拒否しても、現行refresh tokenやgrant全体は失効しない。これは[providerの公開仕様](https://github.com/cloudflare/workers-oauth-provider/blob/v1.2.3/docs/authorization-server.md#pkce-and-token-lifecycle)の挙動であり、[RFC 9700 §4.14.2](https://www.rfc-editor.org/rfc/rfc9700.html#section-4.14.2)がpublic client向けrotationで示す厳密な旧token無効化・replay検出時の現行token失効を保証するものではない。
 
-`mcp-oauth.test.ts` の2つのcharacterization testは、この制約を合成tokenで再現する。テスト成功を完全なreplay耐性と解釈しない。既存のD1先行失効patchはRFC 7009の明示解除に対応するもので、このrefresh動作を変更しない。厳格化には公式対応版・公式hookまたは方式の選定が必要であり、追加patchやtokenの独自解析で暗黙に補わない。
+`mcp-oauth.test.ts` の2つのcharacterization testは、旧設定のSDKで作った合成tokenを直接SDKで更新し、この制約を再現する。現在のKajiがrefreshを受け付ける試験ではない。テスト成功を完全なreplay耐性と解釈しない。既存のD1先行失効patchはRFC 7009の明示解除に対応するもので、このrefresh動作を変更しない。厳格化には公式対応版・公式hookまたは方式の選定が必要であり、追加patchやtokenの独自解析で暗黙に補わない。
 
 2026-10-09確認時点で上流の[Issue #43](https://github.com/cloudflare/workers-oauth-provider/issues/43)は未解決。maintainerは2026-02-23に、public clientのstrict rotationをbreaking changeとして将来majorで扱うため[PR #149](https://github.com/cloudflare/workers-oauth-provider/pull/149)を閉じたと説明している。[KV競合のIssue #214](https://github.com/cloudflare/workers-oauth-provider/issues/214)も未解決である。直列化だけではprevious tokenを受理する意味論は変わらず、`tokenExchangeCallback`はmismatch拒否より後なのでその拒否を検知できない。`onError`の未検証IDからgrantを失効すると第三者による強制解除を招くため、このcallbackを失効経路として使わない。
 
-Kaji側ではaccess tokenを最大15分とし、要求・同意された`offline_access`にだけrefreshを発行する。refreshも初回同意時のD1期限（最大30日）を越えず、`refreshTokenIdleTTL`による期限延長は設定しない。解除・所属喪失はD1で再検査する。KVの多拠点競合はローカル試験では証明できない。
+Kajiの新規同意は最大7日・自動更新なしとする。標準設定の `accessTokenTTL: 604800` / `refreshTokenTTL: 0` を使い、callbackがD1残期限でTTLを制限し、旧refreshの交換も拒否する。新しい独自patch、ASの置換、独自token解析は追加しない。SDK 1.2.3のmetadataは設定0でも `grant_types_supported` に `refresh_token` を含むが、Kajiでの実際の交換は拒否される。metadataを書き換える追加patchは行わない。
 
-MCP [2026-07-28 Refresh Tokens](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization#refresh-tokens)はAS metadataで`offline_access`を広告し、clientが要求へ追加できるとする一方、RSのPRM・401 challengeには含めないことを推奨する。ASが広告してもclientの要求・更新対応は保証されない。要求外scopeは付与せず、短期利用と継続許可を画面で区別する。
+旧15分tokenの保存済み期限を変更せず、旧refresh・旧未交換コードには新しい期間を与えない。旧画面の同意claimはpolicyを含むhash namespaceと一致しないため、開き直して再同意する必要がある。新規propsにも同じpolicyを暗号化保存し、コード交換時に照合する。既存接続を7日にするには連携先から再接続・再同意する。古いD1許可記録が30日残っていても、それをtokenが使える期間として表示しない。
+
+Bearer tokenが漏えいすると、解除・所属喪失・期限切れまで最大7日間使われるリスクがある。この期間はユーザー了承済みの方針であり、refresh rotationの代用となる安全性を主張しない。解除・現在所属・scope・audience・実token期限・D1期限を引き続き毎回確認する。SDKの相対TTLと発行処理の遅延に対しては、RSへ渡すexpiryもD1期限で制限し、D1期限後の業務アクセスを拒否する。実ChatGPTが7日間tokenを保持・再使用するか、KVの多拠点競合はローカル試験では証明できない。
+
+MCP [2026-07-28 Refresh Tokens](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization#refresh-tokens)はrefresh対応ASのmetadataで`offline_access`を広告し、clientが要求へ追加できるとする一方、RSのPRM・401 challengeには含めないことを推奨する。Kajiはrefreshを無効化したため、新規AS広告からも除外する。要求外scopeや必須scopeへ追加せず、新規同意は読み取り・書き込みの範囲だけを縮小可能とする。
 
 ## 関連するMCP SDKの限定peer例外
 
@@ -61,7 +65,7 @@ Agentsの更新時は公式peer範囲を再確認し、修正版を正式に許�
 
 - `mcp-connections.test.ts`: 実D1のID照合、期限切れ/既失効の冪等処理、無関係行の保持。
 - `mcp-oauth.test.ts`: 実providerとD1/KVのRFC 7009要求、client認証・token照合、D1先行失効、障害時の応答。
-- `mcp-workers.test.ts`: 実workerdの2WorkerとService Bindingで、失効後のlist/add/complete・refresh拒否、KV削除失敗、並行refresh後の業務拒否。
+- `mcp-workers.test.ts`: 実workerdの2WorkerとService Bindingで、7日以内の発行・refresh非発行、失効後のlist/add/complete・旧refresh拒否、KV削除失敗を確認する。切替前から進行中の旧発行は、隔離したSDKのKV保存を待機させて再現し、現在のWorkerが業務を拒否することを確認する。
 
 障害注入と並行処理の待ち合わせはローカルテストfixtureだけに置く。本番Workerへ検証用HTTP入口、失敗フラグ、秘密情報を追加しない。実CloudflareのKV伝播時間やGoogle/ChatGPTのOAuth接続をローカル試験の実績として扱わない。
 
