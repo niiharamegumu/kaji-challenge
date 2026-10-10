@@ -102,12 +102,12 @@ ToDo完了の取り消しはfake timerで2999ms時点の未実行と3000ms時点
 
 期限の検証はexpiry列の書換えだけに依存しない。`mcp-operations.test.ts` / `team-access.test.ts` はfake DateによるApplicationのawait中・応答前の失効と、実D1時計を使ったSQL構築後の自然失効を分けて検証する。同意claim・session・grant結合も実時計で確認する。fake timerはD1の時計を動かさない。長時間batch内の時刻変化と保存後の失効の限界は [authorization.md](authorization.md) に記録する。
 
-`mcp-oauth.test.ts` は実provider・KV・D1とテスト専用Better Authセッションで、S256、resource、同意scope縮小、CSRF、セッション結合、code再利用、refreshと解除を検証する。実Google OAuthやChatGPTアカウントの権限は検証しない。`mcp-worker.test.ts` は実SDKのHTTP要求で3ツール・厳密な入力・scope challenge・並行利用者の分離・本文制限を検証する。
+`mcp-oauth.test.ts` は実provider・KV・D1とテスト専用Better Authセッションで、S256、resource、同意scope縮小、CSRF、セッション・policy結合、code再利用、7日の上限とD1残期限、refresh非発行・旧refresh拒否・解除を検証する。旧15分tokenが新同意でも延長されず、旧画面・未交換コードが拒否されることも確認する。SDKの整数秒境界とアプリの期限ちょうどの拒否を区別し、保存値を変えずに時計を進める。実Google OAuthやChatGPTの7日間の接続維持は検証しない。`mcp-worker.test.ts` は実SDKのHTTP要求で3ツール・厳密な入力・scope challenge・並行利用者の分離・本文制限を検証する。
 
 サーバーアイコンはlegacy initializeと現行server/discoverの標準metadata、認証不要のGET/HEAD、元PNGとのbytes一致、Origin/Host/メソッド制限を確認する。`mcp-consent-csp.spec.ts` は外部通信を遮断したChromiumでdesktop/mobileの同意画面、320px幅と文字拡大、長い未信頼入力、キーボードによるscope縮小、native formの送信値とCSPを検証し、表示画像を保存する。クライアントの実アイコン表示やiPhone実機Safariの確認とは扱わない。
 
 `mcp-workers.test.ts` は2つの実workerd Workerとnamed Service Bindingを使い、OAuthからMCP読み書き・解除までを隔離D1/KVで確認する。外部通信と本番の認証情報を使用しない。全体 `test:local` では既存アプリのMCP設定を無効にし、buildにMCP bundleとnamed exportが含まれ、MCP側にDB/KV/秘密情報がbindされないことも確認する。
 
-RFC 7009失効はaccess/refresh両方でD1先行を確認し、別client・不正tokenでD1が変わらないこと、D1障害時の503、KV削除障害後や並行refresh後もlist/add/completeと以後のrefreshが拒否されることを検証する。障害注入はテストfixtureに限定する。`check-oauth-provider-patch.mjs` はbuildと一括検証で依存versionとpatch登録を確認する。上流更新時の確認範囲は [mcp-oauth-provider-patch.md](mcp-oauth-provider-patch.md) を参照する。
+RFC 7009失効は新access/合成した旧refresh両方でD1先行を確認し、別client・不正tokenでD1が変わらないこと、D1障害時の503、KV削除障害後や切替前から進行中の旧refresh発行後もlist/add/completeと以後のrefreshが拒否されることを検証する。旧設定のSDKは既存テスト内にのみ置き、本番入口を追加・変更しない。障害注入はテストfixtureに限定する。`check-oauth-provider-patch.mjs` はbuildと一括検証で依存versionとpatch登録を確認する。上流更新時の確認範囲は [mcp-oauth-provider-patch.md](mcp-oauth-provider-patch.md) を参照する。
 
 実ChatGPT/Codex接続では先に公開先とOAuth権限の承認を得る。読み取り、承認済みテスト項目の追加、同じ項目だけの完了、解除後の拒否を順に確認し、サーバーのHTTP/認可失敗とクライアントプランの制約を分けて記録する。
