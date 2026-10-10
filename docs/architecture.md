@@ -30,6 +30,8 @@ AlchemyではMCP_ORIGIN設定時だけMCP WorkerとOAuth KVを追加し、MCP_EN
 
 ## Server Functions
 
+入口と全業務SQLの認可条件、Cron/初回所属/本人操作の区別、テスト対応表は [authorization.md](authorization.md) を参照する。通常セッションは検証済みuserId/sessionIdをRepositoryへ引き継ぎ、SQLでも失効・現在所属・対象チームを照合する。
+
 `operations.functions.ts` は静的importできる `createServerFn` の入口。`validator` でZod検証し、handlerでsession/originを検証、Applicationでチーム認可を実施する。入力不正・業務エラーは型付き結果で返し、SQLや認証情報を返さない。入力と認可の検証後、用途別Repository操作で保存する。返却DTOも出力schemaで検証するが、既にcommitした保存は応答検証の失敗では取り消せない。結果はStartのシリアライズへ渡し、手動のJSON stringify/parseは行わない。
 
 feature adapter → 共通client → Server Function → Application → Repositoryという構成は、Startのserver-only処理とUIの分離に従う。TanStack Queryがキャッシュ・再取得・mutationを管理する。単一のdiscriminated unionによるoperation入口はこのアプリの設計であり、Startの必須形式ではない。routeのbeforeLoadだけを認証境界にしない。
