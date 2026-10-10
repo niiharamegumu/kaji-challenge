@@ -42,11 +42,15 @@ export const invokeOperation = createServerFn({ method: "POST" })
         const session = await runtime.auth.api.getSession({ headers });
         if (!session) throw new AppError(401, "unauthorized", "ログインしてください。");
 
-        const result = await executeOperation(runtime.repository, input, {
-          userId: session.user.id,
-          now: new Date(),
-          vapidPublicKey: runtime.bindings.VAPID_PUBLIC_KEY,
-        });
+        const result = await executeOperation(
+          runtime.repository.forSession(session.user.id, session.session.id),
+          input,
+          {
+            userId: session.user.id,
+            now: new Date(),
+            vapidPublicKey: runtime.bindings.VAPID_PUBLIC_KEY,
+          },
+        );
         // D1の保存はここで完了済み。通知はwaitUntilで実行し、HTTP応答を待たせない。
         if (result.changedTeams.length)
           notifyChanges(runtime.bindings, result.changedTeams, operationChanges[input.operation]);
