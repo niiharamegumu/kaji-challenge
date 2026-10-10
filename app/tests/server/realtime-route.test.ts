@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("../../src/server/transport/runtime.server", () => ({
   createRuntime: () => ({
     auth: { api: { getSession: mocks.session } },
-    repository: { ListMembershipsByUserID: mocks.members },
+    repository: { forSession: () => ({ ListMembershipsByUserID: mocks.members }) },
   }),
 }));
 import { connectRealtime, notifyTeams } from "../../src/server/transport/realtime.server";
