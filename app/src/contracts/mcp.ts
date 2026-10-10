@@ -7,7 +7,13 @@ import {
 
 export const mcpScopes = ["todos:read", "todos:write"] as const;
 export const McpScopeSchema = z.enum(mcpScopes);
-export const McpTokenPropsSchema = z.strictObject({ connectionId: z.uuid() });
+export const mcpAccessPolicy = "seven-day-no-refresh" as const;
+export const McpTokenPropsSchema = z.strictObject({
+  connectionId: z.uuid(),
+  // Previously issued access tokens retain their original expiry. Only a new
+  // consent carrying this policy may be exchanged for a seven-day token.
+  accessPolicy: z.literal(mcpAccessPolicy).optional(),
+});
 export const McpPrincipalSchema = z.strictObject({
   userId: z.string().min(1).max(200),
   connectionId: z.uuid(),
