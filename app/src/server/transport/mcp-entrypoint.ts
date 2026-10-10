@@ -51,7 +51,7 @@ export class McpApplication extends WorkerEntrypoint<RuntimeBindings> {
       });
       if (!principal.success || principal.data.resource !== expected) return null;
       const { db, repository } = createDatabase(this.env.DB);
-      await authorizeMcpConnection(new D1McpRepository(db), principal.data, new Date());
+      await authorizeMcpConnection(new D1McpRepository(db), principal.data);
       const memberships = await repository.ListMembershipsByUserID(principal.data.userId);
       if (memberships.length !== 1 || !["owner", "member"].includes(memberships[0].Role))
         return null;
@@ -78,7 +78,7 @@ export class McpApplication extends WorkerEntrypoint<RuntimeBindings> {
         connectionId: caller.data.connectionId,
         userId: caller.data.userId,
         scope: requiredMcpScope(input.data.tool),
-        now: now.toISOString(),
+        tokenExpiresAt: new Date(caller.data.expiresAt * 1000).toISOString(),
       });
       const result = await executeMcpOperation(
         repository,
