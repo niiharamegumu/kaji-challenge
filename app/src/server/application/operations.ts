@@ -44,6 +44,7 @@ export async function executeOperation(
   input: Operation,
   context: OperationContext,
 ): Promise<{ data: unknown; changedTeams: string[] }> {
+  await repository.assertAccess();
   let member = await membership(repository, context.userId);
 
   let didChange = true;
@@ -121,7 +122,7 @@ export async function executeOperation(
     case "postTeamJoin": {
       const inviteCode = input.body.code.trim().toUpperCase();
       const invite = await repo.GetInviteCode(inviteCode);
-      invariant(invite.ExpiresAt >= now, "invite code expired");
+      invariant(Date.parse(invite.ExpiresAt) > Date.now(), "invite code expired");
       invariant(invite.TeamID !== teamId, "already joined team", 409);
       await repo.MoveMember({
         userId,
@@ -287,7 +288,11 @@ export async function executeOperation(
       data = { categories: await repo.ListTodoCategories(teamId) };
       break;
     case "deleteTodoCategory":
-      await repo.DeleteTodoCategory(teamId, input.params.categoryId, now);
+      invariant(
+        await repo.DeleteTodoCategory(teamId, input.params.categoryId, now),
+        "category not found",
+        404,
+      );
       data = {};
       break;
     case "postTodoCategoriesReorder":
@@ -552,6 +557,9 @@ export async function executeOperation(
       throw new Error(`Unknown operation ${exhaustive}`);
     }
   }
+  // Empty reads and no-op writes must not conceal a revoked session or a concurrent move.
+  // A successful join/leave deliberately validates the new membership.
+  await repository.forMember(member.TeamID, userId).assertAccess();
   return {
     data,
     changedTeams:

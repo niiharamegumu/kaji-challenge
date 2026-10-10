@@ -16,7 +16,9 @@ export async function connectRealtime(
   const runtime = createRuntime(bindings);
   const session = await runtime.auth.api.getSession({ headers: request.headers });
   if (!session) return new Response("Unauthorized", { status: 401 });
-  const [member] = await runtime.repository.ListMembershipsByUserID(session.user.id);
+  const [member] = await runtime.repository
+    .forSession(session.user.id, session.session.id)
+    .ListMembershipsByUserID(session.user.id);
   if (!member) return new Response("Forbidden", { status: 403 });
 
   const teamRealtime = bindings.TEAM_REALTIME.getByName(member.TeamID);

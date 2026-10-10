@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { readFile } from "node:fs/promises";
 import {
   CLIENT_CAPABILITIES_META_KEY,
   CLIENT_INFO_META_KEY,
   PROTOCOL_VERSION_META_KEY,
+  SERVER_INFO_META_KEY,
 } from "@modelcontextprotocol/server";
 import type { ValidatedAccessToken } from "@cloudflare/workers-oauth-provider";
 import type { McpPrincipal, McpRequest, McpWireResult } from "../../src/contracts/mcp";
@@ -81,6 +83,52 @@ beforeEach(() => {
 });
 
 describe("MCP HTTP authentication boundary", () => {
+  it.each(["GET", "HEAD"])(
+    "serves the fixed brand PNG without credentials for %s",
+    async (method) => {
+      const response = await worker.fetch(
+        new Request(`${mcpOrigin}/icons/kajichalle-192.png`, { method }),
+        { MCP_ORIGIN: mcpOrigin } as McpWorkerBindings,
+        context(),
+      );
+      expect(response.status).toBe(200);
+      expect(response.headers.get("Content-Type")).toBe("image/png");
+      expect(response.headers.get("Cache-Control")).toBe("public, max-age=3600");
+      expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
+      expect(response.headers.has("Set-Cookie")).toBe(false);
+      expect(response.headers.has("Access-Control-Allow-Origin")).toBe(false);
+      const original = await readFile(
+        new URL("../../public/icons/pwa-192x192.png", import.meta.url),
+      );
+      expect(response.headers.get("Content-Length")).toBe(String(original.byteLength));
+      const body = Buffer.from(await response.arrayBuffer());
+      expect(body).toEqual(method === "HEAD" ? Buffer.alloc(0) : original);
+      expect(validateToken).not.toHaveBeenCalled();
+      expect(invoke).not.toHaveBeenCalled();
+    },
+  );
+
+  it("keeps the public icon route limited to its own origin and read methods", async () => {
+    for (const request of [
+      new Request(`https://other.example.com/icons/kajichalle-192.png`),
+      new Request(`${mcpOrigin}/icons/kajichalle-192.png`, {
+        headers: { Host: "other.example.com" },
+      }),
+    ]) {
+      expect((await worker.fetch(request, env(), context())).status).toBe(403);
+    }
+    const denied = await worker.fetch(
+      new Request(`${mcpOrigin}/icons/kajichalle-192.png`, { method: "POST" }),
+      env(),
+      context(),
+    );
+    expect(denied.status).toBe(405);
+    expect(denied.headers.get("Allow")).toBe("GET, HEAD");
+    expect(validateToken).not.toHaveBeenCalled();
+    expect(invoke).not.toHaveBeenCalled();
+    expect((await call("list_todos", {}, { Authorization: "" })).status).toBe(401);
+  });
+
   it("advertises read and write scopes for the initial authorization", async () => {
     const response = await worker.fetch(
       new Request(`${mcpOrigin}/.well-known/oauth-protected-resource/mcp`),
@@ -168,6 +216,24 @@ describe("MCP HTTP authentication boundary", () => {
     },
   );
 
+  it.each([
+    { MCP_ENABLED: undefined },
+    { MCP_ORIGIN: undefined },
+    { APP_ORIGIN: "http://app.example.com" },
+    { APP_ORIGIN: "https://private-config@example.com" },
+    { MCP_ORIGIN: `${mcpOrigin}/private-config` },
+  ])("fails closed on missing or unsafe configuration: %j", async (settings) => {
+    const response = await worker.fetch(
+      request("tools/list"),
+      { ...env(), ...settings } as McpWorkerBindings,
+      context(),
+    );
+    expect(response.status).toBe(503);
+    expect(await response.text()).toBe("Service unavailable");
+    expect(validateToken).not.toHaveBeenCalled();
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
   it("returns health with no bindings, identity or tool data", async () => {
     const response = await worker.fetch(new Request(`${mcpOrigin}/health`), env(), context());
     expect(await payload(response)).toEqual({ status: "ok", release: "test-release" });
@@ -203,6 +269,30 @@ describe("MCP HTTP authentication boundary", () => {
     const response = await call("list_todos");
     expect(response.status).toBe(403);
     expect(response.headers.get("WWW-Authenticate")).toContain('scope="todos:read"');
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["list_todos", {}, "todos:read"],
+    ["add_todo", { name: "Forbidden" }, "todos:write"],
+    ["complete_todo", { itemId: "item" }, "todos:write"],
+  ] as const)("does not treat offline_access as permission for %s", async (name, args, scope) => {
+    validateToken.mockResolvedValue({ ...tokenContext(), scope: ["offline_access"] });
+    const response = await call(name, args);
+    expect(response.status).toBe(403);
+    expect(response.headers.get("WWW-Authenticate")).toContain(`scope="${scope}"`);
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("does not accept a query-string token or identity as authentication", async () => {
+    const unauthenticated = request("tools/list", undefined, { Authorization: "" });
+    const url = new URL(unauthenticated.url);
+    url.searchParams.set("access_token", "private-query-token");
+    url.searchParams.set("userId", "victim");
+    const response = await worker.fetch(new Request(url, unauthenticated), env(), context());
+    expect(response.status).toBe(401);
+    expect(await response.text()).not.toContain("private-query-token");
+    expect(validateToken).not.toHaveBeenCalled();
     expect(invoke).not.toHaveBeenCalled();
   });
 
@@ -248,6 +338,54 @@ describe("MCP HTTP authentication boundary", () => {
 });
 
 describe("MCP tool adapter", () => {
+  it.each(["2025-11-25", "2026-07-28"])(
+    "advertises the brand icon through standard %s metadata",
+    async (protocolVersion) => {
+      const modern = protocolVersion === "2026-07-28";
+      const method = modern ? "server/discover" : "initialize";
+      const clientInfo = { name: "metadata-test", version: "1.0" };
+      const response = await worker.fetch(
+        request(
+          method,
+          modern
+            ? {
+                _meta: {
+                  [PROTOCOL_VERSION_META_KEY]: protocolVersion,
+                  [CLIENT_INFO_META_KEY]: clientInfo,
+                  [CLIENT_CAPABILITIES_META_KEY]: {},
+                },
+              }
+            : { protocolVersion, capabilities: {}, clientInfo },
+          {
+            "MCP-Protocol-Version": protocolVersion,
+            ...(modern ? { "Mcp-Method": method } : {}),
+          },
+        ),
+        env(),
+        context(),
+      );
+      expect(response.status).toBe(200);
+      const body = (await payload(response)) as {
+        result: { serverInfo?: unknown; _meta?: Record<string, unknown> };
+      };
+      const serverInfo = modern
+        ? body.result._meta?.[SERVER_INFO_META_KEY]
+        : body.result.serverInfo;
+      expect(serverInfo).toMatchObject({
+        name: "KajiChalle",
+        version: "test-release",
+        icons: [
+          {
+            src: `${mcpOrigin}/icons/kajichalle-192.png`,
+            mimeType: "image/png",
+            sizes: ["192x192"],
+          },
+        ],
+      });
+      expect(invoke).not.toHaveBeenCalled();
+    },
+  );
+
   it("serves modern stateless requests as well as the legacy Streamable HTTP lane", async () => {
     const response = await worker.fetch(
       request(
@@ -355,6 +493,89 @@ describe("MCP tool adapter", () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 
+  it("does not execute a write hidden in a batch with an allowed read", async () => {
+    validateToken.mockResolvedValue({ ...tokenContext(), scope: ["todos:read"] });
+    const response = await worker.fetch(
+      new Request(request("tools/list"), {
+        method: "POST",
+        body: JSON.stringify([
+          {
+            jsonrpc: "2.0",
+            id: 1,
+            method: "tools/call",
+            params: { name: "list_todos", arguments: {} },
+          },
+          {
+            jsonrpc: "2.0",
+            id: 2,
+            method: "tools/call",
+            params: { name: "complete_todo", arguments: { itemId: "victim-item" } },
+          },
+        ]),
+      }),
+      env(),
+      context(),
+    );
+    const messages = (await response.text())
+      .split("\n")
+      .filter((line) => line.startsWith("data: "))
+      .map((line) => JSON.parse(line.slice(6)));
+    expect(messages).toHaveLength(2);
+    expect(messages.find((message) => message.id === 2)).toMatchObject({
+      result: {
+        isError: true,
+        content: [{ type: "text", text: expect.stringContaining("insufficient_scope") }],
+      },
+    });
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(invoke).toHaveBeenCalledWith(expect.objectContaining({ scopes: ["todos:read"] }), {
+      tool: "list_todos",
+      arguments: {},
+    });
+  });
+
+  it("does not let client metadata replace the verified identity or elevate a token", async () => {
+    validateToken.mockResolvedValue({ ...tokenContext(), scope: ["todos:read"] });
+    const response = await worker.fetch(
+      request("tools/call", {
+        name: "list_todos",
+        arguments: {},
+        _meta: {
+          userId: "victim",
+          teamId: "victim-team",
+          authInfo: { scopes: ["todos:write"], token: "private-injected-token" },
+          connectionId: crypto.randomUUID(),
+        },
+      }),
+      env(),
+      context(),
+    );
+    expect(response.status).toBe(200);
+    expect(invoke).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "user-a",
+        connectionId: tokenContext().props.connectionId,
+        clientId: "client-a",
+        resource,
+        scopes: ["todos:read"],
+      }),
+      { tool: "list_todos", arguments: {} },
+    );
+    expect(JSON.stringify(invoke.mock.calls)).not.toContain("victim");
+    expect(await response.text()).not.toContain("private-injected-token");
+  });
+
+  it("does not reflect invalid argument values in SDK validation errors", async () => {
+    const response = await call("add_todo", {
+      name: { token: "private-argument-token" },
+      notes: { password: "private-argument-password" },
+    });
+    const body = await payload(response);
+    expect(body).toMatchObject({ result: { isError: true } });
+    expect(JSON.stringify(body)).not.toContain("private-argument");
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
   it("sends only verified token identity and validated arguments to the private binding", async () => {
     const response = await call("list_todos", {}, { "x-user-id": "victim", "x-team-id": "victim" });
     expect(await payload(response)).toMatchObject({
@@ -428,8 +649,10 @@ describe("MCP tool adapter", () => {
   });
 
   it("rejects malformed output instead of reporting a false successful result", async () => {
-    invoke.mockResolvedValue({ ok: true, data: { id: "item", completed: true } });
-    expect(await payload(await call("list_todos"))).toMatchObject({ result: { isError: true } });
+    invoke.mockResolvedValue({ ok: true, data: { id: "private-output-token", completed: true } });
+    const body = await payload(await call("list_todos"));
+    expect(body).toMatchObject({ result: { isError: true } });
+    expect(JSON.stringify(body)).not.toContain("private-output-token");
     expect(invoke).toHaveBeenCalledTimes(1);
   });
 });

@@ -54,6 +54,7 @@ beforeAll(async () => {
         target: "es2022",
         conditions: ["workerd", "worker", "browser"],
         mainFields: ["module", "main"],
+        loader: { ".png": "dataurl" },
         external: ["cloudflare:*", "node:*"],
         logLevel: "silent",
         banner: {

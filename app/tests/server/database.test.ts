@@ -14,11 +14,11 @@ describe("D1 and business operations", () => {
   const now = new Date("2026-09-14T03:00:00Z");
   let teamId: string;
   let taskId: string;
-  async function run(operation: string, body?: unknown, params = {}) {
+  async function run(operation: string, body?: unknown, params = {}, at = now) {
     const input = operationSchema.parse({ operation, body, params });
     const result = await executeOperation(connection.repository, input, {
       userId: id,
-      now,
+      now: at,
       vapidPublicKey: "test",
     });
     responseSchemas[input.operation].parse(result.data);
@@ -279,7 +279,7 @@ describe("D1 and business operations", () => {
   });
   it("joins another team, rejects member invites and transfers ownership on departure", async () => {
     const oldTeam = teamId;
-    const invitation = (await run("postTeamInvite", {})) as { code: string };
+    const invitation = (await run("postTeamInvite", {}, {}, new Date())) as { code: string };
     async function asSecond(operation: string, body?: unknown) {
       return executeOperation(connection.repository, operationSchema.parse({ operation, body }), {
         userId: secondId,

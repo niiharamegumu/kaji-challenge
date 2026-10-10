@@ -18,6 +18,7 @@ async function interceptAll(
     url: string,
     method: string,
     headers: Headers,
+    body?: string,
   ) => {
     status: number;
     headers?: Record<string, string>;
@@ -26,7 +27,12 @@ async function interceptAll(
 ) {
   const session = await page.context().newCDPSession(page);
   session.on("Fetch.requestPaused", async ({ requestId, request }) => {
-    const response = respond(request.url, request.method, new Headers(request.headers));
+    const response = respond(
+      request.url,
+      request.method,
+      new Headers(request.headers),
+      request.postData,
+    );
     if (!response) {
       await session.send("Fetch.failRequest", { requestId, errorReason: "Aborted" });
       return;
@@ -165,4 +171,119 @@ test("MCP consent CSP blocks a redirect to an origin that was not approved", asy
   await expect.poll(() => violations.length).toBeGreaterThan(0);
   expect(page.url()).toBe(authorizeUrl);
   expect(reachedUntrusted).toBe(false);
+});
+
+test("MCP consent keeps scopes accessible and submits only the user's native selection", async ({
+  page,
+}, testInfo) => {
+  const redirectUri = "https://chatgpt.com/test-mcp-callback";
+  const html = mcpConsentPage(
+    {
+      clientId: "fixture",
+      clientName: "ChatGPT",
+      clientDomain: "chatgpt.com",
+      redirectUri,
+      redirectHost: "chatgpt.com",
+      redirectIsLoopback: false,
+      scope: ["todos:read", "todos:write"],
+    },
+    "fixture-consent-handle",
+    "山田 花子",
+    "わが家のチーム",
+  );
+  const response = mcpHtml(html, 200, undefined, redirectUri);
+  let submitted: URLSearchParams | undefined;
+  let unexpectedRequests = 0;
+  await interceptAll(page, (url, method, _headers, body) => {
+    if (url === authorizeUrl && method === "GET")
+      return { status: 200, headers: Object.fromEntries(response.headers), body: html };
+    if (url === `${appOrigin}/api/mcp/oauth/authorize` && method === "POST") {
+      submitted = new URLSearchParams(body);
+      return { status: 200, headers: { "Content-Type": "text/plain" }, body: "Selection received" };
+    }
+    unexpectedRequests += 1;
+    return null;
+  });
+  await page.goto(authorizeUrl);
+  await expect(page.getByRole("heading", { name: "ToDo の連携を許可" })).toBeVisible();
+  await expect(page.getByRole("group", { name: "許可する操作" })).toBeVisible();
+  await expect(page.getByText("山田 花子", { exact: true })).toBeVisible();
+  await expect(page.getByText("この操作は元に戻せません。", { exact: false })).toBeVisible();
+  await expect(
+    page.getByText("この連携先は継続アクセスを要求していません", { exact: false }),
+  ).toBeVisible();
+  expect(await page.locator("script,img,iframe,link").count()).toBe(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  const approve = page.getByRole("button", { name: "選んだ操作を許可" });
+  expect((await approve.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await page.screenshot({ path: testInfo.outputPath("mcp-consent.png"), fullPage: true });
+
+  const read = page.getByRole("checkbox", { name: /ToDo とカテゴリーの読み取り/ });
+  const write = page.getByRole("checkbox", { name: /ToDo の追加と完了/ });
+  await page.keyboard.press("Tab");
+  await expect(read).toBeFocused();
+  expect(await read.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe("solid");
+  await page.keyboard.press("Space");
+  await expect(read).not.toBeChecked();
+  await page.keyboard.press("Tab");
+  await expect(write).toBeFocused();
+  await expect(write).toBeChecked();
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("link", { name: "連携の管理" })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(approve).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("Selection received")).toBeVisible();
+  expect(submitted?.getAll("scope")).toEqual(["todos:write"]);
+  expect(submitted?.get("handle")).toBe("fixture-consent-handle");
+  expect(submitted?.get("decision")).toBe("approve");
+  expect(unexpectedRequests).toBe(0);
+});
+
+test("MCP consent reflows long names and continued-access details without overflow", async ({
+  page,
+}, testInfo) => {
+  const redirectUri = "http://localhost:3456/callback";
+  const clientName = `家事の連携アプリ${"LongClientName".repeat(10)}<img src=https://untrusted.example/pixel>`;
+  const html = mcpConsentPage(
+    {
+      clientId: "fixture",
+      clientName,
+      redirectUri,
+      redirectHost: "localhost:3456",
+      redirectIsLoopback: true,
+      scope: ["todos:read", "todos:write", "offline_access"],
+    },
+    "fixture-consent-handle",
+    "長い名前の利用者".repeat(8),
+    "家事を分担するチーム".repeat(8),
+  );
+  const response = mcpHtml(html, 200, undefined, redirectUri);
+  let unexpectedRequests = 0;
+  await interceptAll(page, (url) => {
+    if (url === authorizeUrl)
+      return { status: 200, headers: Object.fromEntries(response.headers), body: html };
+    unexpectedRequests += 1;
+    return null;
+  });
+  await page.goto(authorizeUrl);
+  await page.setViewportSize({ width: 320, height: 720 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await expect(page.getByRole("checkbox", { name: /継続アクセス/ })).toBeChecked();
+  await expect(
+    page.getByText("この端末で動くアプリへアクセスを渡します。", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("連携先の名前は自己申告", { exact: false })).toBeVisible();
+  await expect(
+    page.getByText("初回同意から最大30日間利用できます", { exact: false }),
+  ).toBeVisible();
+  expect(await page.locator("img,script,iframe").count()).toBe(0);
+  await page.screenshot({ path: testInfo.outputPath("mcp-consent-narrow.png"), fullPage: true });
+  await page.setViewportSize({ width: 640, height: 720 });
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = "200%";
+  });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await expect(page.getByRole("button", { name: "拒否", exact: true })).toBeVisible();
+  expect(unexpectedRequests).toBe(0);
 });

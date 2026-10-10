@@ -120,7 +120,9 @@ describe("persisted category order", () => {
     expect(await list()).toEqual(["A", null, "B"]);
     await run("deleteTodoCategory", undefined, { categoryId: cid("B") });
     expect(await list()).toEqual(["A", null]);
-    await run("deleteTodoCategory", undefined, { categoryId: cid("missing") });
+    await expect(
+      run("deleteTodoCategory", undefined, { categoryId: cid("missing") }),
+    ).rejects.toMatchObject({ status: 404 });
     expect(await list()).toEqual(["A", null]);
     await run("postTodoCategory", { name: "D" });
     expect(await list()).toEqual(["A", null, "D"]);

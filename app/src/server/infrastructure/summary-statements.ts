@@ -12,7 +12,7 @@ type SummaryOptions = {
   month: string;
   ensureCoverage: boolean;
   closeMonth?: boolean;
-  access?: SQL;
+  access: SQL;
 };
 
 /** 日次は当月の日付、週次は日曜日が当月に含まれる週だけを計上する。 */
@@ -30,7 +30,7 @@ function monthCoverageDates(start: string, end: string) {
 
 /** 保存・再集計・ルール更新を呼出元のD1 batchへ組み込み、同じcommitで確定する。 */
 export function summaryStatements(db: Database, options: SummaryOptions) {
-  const { teamId, month, ensureCoverage, closeMonth = false, access = sql`1` } = options;
+  const { teamId, month, ensureCoverage, closeMonth = false, access } = options;
   const start = month + "-01";
   const end = nextMonth(month);
 

@@ -5,6 +5,7 @@ import {
 } from "@cloudflare/workers-oauth-provider";
 import { McpServer, type CallToolResult } from "@modelcontextprotocol/server";
 import { createMcpHandler } from "agents/mcp/server";
+import brandIcon from "../../../public/icons/pwa-192x192.png?inline";
 import type { McpEnv } from "../../../mcp-worker-configuration";
 import {
   AddTodoInputSchema,
@@ -23,13 +24,21 @@ export type McpWorkerBindings = {
 };
 type ResourceContext = OAuthResourceContext<{ connectionId: string }>;
 const MAX_BODY_BYTES = 128 * 1024;
+const iconPath = "/icons/kajichalle-192.png";
+// Bundle the existing public PNG. This Worker needs no asset binding or network
+// request to publish its fixed, non-sensitive brand image on its own origin.
+const iconBytes = Uint8Array.from(atob(brandIcon.split(",")[1]), (value) => value.charCodeAt(0));
 
 function toolError(code: string, message: string): CallToolResult {
   return { isError: true, content: [{ type: "text", text: JSON.stringify({ code, message }) }] };
 }
 
 function createServer(env: McpWorkerBindings, ctx: ResourceContext, resource: string) {
-  const server = new McpServer({ name: "KajiChalle", version: env.APP_RELEASE });
+  const server = new McpServer({
+    name: "KajiChalle",
+    version: env.APP_RELEASE,
+    icons: [{ src: `${env.MCP_ORIGIN}${iconPath}`, mimeType: "image/png", sizes: ["192x192"] }],
+  });
   const invoke = async (request: McpRequest): Promise<CallToolResult> => {
     const input = McpRequestSchema.safeParse(request);
     const props = McpTokenPropsSchema.safeParse(ctx.props);
@@ -215,6 +224,27 @@ export default {
           headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
         },
       );
+    }
+    if (url.pathname === iconPath) {
+      try {
+        if (
+          url.origin !== configuredOrigin(env.MCP_ORIGIN) ||
+          (request.headers.has("Host") && request.headers.get("Host") !== url.host)
+        )
+          return new Response("Forbidden", { status: 403 });
+      } catch {
+        return new Response("Service unavailable", { status: 503 });
+      }
+      if (request.method !== "GET" && request.method !== "HEAD")
+        return new Response("Method not allowed", { status: 405, headers: { Allow: "GET, HEAD" } });
+      return new Response(request.method === "HEAD" ? null : iconBytes, {
+        headers: {
+          "Content-Type": "image/png",
+          "Content-Length": String(iconBytes.byteLength),
+          "Cache-Control": "public, max-age=3600",
+          "X-Content-Type-Options": "nosniff",
+        },
+      });
     }
     if (env.MCP_ENABLED !== "true" || env.MAINTENANCE_MODE === "true")
       return new Response("Service unavailable", {

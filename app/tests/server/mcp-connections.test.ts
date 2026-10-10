@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, it } from "vitest";
+import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import type { NewMcpConnection } from "../../src/server/application/mcp-ports";
 import { session, user } from "../../src/server/infrastructure/auth-schema";
@@ -6,9 +6,9 @@ import { D1McpRepository } from "../../src/server/infrastructure/mcp-repository"
 import { mcpConsentClaims } from "../../src/server/infrastructure/schema";
 import { createTestDatabase } from "../helpers/d1";
 
-const now = "2026-10-09T00:00:00.000Z";
-const later = "2026-10-09T00:01:00.000Z";
-const expiresAt = "2026-11-08T00:00:00.000Z";
+const now = new Date().toISOString();
+const later = new Date(Date.parse(now) + 3600_000).toISOString();
+const expiresAt = new Date(Date.parse(now) + 86_400_000).toISOString();
 let database: Awaited<ReturnType<typeof createTestDatabase>>;
 let repository: D1McpRepository;
 
@@ -166,6 +166,63 @@ it("rechecks session expiry and session revocation when consuming consent", asyn
       .where(eq(mcpConsentClaims.handle_hash, revokedHash)),
   ).toEqual([]);
 });
+
+it.each(["claim", "session", "connection"])(
+  "rejects natural %s expiry even with a valid request-start timestamp",
+  async (kind) => {
+    const clock = await database.db.get<{ now: string }>(
+      sql`SELECT strftime('%Y-%m-%dT%H:%M:%fZ','now') AS now`,
+    );
+    const deadline = new Date(Date.parse(clock!.now) + 1000).toISOString();
+    const identity = await createIdentity(kind === "session" ? deadline : expiresAt);
+    const handleHash = await createClaim(identity, kind === "claim" ? deadline : later);
+    const connection = await createPendingConnection(identity.userId, {
+      expiresAt: kind === "connection" ? deadline : expiresAt,
+    });
+    await vi.waitFor(
+      async () => {
+        const row = await database.db.get<{ now: string }>(
+          sql`SELECT strftime('%Y-%m-%dT%H:%M:%fZ','now') AS now`,
+        );
+        expect(row!.now >= deadline).toBe(true);
+      },
+      { timeout: 5000, interval: 25 },
+    );
+    if (kind === "connection") {
+      expect(
+        await repository.bindGrant(
+          connection.id,
+          identity.userId,
+          connection.clientId,
+          connection.resource,
+          crypto.randomUUID(),
+          clock!.now,
+        ),
+      ).toBe(false);
+      expect(await repository.getConnection(connection.id)).toMatchObject({
+        grantId: null,
+        expiresAt: deadline,
+      });
+    } else {
+      expect(
+        await repository.consumeConsentClaim(
+          handleHash,
+          identity.userId,
+          identity.sessionId,
+          clock!.now,
+        ),
+      ).toBe(false);
+      const [claim] = await database.db
+        .select()
+        .from(mcpConsentClaims)
+        .where(eq(mcpConsentClaims.handle_hash, handleHash));
+      expect(claim).toMatchObject({
+        consumed_at: null,
+        expires_at: kind === "claim" ? deadline : later,
+      });
+    }
+  },
+);
 
 it("binds exactly one grant under simultaneous authorization code exchanges", async () => {
   const { userId } = await createIdentity();

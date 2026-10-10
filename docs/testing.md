@@ -6,6 +6,7 @@
 - 設定画面ではヘッダーのメンバーキャッシュ再利用、プロフィール保存中の操作抑止、失敗時の入力保持・再試行、同名の別チームへ移動した際のdraft分離を確認します。
 - Domain: 日付境界、月またぎ週、完了規則、予定を決定的なfixtureで検証します。`app/tests/fixtures/domain-scenarios.json` は業務規則の期待値です。
 - Application/DB: 認可、チーム越境、競合とrollback、締めの冪等性、認証失効・セッション数を使い捨てのローカルD1で検証します。
+- `team-access.test.ts` は全業務Repositoryのread/list/create/update/deleteを他チーム・所属移動/削除・セッション失効/期限切れで確認します。通常入口の偽装IDとSQLの対応は [authorization.md](authorization.md) を参照します。存在しないカテゴリーの削除も404とし、他チームIDで成功を装わないことを確認します。
 - API契約: Zod入出力・DTOを正本とし、意図を指定した完了操作と、revisionを含まないtransport/adapterを確認します。
 - 通信: 所属変更・ログアウト時の古い通信の破棄、更新失敗時の再取得、オフライン更新の自動再送抑止を確認します。
 - 操作フィードバック: 遅延中の家事・ToDoの完了表示、失敗した操作だけの復元、週次連続3タップ、フォームの入力保持を確認します。
@@ -99,7 +100,11 @@ ToDo完了の取り消しはfake timerで2999ms時点の未実行と3000ms時点
 
 `mcp-connections.test.ts` は実D1で単回同意・grant結合・本人限定の失効・期限・FKを検証する。`mcp-operations.test.ts` と `todo-access.test.ts` は現在所属、他チームID、scope、SQL直前の解除、既存ToDo処理の再利用を確認する。
 
+期限の検証はexpiry列の書換えだけに依存しない。`mcp-operations.test.ts` / `team-access.test.ts` はfake DateによるApplicationのawait中・応答前の失効と、実D1時計を使ったSQL構築後の自然失効を分けて検証する。同意claim・session・grant結合も実時計で確認する。fake timerはD1の時計を動かさない。長時間batch内の時刻変化と保存後の失効の限界は [authorization.md](authorization.md) に記録する。
+
 `mcp-oauth.test.ts` は実provider・KV・D1とテスト専用Better Authセッションで、S256、resource、同意scope縮小、CSRF、セッション結合、code再利用、refreshと解除を検証する。実Google OAuthやChatGPTアカウントの権限は検証しない。`mcp-worker.test.ts` は実SDKのHTTP要求で3ツール・厳密な入力・scope challenge・並行利用者の分離・本文制限を検証する。
+
+サーバーアイコンはlegacy initializeと現行server/discoverの標準metadata、認証不要のGET/HEAD、元PNGとのbytes一致、Origin/Host/メソッド制限を確認する。`mcp-consent-csp.spec.ts` は外部通信を遮断したChromiumでdesktop/mobileの同意画面、320px幅と文字拡大、長い未信頼入力、キーボードによるscope縮小、native formの送信値とCSPを検証し、表示画像を保存する。クライアントの実アイコン表示やiPhone実機Safariの確認とは扱わない。
 
 `mcp-workers.test.ts` は2つの実workerd Workerとnamed Service Bindingを使い、OAuthからMCP読み書き・解除までを隔離D1/KVで確認する。外部通信と本番の認証情報を使用しない。全体 `test:local` では既存アプリのMCP設定を無効にし、buildにMCP bundleとnamed exportが含まれ、MCP側にDB/KV/秘密情報がbindされないことも確認する。
 
