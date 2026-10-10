@@ -18,13 +18,17 @@
 
 サーバーアイコンは標準のserverInfo `icons` に設定する。既存の `public/icons/pwa-192x192.png` をbundleし、MCP originの `/icons/kajichalle-192.png` で認証不要のGET/HEADとして返す。追加のasset binding・外部画像取得・CORS許可は不要で、ツールの認証境界は維持する。OAuth画面は本体の配色に合わせた静的HTML/CSSとテキストのブランド名を使い、画像・外部フォント・scriptを読み込まず、既存CSPを維持する。クライアントがアイコンを表示するかどうかはクライアント側の実装とmetadata更新に依存する。
 
-既存アプリの `mcp-oauth.ts` がworkers-oauth-providerのOAuthAuthorizationServerを `/api/mcp/oauth` に配置し、同じoriginのBetter Authセッションで同意者を確認する。既存Google callback・セッション・trustedOriginsは変更しない。S256 PKCE、正確なresource、許可したscopeを要求する。認可コード・access token・refresh token・クライアント登録はproviderのOAUTH_KVへ保存する。同意はproviderのnonceに加え、D1の一回限りのclaimを本人・現在のセッションに結び付ける。Google tokenやログインCookieをMCP tokenとして流用しない。
+既存アプリの `mcp-oauth.ts` がworkers-oauth-providerのOAuthAuthorizationServerを `/api/mcp/oauth` に配置し、同じoriginのBetter Authセッションで同意者を確認する。既存Google callback・セッション・trustedOriginsは変更しない。S256 PKCE、正確なresource、許可したscopeを要求する。認可コード・access token・クライアント登録はproviderのOAUTH_KVへ保存する。同意はproviderのnonceに加え、D1の一回限りのclaimを本人・現在のセッション・表示した期間のpolicyに結び付ける。Google tokenやログインCookieをMCP tokenとして流用しない。
 
 MCP WorkerはOAuthResourceServerとして、片方向の `KAJI_APPLICATION` Service Bindingから既存Workerのnamed entrypoint `McpApplication` を呼ぶ。通常HTTP入口にRPCは公開しない。KVを持つ既存Workerでtokenを検証し、検証済みuserId/clientId/audience/scope/expiryとconnectionIdだけを内部RPCで渡す。任意のHTTPヘッダーによる本人指定はない。このbindingを付与できる配備権限は信頼境界に含む。MCP WorkerにはDB・KV・Google/Better Authの秘密情報をbindしない。
 
 Applicationの `mcp-operations.ts` は毎回、連携の所有者・grant・期限・失効・実tokenのscopeと現在の所属1件・roleを検査する。追加/完了は既存 `executeOperation` を使う。ToDo SQLでも対象teamIdと現在の所属、連携状態、許可scopeを検査し、他チームの項目IDや検証後の解除を拒否する。保存後は既存のToDo変更通知を再利用し、応答不明の書き込みは自動再送しない。
 
-連携は最大30日、access tokenは最大15分。`offline_access` を選択した場合のみrefreshでき、ログアウトでは解除されない。`/api/mcp/connections` で本人が解除するとD1を先に失効させ、続いてproviderのgrantを失効させる。標準RFC 7009失効も、providerがclient認証・token真正性・所有者を確認した後、管理patchのcallbackでD1を先に失効させる。access/refreshのどちらでも対応する連携全体を止める。KV削除失敗や並行refreshでtokenが残っても、D1で業務操作を拒否する。D1更新に失敗した失効要求は503とし、成功扱いしない。依存patchの範囲と更新手順は [mcp-oauth-provider-patch.md](mcp-oauth-provider-patch.md) に従う。チーム移動後は現在所属するチームが対象となり、この挙動を同意画面に表示する。
+新しい連携は同意から最大7日、access tokenのTTLは最大604800秒でD1の残期限にも制限する。SDK標準の `refreshTokenTTL: 0` と既存callbackでrefresh発行・交換を止める。新規の要求・広告は `todos:read` / `todos:write` のみとし、`offline_access` は付与しない。自動更新せず、期限後は再接続・再同意が必要となる。ログアウトでは解除されない。古い同意画面・未交換コードは新policyを持たないため拒否し、発行済み15分tokenは元の期限を保つ。旧tokenに含まれるoffline_accessは旧token検証に限って許容し、操作権限や更新権限にはしない。D1の旧30日許可記録も書き換えず、管理画面ではtokenの有効期限・接続状態と区別する。
+
+SDKは相対TTLをtoken保存前に加算するため、KV待機によってproviderのexpiryがD1期限を越える場合がある。McpApplicationがRSへ渡す検証結果のexpiryもD1期限で制限し、Application・業務SQLは毎回元のtoken期限とD1期限を検査する。SDK単体の秒単位の期限判定に依存せず、期限と同時刻でアプリのアクセスを拒否する。
+
+`/api/mcp/connections` で本人が解除するとD1を先に失効させ、続いてproviderのgrantを失効させる。標準RFC 7009失効も、providerがclient認証・token真正性・所有者を確認した後、管理patchのcallbackでD1を先に失効させる。新access・旧refreshのどちらでも対応する連携全体を止める。KV削除失敗や切替前から進行中の発行でtokenが残っても、D1で業務操作を拒否する。D1更新に失敗した失効要求は503とし、成功扱いしない。依存patchの範囲と更新手順は [mcp-oauth-provider-patch.md](mcp-oauth-provider-patch.md) に従う。チーム移動後は現在所属するチームが対象となり、この挙動を同意画面に表示する。
 
 AlchemyではMCP_ORIGIN設定時だけMCP WorkerとOAuth KVを追加し、MCP_ENABLEDは受付の停止/再開だけを制御する。未設定の既存配備では追加資源を作らない。KVはretain方針で、MCP_ORIGINの削除は管理資源の除去となるため停止手段として使わない。
 
