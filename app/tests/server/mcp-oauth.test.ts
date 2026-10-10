@@ -1,4 +1,5 @@
 import { createHmac } from "node:crypto";
+import { OAuthAuthorizationServer } from "@cloudflare/workers-oauth-provider";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -21,10 +22,20 @@ import {
   isMcpHttpPath,
 } from "../../src/server/transport/mcp-oauth";
 import { mcpConnectionsPage, mcpConsentPage, mcpHtml } from "../../src/server/transport/mcp-pages";
+import { McpApplication } from "../../src/server/transport/mcp-entrypoint";
 import type { RuntimeBindings } from "../../src/server/transport/runtime.server";
 import { createTestDatabase } from "../helpers/d1";
 
-vi.mock("cloudflare:workers", () => ({ WorkerEntrypoint: class {}, waitUntil: () => {}, env: {} }));
+vi.mock("cloudflare:workers", () => ({
+  WorkerEntrypoint: class {
+    constructor(
+      _ctx: unknown,
+      public env: RuntimeBindings,
+    ) {}
+  },
+  waitUntil: () => {},
+  env: {},
+}));
 vi.mock("../../src/server/transport/realtime.server", () => ({ notifyTeams: vi.fn() }));
 
 const origin = "https://app.example.com";
@@ -115,7 +126,7 @@ async function registration() {
   return (await response.json()) as { client_id: string };
 }
 
-async function authorization(scope = "todos:read todos:write offline_access") {
+async function authorization(scope = "todos:read todos:write") {
   const client = await registration();
   const verifier = "a".repeat(64);
   const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
@@ -188,17 +199,19 @@ async function consent(scope?: string) {
   const cookie = `${person.cookie}; ${cookies(response)}`;
   return { ...authorizationRequest, person, html, handle, cookie };
 }
-function approval(handle: string, scopes = ["todos:read", "todos:write", "offline_access"]) {
+function approval(handle: string, scopes = ["todos:read", "todos:write"]) {
   const form = new URLSearchParams({ handle, decision: "approve" });
   scopes.forEach((scope) => form.append("scope", scope));
   return form;
 }
 async function exchange(
-  auth: Awaited<ReturnType<typeof consent>>,
+  auth: { clientId: string; verifier: string },
   code: string,
   overrides: Record<string, string> = {},
+  server?: OAuthAuthorizationServer<RuntimeBindings>,
 ) {
-  return handleMcpHttp(
+  const fetch = server ? server.fetch.bind(server) : handleMcpHttp;
+  return fetch(
     new Request(`${base}/token`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -238,12 +251,76 @@ async function grant(scopes?: string[]) {
   return { auth, token, code };
 }
 
+// Mint historical credentials through the public SDK, in this isolated fixture
+// only. Production never enables the old issuance policy or inspects KV secrets.
+async function legacyAuthorization(scope = "todos:read todos:write offline_access") {
+  const person = await identity();
+  const auth = { ...(await authorization(scope)), person };
+  const server = new OAuthAuthorizationServer<RuntimeBindings>({
+    issuer: base,
+    authorizeEndpoint: `${base}/authorize`,
+    tokenEndpoint: `${base}/token`,
+    resources: [resource],
+    accessTokenTTL: 900,
+    refreshTokenTTL: 2_592_000,
+  });
+  const oauth = server.getOAuthApi(bindings);
+  const connectionId = crypto.randomUUID();
+  const now = new Date();
+  const request = await oauth.parseAuthRequest(new Request(auth.url));
+  await repository.createConnection({
+    id: connectionId,
+    userId: person.userId,
+    clientId: auth.clientId,
+    clientName: "Legacy fixture",
+    resource,
+    scopes: request.scope,
+    createdAt: now.toISOString(),
+    expiresAt: new Date(now.getTime() + 2_592_000_000).toISOString(),
+  });
+  const completed = await oauth.completeAuthorization({
+    request,
+    userId: person.userId,
+    scope: request.scope,
+    metadata: {},
+    props: { connectionId },
+    revokeExistingGrants: false,
+  });
+  const code = new URL(completed.redirectTo).searchParams.get("code")!;
+  return { auth, code, server, connectionId };
+}
+
+async function legacyGrant() {
+  const { auth, code, server, connectionId } = await legacyAuthorization();
+  const response = await exchange(auth, code, {}, server);
+  expect(response.status).toBe(200);
+  const token = (await response.json()) as {
+    access_token: string;
+    refresh_token: string;
+    expires_in: number;
+  };
+  const grants = await server.getOAuthApi(bindings).listUserGrants(auth.person.userId);
+  expect(
+    await repository.bindGrant(
+      connectionId,
+      auth.person.userId,
+      auth.clientId,
+      resource,
+      grants.items[0].id,
+      new Date().toISOString(),
+    ),
+  ).toBe(true);
+  return { auth, code, server, connectionId, token };
+}
+
 function refreshGrant(
   clientId: string,
   refreshToken: string,
   overrides: Record<string, string> = {},
+  server?: OAuthAuthorizationServer<RuntimeBindings>,
 ) {
-  return handleMcpHttp(
+  const fetch = server ? server.fetch.bind(server) : handleMcpHttp;
+  return fetch(
     new Request(`${base}/token`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -305,7 +382,9 @@ it("routes only MCP paths, keeps canonical issuer metadata and fails closed when
     authorization_endpoint: `${base}/authorize`,
     token_endpoint: `${base}/token`,
     registration_endpoint: `${base}/register`,
-    scopes_supported: ["todos:read", "todos:write", "offline_access"],
+    scopes_supported: ["todos:read", "todos:write"],
+    // SDK 1.2.3 advertises refresh even when refreshTokenTTL is zero.
+    grant_types_supported: ["authorization_code", "refresh_token"],
   });
   expect((await handleMcpHttp(request, { ...bindings, MCP_ENABLED: "false" }, ctx)).status).toBe(
     404,
@@ -429,6 +508,7 @@ it("limits form bytes rather than decoded character count", async () => {
 it.each([
   ["scope", "todos:read admin"],
   ["scope", "offline_access"],
+  ["scope", "todos:read offline_access"],
   ["code_challenge_method", "plain"],
   ["code_challenge", "bad"],
   ["resource", "https://other.example.com/mcp"],
@@ -569,10 +649,11 @@ it("denies without issuing a grant and cannot add unrequested scopes", async () 
   expect(await repository.listConnections(read.person.userId)).toEqual([]);
 });
 
-it("issues audience-bound, scoped 15-minute access with optional fixed-lifetime refresh", async () => {
+it("issues audience-bound, scoped access capped at seven days without refresh", async () => {
   const { auth, token, code } = await grant();
-  expect(token.expires_in).toBeLessThanOrEqual(900);
-  expect(token.refresh_token).toBeTruthy();
+  expect(token.expires_in).toBeGreaterThan(604_740);
+  expect(token.expires_in).toBeLessThanOrEqual(604_800);
+  expect(token.refresh_token).toBeUndefined();
   const valid = await createMcpAuthorizationServer(bindings).validateToken(
     resource,
     token.access_token,
@@ -580,21 +661,25 @@ it("issues audience-bound, scoped 15-minute access with optional fixed-lifetime 
   );
   expect(valid).toMatchObject({
     audience: resource,
-    scope: ["todos:read", "todos:write", "offline_access"],
+    scope: ["todos:read", "todos:write"],
     userId: auth.person.userId,
     clientId: auth.clientId,
   });
-  expect((await repository.listConnections(auth.person.userId))[0].grantId).toBeTruthy();
+  const connection = (await repository.listConnections(auth.person.userId))[0];
+  expect(connection.grantId).toBeTruthy();
+  expect(Date.parse(connection.expiresAt) - Date.parse(connection.createdAt)).toBe(604_800_000);
+  expect(valid!.expiresAt * 1000).toBeLessThanOrEqual(Date.parse(connection.expiresAt));
+  expect(valid!.expiresAt * 1000 - Date.now()).toBeGreaterThan(604_740_000);
   expect((await exchange(auth, code)).status).toBe(400);
   const withoutOffline = await grant(["todos:read"]);
   expect(withoutOffline.token.refresh_token).toBeUndefined();
   expect(withoutOffline.token.scope).toBe("todos:read");
 });
 
-it("explains when the client did not request continued access", async () => {
+it("explains seven-day consent without promising the current token state", async () => {
   const auth = await consent("todos:read todos:write");
-  expect(auth.html).toContain("この連携先は継続アクセスを要求していません");
-  expect(auth.html).toContain("トークン発行から最大15分間");
+  expect(auth.html).toContain("今回の同意から最大7日間");
+  expect(auth.html).toContain("自動更新されません");
   expect(auth.html).not.toContain('value="offline_access"');
   const approved = await post(
     "/api/mcp/oauth/authorize",
@@ -605,7 +690,7 @@ it("explains when the client did not request continued access", async () => {
   const response = await exchange(auth, code);
   expect(response.status).toBe(200);
   const token = (await response.json()) as { expires_in: number; refresh_token?: string };
-  expect(token.expires_in).toBeLessThanOrEqual(900);
+  expect(token.expires_in).toBeLessThanOrEqual(604_800);
   expect(token.refresh_token).toBeUndefined();
   const connection = (await repository.listConnections(auth.person.userId))[0];
   const page = await handleMcpHttp(
@@ -614,10 +699,11 @@ it("explains when the client did not request continued access", async () => {
     ctx,
   );
   const html = await page.text();
-  expect(html).toContain("短期アクセス（自動更新なし）");
-  expect(html).toContain("トークン発行から最大15分間");
+  expect(html).toContain("新しい許可は同意から最大7日間");
+  expect(html).toContain("以前の15分トークンは延長されません");
   expect(html).not.toContain("連携中");
-  expect(html).not.toContain(connection.expiresAt);
+  expect(html).toContain(connection.expiresAt);
+  expect(html).toContain("これはトークンの有効期限や接続状態を示すものではありません");
 });
 
 it("shows consent records without claiming that tokens remain active for 30 days", () => {
@@ -639,23 +725,24 @@ it("shows consent records without claiming that tokens remain active for 30 days
       "2026-09-15T00:00:00.000Z",
     );
   expect(render()).toContain("許可済み");
-  expect(render()).toContain("初回同意から最大30日");
-  expect(render()).toContain("継続アクセスの許可期限");
+  expect(render()).not.toContain("最大30日");
+  expect(render()).toContain("保存されている許可期限");
+  expect(render()).toContain("旧方式の継続アクセス（現在は自動更新できません）");
   expect(render()).toContain(connection.expiresAt);
   expect(render()).not.toContain("連携中");
   expect(render()).not.toContain("<untrusted client>");
-  expect(render({ grantId: null })).toContain("認可コードの交換待ち");
+  expect(render({ grantId: null })).toContain("許可済み（交換未確認）");
   expect(render({ expiresAt: "2026-09-02T00:00:00.000Z" })).toContain("許可期限切れ");
   expect(render({ revokedAt: "2026-09-03T00:00:00.000Z" })).toContain("解除済み");
   expect(render({ revokedAt: "2026-09-03T00:00:00.000Z" })).toContain(
-    "未解除かつ許可期限内の場合に限り",
+    "これはトークンの有効期限や接続状態を示すものではありません",
   );
   // An old short-lived token must never appear connected just because its D1 record remains.
-  expect(render({ scopes: ["todos:read"] })).toContain("短期アクセス（自動更新なし）");
-  expect(render({ scopes: ["todos:read"] })).not.toContain(connection.expiresAt);
+  expect(render({ scopes: ["todos:read"] })).toContain("以前の15分トークンは延長されません");
+  expect(render({ scopes: ["todos:read"] })).toContain(connection.expiresAt);
 });
 
-it("caps access and refresh grant expiry at the D1 connection's original deadline", async () => {
+it("caps access and provider grant expiry at the D1 connection's original deadline", async () => {
   const auth = await consent();
   const approved = await post("/api/mcp/oauth/authorize", approval(auth.handle), auth.cookie);
   const code = new URL(approved.headers.get("Location")!).searchParams.get("code")!;
@@ -667,31 +754,32 @@ it("caps access and refresh grant expiry at the D1 connection's original deadlin
     .where(eq(mcpConnections.id, connection.id));
   const response = await exchange(auth, code);
   expect(response.status).toBe(200);
-  const token = (await response.json()) as { expires_in: number; refresh_token?: string };
+  const token = (await response.json()) as {
+    access_token: string;
+    expires_in: number;
+    refresh_token?: string;
+  };
   expect(token.expires_in).toBeLessThanOrEqual(120);
-  expect(token.refresh_token).toBeTruthy();
+  expect(token.expires_in).toBeGreaterThan(60);
+  expect(token.refresh_token).toBeUndefined();
+  const valid = await createMcpAuthorizationServer(bindings).validateToken(
+    resource,
+    token.access_token,
+    bindings,
+  );
+  expect(valid!.expiresAt).toBeLessThanOrEqual(Math.floor(deadline.getTime() / 1000));
   const grants = await createMcpAuthorizationServer(bindings)
     .getOAuthApi(bindings)
     .listUserGrants(auth.person.userId);
   expect(grants.items).toHaveLength(1);
   expect(grants.items[0].expiresAt).toBeLessThanOrEqual(Math.floor(deadline.getTime() / 1000));
-  const refreshed = await refreshGrant(auth.clientId, token.refresh_token!);
-  expect(refreshed.status).toBe(200);
-  const refreshedToken = (await refreshed.json()) as { expires_in: number; refresh_token: string };
-  expect(refreshedToken.expires_in).toBeGreaterThan(0);
-  expect(refreshedToken.expires_in).toBeLessThanOrEqual(120);
-  expect(refreshedToken.refresh_token).toBeTruthy();
-  const afterRefresh = await createMcpAuthorizationServer(bindings)
-    .getOAuthApi(bindings)
-    .listUserGrants(auth.person.userId);
-  expect(afterRefresh.items[0].expiresAt).toBe(grants.items[0].expiresAt);
   expect((await repository.getConnection(connection.id))?.expiresAt).toBe(deadline.toISOString());
 });
 
 it.each(["resource", "client_id", "scope"] as const)(
-  "rejects refresh with invalid %s without consuming the valid refresh token",
+  "rejects legacy refresh with invalid %s and also refuses the genuine credential",
   async (key) => {
-    const { auth, token } = await grant();
+    const { auth, token } = await legacyGrant();
     const value =
       key === "client_id"
         ? (await registration()).client_id
@@ -705,33 +793,28 @@ it.each(["resource", "client_id", "scope"] as const)(
     expect(body).not.toHaveProperty("access_token");
     expect(body).not.toHaveProperty("refresh_token");
     expect(JSON.stringify(body)).not.toContain(token.refresh_token);
-    expect((await refreshGrant(auth.clientId, token.refresh_token!)).status).toBe(200);
+    const genuine = await refreshGrant(auth.clientId, token.refresh_token);
+    expect(genuine.status).toBe(400);
+    expect(await genuine.json()).toMatchObject({ error: "invalid_grant" });
   },
 );
 
-it("does not elevate a read-only grant when refresh requests write access", async () => {
-  const { auth, token } = await grant(["todos:read", "offline_access"]);
-  const refreshed = await refreshGrant(auth.clientId, token.refresh_token!, {
-    scope: "todos:read todos:write",
-  });
-  // The provider may grant the valid subset; the security boundary is the issued scope.
-  expect(refreshed.status).toBe(200);
-  const result = (await refreshed.json()) as { access_token: string; scope: string };
-  expect(result.scope).toBe("todos:read");
-  const context = await createMcpAuthorizationServer(bindings).validateToken(
-    resource,
-    result.access_token,
-    bindings,
-  );
-  expect(context?.scope).toEqual(["todos:read"]);
-});
+it.each(["todos:read", "todos:read todos:write", "todos:read offline_access"])(
+  "refuses a genuine legacy refresh even with requested scope %s",
+  async (scope) => {
+    const { auth, token } = await legacyGrant();
+    const response = await refreshGrant(auth.clientId, token.refresh_token, { scope });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: "invalid_grant" });
+  },
+);
 
 // Characterize the upstream limitation, not a strict replay-protection guarantee.
 // Provider upgrades must revisit these expectations against RFC 9700 section 4.14.2.
 it("documents provider acceptance of repeated previous-refresh use before its replacement is used", async () => {
-  const { auth, token } = await grant();
+  const { auth, token, server } = await legacyGrant();
   for (let attempt = 0; attempt < 3; attempt++) {
-    const response = await refreshGrant(auth.clientId, token.refresh_token!);
+    const response = await refreshGrant(auth.clientId, token.refresh_token, {}, server);
     expect(response.status).toBe(200);
     const result = (await response.json()) as { refresh_token: string; expires_in: number };
     expect(result.refresh_token).not.toBe(token.refresh_token);
@@ -740,17 +823,17 @@ it("documents provider acceptance of repeated previous-refresh use before its re
 });
 
 it("documents that rejecting an older refresh token does not revoke the active provider grant", async () => {
-  const { auth, token } = await grant();
-  const first = await refreshGrant(auth.clientId, token.refresh_token!);
+  const { auth, token, server } = await legacyGrant();
+  const first = await refreshGrant(auth.clientId, token.refresh_token, {}, server);
   expect(first.status).toBe(200);
   const r1 = ((await first.json()) as { refresh_token: string }).refresh_token;
-  const second = await refreshGrant(auth.clientId, r1);
+  const second = await refreshGrant(auth.clientId, r1, {}, server);
   expect(second.status).toBe(200);
   const r2 = ((await second.json()) as { refresh_token: string }).refresh_token;
-  const replay = await refreshGrant(auth.clientId, token.refresh_token!);
+  const replay = await refreshGrant(auth.clientId, token.refresh_token, {}, server);
   expect(replay.status).toBe(400);
   expect(await replay.json()).toMatchObject({ error: "invalid_grant" });
-  expect((await refreshGrant(auth.clientId, r2)).status).toBe(200);
+  expect((await refreshGrant(auth.clientId, r2, {}, server)).status).toBe(200);
 });
 
 it.each(["code_verifier", "client_id", "resource"])(
@@ -768,69 +851,161 @@ it.each(["code_verifier", "client_id", "resource"])(
   },
 );
 
-it("uses the refresh request's reduced scope and rejects expired D1 connections", async () => {
-  const { auth, token } = await grant();
-  const refresh = (refreshToken: string, scope = "todos:read") =>
-    handleMcpHttp(
-      new Request(`${base}/token`, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          grant_type: "refresh_token",
-          client_id: auth.clientId,
-          refresh_token: refreshToken,
-          resource,
-          scope,
-        }),
-      }),
-      bindings,
-      ctx,
-    );
-  const reduced = await refresh(token.refresh_token!);
-  expect(reduced.status).toBe(200);
-  const result = (await reduced.json()) as { access_token: string; refresh_token: string };
-  const context = await createMcpAuthorizationServer(bindings).validateToken(
-    resource,
-    result.access_token,
-    bindings,
-  );
-  expect(context?.scope).toEqual(["todos:read"]);
+it("requires a newly displayed policy rather than accepting an old 15-minute consent form", async () => {
+  const auth = await consent();
+  const oldHash = Buffer.from(
+    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`consent:${auth.handle}`)),
+  ).toString("hex");
+  await database.db
+    .update(mcpConsentClaims)
+    .set({ handle_hash: oldHash })
+    .where(eq(mcpConsentClaims.user_id, auth.person.userId));
+  const response = await post("/api/mcp/oauth/authorize", approval(auth.handle), auth.cookie);
+  expect(response.status).toBe(400);
+  expect(await repository.listConnections(auth.person.userId)).toEqual([]);
+});
+
+it.each(["todos:read todos:write", "todos:read todos:write offline_access"])(
+  "rejects previously approved %s codes instead of expanding their 15-minute consent",
+  async (scope) => {
+    const { auth, code, connectionId } = await legacyAuthorization(scope);
+    const response = await exchange(auth, code);
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: "invalid_grant" });
+    expect((await repository.getConnection(connectionId))?.grantId).toBeNull();
+  },
+);
+
+it("rejects code exchange with less than the SDK's minimum remaining lifetime", async () => {
+  const auth = await consent();
+  const approved = await post("/api/mcp/oauth/authorize", approval(auth.handle), auth.cookie);
+  const code = new URL(approved.headers.get("Location")!).searchParams.get("code")!;
   const connection = (await repository.listConnections(auth.person.userId))[0];
   await database.db
     .update(mcpConnections)
-    .set({ created_at: "2025-01-01T00:00:00.000Z", expires_at: "2025-01-02T00:00:00.000Z" })
+    .set({ expires_at: new Date(Date.now() + 30_000).toISOString() })
     .where(eq(mcpConnections.id, connection.id));
-  expect((await refresh(result.refresh_token)).status).toBe(400);
+  const response = await exchange(auth, code);
+  expect(response.status).toBe(400);
+  const body = await response.json();
+  expect(body).not.toHaveProperty("access_token");
+  expect(body).not.toHaveProperty("refresh_token");
 });
 
-it("rechecks membership and D1 revocation during refresh", async () => {
-  for (const change of ["membership", "revoke"] as const) {
-    const { auth, token } = await grant();
+it("caps the resource server's validated expiry at D1 even if the SDK token lasts longer", async () => {
+  const { auth, token } = await grant();
+  const connection = (await repository.listConnections(auth.person.userId))[0];
+  const deadline = Date.now() + 120_000;
+  await database.db
+    .update(mcpConnections)
+    .set({ expires_at: new Date(deadline).toISOString() })
+    .where(eq(mcpConnections.id, connection.id));
+  const application = new McpApplication(ctx, bindings);
+  const verified = await application.validateToken(resource, token.access_token);
+  expect(verified?.expiresAt).toBe(deadline / 1000);
+  const clock = vi.spyOn(Date, "now");
+  try {
+    clock.mockReturnValue(deadline);
+    expect(await application.validateToken(resource, token.access_token)).toBeNull();
+  } finally {
+    clock.mockRestore();
+  }
+});
+
+it.each(["membership", "revoke", "expired"] as const)(
+  "rechecks %s during code exchange",
+  async (change) => {
+    const auth = await consent();
+    const approved = await post("/api/mcp/oauth/authorize", approval(auth.handle), auth.cookie);
+    const code = new URL(approved.headers.get("Location")!).searchParams.get("code")!;
     const connection = (await repository.listConnections(auth.person.userId))[0];
     if (change === "membership")
       await database.db.delete(teamMembers).where(eq(teamMembers.user_id, auth.person.userId));
-    else
+    else if (change === "revoke")
       await repository.revokeConnection(
         connection.id,
         auth.person.userId,
         new Date().toISOString(),
       );
-    const response = await handleMcpHttp(
-      new Request(`${base}/token`, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          grant_type: "refresh_token",
-          client_id: auth.clientId,
-          refresh_token: token.refresh_token!,
-          resource,
-        }),
-      }),
-      bindings,
-      ctx,
-    );
+    else
+      await database.db
+        .update(mcpConnections)
+        .set({ created_at: "2025-01-01T00:00:00.000Z", expires_at: "2025-01-02T00:00:00.000Z" })
+        .where(eq(mcpConnections.id, connection.id));
+    const response = await exchange(auth, code);
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({ error: "invalid_grant" });
+  },
+);
+
+it("keeps old access tokens at 15 minutes, including after new consent", async () => {
+  const { auth, token } = await legacyGrant();
+  const server = createMcpAuthorizationServer(bindings);
+  const before = await server.validateToken(resource, token.access_token, bindings);
+  const principal = await principalForToken(token.access_token);
+  expect(token.expires_in).toBe(900);
+  const url = new URL(auth.url);
+  url.searchParams.set("scope", "todos:read todos:write");
+  const reauth = await handleMcpHttp(
+    new Request(url, { headers: { Cookie: auth.person.cookie } }),
+    bindings,
+    ctx,
+  );
+  expect(reauth.status).toBe(200);
+  const approved = await post(
+    "/api/mcp/oauth/authorize",
+    approval(hidden(await reauth.text(), "handle")),
+    `${auth.person.cookie}; ${cookies(reauth)}`,
+  );
+  expect(approved.status).toBe(303);
+  const code = new URL(approved.headers.get("Location")!).searchParams.get("code")!;
+  const replacement = await exchange(auth, code);
+  expect(replacement.status).toBe(200);
+  const next = (await replacement.json()) as {
+    access_token: string;
+    expires_in: number;
+    refresh_token?: string;
+  };
+  expect(next.access_token === token.access_token).toBe(false);
+  expect(next.expires_in).toBeGreaterThan(604_740);
+  expect(next.refresh_token).toBeUndefined();
+  expect((await server.validateToken(resource, token.access_token, bindings))?.expiresAt).toBe(
+    before?.expiresAt,
+  );
+  const clock = vi.spyOn(Date, "now");
+  try {
+    clock.mockReturnValue(before!.expiresAt * 1000 - 1);
+    expect(await server.validateToken(resource, token.access_token, bindings)).not.toBeNull();
+    clock.mockReturnValue(before!.expiresAt * 1000);
+    await expect(authorizeMcpConnection(repository, principal)).rejects.toMatchObject({
+      status: 401,
+    });
+    // SDK 1.2.3 compares integer seconds with '<'. Application rejects at
+    // the exact expiry; the provider alone rejects from the following second.
+    clock.mockReturnValue(before!.expiresAt * 1000 + 1000);
+    expect(await server.validateToken(resource, token.access_token, bindings)).toBeNull();
+  } finally {
+    clock.mockRestore();
+  }
+});
+
+it("rejects a seven-day token at its natural expiry without editing its stored state", async () => {
+  const { token } = await grant();
+  const server = createMcpAuthorizationServer(bindings);
+  const principal = await principalForToken(token.access_token);
+  const clock = vi.spyOn(Date, "now");
+  try {
+    clock.mockReturnValue(principal.expiresAt * 1000 - 1);
+    expect(await server.validateToken(resource, token.access_token, bindings)).not.toBeNull();
+    await expect(authorizeMcpConnection(repository, principal)).resolves.toBeDefined();
+    clock.mockReturnValue(principal.expiresAt * 1000);
+    await expect(authorizeMcpConnection(repository, principal)).rejects.toMatchObject({
+      status: 401,
+    });
+    clock.mockReturnValue(principal.expiresAt * 1000 + 1000);
+    expect(await server.validateToken(resource, token.access_token, bindings)).toBeNull();
+  } finally {
+    clock.mockRestore();
   }
 });
 
@@ -920,7 +1095,7 @@ it("keeps D1 revocation effective when KV revocation fails and permits an explic
 it.each(["access_token", "refresh_token"] as const)(
   "stops the D1 connection on verified RFC 7009 %s revocation and keeps retries idempotent",
   async (tokenType) => {
-    const { auth, token } = await grant();
+    const { auth, token } = tokenType === "refresh_token" ? await legacyGrant() : await grant();
     const principal = await principalForToken(token.access_token);
     const response = await revokeToken(token[tokenType]!, auth.clientId, tokenType);
     expect(response.status).toBe(200);
@@ -955,7 +1130,7 @@ it.each(["access_token", "refresh_token"] as const)(
 it.each(["access_token", "refresh_token"] as const)(
   "ignores a different client's RFC 7009 %s without changing D1 or the grant",
   async (tokenType) => {
-    const { auth, token } = await grant();
+    const { auth, token } = tokenType === "refresh_token" ? await legacyGrant() : await grant();
     const otherClient = await registration();
     const principal = await principalForToken(token.access_token);
     // RFC 7009 deliberately returns the same success for unknown/not-owned tokens.
@@ -982,7 +1157,7 @@ it.each(["access_token", "refresh_token"] as const)(
 it.each(["access_token", "refresh_token"] as const)(
   "returns 503 and retains the provider token when D1 RFC 7009 %s revocation fails",
   async (tokenType) => {
-    const { auth, token } = await grant();
+    const { auth, token } = tokenType === "refresh_token" ? await legacyGrant() : await grant();
     const principal = await principalForToken(token.access_token);
     await database.db.run(sql`CREATE TRIGGER reject_mcp_revocation
       BEFORE UPDATE OF revoked_at ON mcp_connections
@@ -1012,7 +1187,7 @@ it.each(["access_token", "refresh_token"] as const)(
 it.each(["access_token", "refresh_token"] as const)(
   "keeps D1 denial after RFC 7009 %s reaches a failing KV delete",
   async (tokenType) => {
-    const { auth, token } = await grant();
+    const { auth, token } = tokenType === "refresh_token" ? await legacyGrant() : await grant();
     const principal = await principalForToken(token.access_token);
     let deleteAttempted = false;
     let d1RevokedBeforeDelete = false;
