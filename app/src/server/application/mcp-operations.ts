@@ -21,20 +21,21 @@ const forbidden = () => new AppError(403, "forbidden", "この操作を行う権
 export async function authorizeMcpConnection(
   repository: McpRepository,
   principal: McpPrincipal,
-  now: Date,
 ): Promise<McpConnection> {
   const parsed = McpPrincipalSchema.safeParse(principal);
-  if (!parsed.success || parsed.data.expiresAt <= now.getTime() / 1000) throw unauthorized();
+  if (!parsed.success || parsed.data.expiresAt <= Date.now() / 1000) throw unauthorized();
   const token = parsed.data;
   const connection = await repository.getConnection(token.connectionId);
+  const now = Date.now();
   if (
     !connection ||
+    token.expiresAt <= now / 1000 ||
     connection.userId !== token.userId ||
     connection.clientId !== token.clientId ||
     connection.resource !== token.resource ||
     !connection.grantId?.trim() ||
     connection.revokedAt !== null ||
-    !(Date.parse(connection.expiresAt) > now.getTime())
+    !(Date.parse(connection.expiresAt) > now)
   ) {
     throw unauthorized();
   }
@@ -70,11 +71,11 @@ export async function executeMcpOperation(
   const parsed = McpRequestSchema.safeParse(request);
   if (!parsed.success) throw new AppError(400, "invalid_request", "入力内容を確認してください。");
   const input = parsed.data;
-  await authorizeMcpConnection(mcpRepository, principal, context.now);
+  await authorizeMcpConnection(mcpRepository, principal);
   if (!principal.scopes.includes(requiredMcpScope(input.tool))) throw forbidden();
   const member = await currentMembership(repository, principal.userId);
   const revalidate = async () => {
-    await authorizeMcpConnection(mcpRepository, principal, context.now);
+    await authorizeMcpConnection(mcpRepository, principal);
     const current = await currentMembership(repository, principal.userId);
     if (current.TeamID !== member.TeamID) throw forbidden();
   };
@@ -98,6 +99,7 @@ export async function executeMcpOperation(
         : { operation: "deleteTodoItem", params: { itemId: input.arguments.itemId } },
       { userId: principal.userId, ...context },
     );
+    await revalidate();
     return {
       data:
         input.tool === "add_todo"
