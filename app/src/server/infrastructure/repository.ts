@@ -122,31 +122,78 @@ export class D1Repository implements P.Repository {
   constructor(
     private readonly db: Database,
     private readonly member?: { teamId: string; userId: string },
-    private readonly authorization?: {
-      connectionId: string;
-      userId: string;
-      scope: string;
-      now: string;
-    },
+    private readonly authorization?:
+      | { sessionId: string; userId: string }
+      | {
+          connectionId: string;
+          userId: string;
+          scope: string;
+          // UTC ISO expiry from the provider-verified principal, never request input.
+          tokenExpiresAt: string;
+        },
   ) {}
+  forSession(userId: string, sessionId: string): P.Repository {
+    if (this.member || this.authorization) throw new AppError(403, "forbidden", "Already scoped");
+    return new D1Repository(this.db, undefined, { userId, sessionId });
+  }
   forMember(teamId: string, userId: string): P.Repository {
+    if (this.member && (this.member.teamId !== teamId || this.member.userId !== userId))
+      throw new AppError(403, "forbidden", "Cannot change repository identity");
     return new D1Repository(this.db, { teamId, userId }, this.authorization);
   }
-  private access() {
-    const membership = this.member
+  private membershipAccess() {
+    return this.member
       ? sql`EXISTS (SELECT 1 FROM team_members WHERE team_id=${this.member.teamId} AND user_id=${this.member.userId})`
       : sql`1`;
-    if (!this.authorization) return membership;
+  }
+  private authentication() {
+    if (!this.authorization) return sql`1`;
     const authorization = this.authorization;
     const actor = this.member ? sql`${this.member.userId}=${authorization.userId}` : sql`1`;
-    return sql`(${membership}) AND (${actor}) AND EXISTS (
+    if ("sessionId" in authorization)
+      return sql`(${actor}) AND EXISTS (
+        SELECT 1 FROM auth_session WHERE id=${authorization.sessionId} AND user_id=${authorization.userId}
+          AND expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now')
+      )`;
+    return sql`(${actor}) AND EXISTS (
       SELECT 1 FROM mcp_connections AS mcp
       WHERE mcp.id=${authorization.connectionId} AND mcp.user_id=${authorization.userId}
         AND mcp.grant_id IS NOT NULL AND length(mcp.grant_id)>0
-        AND mcp.revoked_at IS NULL AND mcp.expires_at>${authorization.now}
+        AND mcp.revoked_at IS NULL AND mcp.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now')
+        AND ${authorization.tokenExpiresAt}>strftime('%Y-%m-%dT%H:%M:%fZ','now')
         AND EXISTS (SELECT 1 FROM json_each(mcp.scopes)
           WHERE type='text' AND value=${authorization.scope})
     )`;
+  }
+  private access() {
+    return sql`(${this.membershipAccess()}) AND (${this.authentication()})`;
+  }
+  private identityAccess(userId: string | SQLWrapper) {
+    const actor = this.authorization?.userId ?? this.member?.userId;
+    return sql`(${this.authentication()}) AND (${actor === undefined ? sql`1` : sql`${userId}=${actor}`})`;
+  }
+  private teamAccess(teamId: string | SQLWrapper) {
+    // Authenticated requests resolve membership before team data access. Only trusted
+    // jobs/bootstrap use the unscoped repository to span teams.
+    return and(
+      this.access(),
+      this.member ? sql`${teamId}=${this.member.teamId}` : this.authorization ? sql`0` : sql`1`,
+    )!;
+  }
+  private taskAccess(taskId: string | SQLWrapper) {
+    return sql`EXISTS (SELECT 1 FROM tasks WHERE id=${taskId} AND ${this.teamAccess(tasks.team_id)})`;
+  }
+  private requireSystemAccess() {
+    if (this.member || this.authorization)
+      throw new AppError(403, "forbidden", "System operation required");
+  }
+  async assertAccess(): Promise<void> {
+    const row = await this.db.get<{ authenticated: number; member: number }>(sql`
+      SELECT ${this.authentication()} AS authenticated, ${this.membershipAccess()} AS member
+    `);
+    if (!row?.authenticated) throw new AppError(401, "unauthorized", "認証が失効しています。");
+    if (!row.member)
+      throw new AppError(403, "forbidden", "所属が変わりました。再取得してください。");
   }
   async GetTaskCompletionWeeklyEntryCount(
     arg: P.GetTaskCompletionWeeklyEntryCountParams,
@@ -158,6 +205,7 @@ export class D1Repository implements P.Repository {
         and(
           eq(taskCompletionWeeklyEntries.task_id, arg.TaskID),
           eq(taskCompletionWeeklyEntries.week_start, arg.WeekStart),
+          this.taskAccess(taskCompletionWeeklyEntries.task_id),
         ),
       );
     return required(rows, "GetTaskCompletionWeeklyEntryCount").count;
@@ -170,6 +218,7 @@ export class D1Repository implements P.Repository {
         and(
           eq(taskCompletionDaily.task_id, arg.TaskID),
           eq(taskCompletionDaily.target_date, arg.TargetDate),
+          this.taskAccess(taskCompletionDaily.task_id),
         ),
       )
       .limit(1);
@@ -193,6 +242,7 @@ export class D1Repository implements P.Repository {
         and(
           eq(tasks.team_id, arg.TeamID),
           gte(taskCompletionDaily.target_date, arg.TargetDate),
+          this.teamAccess(tasks.team_id),
           lt(taskCompletionDaily.target_date, arg.BeforeDate),
         ),
       )
@@ -215,6 +265,7 @@ export class D1Repository implements P.Repository {
         and(
           eq(tasks.team_id, arg.TeamID),
           eq(tasks.type, "daily"),
+          this.teamAccess(tasks.team_id),
           eq(taskCompletionDaily.target_date, arg.TargetDate),
         ),
       )
@@ -231,6 +282,7 @@ export class D1Repository implements P.Repository {
         and(
           eq(tasks.team_id, arg.TeamID),
           eq(tasks.type, "weekly"),
+          this.teamAccess(tasks.team_id),
           eq(taskCompletionWeeklyEntries.week_start, arg.WeekStart),
         ),
       )
@@ -259,6 +311,7 @@ export class D1Repository implements P.Repository {
           eq(tasks.team_id, arg.TeamID),
           eq(tasks.type, "weekly"),
           gte(taskCompletionWeeklyEntries.week_start, arg.WeekStart),
+          this.teamAccess(tasks.team_id),
           lt(taskCompletionWeeklyEntries.week_start, arg.BeforeWeekStart),
         ),
       )
@@ -290,6 +343,7 @@ export class D1Repository implements P.Repository {
           eq(tasks.team_id, arg.TeamID),
           eq(tasks.type, "weekly"),
           eq(taskCompletionWeeklyEntries.week_start, arg.WeekStart),
+          this.teamAccess(tasks.team_id),
         ),
       )
       .orderBy(
@@ -300,6 +354,7 @@ export class D1Repository implements P.Repository {
       );
   }
   async DeleteTeam(id: string): Promise<void> {
+    this.requireSystemAccess();
     await this.db.batch([
       this.db.update(tasks).set({ assignee_user_id: null }).where(eq(tasks.team_id, id)),
       this.db.delete(tasks).where(eq(tasks.team_id, id)),
@@ -312,9 +367,10 @@ export class D1Repository implements P.Repository {
       .select({ TeamID: teamMembers.team_id, Role: teamMembers.role, TeamName: teams.name })
       .from(teamMembers)
       .innerJoin(teams, eq(teams.id, teamMembers.team_id))
-      .where(eq(teamMembers.user_id, userID));
+      .where(and(eq(teamMembers.user_id, userID), this.identityAccess(teamMembers.user_id)));
   }
   async ListTeamIDsForClose(): Promise<string[]> {
+    this.requireSystemAccess();
     const rows = await this.db
       .select({ id: teams.id })
       .from(teams)
@@ -342,14 +398,14 @@ export class D1Repository implements P.Repository {
       })
       .from(teamMembers)
       .innerJoin(user, eq(user.id, teamMembers.user_id))
-      .where(eq(teamMembers.team_id, teamID))
+      .where(and(eq(teamMembers.team_id, teamID), this.teamAccess(teamMembers.team_id)))
       .orderBy(teamMembers.created_at);
   }
   async UpdateTeamName(arg: P.UpdateTeamNameParams): Promise<void> {
     await this.db
       .update(teams)
       .set({ name: arg.Name })
-      .where(and(eq(teams.id, arg.ID), this.access()))
+      .where(and(eq(teams.id, arg.ID), this.teamAccess(teams.id)))
       .returning()
       .then((rows) => rows.length);
   }
@@ -357,14 +413,15 @@ export class D1Repository implements P.Repository {
     const rows = await this.db
       .select(inviteFields)
       .from(inviteCodes)
-      .where(eq(inviteCodes.code, code));
+      // The invite is the capability for joining another team. MoveMember rechecks it.
+      .where(and(eq(inviteCodes.code, code), this.access()));
     return required(rows, "GetInviteCode");
   }
   async GetLatestInviteCodeByTeamID(teamID: string): Promise<P.InviteCode> {
     const rows = await this.db
       .select(inviteFields)
       .from(inviteCodes)
-      .where(eq(inviteCodes.team_id, teamID))
+      .where(and(eq(inviteCodes.team_id, teamID), this.teamAccess(inviteCodes.team_id)))
       .orderBy(desc(inviteCodes.created_at))
       .limit(1);
     return required(rows, "GetLatestInviteCodeByTeamID");
@@ -376,7 +433,7 @@ export class D1Repository implements P.Repository {
           WHERE team_id = ${arg.TeamID} AND user_id = ${arg.AssigneeUserID}
         )`
       : sql`1`;
-    const valid = sql`${this.access()} AND ${assigneeIsMember}`;
+    const valid = sql`${this.teamAccess(arg.TeamID)} AND ${assigneeIsMember}`;
     const [, created] = await this.db.batch([
       this.db
         .update(tasks)
@@ -409,7 +466,7 @@ export class D1Repository implements P.Repository {
       .set({
         deleted_at: new Date().toISOString(),
       })
-      .where(and(and(eq(tasks.id, id), isNull(tasks.deleted_at))!, this.access()))
+      .where(and(eq(tasks.id, id), isNull(tasks.deleted_at), this.teamAccess(tasks.team_id)))
       .returning()
       .then((rows) => rows.length);
   }
@@ -417,18 +474,23 @@ export class D1Repository implements P.Repository {
     const rows = await this.db
       .select({ createdAt: sql<string>`COALESCE(MIN(${tasks.created_at}), '')` })
       .from(tasks)
-      .where(eq(tasks.team_id, teamID));
+      .where(and(eq(tasks.team_id, teamID), this.teamAccess(tasks.team_id)));
     return required(rows, "GetEarliestTaskCreatedAtByTeam").createdAt;
   }
   async GetTaskByID(id: string): Promise<P.GetTaskByIDRow> {
-    const rows = await this.db.select(taskFields).from(tasks).where(eq(tasks.id, id));
+    const rows = await this.db
+      .select(taskFields)
+      .from(tasks)
+      .where(and(eq(tasks.id, id), this.teamAccess(tasks.team_id)));
     return required(rows, "GetTaskByID");
   }
   async ListTasksByTeamID(teamID: string): Promise<P.ListTasksByTeamIDRow[]> {
     return this.db
       .select(taskFields)
       .from(tasks)
-      .where(and(eq(tasks.team_id, teamID), isNull(tasks.deleted_at)))
+      .where(
+        and(eq(tasks.team_id, teamID), isNull(tasks.deleted_at), this.teamAccess(tasks.team_id)),
+      )
       .orderBy(tasks.type, tasks.sort_key, tasks.created_at, tasks.id);
   }
   async ListTasksEffectiveForCloseByTeamAndType(
@@ -443,6 +505,7 @@ export class D1Repository implements P.Repository {
           eq(tasks.type, arg.Type),
           lt(tasks.created_at, arg.CreatedAt),
           or(isNull(tasks.deleted_at), gte(tasks.deleted_at, arg.CreatedAt)),
+          this.teamAccess(tasks.team_id),
         ),
       )
       .orderBy(tasks.sort_key, tasks.created_at, tasks.id);
@@ -457,6 +520,7 @@ export class D1Repository implements P.Repository {
         and(
           eq(tasks.team_id, arg.TeamID),
           lt(tasks.created_at, arg.CreatedAt),
+          this.teamAccess(tasks.team_id),
           or(
             isNull(tasks.deleted_at),
             arg.DeletedAt === null ? sql`FALSE` : gte(tasks.deleted_at, arg.DeletedAt),
@@ -479,7 +543,7 @@ export class D1Repository implements P.Repository {
       .where(
         and(
           eq(tasks.id, arg.ID),
-          this.access(),
+          this.teamAccess(tasks.team_id),
           arg.AssigneeUserID
             ? sql`EXISTS(SELECT 1 FROM team_members WHERE team_id=${tasks.team_id} AND user_id=${arg.AssigneeUserID})`
             : undefined,
@@ -496,6 +560,7 @@ export class D1Repository implements P.Repository {
   async DeactivatePushSubscriptionByEndpoint(
     arg: P.DeactivatePushSubscriptionByEndpointParams,
   ): Promise<number> {
+    this.requireSystemAccess();
     return this.db
       .update(pushSubscriptions)
       .set({
@@ -523,7 +588,8 @@ export class D1Repository implements P.Repository {
       .where(
         and(
           and(eq(pushSubscriptions.id, arg.ID), eq(pushSubscriptions.user_id, arg.UserID))!,
-          this.access(),
+          this.teamAccess(pushSubscriptions.team_id),
+          this.identityAccess(pushSubscriptions.user_id),
         ),
       )
       .returning()
@@ -532,6 +598,7 @@ export class D1Repository implements P.Repository {
   async ListActivePushSubscriptionsByTeamID(
     teamID: string,
   ): Promise<P.ListActivePushSubscriptionsByTeamIDRow[]> {
+    this.requireSystemAccess();
     return this.db
       .select(pushFields)
       .from(pushSubscriptions)
@@ -560,7 +627,13 @@ export class D1Repository implements P.Repository {
     return this.db
       .select(pushFields)
       .from(pushSubscriptions)
-      .where(eq(pushSubscriptions.user_id, userID))
+      .where(
+        and(
+          eq(pushSubscriptions.user_id, userID),
+          this.identityAccess(pushSubscriptions.user_id),
+          this.teamAccess(pushSubscriptions.team_id),
+        ),
+      )
       .orderBy(
         desc(pushSubscriptions.is_active),
         desc(pushSubscriptions.updated_at),
@@ -568,6 +641,7 @@ export class D1Repository implements P.Repository {
       );
   }
   async ListTeamIDsForPush(): Promise<string[]> {
+    this.requireSystemAccess();
     const rows = await this.db
       .selectDistinct({ id: pushSubscriptions.team_id })
       .from(pushSubscriptions)
@@ -593,24 +667,23 @@ export class D1Repository implements P.Repository {
   async UpsertPushSubscription(
     arg: P.UpsertPushSubscriptionParams,
   ): Promise<P.UpsertPushSubscriptionRow> {
+    const allowed = and(this.teamAccess(arg.TeamID), this.identityAccess(arg.UserID))!;
     await this.db.batch([
-      this.db
-        .delete(pushSubscriptions)
-        .where(
-          and(
-            and(
-              eq(pushSubscriptions.endpoint, arg.Endpoint),
-              eq(pushSubscriptions.user_id, arg.UserID),
-              ne(pushSubscriptions.team_id, arg.TeamID),
-              this.access(),
-            ),
-            this.access(),
-          ),
+      this.db.delete(pushSubscriptions).where(
+        and(
+          eq(pushSubscriptions.endpoint, arg.Endpoint),
+          eq(pushSubscriptions.user_id, arg.UserID),
+          ne(pushSubscriptions.team_id, arg.TeamID),
+          // A new registration may replace only this user's inactive old device
+          // record. It cannot remove an active subscription in another team.
+          this.member ? eq(pushSubscriptions.is_active, 0) : undefined,
+          allowed,
         ),
+      ),
       this.db
         .insert(pushSubscriptions)
         .select(
-          sql`SELECT ${arg.ID},${arg.TeamID},${arg.UserID},${arg.Endpoint},${arg.P256dh},${arg.Auth},${arg.UserAgent || null},${arg.Platform},1,${arg.LastSeenAt},${arg.CreatedAt},${arg.UpdatedAt} WHERE ${this.access()}`,
+          sql`SELECT ${arg.ID},${arg.TeamID},${arg.UserID},${arg.Endpoint},${arg.P256dh},${arg.Auth},${arg.UserAgent || null},${arg.Platform},1,${arg.LastSeenAt},${arg.CreatedAt},${arg.UpdatedAt} WHERE ${allowed}`,
         )
         .onConflictDoUpdate({
           target: [pushSubscriptions.team_id, pushSubscriptions.user_id],
@@ -646,7 +719,7 @@ export class D1Repository implements P.Repository {
       .where(
         and(
           eq(teams.id, teamId),
-          this.access(),
+          this.teamAccess(teams.id),
           sql`NOT EXISTS (SELECT 1 FROM json_each(${teams.todo_categories}) WHERE json_extract(value, '$.name')=${category.name})`,
         ),
       );
@@ -663,7 +736,7 @@ export class D1Repository implements P.Repository {
       .where(
         and(
           eq(teams.id, teamId),
-          this.access(),
+          this.teamAccess(teams.id),
           sql`EXISTS (SELECT 1 FROM json_each(${teams.todo_categories})
             WHERE json_extract(value, '$.id')=${categoryId})`,
           sql`NOT EXISTS (SELECT 1 FROM json_each(${teams.todo_categories})
@@ -678,7 +751,7 @@ export class D1Repository implements P.Repository {
     const rows = await this.db
       .select({ categories: teams.todo_categories })
       .from(teams)
-      .where(and(eq(teams.id, teamId), this.todoAccess(teams.id)));
+      .where(and(eq(teams.id, teamId), this.teamAccess(teams.id)));
     const { categories } = required(rows, "ListTodoCategories");
     return categories.length === 0 ? [null] : categories;
   }
@@ -699,7 +772,7 @@ export class D1Repository implements P.Repository {
       .where(
         and(
           eq(teams.id, teamId),
-          this.access(),
+          this.teamAccess(teams.id),
           sql`(SELECT COUNT(*) FROM json_each(${teams.todo_categories}) WHERE type <> 'null') = ${ids.length}`,
           sql`NOT EXISTS (
         SELECT 1 FROM json_each(${teams.todo_categories}) AS current WHERE current.type <> 'null'
@@ -711,8 +784,13 @@ export class D1Repository implements P.Repository {
       .returning({ id: teams.id });
     return rows.length === 1;
   }
-  async DeleteTodoCategory(teamId: string, categoryId: string, now: string): Promise<void> {
-    await this.db.batch([
+  async DeleteTodoCategory(teamId: string, categoryId: string, now: string): Promise<boolean> {
+    const allowed = and(this.teamAccess(teamId), this.todoCategoryExists(teamId, categoryId))!;
+    const [, deleted] = await this.db.batch([
+      this.db
+        .update(todoItems)
+        .set({ category_id: null, updated_at: now })
+        .where(and(eq(todoItems.team_id, teamId), eq(todoItems.category_id, categoryId), allowed)),
       this.db
         .update(teams)
         .set({
@@ -721,14 +799,10 @@ export class D1Repository implements P.Repository {
           WHERE json_extract(value, '$.id') IS NOT ${categoryId} ORDER BY key
         ))`,
         })
-        .where(and(eq(teams.id, teamId), this.access())),
-      this.db
-        .update(todoItems)
-        .set({ category_id: null, updated_at: now })
-        .where(
-          and(eq(todoItems.team_id, teamId), eq(todoItems.category_id, categoryId), this.access()),
-        ),
+        .where(and(eq(teams.id, teamId), allowed))
+        .returning({ id: teams.id }),
     ]);
+    return deleted.length === 1;
   }
 
   private todoCategoryExists(teamId: string, categoryId: string | null | undefined) {
@@ -740,13 +814,9 @@ export class D1Repository implements P.Repository {
     )`;
   }
 
-  private todoAccess(teamId: string | SQLWrapper) {
-    return and(this.access(), this.member ? sql`${teamId}=${this.member.teamId}` : undefined);
-  }
-
   async CreateTodoItem(arg: P.CreateTodoItemParams): Promise<boolean> {
     const allowed = and(
-      this.todoAccess(arg.TeamID),
+      this.teamAccess(arg.TeamID),
       this.todoCategoryExists(arg.TeamID, arg.CategoryID),
     );
     const [, inserted] = await this.db.batch([
@@ -767,7 +837,7 @@ export class D1Repository implements P.Repository {
   async DeleteTodoItem(id: string): Promise<number> {
     return this.db
       .delete(todoItems)
-      .where(and(eq(todoItems.id, id), this.todoAccess(todoItems.team_id)))
+      .where(and(eq(todoItems.id, id), this.teamAccess(todoItems.team_id)))
       .returning()
       .then((rows) => rows.length);
   }
@@ -775,14 +845,14 @@ export class D1Repository implements P.Repository {
     const rows = await this.db
       .select(todoFields)
       .from(todoItems)
-      .where(and(eq(todoItems.id, id), this.todoAccess(todoItems.team_id)));
+      .where(and(eq(todoItems.id, id), this.teamAccess(todoItems.team_id)));
     return required(rows, "GetTodoItemByID");
   }
   async ListTodoItemsByTeamID(teamID: string): Promise<P.TodoItem[]> {
     return this.db
       .select(todoFields)
       .from(todoItems)
-      .where(and(eq(todoItems.team_id, teamID), this.todoAccess(todoItems.team_id)))
+      .where(and(eq(todoItems.team_id, teamID), this.teamAccess(todoItems.team_id)))
       .orderBy(todoItems.sort_key, todoItems.created_at, todoItems.id);
   }
   async UpdateTodoItem(arg: P.UpdateTodoItemParams): Promise<boolean> {
@@ -798,7 +868,7 @@ export class D1Repository implements P.Repository {
         and(
           eq(todoItems.id, arg.ID),
           eq(todoItems.team_id, arg.TeamID),
-          this.todoAccess(todoItems.team_id),
+          this.teamAccess(todoItems.team_id),
           this.todoCategoryExists(arg.TeamID, arg.CategoryID),
         ),
       )
@@ -810,7 +880,7 @@ export class D1Repository implements P.Repository {
   ): Promise<P.FindOldestMonthCloseCandidateRow> {
     const rows = await this.db.all<{ MonthStart: string; PendingMonthCount: number }>(
       sql`WITH RECURSIVE months(month_start) AS (
- SELECT strftime('%Y-%m-01',MIN(${tasks.created_at}),'+9 hours') FROM ${tasks} WHERE ${tasks.team_id}=${arg.TeamID}
+ SELECT strftime('%Y-%m-01',MIN(${tasks.created_at}),'+9 hours') FROM ${tasks} WHERE ${tasks.team_id}=${arg.TeamID} AND ${this.teamAccess(tasks.team_id)}
  UNION ALL SELECT date(month_start,'+1 month') FROM months WHERE date(month_start,'+1 month')<${arg.CurrentMonthStart}
 ), eligible AS (
  SELECT month_start FROM months m WHERE month_start<${arg.CurrentMonthStart}
@@ -838,6 +908,7 @@ export class D1Repository implements P.Repository {
         and(
           eq(monthlyPenaltySummaries.team_id, arg.TeamID),
           eq(monthlyPenaltySummaries.month_start, arg.MonthStart),
+          this.teamAccess(monthlyPenaltySummaries.team_id),
         ),
       );
     return required(rows, "GetMonthlyPenaltySummary");
@@ -851,6 +922,7 @@ export class D1Repository implements P.Repository {
         and(
           eq(monthlyPenaltySummaryTriggeredRules.team_id, arg.TeamID),
           eq(monthlyPenaltySummaryTriggeredRules.month_start, arg.MonthStart),
+          this.teamAccess(monthlyPenaltySummaryTriggeredRules.team_id),
         ),
       )
       .orderBy(monthlyPenaltySummaryTriggeredRules.rule_id);
@@ -861,13 +933,19 @@ export class D1Repository implements P.Repository {
     const rows = await this.db
       .select({ date: sql<string>`COALESCE(MAX(${closeRuns.target_date}), '')` })
       .from(closeRuns)
-      .where(and(eq(closeRuns.team_id, arg.TeamID), eq(closeRuns.scope, arg.Scope)));
+      .where(
+        and(
+          eq(closeRuns.team_id, arg.TeamID),
+          eq(closeRuns.scope, arg.Scope),
+          this.teamAccess(closeRuns.team_id),
+        ),
+      );
     return required(rows, "GetLatestCloseRunTargetDate").date;
   }
   async CreateReminder(arg: P.CreateReminderParams): Promise<void> {
     await this.db
       .run(sql`INSERT INTO reminders(id,team_id,title,notes,kind,schedule_type,start_date,end_date,created_at,updated_at)
-      SELECT ${arg.ID},${arg.TeamID},${arg.Title},${arg.Notes},${arg.Kind},${arg.ScheduleType},${arg.StartDate},${arg.EndDate},${arg.CreatedAt},${arg.UpdatedAt} WHERE ${this.access()}`);
+      SELECT ${arg.ID},${arg.TeamID},${arg.Title},${arg.Notes},${arg.Kind},${arg.ScheduleType},${arg.StartDate},${arg.EndDate},${arg.CreatedAt},${arg.UpdatedAt} WHERE ${this.teamAccess(arg.TeamID)}`);
   }
 
   async DeleteExpiredOneTimeRemindersByTeam(
@@ -882,7 +960,7 @@ export class D1Repository implements P.Repository {
             eq(reminders.kind, "one_time"),
             lt(reminders.start_date, arg.StartDate),
           )!,
-          this.access(),
+          this.teamAccess(reminders.team_id),
         ),
       )
       .returning()
@@ -891,12 +969,15 @@ export class D1Repository implements P.Repository {
   async DeleteReminder(id: string): Promise<number> {
     return this.db
       .delete(reminders)
-      .where(and(eq(reminders.id, id), this.access()))
+      .where(and(eq(reminders.id, id), this.teamAccess(reminders.team_id)))
       .returning()
       .then((rows) => rows.length);
   }
   async GetReminderByID(id: string): Promise<P.Reminder> {
-    const rows = await this.db.select(reminderFields).from(reminders).where(eq(reminders.id, id));
+    const rows = await this.db
+      .select(reminderFields)
+      .from(reminders)
+      .where(and(eq(reminders.id, id), this.teamAccess(reminders.team_id)));
     return required(rows, "GetReminderByID");
   }
   async ListRemindersByTeamID(teamID: string, period?: P.ReminderPeriod): Promise<P.Reminder[]> {
@@ -906,6 +987,7 @@ export class D1Repository implements P.Repository {
       .where(
         and(
           eq(reminders.team_id, teamID),
+          this.teamAccess(reminders.team_id),
           period
             ? and(
                 lte(reminders.start_date, period.to),
@@ -935,28 +1017,34 @@ export class D1Repository implements P.Repository {
         end_date: arg.EndDate,
         updated_at: arg.UpdatedAt,
       })
-      .where(and(eq(reminders.id, arg.ID), this.access()))
+      .where(and(eq(reminders.id, arg.ID), this.teamAccess(reminders.team_id)))
       .returning()
       .then((rows) => rows.length);
   }
   async CreatePenaltyRule(arg: P.CreatePenaltyRuleParams): Promise<void> {
     await this.db
       .run(sql`INSERT INTO penalty_rules(id,team_id,threshold,name,description,created_at,updated_at)
-      SELECT ${arg.ID},${arg.TeamID},${arg.Threshold},${arg.Name},${arg.Description},${arg.CreatedAt},${arg.UpdatedAt} WHERE ${this.access()}`);
+      SELECT ${arg.ID},${arg.TeamID},${arg.Threshold},${arg.Name},${arg.Description},${arg.CreatedAt},${arg.UpdatedAt} WHERE ${this.teamAccess(arg.TeamID)}`);
   }
 
   async GetUndeletedPenaltyRuleByID(id: string): Promise<P.PenaltyRule> {
     const rows = await this.db
       .select(penaltyFields)
       .from(penaltyRules)
-      .where(and(eq(penaltyRules.id, id), isNull(penaltyRules.deleted_at)));
+      .where(
+        and(
+          eq(penaltyRules.id, id),
+          isNull(penaltyRules.deleted_at),
+          this.teamAccess(penaltyRules.team_id),
+        ),
+      );
     return required(rows, "GetUndeletedPenaltyRuleByID");
   }
   async ListPenaltyRulesByTeamID(teamID: string): Promise<P.PenaltyRule[]> {
     return this.db
       .select(penaltyFields)
       .from(penaltyRules)
-      .where(eq(penaltyRules.team_id, teamID))
+      .where(and(eq(penaltyRules.team_id, teamID), this.teamAccess(penaltyRules.team_id)))
       .orderBy(penaltyRules.threshold);
   }
   async ListPenaltyRulesEffectiveAtByTeamID(
@@ -968,6 +1056,7 @@ export class D1Repository implements P.Repository {
       .where(
         and(
           eq(penaltyRules.team_id, arg.TeamID),
+          this.teamAccess(penaltyRules.team_id),
           lt(penaltyRules.created_at, arg.AsOf),
           or(isNull(penaltyRules.deleted_at), gte(penaltyRules.deleted_at, arg.AsOf)),
         ),
@@ -978,7 +1067,13 @@ export class D1Repository implements P.Repository {
     return this.db
       .select(penaltyFields)
       .from(penaltyRules)
-      .where(and(eq(penaltyRules.team_id, teamID), isNull(penaltyRules.deleted_at)))
+      .where(
+        and(
+          eq(penaltyRules.team_id, teamID),
+          isNull(penaltyRules.deleted_at),
+          this.teamAccess(penaltyRules.team_id),
+        ),
+      )
       .orderBy(penaltyRules.threshold);
   }
   async SoftDeletePenaltyRule(arg: P.SoftDeletePenaltyRuleParams): Promise<number> {
@@ -988,7 +1083,13 @@ export class D1Repository implements P.Repository {
         deleted_at: arg.DeletedAt,
         updated_at: arg.DeletedAt,
       })
-      .where(and(and(eq(penaltyRules.id, arg.ID), isNull(penaltyRules.deleted_at))!, this.access()))
+      .where(
+        and(
+          eq(penaltyRules.id, arg.ID),
+          isNull(penaltyRules.deleted_at),
+          this.teamAccess(penaltyRules.team_id),
+        ),
+      )
       .returning()
       .then((rows) => rows.length);
   }
@@ -1001,7 +1102,7 @@ export class D1Repository implements P.Repository {
         description: arg.Description,
         updated_at: arg.UpdatedAt,
       })
-      .where(and(eq(penaltyRules.id, arg.ID), this.access()))
+      .where(and(eq(penaltyRules.id, arg.ID), this.teamAccess(penaltyRules.team_id)))
       .returning()
       .then((rows) => rows.length);
   }
@@ -1016,7 +1117,7 @@ export class D1Repository implements P.Repository {
         CreatedAt: iso(user.createdAt),
       })
       .from(user)
-      .where(eq(user.id, id));
+      .where(and(eq(user.id, id), this.identityAccess(user.id), this.access()));
     return required(rows, "GetUserByID");
   }
   async UpdateUserColorHex(arg: P.UpdateUserColorHexParams): Promise<void> {
@@ -1026,7 +1127,7 @@ export class D1Repository implements P.Repository {
         colorHex: arg.ColorHex || null,
         updatedAt: new Date(),
       })
-      .where(and(eq(user.id, arg.ID), this.access()))
+      .where(and(eq(user.id, arg.ID), this.identityAccess(user.id), this.access()))
       .returning()
       .then((rows) => rows.length);
   }
@@ -1037,11 +1138,12 @@ export class D1Repository implements P.Repository {
         nickname: arg.Nickname || null,
         updatedAt: new Date(),
       })
-      .where(and(eq(user.id, arg.ID), this.access()))
+      .where(and(eq(user.id, arg.ID), this.identityAccess(user.id), this.access()))
       .returning()
       .then((rows) => rows.length);
   }
   async ProvisionUser(userId: string, teamId: string, name: string, now: string): Promise<void> {
+    this.requireSystemAccess();
     await this.db.batch([
       this.db.insert(teams).select(sql`SELECT ${teamId},${name},${now},'[null]'
         WHERE NOT EXISTS(SELECT 1 FROM team_members WHERE user_id=${userId})`),
@@ -1057,12 +1159,14 @@ export class D1Repository implements P.Repository {
     const validInvite = arg.inviteCode
       ? sql`EXISTS (
           SELECT 1 FROM invite_codes
-          WHERE code = ${arg.inviteCode} AND team_id = ${arg.toTeamId} AND expires_at >= ${arg.now}
+          WHERE code = ${arg.inviteCode} AND team_id = ${arg.toTeamId}
+            AND expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now')
         )`
       : sql`1`;
-    const valid = sql`${currentMembership} AND ${validInvite}`;
+    const valid = sql`${currentMembership} AND ${validInvite}
+      AND ${this.teamAccess(arg.fromTeamId)} AND ${this.identityAccess(arg.userId)}`;
     // 所属の移動、担当解除、owner引継ぎ、空チーム削除を一度にcommitする。
-    const [, , , membershipUpdate] = await this.db.batch([
+    const [, , , , membershipUpdate] = await this.db.batch([
       this.db
         .insert(teams)
         .select(
@@ -1084,6 +1188,13 @@ export class D1Repository implements P.Repository {
             valid,
           ),
         ),
+      // Select the successor while the original membership still authorizes the batch.
+      this.db.update(teamMembers).set({ role: "owner" }).where(sql`
+        team_id=${arg.fromTeamId} AND ${valid}
+        AND user_id=(SELECT user_id FROM team_members WHERE team_id=${arg.fromTeamId}
+          AND user_id<>${arg.userId} ORDER BY created_at,user_id LIMIT 1)
+        AND NOT EXISTS(SELECT 1 FROM team_members WHERE team_id=${arg.fromTeamId}
+          AND user_id<>${arg.userId} AND role='owner')`),
       this.db
         .update(teamMembers)
         .set({
@@ -1094,14 +1205,14 @@ export class D1Repository implements P.Repository {
         .where(
           and(eq(teamMembers.team_id, arg.fromTeamId), eq(teamMembers.user_id, arg.userId), valid),
         ),
-      this.db.update(teamMembers).set({ role: "owner" }).where(sql` team_id=${arg.fromTeamId}
-        AND user_id=(SELECT user_id FROM team_members WHERE team_id=${arg.fromTeamId} ORDER BY created_at,user_id LIMIT 1)
-        AND NOT EXISTS(SELECT 1 FROM team_members WHERE team_id=${arg.fromTeamId} AND role='owner')`),
+      // SQLite changes() refers to the immediately preceding membership UPDATE in this
+      // atomic batch. A rejected move must not delete an unrelated empty team.
       this.db
         .delete(teams)
         .where(
           and(
             eq(teams.id, arg.fromTeamId),
+            sql`changes()>0`,
             sql`NOT EXISTS(SELECT 1 FROM team_members WHERE team_id=${arg.fromTeamId})`,
           ),
         ),
@@ -1115,14 +1226,13 @@ export class D1Repository implements P.Repository {
   }
   async ReplaceInvite(arg: P.CreateInviteCodeParams, userId: string): Promise<void> {
     const owner = sql`EXISTS(SELECT 1 FROM team_members WHERE team_id=${arg.TeamID} AND user_id=${userId} AND role='owner')`;
+    const allowed = and(owner, this.teamAccess(arg.TeamID), this.identityAccess(userId))!;
     const [, result] = await this.db.batch([
-      this.db
-        .delete(inviteCodes)
-        .where(and(eq(inviteCodes.team_id, arg.TeamID), owner, this.access())),
+      this.db.delete(inviteCodes).where(and(eq(inviteCodes.team_id, arg.TeamID), allowed)),
       this.db
         .insert(inviteCodes)
         .select(
-          sql`SELECT ${arg.Code},${arg.TeamID},${arg.ExpiresAt},strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE ${owner}`,
+          sql`SELECT ${arg.Code},${arg.TeamID},${arg.ExpiresAt},strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE ${allowed}`,
         ),
     ]);
     if (!result.meta.changes) throw new AppError(403, "forbidden", "owner role required");
@@ -1144,7 +1254,7 @@ export class D1Repository implements P.Repository {
         sort_key: sql`(SELECT (CAST(key AS INTEGER)+1)*100 FROM json_each(${ids}) WHERE value=${table.id})`,
         updated_at: arg.now,
       })
-      .where(and(scope, this.access(), valid))
+      .where(and(scope, this.teamAccess(table.team_id), valid))
       .returning({ id: table.id });
     if (rows.length !== arg.ids.length)
       throw new AppError(409, "items_changed", "一覧が変わりました。再取得してお試しください。");
@@ -1200,7 +1310,7 @@ export class D1Repository implements P.Repository {
         WHERE id = ${arg.taskId} AND team_id = ${arg.teamId} AND type = ${arg.type}
           AND created_at < ${arg.cutoff}
           AND (deleted_at IS NULL OR deleted_at >= ${arg.cutoff})
-      ) AND ${this.access()} AND ${singleCompletionRequired}
+      ) AND ${this.teamAccess(arg.teamId)} AND ${this.identityAccess(arg.userId)} AND ${singleCompletionRequired}
     `;
     const change = this.completionChange(arg, allowed);
     const summaries = arg.recalculateMonth
@@ -1208,7 +1318,7 @@ export class D1Repository implements P.Repository {
           teamId: arg.teamId,
           month: arg.recalculateMonth,
           ensureCoverage: arg.ensureCoverage,
-          access: this.access(),
+          access: allowed,
         })
       : [];
     const table = arg.type === "daily" ? taskCompletionDaily : taskCompletionWeeklyEntries;
@@ -1219,7 +1329,7 @@ export class D1Repository implements P.Repository {
     const countCompletions = this.db
       .select({ count: count() })
       .from(table)
-      .where(and(eq(table.task_id, arg.taskId), eq(target, arg.target)));
+      .where(and(eq(table.task_id, arg.taskId), eq(target, arg.target), allowed));
 
     // 完了変更・過去集計・結果の件数取得を同じbatchで確定する。
     const results = await this.db.batch([change, ...summaries, countCompletions]);
@@ -1228,10 +1338,11 @@ export class D1Repository implements P.Repository {
     return rows[0].count;
   }
   async RecalculateMonth(arg: P.RecalculateMonthParams): Promise<void> {
-    const statements = summaryStatements(this.db, { ...arg, access: this.access() });
+    const statements = summaryStatements(this.db, { ...arg, access: this.teamAccess(arg.teamId) });
     await this.db.batch(statements);
   }
   async ClosePeriod(teamId: string, scope: "day" | "week", date: string): Promise<boolean> {
+    this.requireSystemAccess();
     const month = (scope === "day" ? date : addDays(date, 6)).slice(0, 7);
     const monthIsOpen = sql`NOT EXISTS (
       SELECT 1 FROM monthly_penalty_summaries
