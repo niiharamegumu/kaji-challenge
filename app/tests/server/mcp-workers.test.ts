@@ -1,4 +1,5 @@
 import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
+import { OAuthAuthorizationServer } from "@cloudflare/workers-oauth-provider";
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,7 +7,9 @@ import { build } from "esbuild";
 import { chromium } from "@playwright/test";
 import { Log, LogLevel, Miniflare, convertV4MiniflareOptions } from "miniflare";
 import { unstable_splitSqlQuery } from "wrangler";
-import { afterAll, beforeAll, expect, it } from "vitest";
+import { afterAll, beforeAll, expect, it, vi } from "vitest";
+
+vi.mock("cloudflare:workers", () => ({ WorkerEntrypoint: class {} }));
 
 const appOrigin = "https://app.example.com";
 const mcpOrigin = "http://localhost:5176";
@@ -243,7 +246,7 @@ async function authorizationRequest(scopes: string[]) {
 
 async function issueTokens(
   person: Awaited<ReturnType<typeof identity>>,
-  scopes = ["todos:read", "todos:write", "offline_access"],
+  scopes = ["todos:read", "todos:write"],
   tokenScopes?: string[],
 ) {
   const { authorization, clientId, verifier, state } = await authorizationRequest(scopes);
@@ -290,12 +293,120 @@ async function issueTokens(
   expect(tokenResponse.status).toBe(200);
   const tokens = (await tokenResponse.json()) as Tokens;
   expect(typeof tokens.access_token).toBe("string");
+  expect(tokens.expires_in).toBeGreaterThan(604_740);
+  expect(tokens.expires_in).toBeLessThanOrEqual(604_800);
+  expect(tokens.refresh_token).toBeUndefined();
   const connection = await db
     .prepare("SELECT id FROM mcp_connections WHERE user_id=? AND client_id=?")
     .bind(person.userId, clientId)
     .first<{ id: string }>();
   if (!connection) throw new Error("Missing local connection");
   return { ...tokens, clientId, connectionId: connection.id, exchange };
+}
+
+// Historical grants are minted only through the SDK's public API in this
+// isolated test process. The actual Workers continue to run the new policy.
+function legacyServer() {
+  return new OAuthAuthorizationServer<{ OAUTH_KV: KVNamespace }>({
+    issuer,
+    authorizeEndpoint: `${issuer}/authorize`,
+    tokenEndpoint: `${issuer}/token`,
+    resources: [resource],
+    accessTokenTTL: 900,
+    refreshTokenTTL: 2_592_000,
+  });
+}
+
+async function legacyTokens(person: Awaited<ReturnType<typeof identity>>) {
+  const scopes = ["todos:read", "todos:write", "offline_access"];
+  const { authorization, clientId, verifier } = await authorizationRequest(scopes);
+  const environment = { OAUTH_KV: kv as unknown as KVNamespace };
+  const server = legacyServer();
+  const oauth = server.getOAuthApi(environment);
+  const request = await oauth.parseAuthRequest(new Request(authorization));
+  const connectionId = randomUUID();
+  const now = new Date();
+  await db
+    .prepare(`INSERT INTO mcp_connections
+    (id,user_id,client_id,client_name,resource,scopes,created_at,expires_at)
+    VALUES (?,?,?,?,?,?,?,?)`)
+    .bind(
+      connectionId,
+      person.userId,
+      clientId,
+      "Legacy fixture",
+      resource,
+      JSON.stringify(scopes),
+      now.toISOString(),
+      new Date(now.getTime() + 2_592_000_000).toISOString(),
+    )
+    .run();
+  const completed = await oauth.completeAuthorization({
+    request,
+    userId: person.userId,
+    scope: scopes,
+    metadata: {},
+    props: { connectionId },
+    revokeExistingGrants: false,
+  });
+  const exchange = new URLSearchParams({
+    grant_type: "authorization_code",
+    client_id: clientId,
+    code: new URL(completed.redirectTo).searchParams.get("code")!,
+    code_verifier: verifier,
+    redirect_uri: redirectUri,
+    resource,
+  });
+  const response = await server.fetch(
+    new Request(`${issuer}/token`, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: exchange,
+    }),
+    environment,
+    { waitUntil: () => {} } as unknown as ExecutionContext,
+  );
+  expect(response.status).toBe(200);
+  const tokens = (await response.json()) as Tokens;
+  expect(tokens.refresh_token).toBeTruthy();
+  const grants = await oauth.listUserGrants(person.userId);
+  await db
+    .prepare("UPDATE mcp_connections SET grant_id=? WHERE id=?")
+    .bind(grants.items[0].id, connectionId)
+    .run();
+  return { ...tokens, clientId, connectionId, exchange };
+}
+
+function legacyRefreshToken(token: string, clientId: string, pause = false) {
+  const namespace = new Proxy(kv, {
+    get(target, property) {
+      if (property === "put" && pause)
+        return async (...args: Parameters<typeof kv.put>) => {
+          if (args[0].startsWith("grant:") && grantWriteBarrier) {
+            const barrier = grantWriteBarrier;
+            barrier.reached();
+            await barrier.resume;
+          }
+          return target.put(...args);
+        };
+      const value = Reflect.get(target, property);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+  return legacyServer().fetch(
+    new Request(`${issuer}/token`, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "refresh_token",
+        refresh_token: token,
+        client_id: clientId,
+        resource,
+      }),
+    }),
+    { OAUTH_KV: namespace as unknown as KVNamespace },
+    { waitUntil: () => {} } as unknown as ExecutionContext,
+  );
 }
 
 async function rpcResponse(
@@ -719,7 +830,7 @@ it("refuses forged public IDs and exposes no HTTP forwarding route for the named
 
 it("rechecks D1 revocation, connection expiry and current membership independently of KV", async () => {
   const person = await identity();
-  const token = await issueTokens(person, ["todos:read", "todos:write", "offline_access"]);
+  const token = await issueTokens(person);
   await db
     .prepare("UPDATE mcp_connections SET revoked_at=? WHERE id=?")
     .bind(new Date().toISOString(), token.connectionId)
@@ -744,7 +855,7 @@ it.each(["access_token", "refresh_token"] as const)(
   "RFC 7009 revokes the D1 connection for a genuine %s, even with the wrong hint",
   async (type) => {
     const person = await identity();
-    const token = await issueTokens(person);
+    const token = type === "refresh_token" ? await legacyTokens(person) : await issueTokens(person);
     const independent = await issueTokens(person);
     // Hint fallback must still verify the actual credential before invoking D1.
     const hint = type === "access_token" ? "refresh_token" : "access_token";
@@ -753,7 +864,7 @@ it.each(["access_token", "refresh_token"] as const)(
     expect(await response.text()).toBe("");
     expect(await revokedAt(token.connectionId)).not.toBeNull();
     expect((await rpcResponse(token.access_token, "tools/list")).status).toBe(401);
-    await expectRefreshDenied(token.refresh_token!, token.clientId);
+    await expectRefreshDenied(token.refresh_token ?? token.access_token, token.clientId);
     expect(await revokedAt(independent.connectionId)).toBeNull();
     expect((await call(independent.access_token, "list_todos")).result?.isError).not.toBe(true);
   },
@@ -769,7 +880,7 @@ it.each([
   "RFC 7009 leaves D1 and usable tokens unchanged for %s / %s",
   async (type, invalidity) => {
     const person = await identity();
-    const token = await issueTokens(person);
+    const token = type === "refresh_token" ? await legacyTokens(person) : await issueTokens(person);
     const other = await issueTokens(await identity());
     const genuine = token[type]!;
     const attempted =
@@ -783,16 +894,16 @@ it.each([
     expect(await revokedAt(token.connectionId)).toBeNull();
     expect(await revokedAt(other.connectionId)).toBeNull();
     expect((await call(token.access_token, "list_todos")).result?.isError).not.toBe(true);
-    const refreshed = await refreshToken(token.refresh_token!, token.clientId);
-    expect(refreshed.status).toBe(200);
+    // Both historical refresh and new access credentials must fail as a refresh.
+    await expectRefreshDenied(token.refresh_token ?? token.access_token, token.clientId);
     expect((await call(other.access_token, "list_todos")).result?.isError).not.toBe(true);
   },
   30_000,
 );
 
 it("RFC 7009 verifies and revokes the previously rotated refresh credential", async () => {
-  const token = await issueTokens(await identity());
-  const refreshed = await refreshToken(token.refresh_token!, token.clientId);
+  const token = await legacyTokens(await identity());
+  const refreshed = await legacyRefreshToken(token.refresh_token!, token.clientId);
   expect(refreshed.status).toBe(200);
   const next = (await refreshed.json()) as Tokens;
   const response = await revokeToken(token.refresh_token!, token.clientId, "refresh_token");
@@ -805,7 +916,8 @@ it("RFC 7009 verifies and revokes the previously rotated refresh credential", as
 it.each(["access_token", "refresh_token"] as const)(
   "RFC 7009 returns 503 without deleting KV when the D1 revoke of %s fails",
   async (type) => {
-    const token = await issueTokens(await identity());
+    const person = await identity();
+    const token = type === "refresh_token" ? await legacyTokens(person) : await issueTokens(person);
     const tokenPrefix = `token:${token.access_token.split(":").slice(0, 2).join(":")}:`;
     const grantKey = `grant:${token.access_token.split(":").slice(0, 2).join(":")}`;
     const before = (await kv.list({ prefix: tokenPrefix })).keys.map(({ name }) => name);
@@ -841,7 +953,7 @@ it.each(["access_token", "refresh_token"] as const)(
   "RFC 7009 keeps %s unusable after D1 commits but KV deletion fails",
   async (type) => {
     const person = await identity();
-    const token = await issueTokens(person);
+    const token = type === "refresh_token" ? await legacyTokens(person) : await issueTokens(person);
     const retained = await createRetainedTodo(token.access_token);
     const tokenPrefix = `token:${token.access_token.split(":").slice(0, 2).join(":")}:`;
     const before = (await kv.list({ prefix: tokenPrefix })).keys.map(({ name }) => name);
@@ -854,7 +966,7 @@ it.each(["access_token", "refresh_token"] as const)(
     expect((await kv.list({ prefix: tokenPrefix })).keys.map(({ name }) => name)).toEqual(before);
     expect((await rpcResponse(token.access_token, "tools/list")).status).toBe(401);
     await expectBusinessAccessDenied(token.access_token, retained.id);
-    await expectRefreshDenied(token.refresh_token!, token.clientId);
+    await expectRefreshDenied(token.refresh_token ?? token.access_token, token.clientId);
     expect(
       (await db.prepare("SELECT id,name FROM todo_items WHERE team_id=?").bind(person.teamId).all())
         .results,
@@ -864,10 +976,10 @@ it.each(["access_token", "refresh_token"] as const)(
 );
 
 it.each(["access_token", "refresh_token"] as const)(
-  "a refresh saving after RFC 7009 %s revocation cannot restore business access",
+  "a historical refresh saving after RFC 7009 %s revocation cannot restore business access",
   async (type) => {
     const person = await identity();
-    const token = await issueTokens(person);
+    const token = await legacyTokens(person);
     const retained = await createRetainedTodo(token.access_token);
     let reached!: () => void;
     let resume!: () => void;
@@ -880,9 +992,9 @@ it.each(["access_token", "refresh_token"] as const)(
         resume = resolve;
       }),
     };
-    // Stop after the actual refresh callback's D1 checks but before its KV
-    // grant/token writes. Revocation completes while the old snapshot is held.
-    const inFlight = refreshToken(token.refresh_token!, token.clientId, "pause-grant-write");
+    // Model an old-policy issuance already in flight at rollout. Its SDK has
+    // read the old grant; current application revocation completes before put.
+    const inFlight = legacyRefreshToken(token.refresh_token!, token.clientId, true);
     try {
       await paused;
       expect((await revokeToken(token[type]!, token.clientId, type)).status).toBe(200);
