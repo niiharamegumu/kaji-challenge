@@ -531,7 +531,9 @@ export interface RecalculateMonthParams {
 }
 
 export interface Repository {
+  forSession(userId: string, sessionId: string): Repository;
   forMember(teamId: string, userId: string): Repository;
+  assertAccess(): Promise<void>;
   ProvisionUser(userId: string, teamId: string, name: string, now: string): Promise<void>;
   MoveMember(arg: MoveMemberParams): Promise<void>;
   ReplaceInvite(arg: CreateInviteCodeParams, userId: string): Promise<void>;
@@ -591,7 +593,7 @@ export interface Repository {
   ReorderTodoCategories(teamId: string, categoryIds: (string | null)[]): Promise<boolean>;
   CreateTodoCategory(teamId: string, category: TodoCategory): Promise<void>;
   RenameTodoCategory(teamId: string, categoryId: string, name: string): Promise<boolean>;
-  DeleteTodoCategory(teamId: string, categoryId: string, now: string): Promise<void>;
+  DeleteTodoCategory(teamId: string, categoryId: string, now: string): Promise<boolean>;
   CreateTodoItem(arg: CreateTodoItemParams): Promise<boolean>;
   DeleteTodoItem(id: string): Promise<number>;
   GetTodoItemByID(id: string): Promise<TodoItem>;
