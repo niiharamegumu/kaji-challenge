@@ -51,11 +51,16 @@ export class McpApplication extends WorkerEntrypoint<RuntimeBindings> {
       });
       if (!principal.success || principal.data.resource !== expected) return null;
       const { db, repository } = createDatabase(this.env.DB);
-      await authorizeMcpConnection(new D1McpRepository(db), principal.data);
+      const connection = await authorizeMcpConnection(new D1McpRepository(db), principal.data);
       const memberships = await repository.ListMembershipsByUserID(principal.data.userId);
       if (memberships.length !== 1 || !["owner", "member"].includes(memberships[0].Role))
         return null;
-      return verified;
+      // SDK TTLs are relative to issuance, which can follow slow KV writes.
+      // Expose the effective D1 consent deadline to the resource server too.
+      return {
+        ...verified,
+        expiresAt: Math.min(verified.expiresAt, Date.parse(connection.expiresAt) / 1000),
+      };
     } catch (error) {
       if (error instanceof AppError && error.status < 500) return null;
       // RPC serialization and runtime logs must not disclose provider/SQL exception details.

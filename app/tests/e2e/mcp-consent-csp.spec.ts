@@ -1,5 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
-import { mcpConsentPage, mcpHtml, mcpLoginPage } from "../../src/server/transport/mcp-pages";
+import {
+  mcpConnectionsPage,
+  mcpConsentPage,
+  mcpHtml,
+  mcpLoginPage,
+} from "../../src/server/transport/mcp-pages";
 
 test.use({
   serviceWorkers: "block",
@@ -210,7 +215,7 @@ test("MCP consent keeps scopes accessible and submits only the user's native sel
   await expect(page.getByText("山田 花子", { exact: true })).toBeVisible();
   await expect(page.getByText("この操作は元に戻せません。", { exact: false })).toBeVisible();
   await expect(
-    page.getByText("この連携先は継続アクセスを要求していません", { exact: false }),
+    page.getByText("今回の同意から最大7日間で、自動更新されません", { exact: false }),
   ).toBeVisible();
   expect(await page.locator("script,img,iframe,link").count()).toBe(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -240,7 +245,7 @@ test("MCP consent keeps scopes accessible and submits only the user's native sel
   expect(unexpectedRequests).toBe(0);
 });
 
-test("MCP consent reflows long names and continued-access details without overflow", async ({
+test("MCP consent reflows long names and seven-day access details without overflow", async ({
   page,
 }, testInfo) => {
   const redirectUri = "http://localhost:3456/callback";
@@ -252,7 +257,7 @@ test("MCP consent reflows long names and continued-access details without overfl
       redirectUri,
       redirectHost: "localhost:3456",
       redirectIsLoopback: true,
-      scope: ["todos:read", "todos:write", "offline_access"],
+      scope: ["todos:read", "todos:write"],
     },
     "fixture-consent-handle",
     "長い名前の利用者".repeat(8),
@@ -269,13 +274,13 @@ test("MCP consent reflows long names and continued-access details without overfl
   await page.goto(authorizeUrl);
   await page.setViewportSize({ width: 320, height: 720 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await expect(page.getByRole("checkbox", { name: /継続アクセス/ })).toBeChecked();
+  await expect(page.getByRole("checkbox")).toHaveCount(2);
   await expect(
     page.getByText("この端末で動くアプリへアクセスを渡します。", { exact: true }),
   ).toBeVisible();
   await expect(page.getByText("連携先の名前は自己申告", { exact: false })).toBeVisible();
   await expect(
-    page.getByText("初回同意から最大30日間利用できます", { exact: false }),
+    page.getByText("今回の同意から最大7日間で、自動更新されません", { exact: false }),
   ).toBeVisible();
   expect(await page.locator("img,script,iframe").count()).toBe(0);
   await page.screenshot({ path: testInfo.outputPath("mcp-consent-narrow.png"), fullPage: true });
@@ -285,5 +290,69 @@ test("MCP consent reflows long names and continued-access details without overfl
   });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await expect(page.getByRole("button", { name: "拒否", exact: true })).toBeVisible();
+  expect(unexpectedRequests).toBe(0);
+});
+
+test("MCP connections distinguish saved consent deadlines from live token validity", async ({
+  page,
+}, testInfo) => {
+  const url = `${appOrigin}/api/mcp/connections`;
+  const html = mcpConnectionsPage(
+    [
+      {
+        connection: {
+          id: "new",
+          userId: "fixture",
+          clientId: "client",
+          clientName: "新しい連携",
+          resource: "https://mcp.example.test/mcp",
+          scopes: ["todos:read", "todos:write"],
+          grantId: "fixture-grant",
+          createdAt: "2026-10-10T00:00:00.000Z",
+          expiresAt: "2026-10-17T00:00:00.000Z",
+          revokedAt: null,
+        },
+        handle: "new-handle",
+      },
+      {
+        connection: {
+          id: "old",
+          userId: "fixture",
+          clientId: "old-client",
+          clientName: "以前の連携",
+          resource: "https://mcp.example.test/mcp",
+          scopes: ["todos:read", "offline_access"],
+          grantId: null,
+          createdAt: "2026-10-01T00:00:00.000Z",
+          expiresAt: "2026-10-31T00:00:00.000Z",
+          revokedAt: null,
+        },
+        handle: "old-handle",
+      },
+    ],
+    "2026-10-10T12:00:00.000Z",
+  );
+  const response = mcpHtml(html);
+  let unexpectedRequests = 0;
+  await interceptAll(page, (requestUrl) => {
+    if (requestUrl === url)
+      return { status: 200, headers: Object.fromEntries(response.headers), body: html };
+    unexpectedRequests += 1;
+    return null;
+  });
+  await page.goto(url);
+  await expect(
+    page.getByText("以前の15分トークンは延長されません", { exact: false }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("これはトークンの有効期限や接続状態を示すものではありません。", { exact: true }),
+  ).toHaveCount(2);
+  await expect(
+    page.getByText("旧方式の継続アクセス（現在は自動更新できません）", { exact: false }),
+  ).toBeVisible();
+  await expect(page.getByText("許可済み（交換未確認）", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "連携を解除", exact: true })).toHaveCount(2);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath("mcp-connections.png"), fullPage: true });
   expect(unexpectedRequests).toBe(0);
 });
