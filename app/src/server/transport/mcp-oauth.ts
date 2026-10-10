@@ -8,7 +8,7 @@ import {
   type TokenExchangeCallbackOptions,
   type TokenRevocationCallbackOptions,
 } from "@cloudflare/workers-oauth-provider";
-import { McpTokenPropsSchema, mcpScopes } from "../../contracts/mcp";
+import { McpTokenPropsSchema, mcpAccessPolicy, mcpScopes } from "../../contracts/mcp";
 import { AppError } from "../domain/errors";
 import { D1McpRepository } from "../infrastructure/mcp-repository";
 import { createDatabase } from "../infrastructure/database";
@@ -23,9 +23,8 @@ import {
 
 const basePath = "/api/mcp/oauth";
 const authorizePath = `${basePath}/authorize`;
-const supportedScopes: readonly string[] = [...mcpScopes, "offline_access"];
-const accessTokenTTL = 15 * 60;
-const connectionTTL = 30 * 24 * 60 * 60;
+const supportedScopes: readonly string[] = mcpScopes;
+const accessTokenTTL = 7 * 24 * 60 * 60;
 const consentTTL = 10 * 60;
 
 function mcpResource(bindings: RuntimeBindings) {
@@ -44,7 +43,11 @@ async function tokenExchange(options: TokenExchangeCallbackOptions<RuntimeBindin
         statusCode: 503,
       });
     const props = McpTokenPropsSchema.safeParse(options.props);
-    if (!props.success || !["authorization_code", "refresh_token"].includes(options.grantType))
+    if (
+      !props.success ||
+      props.data.accessPolicy !== mcpAccessPolicy ||
+      options.grantType !== "authorization_code"
+    )
       invalidGrant();
     const { db, repository } = createDatabase(options.env.DB);
     const connections = new D1McpRepository(db);
@@ -68,33 +71,22 @@ async function tokenExchange(options: TokenExchangeCallbackOptions<RuntimeBindin
     const memberships = await repository.ListMembershipsByUserID(options.userId);
     if (memberships.length !== 1 || !["owner", "member"].includes(memberships[0].Role))
       invalidGrant();
-    if (options.grantType === "authorization_code") {
-      if (
-        !(await connections.bindGrant(
-          connection.id,
-          options.userId,
-          options.clientId,
-          options.resource,
-          options.grantId,
-          now,
-        ))
-      )
-        invalidGrant();
-    } else if (
-      connection.grantId !== options.grantId ||
-      !connection.scopes.includes("offline_access")
+    if (
+      !(await connections.bindGrant(
+        connection.id,
+        options.userId,
+        options.clientId,
+        options.resource,
+        options.grantId,
+        now,
+      ))
     )
       invalidGrant();
     const remainingSeconds = Math.floor((Date.parse(connection.expiresAt) - Date.now()) / 1000);
     if (remainingSeconds <= 0) invalidGrant();
     return {
       accessTokenTTL: Math.min(accessTokenTTL, remainingSeconds),
-      // The provider applies this only on code exchange. Do not introduce a
-      // rolling refresh lifetime, and do not outlive the original D1 consent.
-      refreshTokenTTL:
-        connection.scopes.includes("offline_access") && remainingSeconds >= 60
-          ? Math.min(connectionTTL, remainingSeconds)
-          : 0,
+      refreshTokenTTL: 0,
     };
   } catch (error) {
     if (error instanceof OAuthError) throw error;
@@ -140,7 +132,7 @@ export function createMcpAuthorizationServer(bindings: RuntimeBindings) {
     resources: [mcpResource(bindings)],
     scopesSupported: [...supportedScopes],
     accessTokenTTL,
-    refreshTokenTTL: connectionTTL,
+    refreshTokenTTL: 0,
     allowTokenExchangeGrant: false,
     allowPrivateUseRedirectUris: false,
     clientIdMetadataDocumentEnabled: true,
@@ -306,7 +298,9 @@ async function authorize(request: Request, bindings: RuntimeBindings, oauth: OAu
     const details = await oauth.describeConsent(authorization);
     const consent = await oauth.beginConsent(authorization);
     await connections.createConsentClaim({
-      handleHash: await hashClaim(`consent:${consent.handle}`),
+      // Bind the displayed duration to this policy. Forms opened under the
+      // previous 15-minute policy must be reopened, never silently extended.
+      handleHash: await hashClaim(`consent:${mcpAccessPolicy}:${consent.handle}`),
       userId: session.user.id,
       sessionId: session.session.id,
       expiresAt: new Date(Date.now() + consentTTL * 1000).toISOString(),
@@ -326,7 +320,7 @@ async function authorize(request: Request, bindings: RuntimeBindings, oauth: OAu
     throw new AppError(400, "invalid_request", "許可または拒否を選んでください。");
   if (
     !(await connections.consumeConsentClaim(
-      await hashClaim(`consent:${handle}`),
+      await hashClaim(`consent:${mcpAccessPolicy}:${handle}`),
       session.user.id,
       session.session.id,
       new Date().toISOString(),
@@ -365,14 +359,14 @@ async function authorize(request: Request, bindings: RuntimeBindings, oauth: OAu
     resource: mcpResource(bindings),
     scopes: scope,
     createdAt: now.toISOString(),
-    expiresAt: new Date(now.getTime() + connectionTTL * 1000).toISOString(),
+    expiresAt: new Date(now.getTime() + accessTokenTTL * 1000).toISOString(),
   });
   const completed = await oauth.completeAuthorization({
     request: approved.request,
     userId: session.user.id,
     metadata: {},
     scope,
-    props: { connectionId: id },
+    props: { connectionId: id, accessPolicy: mcpAccessPolicy },
     revokeExistingGrants: false,
   });
   return redirect(completed.redirectTo, approved.headers);
