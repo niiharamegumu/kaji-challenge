@@ -49,12 +49,15 @@ export class D1McpRepository implements McpRepository {
           eq(mcpConsentClaims.handle_hash, handleHash),
           eq(mcpConsentClaims.user_id, userId),
           eq(mcpConsentClaims.session_id, sessionId),
+          // Preserve the caller's bound, and reject time elapsed before SQL execution.
           gt(mcpConsentClaims.expires_at, now),
+          gt(mcpConsentClaims.expires_at, sql`strftime('%Y-%m-%dT%H:%M:%fZ','now')`),
           isNull(mcpConsentClaims.consumed_at),
           sql`EXISTS (SELECT 1 FROM ${session}
             WHERE ${session.id} = ${sessionId}
               AND ${session.userId} = ${userId}
-              AND ${session.expiresAt} > ${now})`,
+              AND ${session.expiresAt} > ${now}
+              AND ${session.expiresAt} > strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
         ),
       )
       .returning({ hash: mcpConsentClaims.handle_hash });
@@ -96,6 +99,7 @@ export class D1McpRepository implements McpRepository {
           isNull(mcpConnections.grant_id),
           isNull(mcpConnections.revoked_at),
           gt(mcpConnections.expires_at, now),
+          gt(mcpConnections.expires_at, sql`strftime('%Y-%m-%dT%H:%M:%fZ','now')`),
           sql`EXISTS (SELECT 1 FROM ${user} WHERE ${user.id} = ${userId})`,
         ),
       )
