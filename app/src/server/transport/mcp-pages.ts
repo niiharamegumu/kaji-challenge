@@ -6,7 +6,7 @@ const escape = (value: string) =>
 
 const scopeLabels: Record<string, string> = {
   "todos:read": "ToDo とカテゴリーの読み取り",
-  "todos:write": "ToDo の追加と完了（完了した ToDo は削除されます）",
+  "todos:write": "ToDo の追加・更新・完了（内容の上書きやメモ・カテゴリーの解除、完了時の削除）",
   offline_access: "旧方式の継続アクセス（現在は自動更新できません）",
 };
 
@@ -126,8 +126,9 @@ export function mcpConsentPage(
       description: "現在のチームの未完了ToDoとカテゴリーを取得します。",
     },
     "todos:write": {
-      title: "ToDo の追加と完了",
-      description: "完了した ToDo は削除されます。この操作は元に戻せません。",
+      title: "ToDo の追加・更新・完了",
+      description:
+        "名前・メモ・カテゴリーの上書きや、メモ・カテゴリーの解除ができます。完了した ToDo は削除されます。この操作は元に戻せません。",
     },
   };
   const scopes = details.scope
