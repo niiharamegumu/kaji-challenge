@@ -8,6 +8,7 @@ import {
   type McpPrincipal,
   type McpRequest,
 } from "../../contracts/mcp";
+import type { Operation } from "../../contracts/operations";
 import { AppError } from "../domain/errors";
 import { executeOperation } from "./operations";
 import { todo } from "./mappers";
@@ -81,8 +82,8 @@ export async function executeMcpOperation(
   };
 
   try {
+    const scoped = repository.forMember(member.TeamID, principal.userId);
     if (input.tool === "list_todos") {
-      const scoped = repository.forMember(member.TeamID, principal.userId);
       const items = (await scoped.ListTodoItemsByTeamID(member.TeamID)).map((item) =>
         McpTodoSchema.parse(todo(item)),
       );
@@ -92,19 +93,27 @@ export async function executeMcpOperation(
       return { data: { items, categories }, changedTeams: [] };
     }
 
-    const result = await executeOperation(
-      repository,
-      input.tool === "add_todo"
-        ? { operation: "postTodoItem", params: {}, body: input.arguments }
-        : { operation: "deleteTodoItem", params: { itemId: input.arguments.itemId } },
-      { userId: principal.userId, ...context },
-    );
+    let operation: Operation;
+    if (input.tool === "add_todo") {
+      operation = { operation: "postTodoItem", params: {}, body: input.arguments };
+    } else if (input.tool === "update_todo") {
+      const { itemId, ...body } = input.arguments;
+      operation = { operation: "patchTodoItem", params: { itemId }, body };
+    } else {
+      operation = { operation: "deleteTodoItem", params: { itemId: input.arguments.itemId } };
+    }
+    // Keep the initially authorized team fixed if membership changes while the
+    // shared application resolves it again. SQL rechecks the same scoped identity.
+    const result = await executeOperation(scoped, operation, {
+      userId: principal.userId,
+      ...context,
+    });
     await revalidate();
     return {
       data:
-        input.tool === "add_todo"
-          ? { item: McpTodoSchema.parse(result.data) }
-          : { id: input.arguments.itemId, completed: true },
+        input.tool === "complete_todo"
+          ? { id: input.arguments.itemId, completed: true }
+          : { item: McpTodoSchema.parse(result.data) },
       changedTeams: result.changedTeams,
     };
   } catch (error) {
