@@ -213,6 +213,12 @@ test("MCP consent keeps scopes accessible and submits only the user's native sel
   await expect(page.getByRole("heading", { name: "ToDo の連携を許可" })).toBeVisible();
   await expect(page.getByRole("group", { name: "許可する操作" })).toBeVisible();
   await expect(page.getByText("山田 花子", { exact: true })).toBeVisible();
+  await expect(page.getByText("ToDo の追加・更新・完了", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("名前・メモ・カテゴリーの上書きや、メモ・カテゴリーの解除ができます。", {
+      exact: false,
+    }),
+  ).toBeVisible();
   await expect(page.getByText("この操作は元に戻せません。", { exact: false })).toBeVisible();
   await expect(
     page.getByText("今回の同意から最大7日間で、自動更新されません", { exact: false }),
@@ -224,7 +230,7 @@ test("MCP consent keeps scopes accessible and submits only the user's native sel
   await page.screenshot({ path: testInfo.outputPath("mcp-consent.png"), fullPage: true });
 
   const read = page.getByRole("checkbox", { name: /ToDo とカテゴリーの読み取り/ });
-  const write = page.getByRole("checkbox", { name: /ToDo の追加と完了/ });
+  const write = page.getByRole("checkbox", { name: /ToDo の追加・更新・完了/ });
   await page.keyboard.press("Tab");
   await expect(read).toBeFocused();
   expect(await read.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe("solid");
@@ -273,6 +279,12 @@ test("MCP consent reflows long names and seven-day access details without overfl
   });
   await page.goto(authorizeUrl);
   await page.setViewportSize({ width: 320, height: 720 });
+  await expect(page.getByText("ToDo の追加・更新・完了", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("名前・メモ・カテゴリーの上書きや、メモ・カテゴリーの解除ができます。", {
+      exact: false,
+    }),
+  ).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await expect(page.getByRole("checkbox")).toHaveCount(2);
   await expect(
@@ -341,6 +353,12 @@ test("MCP connections distinguish saved consent deadlines from live token validi
     return null;
   });
   await page.goto(url);
+  await expect(
+    page.getByText(
+      "ToDo の追加・更新・完了（内容の上書きやメモ・カテゴリーの解除、完了時の削除）",
+      { exact: false },
+    ),
+  ).toBeVisible();
   await expect(
     page.getByText("以前の15分トークンは延長されません", { exact: false }),
   ).toBeVisible();
