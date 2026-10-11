@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   CreateTodoItemRequestSchema,
+  UpdateTodoItemRequestSchema,
   TodoItemSchema,
   TodoCategoriesResponseSchema,
 } from "./operations";
@@ -26,9 +27,19 @@ export type McpPrincipal = z.infer<typeof McpPrincipalSchema>;
 export const ListTodosInputSchema = z.strictObject({});
 export const AddTodoInputSchema = CreateTodoItemRequestSchema.strict();
 export const CompleteTodoInputSchema = z.strictObject({ itemId: z.string().min(1).max(200) });
+export const UpdateTodoInputSchema = UpdateTodoItemRequestSchema.extend({
+  itemId: CompleteTodoInputSchema.shape.itemId,
+})
+  .strict()
+  .refine(
+    ({ name, notes, categoryId }) =>
+      name !== undefined || notes !== undefined || categoryId !== undefined,
+    { message: "更新する項目を1つ以上指定してください。" },
+  );
 export const McpRequestSchema = z.discriminatedUnion("tool", [
   z.strictObject({ tool: z.literal("list_todos"), arguments: ListTodosInputSchema }),
   z.strictObject({ tool: z.literal("add_todo"), arguments: AddTodoInputSchema }),
+  z.strictObject({ tool: z.literal("update_todo"), arguments: UpdateTodoInputSchema }),
   z.strictObject({ tool: z.literal("complete_todo"), arguments: CompleteTodoInputSchema }),
 ]);
 export type McpRequest = z.infer<typeof McpRequestSchema>;
@@ -39,6 +50,7 @@ export const mcpResponseSchemas = {
     categories: TodoCategoriesResponseSchema.shape.categories,
   }),
   add_todo: z.strictObject({ item: McpTodoSchema }),
+  update_todo: z.strictObject({ item: McpTodoSchema }),
   complete_todo: z.strictObject({ id: z.string(), completed: z.literal(true) }),
 };
 export type McpData = z.infer<(typeof mcpResponseSchemas)[keyof typeof mcpResponseSchemas]>;
