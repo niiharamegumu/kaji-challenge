@@ -14,7 +14,7 @@
 
 ## MCP連携
 
-`src/server/transport/mcp-worker.ts` は独立したCloudflare Workerで、Agents SDKのstateless `createMcpHandler` とStreamable HTTPを使う。公開操作は `contracts/mcp.ts` の `list_todos`・`add_todo`・`complete_todo` のみ。userId/teamIdをツール引数として受け取らず、ToDoの返却DTOにもteamIdを含めない。完了は既存の物理削除を再利用し、破壊的操作のannotationを付ける。
+`src/server/transport/mcp-worker.ts` は独立したCloudflare Workerで、Agents SDKのstateless `createMcpHandler` とStreamable HTTPを使う。公開操作は `contracts/mcp.ts` の `list_todos`・`add_todo`・`update_todo`・`complete_todo` のみ。userId/teamIdをツール引数として受け取らず、ToDoの返却DTOにもteamIdを含めない。更新は既存の `patchTodoItem` を再利用し、itemIdとname・notes・categoryIdだけを受け付ける。省略は保持、notes/categoryIdのnullは解除、未知キー・空更新は拒否する。更新は上書き、完了は既存の物理削除を再利用する操作として、破壊的操作のannotationを付ける。
 
 サーバーアイコンは標準のserverInfo `icons` に設定する。既存の `public/icons/pwa-192x192.png` をbundleし、MCP originの `/icons/kajichalle-192.png` で認証不要のGET/HEADとして返す。追加のasset binding・外部画像取得・CORS許可は不要で、ツールの認証境界は維持する。OAuth画面は本体の配色に合わせた静的HTML/CSSとテキストのブランド名を使い、画像・外部フォント・scriptを読み込まず、既存CSPを維持する。クライアントがアイコンを表示するかどうかはクライアント側の実装とmetadata更新に依存する。
 
@@ -22,7 +22,7 @@
 
 MCP WorkerはOAuthResourceServerとして、片方向の `KAJI_APPLICATION` Service Bindingから既存Workerのnamed entrypoint `McpApplication` を呼ぶ。通常HTTP入口にRPCは公開しない。KVを持つ既存Workerでtokenを検証し、検証済みuserId/clientId/audience/scope/expiryとconnectionIdだけを内部RPCで渡す。任意のHTTPヘッダーによる本人指定はない。このbindingを付与できる配備権限は信頼境界に含む。MCP WorkerにはDB・KV・Google/Better Authの秘密情報をbindしない。
 
-Applicationの `mcp-operations.ts` は毎回、連携の所有者・grant・期限・失効・実tokenのscopeと現在の所属1件・roleを検査する。追加/完了は既存 `executeOperation` を使う。ToDo SQLでも対象teamIdと現在の所属、連携状態、許可scopeを検査し、他チームの項目IDや検証後の解除を拒否する。保存後は既存のToDo変更通知を再利用し、応答不明の書き込みは自動再送しない。
+Applicationの `mcp-operations.ts` は毎回、連携の所有者・grant・期限・失効・実tokenのscopeと現在の所属1件・roleを検査する。追加/更新/完了は既存 `executeOperation` を使い、入口で確定した本人・チームのRepositoryを引き継ぐ。所属を再解決する途中に移動しても別チームへ更新先を切り替えない。ToDo SQLでも対象teamIdと現在の所属、連携状態、許可scope、変更先カテゴリーが同チームにあることを検査し、他チームの項目IDや検証後の解除を拒否する。保存後は既存のToDo変更通知を再利用し、応答不明の書き込みは自動再送しない。
 
 新しい連携は同意から最大7日、access tokenのTTLは最大604800秒でD1の残期限にも制限する。SDK標準の `refreshTokenTTL: 0` と既存callbackでrefresh発行・交換を止める。新規の要求・広告は `todos:read` / `todos:write` のみとし、`offline_access` は付与しない。自動更新せず、期限後は再接続・再同意が必要となる。ログアウトでは解除されない。古い同意画面・未交換コードは新policyを持たないため拒否し、発行済み15分tokenは元の期限を保つ。旧tokenに含まれるoffline_accessは旧token検証に限って許容し、操作権限や更新権限にはしない。D1の旧30日許可記録も書き換えず、管理画面ではtokenの有効期限・接続状態と区別する。
 
