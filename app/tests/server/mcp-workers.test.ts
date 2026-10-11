@@ -506,6 +506,7 @@ async function expectBusinessAccessDenied(token: string, itemId: string) {
   for (const [name, args] of [
     ["list_todos", {}],
     ["add_todo", { name: "Must not be added after revocation" }],
+    ["update_todo", { itemId, name: "Must not be changed after revocation" }],
     ["complete_todo", { itemId }],
   ] as const) {
     expect(
@@ -652,7 +653,7 @@ it("accepts native browser consent, revocation and login forms without rewriting
   }
 }, 60_000);
 
-it("uses real OAuth, RPC and D1 for list/add/complete, then rejects the revoked grant", async () => {
+it("uses real OAuth, RPC and D1 for list/add/update/complete, then rejects the revoked grant", async () => {
   const discovery = await app.fetch(
     `${appOrigin}/.well-known/oauth-authorization-server/api/mcp/oauth`,
   );
@@ -681,7 +682,7 @@ it("uses real OAuth, RPC and D1 for list/add/complete, then rejects the revoked 
   const tools = await rpc(token.access_token, "tools/list");
   expect(
     ((tools.result?.tools ?? []) as { name: string }[]).map((tool) => tool.name).sort(),
-  ).toEqual(["add_todo", "complete_todo", "list_todos"]);
+  ).toEqual(["add_todo", "complete_todo", "list_todos", "update_todo"]);
   const listed = await call(token.access_token, "list_todos");
   expect(listed.result?.structuredContent).toEqual({
     items: [],
@@ -698,6 +699,48 @@ it("uses real OAuth, RPC and D1 for list/add/complete, then rejects the revoked 
   expect(
     await db.prepare("SELECT team_id FROM todo_items WHERE id=?").bind(item.id).first("team_id"),
   ).toBe(person.teamId);
+  const updated = await call(token.access_token, "update_todo", {
+    itemId: item.id,
+    name: "Updated integration milk",
+    notes: null,
+    categoryId: null,
+  });
+  expect(updated.result?.structuredContent).toMatchObject({
+    item: { id: item.id, name: "Updated integration milk", notes: null, categoryId: null },
+  });
+  expect(updated.result?.structuredContent?.item).not.toHaveProperty("teamId");
+  expect(
+    await db
+      .prepare("SELECT name,notes,category_id FROM todo_items WHERE id=?")
+      .bind(item.id)
+      .first(),
+  ).toEqual({
+    name: "Updated integration milk",
+    notes: null,
+    category_id: null,
+  });
+  for (const args of [
+    { itemId: otherTodo, name: "Forbidden" },
+    { itemId: item.id, name: "Forbidden", categoryId: other.categoryId },
+    { itemId: item.id, name: "Forbidden", userId: other.userId },
+    { itemId: item.id },
+  ]) {
+    const denied = await call(token.access_token, "update_todo", args);
+    expect(Boolean(denied.error || denied.result?.isError)).toBe(true);
+  }
+  expect(
+    await db.prepare("SELECT name FROM todo_items WHERE id=?").bind(otherTodo).first("name"),
+  ).toBe("Other team fixture");
+  expect(
+    await db
+      .prepare("SELECT name,notes,category_id FROM todo_items WHERE id=?")
+      .bind(item.id)
+      .first(),
+  ).toEqual({
+    name: "Updated integration milk",
+    notes: null,
+    category_id: null,
+  });
   expect(
     (await call(token.access_token, "complete_todo", { itemId: otherTodo })).result?.isError,
   ).toBe(true);
@@ -733,6 +776,14 @@ it("uses real OAuth, RPC and D1 for list/add/complete, then rejects the revoked 
   });
   expect(revoke.status).toBe(303);
   expect((await rpcResponse(token.access_token, "tools/list")).status).toBe(401);
+  expect(
+    (
+      await rpcResponse(token.access_token, "tools/call", {
+        name: "update_todo",
+        arguments: { itemId: item.id, name: "Forbidden" },
+      })
+    ).status,
+  ).toBe(401);
   const refresh = await app.fetch(`${issuer}/token`, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
@@ -763,6 +814,12 @@ it("uses the actual token scopes and rejects writes for a read-only authorizatio
   });
   expect(forbidden.status).toBe(403);
   expect(forbidden.headers.get("www-authenticate")?.includes("insufficient_scope")).toBe(true);
+  const update = await rpcResponse(token.access_token, "tools/call", {
+    name: "update_todo",
+    arguments: { itemId: randomUUID(), notes: null },
+  });
+  expect(update.status).toBe(403);
+  expect(update.headers.get("www-authenticate")).toContain('scope="todos:write"');
   expect(
     await db
       .prepare("SELECT count(*) FROM todo_items WHERE team_id=?")
@@ -780,6 +837,14 @@ it("rejects writes when a token narrows a grant that permits writing", async () 
     .bind(token.connectionId)
     .first<string>("scopes");
   expect(JSON.parse(grantedScopes!)).toEqual(["todos:read", "todos:write"]);
+  expect(
+    (
+      await rpcResponse(token.access_token, "tools/call", {
+        name: "update_todo",
+        arguments: { itemId: randomUUID(), notes: null },
+      })
+    ).status,
+  ).toBe(403);
   expect((await call(token.access_token, "list_todos")).result?.isError).not.toBe(true);
   expect(
     (
