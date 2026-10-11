@@ -11,7 +11,7 @@ Applicationは応答前にも認証と期待する所属を再確認し、所属
 | 入口 | 本人・所属の決定と認可 | 検証 |
 | --- | --- | --- |
 | 通常Server Function | Cookieセッション→DBの本人所属→用途別SQL。招待作成だけowner限定、通常業務はmemberも可能 | `operations-functions.test.ts`：無認証/別Origin、SQL前のセッション失効・期限切れ・別本人、15種類の他チームID、ヘッダー/params/bodyの偽装 |
-| 公開MCP→Service Binding | providerでtoken検証→principal/連携/必要scope/現在所属→同じRepository。公開ツールはlist/add/complete ToDoだけ | `mcp-operations.test.ts`、`mcp-worker.test.ts`、`mcp-workers.test.ts`：他チームID、scope、失効、所属移動、実OAuth/RPC/D1 |
+| 公開MCP→Service Binding | providerでtoken検証→principal/連携/必要scope/現在所属→本人・チームを固定したRepository。公開ツールはlist/add/update/complete ToDoだけ | `mcp-operations.test.ts`、`mcp-worker.test.ts`、`mcp-workers.test.ts`：他チームID、scope、失効、所属移動、実OAuth/RPC/D1 |
 | Realtime | Cookieセッションと所属をSQLで再確認。サーバーが接続先と内部identityヘッダーを設定。配信時にもsession/所属を照合 | `realtime-route.test.ts`、`team-realtime.test.ts`、既存Realtime E2E |
 | Cron | Cloudflare scheduled入口、maintenance/JOBS_ENABLED。ユーザーのHTTP操作へ公開しない | `scheduled.test.ts`、`push.test.ts`、`database.test.ts` |
 | 初回所属 | Better Authの検証済みGoogle本人を使うsession作成hook。未所属確認と初期チーム作成をbatchで実施 | `auth-access.test.ts`、`database.test.ts`、`d1-atomic.test.ts` |
@@ -56,6 +56,7 @@ Applicationは応答前にも認証と期待する所属を再確認し、所属
 - `ListTeamIDsForClose`、`ListTeamIDsForPush`、`ListActivePushSubscriptionsByTeamID`、`DeactivatePushSubscriptionByEndpoint`、`ClosePeriod` はtrusted Cron専用、`ProvisionUser` は認証hook専用、`DeleteTeam` はfixture cleanup用。これらは認証済み/所属付きRepositoryからの呼出を403で拒否する。`DeleteExpiredOneTimeRemindersByTeam` は対象teamの条件を保持する。
 - Push配送のclaimは、購読ID・team/user・endpoint/鍵・有効性・現在所属をSQLで照合する。finishはそのclaimを照合する。これらはCron専用の配信台帳で、ユーザーの業務更新APIではない。
 - Better Authのuser/account/session/rate limit、MCP connection/consent/grantは本人・認証主体のデータでありteamIdを後付けしない。既存の本人/所有者/セッション/nonce検証を保持する。MCPの管理操作がチーム業務SQLを迂回する経路は作らない。
+- MCPの `update_todo` は `todos:write` を要求し、name・notes・categoryIdだけを部分更新する。itemIdで取得したToDoと変更先カテゴリーのチームを既存UPDATEでも照合する。userId/teamId等の未知キーや更新項目なしは拒否し、省略値をnullに置き換えない。入口の所属確認と共有Applicationの所属再解決の間に移動した場合も、固定済みRepositoryで更新を拒否する。
 
 ## 検証の範囲
 

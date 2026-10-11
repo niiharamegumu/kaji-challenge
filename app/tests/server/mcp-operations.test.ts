@@ -168,6 +168,7 @@ describe("MCP application authorization and ToDos", () => {
       const scoped = guarded.forMember(teamId, principal.userId);
       const memberBoundary = vi.spyOn(guarded, "forMember").mockReturnValue(scoped);
       const create = scoped.CreateTodoItem.bind(scoped);
+      const scopeBoundary = vi.spyOn(scoped, "forMember").mockReturnValue(scoped);
       const boundary = vi.spyOn(scoped, "CreateTodoItem").mockImplementationOnce(async (item) => {
         const created = await create(item);
         vi.setSystemTime(deadline);
@@ -194,6 +195,7 @@ describe("MCP application authorization and ToDos", () => {
       } finally {
         boundary.mockRestore();
         memberBoundary.mockRestore();
+        scopeBoundary.mockRestore();
         vi.useRealTimers();
       }
     },
@@ -250,6 +252,14 @@ describe("MCP application authorization and ToDos", () => {
           }),
         ).toBe(false);
         expect(await scoped.DeleteTodoItem(item.id)).toBe(0);
+        expect(
+          await scoped.UpdateTodoItem({
+            ID: item.id,
+            TeamID: teamId,
+            Name: "Expired update",
+            UpdatedAt: now.toISOString(),
+          }),
+        ).toBe(false);
         expect(await scoped.ListTodoItemsByTeamID(teamId)).toEqual([]);
         await expect(scoped.assertAccess()).rejects.toMatchObject({ status: 401 });
         expect(await connection.repository.ListTodoItemsByTeamID(teamId)).toEqual(before);
@@ -294,6 +304,87 @@ describe("MCP application authorization and ToDos", () => {
     ).rejects.toMatchObject({ status: 404 });
   });
 
+  it("updates a teammate's ToDo through the existing partial-update rules and DTO", async () => {
+    const owner = await identity();
+    const member = await identity(["todos:write"]);
+    await connection.query(sql`UPDATE team_members SET team_id=${owner.teamId},role='member'
+      WHERE user_id=${member.principal.userId}`);
+    const firstCategory = { id: crypto.randomUUID(), name: "First" };
+    const nextCategory = { id: crypto.randomUUID(), name: "Next" };
+    await connection.repository.CreateTodoCategory(owner.teamId, firstCategory);
+    await connection.repository.CreateTodoCategory(owner.teamId, nextCategory);
+    const item = await createTodo(owner.principal.userId, firstCategory.id);
+    for (const [changes, expected] of [
+      [
+        { notes: "  Updated memo  " },
+        { name: "Keep", notes: "Updated memo", categoryId: firstCategory.id },
+      ],
+      [
+        { name: "  New name  " },
+        { name: "New name", notes: "Updated memo", categoryId: firstCategory.id },
+      ],
+      [
+        { categoryId: nextCategory.id },
+        { name: "New name", notes: "Updated memo", categoryId: nextCategory.id },
+      ],
+      [
+        { notes: null, categoryId: null },
+        { name: "New name", notes: null, categoryId: null },
+      ],
+      [
+        { name: "x".repeat(100), notes: "y".repeat(500) },
+        { name: "x".repeat(100), notes: "y".repeat(500), categoryId: null },
+      ],
+      [{ notes: "   " }, { name: "x".repeat(100), notes: null, categoryId: null }],
+    ] as const) {
+      const result = await run(member.principal, {
+        tool: "update_todo",
+        arguments: { itemId: item.id, ...changes },
+      });
+      const updated = mcpResponseSchemas.update_todo.parse(result.data).item;
+      expect(updated).toMatchObject({
+        id: item.id,
+        sortKey: item.sortKey,
+        createdAt: item.createdAt,
+        ...expected,
+      });
+      expect(updated).not.toHaveProperty("teamId");
+      expect(result.changedTeams).toEqual([owner.teamId]);
+      expect(await connection.repository.GetTodoItemByID(item.id)).toMatchObject({
+        Name: expected.name,
+        Notes: expected.notes,
+        CategoryID: expected.categoryId,
+        TeamID: owner.teamId,
+        SortKey: item.sortKey,
+      });
+    }
+  });
+
+  it.each([
+    {},
+    { name: undefined, notes: undefined, categoryId: undefined },
+    { name: "" },
+    { name: "   " },
+    { name: null },
+    { name: "x".repeat(101) },
+    { notes: "x".repeat(501) },
+    { categoryId: "not-a-uuid" },
+    { name: "Changed", userId: "other" },
+    { name: "Changed", teamId: "other" },
+    { name: "Changed", sortKey: 1 },
+  ])("rejects invalid update fields without changing the item: %j", async (changes) => {
+    const { principal, teamId } = await identity();
+    const item = await createTodo(principal.userId);
+    const before = await connection.repository.ListTodoItemsByTeamID(teamId);
+    await expect(
+      run(principal, {
+        tool: "update_todo",
+        arguments: { itemId: item.id, ...changes },
+      } as McpRequest),
+    ).rejects.toMatchObject({ status: 400 });
+    expect(await connection.repository.ListTodoItemsByTeamID(teamId)).toEqual(before);
+  });
+
   it.each([
     ["missing connection", 401],
     ["other user", 401],
@@ -309,6 +400,8 @@ describe("MCP application authorization and ToDos", () => {
     ["scope beyond consent", 403],
   ] as const)("rejects %s before business access", async (failure, status) => {
     const { principal } = await identity(["todos:read"], failure !== "pending grant");
+    const item = await createTodo(principal.userId);
+    const before = await connection.repository.GetTodoItemByID(item.id);
     switch (failure) {
       case "missing connection":
         principal.connectionId = crypto.randomUUID();
@@ -346,6 +439,10 @@ describe("MCP application authorization and ToDos", () => {
         break;
     }
     await expect(run(principal, list)).rejects.toMatchObject({ status });
+    await expect(
+      run(principal, { tool: "update_todo", arguments: { itemId: item.id, name: "Forbidden" } }),
+    ).rejects.toMatchObject({ status });
+    expect(await connection.repository.GetTodoItemByID(item.id)).toEqual(before);
   });
 
   it("requires the operation's scope even when the connection approved more capabilities", async () => {
@@ -358,6 +455,9 @@ describe("MCP application authorization and ToDos", () => {
     ).rejects.toMatchObject({ status: 403 });
     await expect(
       run(readOnly, { tool: "complete_todo", arguments: { itemId: item.id } }),
+    ).rejects.toMatchObject({ status: 403 });
+    await expect(
+      run(readOnly, { tool: "update_todo", arguments: { itemId: item.id, notes: null } }),
     ).rejects.toMatchObject({ status: 403 });
     await expect(run({ ...principal, scopes: ["todos:write"] }, list)).rejects.toMatchObject({
       status: 403,
@@ -394,6 +494,20 @@ describe("MCP application authorization and ToDos", () => {
     await connection.repository.CreateTodoCategory(other.teamId, category);
     const otherItem = await createTodo(other.principal.userId, category.id);
     const before = await connection.repository.ListTodoItemsByTeamID(other.teamId);
+    const ownBefore = await connection.repository.ListTodoItemsByTeamID(own.teamId);
+    await expect(
+      run(own.principal, {
+        tool: "update_todo",
+        arguments: { itemId: otherItem.id, name: "Forbidden" },
+      }),
+    ).rejects.toMatchObject({ status: 404 });
+    await expect(
+      run(own.principal, {
+        tool: "update_todo",
+        arguments: { itemId: ownItem.id, name: "Forbidden", categoryId: category.id },
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(await connection.repository.ListTodoItemsByTeamID(own.teamId)).toEqual(ownBefore);
     await expect(
       run(own.principal, { tool: "complete_todo", arguments: { itemId: otherItem.id } }),
     ).rejects.toMatchObject({ status: 404 });
@@ -412,30 +526,52 @@ describe("MCP application authorization and ToDos", () => {
     const moved = mcpResponseSchemas.list_todos.parse((await run(own.principal, list)).data);
     expect(moved.items.map((item) => item.id)).toEqual([otherItem.id]);
     expect(moved.categories).toEqual([null, category]);
+    await expect(
+      run(own.principal, {
+        tool: "update_todo",
+        arguments: { itemId: ownItem.id, name: "Old team" },
+      }),
+    ).rejects.toMatchObject({ status: 404 });
+    expect(
+      (
+        await run(own.principal, {
+          tool: "update_todo",
+          arguments: { itemId: otherItem.id, name: "Current team" },
+        })
+      ).changedTeams,
+    ).toEqual([other.teamId]);
   });
 
-  it("does not reveal whether a forbidden ToDo ID exists", async () => {
-    const own = await identity();
-    const other = await identity();
-    const hidden = await createTodo(other.principal.userId);
-    const before = await connection.repository.ListTodoItemsByTeamID(other.teamId);
-    const errors = [];
-    for (const itemId of [hidden.id, crypto.randomUUID()]) {
-      const result = await Promise.allSettled([
-        run(own.principal, { tool: "complete_todo", arguments: { itemId } }),
-      ]);
-      expect(result[0].status).toBe("rejected");
-      if (result[0].status === "rejected") {
-        const { status, code, message } = result[0].reason;
-        errors.push({ status, code, message });
+  it.each(["complete_todo", "update_todo"] as const)(
+    "does not reveal whether a forbidden ToDo ID exists through %s",
+    async (tool) => {
+      const own = await identity();
+      const other = await identity();
+      const hidden = await createTodo(other.principal.userId);
+      const before = await connection.repository.ListTodoItemsByTeamID(other.teamId);
+      const errors = [];
+      for (const itemId of [hidden.id, crypto.randomUUID()]) {
+        const result = await Promise.allSettled([
+          run(
+            own.principal,
+            tool === "update_todo"
+              ? { tool, arguments: { itemId, name: "Forbidden" } }
+              : { tool, arguments: { itemId } },
+          ),
+        ]);
+        expect(result[0].status).toBe("rejected");
+        if (result[0].status === "rejected") {
+          const { status, code, message } = result[0].reason;
+          errors.push({ status, code, message });
+        }
       }
-    }
-    expect(errors).toHaveLength(2);
-    expect(errors[0]).toEqual(errors[1]);
-    expect(errors[0]).toMatchObject({ status: 404 });
-    expect(JSON.stringify(errors)).not.toContain(hidden.id);
-    expect(await connection.repository.ListTodoItemsByTeamID(other.teamId)).toEqual(before);
-  });
+      expect(errors).toHaveLength(2);
+      expect(errors[0]).toEqual(errors[1]);
+      expect(errors[0]).toMatchObject({ status: 404 });
+      expect(JSON.stringify(errors)).not.toContain(hidden.id);
+      expect(await connection.repository.ListTodoItemsByTeamID(other.teamId)).toEqual(before);
+    },
+  );
 
   it.each(["revoked", "expired", "pending", "scope removed"])(
     "rechecks %s connections inside the Todo SQL after initial authorization",
@@ -462,6 +598,14 @@ describe("MCP application authorization and ToDos", () => {
           break;
       }
       expect(await scoped.DeleteTodoItem(item.id)).toBe(0);
+      expect(
+        await scoped.UpdateTodoItem({
+          ID: item.id,
+          TeamID: teamId,
+          Name: "Forbidden",
+          UpdatedAt: now.toISOString(),
+        }),
+      ).toBe(false);
       expect(await scoped.ListTodoItemsByTeamID(teamId)).toEqual([]);
       await expect(scoped.GetTodoItemByID(item.id)).rejects.toMatchObject({ status: 404 });
       expect(await connection.repository.GetTodoItemByID(item.id)).toMatchObject({ ID: item.id });
@@ -479,12 +623,20 @@ describe("MCP application authorization and ToDos", () => {
       other.principal.userId,
     );
     expect(await scoped.DeleteTodoItem(item.id)).toBe(0);
+    expect(
+      await scoped.UpdateTodoItem({
+        ID: item.id,
+        TeamID: own.teamId,
+        Name: "Forbidden",
+        UpdatedAt: now.toISOString(),
+      }),
+    ).toBe(false);
     await expect(scoped.GetTodoItemByID(item.id)).rejects.toMatchObject({ status: 404 });
   });
 
   it.each(
-    (["add_todo", "complete_todo"] as const).flatMap((tool) =>
-      (["revoked", "expired", "scope removed", "moved"] as const).map((change) => ({
+    (["add_todo", "update_todo", "complete_todo"] as const).flatMap((tool) =>
+      (["revoked", "expired", "scope removed", "moved", "removed"] as const).map((change) => ({
         tool,
         change,
       })),
@@ -500,6 +652,7 @@ describe("MCP application authorization and ToDos", () => {
       const guarded = repository(principal, "todos:write");
       const scoped = guarded.forMember(teamId, principal.userId);
       const memberBoundary = vi.spyOn(guarded, "forMember").mockReturnValue(scoped);
+      const scopeBoundary = vi.spyOn(scoped, "forMember").mockReturnValue(scoped);
       const invalidate = async () => {
         if (change === "revoked") {
           await mcp.revokeConnection(principal.connectionId, principal.userId, now.toISOString());
@@ -509,6 +662,8 @@ describe("MCP application authorization and ToDos", () => {
         } else if (change === "scope removed") {
           await connection.query(sql`UPDATE mcp_connections SET scopes='["todos:read"]'
             WHERE id=${principal.connectionId}`);
+        } else if (change === "removed") {
+          await connection.query(sql`DELETE FROM team_members WHERE user_id=${principal.userId}`);
         } else {
           await connection.query(sql`UPDATE team_members SET team_id=${other.teamId},role='member'
             WHERE user_id=${principal.userId}`);
@@ -516,6 +671,13 @@ describe("MCP application authorization and ToDos", () => {
       };
       const create = scoped.CreateTodoItem.bind(scoped);
       const complete = scoped.DeleteTodoItem.bind(scoped);
+      const update = scoped.UpdateTodoItem.bind(scoped);
+      const updateBoundary = vi
+        .spyOn(scoped, "UpdateTodoItem")
+        .mockImplementationOnce(async (arg) => {
+          await invalidate();
+          return update(arg);
+        });
       const createBoundary = vi
         .spyOn(scoped, "CreateTodoItem")
         .mockImplementationOnce(async (arg) => {
@@ -535,12 +697,15 @@ describe("MCP application authorization and ToDos", () => {
             mcp,
             tool === "add_todo"
               ? { tool, arguments: { name: "Forbidden" } }
-              : { tool, arguments: { itemId: item.id } },
+              : tool === "update_todo"
+                ? { tool, arguments: { itemId: item.id, name: "Forbidden", notes: null } }
+                : { tool, arguments: { itemId: item.id } },
             principal,
             context,
           ),
         ).rejects.toMatchObject({
-          status: change === "scope removed" || change === "moved" ? 403 : 401,
+          status:
+            change === "scope removed" || change === "moved" || change === "removed" ? 403 : 401,
         });
         expect(await connection.repository.ListTodoItemsByTeamID(teamId)).toEqual(before);
         expect(await connection.repository.ListTodoItemsByTeamID(other.teamId)).toEqual(
@@ -548,8 +713,138 @@ describe("MCP application authorization and ToDos", () => {
         );
       } finally {
         createBoundary.mockRestore();
+        updateBoundary.mockRestore();
         completeBoundary.mockRestore();
         memberBoundary.mockRestore();
+        scopeBoundary.mockRestore();
+      }
+    },
+  );
+
+  it.each(["add_todo", "update_todo", "complete_todo"] as const)(
+    "keeps the authorized team fixed if membership changes before shared application %s",
+    async (tool) => {
+      const own = await identity();
+      const other = await identity();
+      await createTodo(own.principal.userId);
+      const target = await createTodo(other.principal.userId);
+      const before = await connection.repository.ListTodoItemsByTeamID(own.teamId);
+      const otherBefore = await connection.repository.ListTodoItemsByTeamID(other.teamId);
+      const guarded = repository(own.principal, "todos:write");
+      const scoped = guarded.forMember(own.teamId, own.principal.userId);
+      const memberBoundary = vi.spyOn(guarded, "forMember").mockReturnValueOnce(scoped);
+      const read = scoped.ListMembershipsByUserID.bind(scoped);
+      const boundary = vi
+        .spyOn(scoped, "ListMembershipsByUserID")
+        .mockImplementationOnce(async (id) => {
+          await connection.query(sql`UPDATE team_members SET team_id=${other.teamId},role='member'
+          WHERE user_id=${own.principal.userId}`);
+          return read(id);
+        });
+      try {
+        await expect(
+          executeMcpOperation(
+            guarded,
+            mcp,
+            tool === "add_todo"
+              ? { tool, arguments: { name: "Forbidden" } }
+              : tool === "update_todo"
+                ? { tool, arguments: { itemId: target.id, name: "Forbidden" } }
+                : { tool, arguments: { itemId: target.id } },
+            own.principal,
+            context,
+          ),
+        ).rejects.toMatchObject({ status: 403 });
+        expect(boundary).toHaveBeenCalledOnce();
+        expect(await connection.repository.ListTodoItemsByTeamID(own.teamId)).toEqual(before);
+        expect(await connection.repository.ListTodoItemsByTeamID(other.teamId)).toEqual(
+          otherBefore,
+        );
+      } finally {
+        boundary.mockRestore();
+        memberBoundary.mockRestore();
+      }
+    },
+  );
+
+  it("rejects a category removed immediately before UPDATE without changing the ToDo", async () => {
+    const { principal, teamId } = await identity();
+    const category = { id: crypto.randomUUID(), name: "Removed before update" };
+    await connection.repository.CreateTodoCategory(teamId, category);
+    const item = await createTodo(principal.userId);
+    const before = await connection.repository.GetTodoItemByID(item.id);
+    const guarded = repository(principal, "todos:write");
+    const scoped = guarded.forMember(teamId, principal.userId);
+    const memberBoundary = vi.spyOn(guarded, "forMember").mockReturnValue(scoped);
+    const scopeBoundary = vi.spyOn(scoped, "forMember").mockReturnValue(scoped);
+    const update = scoped.UpdateTodoItem.bind(scoped);
+    const boundary = vi.spyOn(scoped, "UpdateTodoItem").mockImplementationOnce(async (arg) => {
+      await connection.repository.DeleteTodoCategory(teamId, category.id, now.toISOString());
+      return update(arg);
+    });
+    try {
+      await expect(
+        executeMcpOperation(
+          guarded,
+          mcp,
+          {
+            tool: "update_todo",
+            arguments: { itemId: item.id, name: "Forbidden", categoryId: category.id },
+          },
+          principal,
+          context,
+        ),
+      ).rejects.toMatchObject({ status: 409 });
+      expect(boundary).toHaveBeenCalledOnce();
+      expect(await connection.repository.GetTodoItemByID(item.id)).toEqual(before);
+    } finally {
+      boundary.mockRestore();
+      scopeBoundary.mockRestore();
+      memberBoundary.mockRestore();
+    }
+  });
+
+  it.each(["token", "connection"] as const)(
+    "does not retry or roll back an update committed before natural %s expiry",
+    async (kind) => {
+      const deadline = Date.now() + 60_000;
+      const { principal, teamId } = await identity(undefined, true, {
+        [kind]: kind === "token" ? deadline / 1000 : new Date(deadline).toISOString(),
+      });
+      const item = await createTodo(principal.userId);
+      const guarded = repository(principal, "todos:write");
+      const scoped = guarded.forMember(teamId, principal.userId);
+      const memberBoundary = vi.spyOn(guarded, "forMember").mockReturnValue(scoped);
+      const scopeBoundary = vi.spyOn(scoped, "forMember").mockReturnValue(scoped);
+      const update = scoped.UpdateTodoItem.bind(scoped);
+      const boundary = vi.spyOn(scoped, "UpdateTodoItem").mockImplementationOnce(async (arg) => {
+        const result = await update(arg);
+        vi.setSystemTime(deadline);
+        return result;
+      });
+      vi.useFakeTimers({ toFake: ["Date"] });
+      try {
+        await expect(
+          executeMcpOperation(
+            guarded,
+            mcp,
+            {
+              tool: "update_todo",
+              arguments: { itemId: item.id, name: "Already saved" },
+            },
+            principal,
+            context,
+          ),
+        ).rejects.toMatchObject({ status: 401 });
+        expect(boundary).toHaveBeenCalledOnce();
+        expect(await connection.repository.GetTodoItemByID(item.id)).toMatchObject({
+          Name: "Already saved",
+        });
+      } finally {
+        boundary.mockRestore();
+        scopeBoundary.mockRestore();
+        memberBoundary.mockRestore();
+        vi.useRealTimers();
       }
     },
   );

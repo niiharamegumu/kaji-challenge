@@ -253,11 +253,16 @@ describe("MCP HTTP authentication boundary", () => {
     });
   });
 
-  it.each(["add_todo", "complete_todo"])(
+  it.each(["add_todo", "update_todo", "complete_todo"])(
     "challenges the actual read-only token for %s",
     async (name) => {
       validateToken.mockResolvedValue({ ...tokenContext(), scope: ["todos:read"] });
-      const response = await call(name, name === "add_todo" ? { name: "Test" } : { itemId: "id" });
+      const response = await call(
+        name,
+        name === "add_todo"
+          ? { name: "Test" }
+          : { itemId: "id", ...(name === "update_todo" ? { name: "Updated" } : {}) },
+      );
       expect(response.status).toBe(403);
       expect(response.headers.get("WWW-Authenticate")).toContain('scope="todos:write"');
       expect(invoke).not.toHaveBeenCalled();
@@ -275,6 +280,7 @@ describe("MCP HTTP authentication boundary", () => {
   it.each([
     ["list_todos", {}, "todos:read"],
     ["add_todo", { name: "Forbidden" }, "todos:write"],
+    ["update_todo", { itemId: "item", name: "Forbidden" }, "todos:write"],
     ["complete_todo", { itemId: "item" }, "todos:write"],
   ] as const)("does not treat offline_access as permission for %s", async (name, args, scope) => {
     validateToken.mockResolvedValue({ ...tokenContext(), scope: ["offline_access"] });
@@ -338,6 +344,28 @@ describe("MCP HTTP authentication boundary", () => {
 });
 
 describe("MCP tool adapter", () => {
+  it("updates a ToDo once while preserving omitted fields and explicit nulls", async () => {
+    validateToken.mockResolvedValue({ ...tokenContext(), scope: ["todos:write"] });
+    const item = {
+      id: "todo-id",
+      name: "Existing name",
+      notes: null,
+      categoryId: null,
+      sortKey: 100,
+      createdAt: "2026-10-09T00:00:00Z",
+      updatedAt: "2026-10-11T00:00:00Z",
+    };
+    invoke.mockResolvedValueOnce({ ok: true, data: { item } });
+    const args = { itemId: item.id, notes: null, categoryId: null };
+    expect(await payload(await call("update_todo", args))).toMatchObject({
+      result: { structuredContent: { item } },
+    });
+    expect(invoke).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ userId: "user-a", scopes: ["todos:write"] }),
+      { tool: "update_todo", arguments: args },
+    );
+  });
+
   it.each(["2025-11-25", "2026-07-28"])(
     "advertises the brand icon through standard %s metadata",
     async (protocolVersion) => {
@@ -443,7 +471,7 @@ describe("MCP tool adapter", () => {
     });
     expect(invoke).toHaveBeenCalledTimes(2);
   });
-  it("lists exactly the three strict tools and describes the irreversible completion", async () => {
+  it("lists exactly four strict tools and describes update and irreversible completion", async () => {
     const response = await worker.fetch(request("tools/list"), env(), context());
     expect(response.status).toBe(200);
     const body = (await payload(response)) as {
@@ -459,13 +487,20 @@ describe("MCP tool adapter", () => {
     expect(body.result.tools.map((tool) => tool.name)).toEqual([
       "list_todos",
       "add_todo",
+      "update_todo",
       "complete_todo",
     ]);
     for (const tool of body.result.tools) expect(tool.inputSchema.additionalProperties).toBe(false);
     expect(body.result.tools[0].annotations.readOnlyHint).toBe(true);
     expect(body.result.tools[1].annotations.idempotentHint).toBe(false);
     expect(body.result.tools[2].annotations.destructiveHint).toBe(true);
-    expect(body.result.tools[2].description).toContain("物理削除");
+    expect(body.result.tools[2].annotations.readOnlyHint).toBe(false);
+    expect(body.result.tools[2].annotations.idempotentHint).toBe(false);
+    expect(body.result.tools[2].description).toContain("省略した項目は保持");
+    expect(body.result.tools[2].description).toContain("notes:null");
+    expect(body.result.tools[2].description).toContain("categoryId:null");
+    expect(body.result.tools[3].annotations.destructiveHint).toBe(true);
+    expect(body.result.tools[3].description).toContain("物理削除");
   });
 
   it.each([
@@ -474,6 +509,22 @@ describe("MCP tool adapter", () => {
     ["add_todo", { name: "Test", userId: "victim" }],
     ["complete_todo", { itemId: "id", teamId: "victim" }],
     ["add_todo", { name: "x".repeat(101) }],
+    ["update_todo", { itemId: "id", name: "Test", userId: "victim" }],
+    ["update_todo", { itemId: "id", name: "Test", teamId: "victim" }],
+    ["update_todo", { itemId: "id", name: "Test", sortKey: 1 }],
+    ["update_todo", { itemId: "id", createdAt: "2026-10-11T00:00:00Z" }],
+    ["update_todo", { itemId: "id" }],
+    ["update_todo", { name: "Test" }],
+    ["update_todo", { itemId: "", name: "Test" }],
+    ["update_todo", { itemId: "x".repeat(201), name: "Test" }],
+    ["update_todo", { itemId: null, name: "Test" }],
+    ["update_todo", { itemId: "id", name: "" }],
+    ["update_todo", { itemId: "id", name: "x".repeat(101) }],
+    ["update_todo", { itemId: "id", name: null }],
+    ["update_todo", { itemId: "id", notes: "x".repeat(501) }],
+    ["update_todo", { itemId: "id", notes: 1 }],
+    ["update_todo", { itemId: "id", categoryId: "not-a-uuid" }],
+    ["update_todo", { itemId: "id", categoryId: {} }],
     ["complete_todo", {}],
     ["delete_team", {}],
   ])("rejects invalid or unknown %s without invoking the binding", async (name, args) => {
@@ -493,46 +544,55 @@ describe("MCP tool adapter", () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 
-  it("does not execute a write hidden in a batch with an allowed read", async () => {
-    validateToken.mockResolvedValue({ ...tokenContext(), scope: ["todos:read"] });
-    const response = await worker.fetch(
-      new Request(request("tools/list"), {
-        method: "POST",
-        body: JSON.stringify([
-          {
-            jsonrpc: "2.0",
-            id: 1,
-            method: "tools/call",
-            params: { name: "list_todos", arguments: {} },
-          },
-          {
-            jsonrpc: "2.0",
-            id: 2,
-            method: "tools/call",
-            params: { name: "complete_todo", arguments: { itemId: "victim-item" } },
-          },
-        ]),
-      }),
-      env(),
-      context(),
-    );
-    const messages = (await response.text())
-      .split("\n")
-      .filter((line) => line.startsWith("data: "))
-      .map((line) => JSON.parse(line.slice(6)));
-    expect(messages).toHaveLength(2);
-    expect(messages.find((message) => message.id === 2)).toMatchObject({
-      result: {
-        isError: true,
-        content: [{ type: "text", text: expect.stringContaining("insufficient_scope") }],
-      },
-    });
-    expect(invoke).toHaveBeenCalledTimes(1);
-    expect(invoke).toHaveBeenCalledWith(expect.objectContaining({ scopes: ["todos:read"] }), {
-      tool: "list_todos",
-      arguments: {},
-    });
-  });
+  it.each(["complete_todo", "update_todo"])(
+    "does not execute %s hidden in a batch with an allowed read",
+    async (tool) => {
+      validateToken.mockResolvedValue({ ...tokenContext(), scope: ["todos:read"] });
+      const response = await worker.fetch(
+        new Request(request("tools/list"), {
+          method: "POST",
+          body: JSON.stringify([
+            {
+              jsonrpc: "2.0",
+              id: 1,
+              method: "tools/call",
+              params: { name: "list_todos", arguments: {} },
+            },
+            {
+              jsonrpc: "2.0",
+              id: 2,
+              method: "tools/call",
+              params: {
+                name: tool,
+                arguments: {
+                  itemId: "victim-item",
+                  ...(tool === "update_todo" ? { notes: null } : {}),
+                },
+              },
+            },
+          ]),
+        }),
+        env(),
+        context(),
+      );
+      const messages = (await response.text())
+        .split("\n")
+        .filter((line) => line.startsWith("data: "))
+        .map((line) => JSON.parse(line.slice(6)));
+      expect(messages).toHaveLength(2);
+      expect(messages.find((message) => message.id === 2)).toMatchObject({
+        result: {
+          isError: true,
+          content: [{ type: "text", text: expect.stringContaining("insufficient_scope") }],
+        },
+      });
+      expect(invoke).toHaveBeenCalledTimes(1);
+      expect(invoke).toHaveBeenCalledWith(expect.objectContaining({ scopes: ["todos:read"] }), {
+        tool: "list_todos",
+        arguments: {},
+      });
+    },
+  );
 
   it("does not let client metadata replace the verified identity or elevate a token", async () => {
     validateToken.mockResolvedValue({ ...tokenContext(), scope: ["todos:read"] });
@@ -634,19 +694,25 @@ describe("MCP tool adapter", () => {
     ]);
   });
 
-  it("returns safe business errors and does not retry a write after an interrupted RPC", async () => {
-    invoke.mockResolvedValueOnce({
-      ok: false,
-      error: { status: 403, code: "forbidden", message: "所属を確認してください。" },
-    });
-    expect(await payload(await call("list_todos"))).toMatchObject({ result: { isError: true } });
-    invoke.mockRejectedValueOnce(new Error("SECRET SQL test-token notes"));
-    const response = await call("add_todo", { name: "Test" });
-    const text = await response.text();
-    expect(text).toContain("internal_error");
-    expect(text).not.toContain("SECRET");
-    expect(invoke).toHaveBeenCalledTimes(2);
-  });
+  it.each(["add_todo", "update_todo"])(
+    "returns safe errors and does not retry %s after an interrupted RPC",
+    async (tool) => {
+      invoke.mockResolvedValueOnce({
+        ok: false,
+        error: { status: 403, code: "forbidden", message: "所属を確認してください。" },
+      });
+      expect(await payload(await call("list_todos"))).toMatchObject({ result: { isError: true } });
+      invoke.mockRejectedValueOnce(new Error("SECRET SQL test-token notes"));
+      const response = await call(tool, {
+        name: "Test",
+        ...(tool === "update_todo" ? { itemId: "id" } : {}),
+      });
+      const text = await response.text();
+      expect(text).toContain("internal_error");
+      expect(text).not.toContain("SECRET");
+      expect(invoke).toHaveBeenCalledTimes(2);
+    },
+  );
 
   it("rejects malformed output instead of reporting a false successful result", async () => {
     invoke.mockResolvedValue({ ok: true, data: { id: "private-output-token", completed: true } });

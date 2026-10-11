@@ -11,6 +11,7 @@ import {
   AddTodoInputSchema,
   CompleteTodoInputSchema,
   ListTodosInputSchema,
+  UpdateTodoInputSchema,
   McpPrincipalSchema,
   McpRequestSchema,
   McpTokenPropsSchema,
@@ -110,6 +111,23 @@ function createServer(env: McpWorkerBindings, ctx: ResourceContext, resource: st
     (args) => invoke({ tool: "add_todo", arguments: args }),
   );
   server.registerTool(
+    "update_todo",
+    {
+      title: "ToDo更新",
+      description:
+        "現在所属するチームのToDoの名前・メモ・カテゴリーを更新します。itemIdとcategoryIdはlist_todosの結果から指定します。省略した項目は保持し、notes:nullでメモ削除、categoryId:nullで未分類に変更します。更新項目は1つ以上必要です。指定した内容を上書きするため対象を確認し、応答不明時は自動再送せず一覧で確認してください。",
+      inputSchema: UpdateTodoInputSchema,
+      outputSchema: mcpResponseSchemas.update_todo,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    (args) => invoke({ tool: "update_todo", arguments: args }),
+  );
+  server.registerTool(
     "complete_todo",
     {
       title: "ToDo完了",
@@ -176,7 +194,12 @@ async function handleMcp(request: Request, env: McpWorkerBindings, ctx: Resource
     }
     if (record(parsedBody) && parsedBody.method === "tools/call" && record(parsedBody.params)) {
       const name = parsedBody.params.name;
-      if (name === "list_todos" || name === "add_todo" || name === "complete_todo") {
+      if (
+        name === "list_todos" ||
+        name === "add_todo" ||
+        name === "update_todo" ||
+        name === "complete_todo"
+      ) {
         const scope = requiredMcpScope(name);
         if (!ctx.auth.scope.includes(scope)) return insufficientScope(ctx.auth, [scope]);
       }
