@@ -8,7 +8,7 @@ import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { getPlatformProxy } from "wrangler";
 import { provisionUser } from "../../src/server/application/provision-user";
 import { authorizeMcpConnection } from "../../src/server/application/mcp-operations";
-import { McpPrincipalSchema } from "../../src/contracts/mcp";
+import { McpPrincipalSchema, type McpRequest } from "../../src/contracts/mcp";
 import { session, user } from "../../src/server/infrastructure/auth-schema";
 import { D1McpRepository } from "../../src/server/infrastructure/mcp-repository";
 import {
@@ -401,6 +401,66 @@ it("routes only MCP paths, keeps canonical issuer metadata and fails closed when
       )
     ).status,
   ).toBe(404);
+});
+
+it.each(["false", undefined, "invalid"])(
+  "closes OAuth, discovery and connection routes before accessing bindings when MCP_ENABLED is %s",
+  async (enabled) => {
+    for (const [method, path] of [
+      ["GET", "/api/mcp"],
+      ["GET", "/.well-known/oauth-authorization-server/api/mcp/oauth"],
+      ["GET", "/api/mcp/oauth/authorize"],
+      ["POST", "/api/mcp/oauth/authorize"],
+      ["POST", "/api/mcp/oauth/login"],
+      ["POST", "/api/mcp/oauth/token"],
+      ["POST", "/api/mcp/oauth/register"],
+      ["OPTIONS", "/api/mcp/oauth/register"],
+      ["GET", "/api/mcp/connections"],
+      ["POST", "/api/mcp/connections/revoke"],
+    ]) {
+      expect(isMcpHttpPath(path)).toBe(true);
+      const response = await handleMcpHttp(
+        new Request(`${origin}${path}`, {
+          method,
+          headers: {
+            Cookie: "better-auth.session_token=fixture",
+            Authorization: "Bearer fixture",
+          },
+        }),
+        { MCP_ENABLED: enabled } as RuntimeBindings,
+        ctx,
+      );
+      expect(response.status).toBe(404);
+      expect(await response.text()).toBe("Not found");
+      expect(response.headers.has("Location")).toBe(false);
+      expect(response.headers.has("Set-Cookie")).toBe(false);
+      expect(response.headers.has("Access-Control-Allow-Origin")).toBe(false);
+    }
+  },
+);
+
+it("blocks a valid token and every named RPC tool when disabled without deleting the grant", async () => {
+  const { token } = await grant();
+  const principal = await principalForToken(token.access_token);
+  const enabled = new McpApplication(ctx, bindings);
+  expect(await enabled.validateToken(resource, token.access_token)).not.toBeNull();
+  for (const flag of ["false", undefined]) {
+    const disabled = new McpApplication(ctx, { MCP_ENABLED: flag } as RuntimeBindings);
+    expect(await disabled.validateToken(resource, token.access_token)).toBeNull();
+    const requests: McpRequest[] = [
+      { tool: "list_todos", arguments: {} },
+      { tool: "add_todo", arguments: { name: "Disabled" } },
+      { tool: "update_todo", arguments: { itemId: "fixture", name: "Disabled" } },
+      { tool: "complete_todo", arguments: { itemId: "fixture" } },
+    ];
+    for (const input of requests) {
+      expect(await disabled.invoke(principal, input)).toMatchObject({
+        ok: false,
+        error: { status: 404, code: "not_found" },
+      });
+    }
+  }
+  expect(await enabled.validateToken(resource, token.access_token)).not.toBeNull();
 });
 
 it("logs only OAuth error classification and omits request values and descriptions", async () => {
