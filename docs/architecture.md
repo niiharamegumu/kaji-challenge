@@ -30,7 +30,9 @@ SDKは相対TTLをtoken保存前に加算するため、KV待機によってprov
 
 `/api/mcp/connections` で本人が解除するとD1を先に失効させ、続いてproviderのgrantを失効させる。標準RFC 7009失効も、providerがclient認証・token真正性・所有者を確認した後、管理patchのcallbackでD1を先に失効させる。新access・旧refreshのどちらでも対応する連携全体を止める。KV削除失敗や切替前から進行中の発行でtokenが残っても、D1で業務操作を拒否する。D1更新に失敗した失効要求は503とし、成功扱いしない。依存patchの範囲と更新手順は [mcp-oauth-provider-patch.md](mcp-oauth-provider-patch.md) に従う。チーム移動後は現在所属するチームが対象となり、この挙動を同意画面に表示する。
 
-AlchemyではMCP_ORIGIN設定時だけMCP WorkerとOAuth KVを追加し、MCP_ENABLEDは受付の停止/再開だけを制御する。未設定の既存配備では追加資源を作らない。KVはretain方針で、MCP_ORIGINの削除は管理資源の除去となるため停止手段として使わない。
+AlchemyではMCP_ORIGIN設定時にOAuth KVを宣言し、MCP_ENABLED=trueのときだけ専用MCP Workerを追加する。falseでの配備は専用WorkerとそのCustom Domain・Service Bindingを除去する。専用Workerのローカル実行でもfalseならhealth・アイコン・discoveryを含む全HTTP入口を404にし、既存ApplicationのOAuth・連携管理・named RPCも拒否する。通常認証・ToDo・Realtimeはこのflagに依存しない。
+
+停止中もMCP_ORIGIN、KV宣言とretain、D1テーブル・データ、MCPコード・build・named export・依存patchを保持する。MCP_ORIGINの削除はKVがAlchemy管理から外れるため停止手段として使わない。再開はtrueで再配備する。無効化は認可データの削除・失効ではなく、再開後は残存する有効な連携を利用できる。専用データ消去は別途承認された操作として扱う。
 
 ## Server Functions
 
