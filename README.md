@@ -158,12 +158,12 @@ Alchemyはビルド済みの `dist/server/index.js` と `dist/client` を、公�
 | Variable | `VAPID_SUBJECT` | `mailto:` 連絡先またはHTTPS URL |
 | Variable | `JOBS_ENABLED` | 初回は `false`、初回動作確認後 `true` |
 | Variable | `MAINTENANCE_MODE` | 通常 `false`、停止時のみ `true` |
-| Variable | `MCP_ORIGIN` | 未設定ならMCPリソースを作成しない。設定時は `APP_ORIGIN` と異なるHTTPS origin。パス・ポートなし |
-| Variable | `MCP_ENABLED` | 未設定は `false`。MCP/OAuthの受付を有効にする場合だけ `true` |
+| Variable | `MCP_ORIGIN` | 未設定ならMCPリソースを作成しない。設定時はOAuth用KVを保持する。`APP_ORIGIN` と異なるHTTPS origin。パス・ポートなし。停止中も維持する |
+| Variable | `MCP_ENABLED` | 未設定は `false`。`true` のときだけMCP Workerを配備し、MCP/OAuthの受付を有効にする |
 
 `APP_RELEASE` の登録は不要です。Cloudflare tokenには、CDが状態保存先の資格情報を取得するためのSecrets Store Editも必要です。権限不足を解消するために全権限tokenへ置き換えるのではなく、失敗したAPIとscopeを確認します。
 
-MCP追加配備前に、公開originのドメイン、新WorkerとOAuth用KVを作成できる配備権限、接続先ChatGPTのプラン・管理者設定、OAuth同意と検証用ToDoを確認します。`MCP_ORIGIN` を設定するとMCP WorkerとKVを追加し、既存ApplicationにOAuth認可サーバーとKVを接続します。MCP Workerは既存Applicationへの専用Service Bindingを使い、D1やGoogleの秘密値は持ちません。ToDoの完了は物理削除なので、書き込み確認には削除できる検証データを使います。
+MCP追加配備前に、公開originのドメイン、新WorkerとOAuth用KVを作成できる配備権限、接続先ChatGPTのプラン・管理者設定、OAuth同意と検証用ToDoを確認します。`MCP_ORIGIN` の設定でKVを追加して既存Applicationに接続し、`MCP_ENABLED=true` でMCP Workerも追加します。MCP Workerは既存Applicationへの専用Service Bindingを使い、D1やGoogleの秘密値は持ちません。ToDoの完了は物理削除なので、書き込み確認には削除できる検証データを使います。
 
 OAuthの標準失効もD1先行にするため、providerの固定versionにBun patchを適用します。`bun install --frozen-lockfile` を使い、依存更新時は [patchの保守手順](docs/mcp-oauth-provider-patch.md) と失効の回帰検証を実施します。access tokenだけを失効した場合も、Kajiでは対応する連携全体を停止します。
 
@@ -173,7 +173,7 @@ OAuthの標準失効もD1先行にするため、providerの固定versionにBun 
 
 1. PRのCI成功を確認して `main` へマージします。CIが失敗しているPRはマージしません。
 2. Actionsの **Deploy production** を開き、`deploy` の成功を確認します。planはログに出力され、その後deployを自動実行します。**plan確認の手動停止はありません。** SQLやIaCの意図しない変更はPRで確認してください。
-3. 公開先 `/health` の `status: ok` と `release: 対象SHA` はCDが確認します。`MCP_ORIGIN` 設定時はMCP Workerも確認します。伝播待ちのため最大12回・各5秒タイムアウトで再試行します。health確認は実OAuthやMCPツールの動作確認を代替しません。
+3. 公開先 `/health` の `status: ok` と `release: 対象SHA` はCDが確認します。`MCP_ENABLED=true` のときはMCP Workerも確認します。伝播待ちのため最大12回・各5秒タイムアウトで再試行します。health確認は実OAuthやMCPツールの動作確認を代替しません。
 4. ブラウザーでログイン、家事・ToDo・予定の保存と再読込、ログアウトを確認します。認証/PWA/Push変更時は新規登録許可・拒否、PWA更新、iPhone実機Pushも確認します。これはCDのhealth確認では代替しません。
 5. CloudflareのWorkerログでエラー・締め・通知結果を確認します。通常の更新では鍵の再作成・手動bootstrap・ジョブ無効化は不要です。
 
@@ -182,7 +182,8 @@ OAuthの標準失効もD1先行にするため、providerの固定versionにBun 
 ### 設定変更・障害時
 
 - **設定/Secret更新**：GitHub Environment `production` の値を変更し、ActionsからmainのDeploy productionを手動実行します。設定変更だけでは自動起動しません。
-- **MCP受付停止**：`MCP_ENABLED=false` で再配備します。`MCP_ORIGIN` は維持し、WorkerとOAuth用KVを残します。originの削除はリソース除去に相当するため、事前にplanを確認してください。KVは物理保持する設定ですがAlchemyの管理状態から外れるため、再有効化時には既存KVの扱いも確認します。
+- **MCP停止**：GitHub Environment `production` の `MCP_ENABLED=false` で再配備します。専用MCP WorkerとそのCustom Domain・Service Bindingは削除され、既存ApplicationのOAuth・discovery・連携管理・named RPCは拒否します。配備前に専用Workerへ実際に紐付いているドメインとplanの削除対象を確認してください。CDはplan後に自動でdeployするため、確認待ちにはなりません。`MCP_ORIGIN` は維持し、OAuth用KVの宣言・retain・管理状態とD1のテーブル・データを残します。originを消すとKVがAlchemyの管理状態から外れるため、停止手段には使いません。
+- **MCP再開**：`MCP_ORIGIN` を維持したまま `MCP_ENABLED=true` で再配備します。MCPコード・build・schema・依存patchは停止中も保持します。停止自体は認可データを失効・削除しないため、残っている有効な連携は再開後に再利用できます。MCP専用データの消去は対象と不可逆性を確認した別操作とし、通常の停止配備やmigrationには含めません。
 - **schema変更**：新しい番号（現在は `app/migrations/0004_*.sql` 以降）のSQLを追加し、CIで検証してからマージ。Alchemyが未適用SQLを適用します。適用済みSQLを編集せず、本番へWranglerで重ねて適用しません。`db:migrate` はローカル専用です。 既存DBへの `0003_iso_timestamps.sql` 適用は旧コードと日時形式が非互換のため、この変更のマージ前に現行mainをメンテナンス状態で配備し、SQLと新Workerの配備完了後に解除します。詳細は [日時の保存形式](docs/database.md#日時の保存形式) を参照してください。
 - **停止が必要な作業**：Environmentの `MAINTENANCE_MODE=true` に変更してCD実行。受付停止とCron解除を確認して作業し、falseへ戻してCD実行・復帰確認します。
 - **配備失敗**：エラーログを確認して修正後、最新mainで再実行。health失敗では自動rollbackしません。SQL適用後にWorker更新だけ失敗する場合もあるため、古いコードへ戻す前にDB互換性を確認します。復元は別の操作です。
