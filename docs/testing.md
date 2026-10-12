@@ -108,6 +108,8 @@ ToDo完了の取り消しはfake timerで2999ms時点の未実行と3000ms時点
 
 `mcp-workers.test.ts` は2つの実workerd Workerとnamed Service Bindingを使い、OAuthからMCP読み書き・解除までを隔離D1/KVで確認する。外部通信と本番の認証情報を使用しない。全体 `test:local` では既存アプリのMCP設定を無効にし、buildにMCP bundleとnamed exportが含まれ、MCP側にDB/KV/秘密情報がbindされないことも確認する。
 
+MCP停止は `infra.test.ts` で有効/無効/再有効化のWorker構成とKV保持、通常Application・D1構成の維持を確認する。`mcp-worker.test.ts` は無効・未設定・不正flagでhealth・アイコン・discovery・MCPをすべて拒否すること、maintenanceでは従来どおりhealthとアイコンを返すことを確認する。`mcp-oauth.test.ts` は無効時のOAuth・連携管理・discoveryと、発行済み有効tokenによる全named RPCツールの拒否を、DB/KV bindingがない状態で検証する。停止してもgrantを消去しないことも確認する。実Cloudflareの削除・Custom Domainの棚卸し、GitHub変数の変更、本番データ消去はローカル検証に含めない。
+
 RFC 7009失効は新access/合成した旧refresh両方でD1先行を確認し、別client・不正tokenでD1が変わらないこと、D1障害時の503、KV削除障害後や切替前から進行中の旧refresh発行後もlist/add/update/completeと以後のrefreshが拒否されることを検証する。旧設定のSDKは既存テスト内にのみ置き、本番入口を追加・変更しない。障害注入はテストfixtureに限定する。`check-oauth-provider-patch.mjs` はbuildと一括検証で依存versionとpatch登録を確認する。上流更新時の確認範囲は [mcp-oauth-provider-patch.md](mcp-oauth-provider-patch.md) を参照する。
 
 実ChatGPT/Codex接続では先に公開先とOAuth権限の承認を得る。読み取り、承認済みテスト項目の追加、同じ項目だけの完了、解除後の拒否を順に確認し、サーバーのHTTP/認可失敗とクライアントプランの制約を分けて記録する。
