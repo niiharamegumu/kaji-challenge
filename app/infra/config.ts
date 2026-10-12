@@ -76,15 +76,18 @@ export function deploymentResources(input: unknown) {
     mcp: settings.mcpOrigin
       ? {
           oauthKv: { title: `kaji-${settings.stage}-mcp-oauth` },
-          worker: {
-            main: "dist/mcp/index.js",
-            bundle: false,
-            compatibility: { date: "2026-09-14", flags: ["nodejs_compat"] },
-            domain: new URL(settings.mcpOrigin).hostname,
-            workersDev: false,
-            crons: [],
-            observability: { enabled: true, headSamplingRate: 1 },
-          },
+          worker:
+            settings.mcpEnabled === "true"
+              ? {
+                  main: "dist/mcp/index.js",
+                  bundle: false,
+                  compatibility: { date: "2026-09-14", flags: ["nodejs_compat"] },
+                  domain: new URL(settings.mcpOrigin).hostname,
+                  workersDev: false,
+                  crons: [],
+                  observability: { enabled: true, headSamplingRate: 1 },
+                }
+              : undefined,
         }
       : undefined,
   };
