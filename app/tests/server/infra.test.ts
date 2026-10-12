@@ -59,13 +59,17 @@ describe("Alchemy deployment configuration", () => {
     expect(result.settings.mcpOrigin).toBe("");
     expect(result.mcp).toBeUndefined();
   });
-  it("keeps provisioned MCP resources when its runtime gate is disabled", () => {
+  it("removes only the MCP Worker when disabled and restores its configuration when enabled", () => {
     const origin = { ...config, mcpOrigin: "https://mcp.example.com" };
     const disabled = deploymentResources({ ...origin, mcpEnabled: "false" });
     const enabled = deploymentResources({ ...origin, mcpEnabled: "true" });
-    expect(disabled.mcp).toEqual(enabled.mcp);
     expect(disabled.mcp).toEqual({
       oauthKv: { title: "kaji-production-mcp-oauth" },
+      worker: undefined,
+    });
+    expect(deploymentResources(origin).mcp).toEqual(disabled.mcp);
+    expect(enabled.mcp).toEqual({
+      oauthKv: disabled.mcp?.oauthKv,
       worker: {
         main: "dist/mcp/index.js",
         bundle: false,
@@ -78,6 +82,14 @@ describe("Alchemy deployment configuration", () => {
     });
     expect(disabled.database).toEqual(deploymentResources(config).database);
     expect(disabled.worker).toEqual(deploymentResources(config).worker);
+    expect(enabled.database).toEqual(disabled.database);
+    expect(enabled.worker).toEqual(disabled.worker);
+    expect(deploymentResources({ ...disabled.settings, mcpEnabled: "true" }).mcp).toEqual(
+      enabled.mcp,
+    );
+    expect(deploymentResources({ ...enabled.settings, maintenance: "true" }).mcp).toEqual(
+      enabled.mcp,
+    );
   });
   it("normalizes a valid MCP origin before binding it to either Worker", () => {
     const result = deploymentResources({
@@ -86,7 +98,7 @@ describe("Alchemy deployment configuration", () => {
       mcpOrigin: "https://mcp.example.com/",
     });
     expect(result.settings.mcpOrigin).toBe("https://mcp.example.com");
-    expect(result.mcp?.worker.domain).toBe("mcp.example.com");
+    expect(result.mcp?.worker?.domain).toBe("mcp.example.com");
   });
   it("binds local OAuth storage to the application and only its named RPC to MCP", () => {
     const application = unstable_readConfig({

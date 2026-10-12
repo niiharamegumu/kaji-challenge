@@ -51,7 +51,7 @@ export default Alchemy.Stack(
         VAPID_SUBJECT: yield* Config.String("VAPID_SUBJECT"),
       },
     });
-    if (resources.mcp) {
+    if (resources.mcp?.worker) {
       const mcp = yield* Cloudflare.Worker("Mcp", {
         ...resources.mcp.worker,
         env: {

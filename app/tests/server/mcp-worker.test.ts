@@ -88,7 +88,7 @@ describe("MCP HTTP authentication boundary", () => {
     async (method) => {
       const response = await worker.fetch(
         new Request(`${mcpOrigin}/icons/kajichalle-192.png`, { method }),
-        { MCP_ORIGIN: mcpOrigin } as McpWorkerBindings,
+        { MCP_ENABLED: "true", MCP_ORIGIN: mcpOrigin } as McpWorkerBindings,
         context(),
       );
       expect(response.status).toBe(200);
@@ -206,18 +206,47 @@ describe("MCP HTTP authentication boundary", () => {
     expect(validateToken).not.toHaveBeenCalled();
   });
 
-  it.each([{ MCP_ENABLED: "false" }, { MAINTENANCE_MODE: "true" }])(
-    "closes the disabled or maintenance gate: %j",
-    async (settings) => {
-      expect(
-        (await worker.fetch(request("tools/list"), { ...env(), ...settings }, context())).status,
-      ).toBe(503);
+  it.each(["false", undefined, "invalid"])(
+    "closes every public MCP route without accessing bindings when MCP_ENABLED is %s",
+    async (enabled) => {
+      for (const input of [
+        request("tools/list"),
+        new Request(resource, { method: "OPTIONS" }),
+        new Request(`${mcpOrigin}/.well-known/oauth-protected-resource/mcp`),
+        new Request(`${mcpOrigin}/.well-known/oauth-protected-resource`),
+        ...["GET", "HEAD"].flatMap((method) => [
+          new Request(`${mcpOrigin}/icons/kajichalle-192.png`, { method }),
+          new Request(`${mcpOrigin}/health`, { method }),
+        ]),
+      ]) {
+        const response = await worker.fetch(
+          input,
+          { MCP_ENABLED: enabled } as McpWorkerBindings,
+          context(),
+        );
+        expect(response.status).toBe(404);
+        expect(response.headers.get("Cache-Control")).toBe("no-store");
+        expect(response.headers.has("WWW-Authenticate")).toBe(false);
+        expect(response.headers.has("Access-Control-Allow-Origin")).toBe(false);
+      }
       expect(validateToken).not.toHaveBeenCalled();
+      expect(invoke).not.toHaveBeenCalled();
     },
   );
 
+  it("blocks MCP during maintenance while keeping health and the fixed icon available", async () => {
+    const bindings = { ...env(), MAINTENANCE_MODE: "true" };
+    expect((await worker.fetch(request("tools/list"), bindings, context())).status).toBe(503);
+    for (const path of ["/health", "/icons/kajichalle-192.png"]) {
+      expect(
+        (await worker.fetch(new Request(`${mcpOrigin}${path}`), bindings, context())).status,
+      ).toBe(200);
+    }
+    expect(validateToken).not.toHaveBeenCalled();
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
   it.each([
-    { MCP_ENABLED: undefined },
     { MCP_ORIGIN: undefined },
     { APP_ORIGIN: "http://app.example.com" },
     { APP_ORIGIN: "https://private-config@example.com" },

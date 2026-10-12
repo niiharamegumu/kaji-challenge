@@ -92,10 +92,11 @@ jobs:
         env:
           APP_ORIGIN: ${{ vars.APP_ORIGIN }}
           APP_RELEASE: ${{ github.sha }}
+          MCP_ENABLED: ${{ vars.MCP_ENABLED || 'false' }}
           MCP_ORIGIN: ${{ vars.MCP_ORIGIN || '' }}
         run: |
           bun scripts/check-deployment.ts
-          if [ -n "$MCP_ORIGIN" ]; then
+          if [ "$MCP_ENABLED" = "true" ] && [ -n "$MCP_ORIGIN" ]; then
             APP_ORIGIN="$MCP_ORIGIN" bun scripts/check-deployment.ts
           fi
           echo "Production health verified for release $GITHUB_SHA." >> "$GITHUB_STEP_SUMMARY"
