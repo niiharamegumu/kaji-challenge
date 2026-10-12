@@ -237,6 +237,8 @@ function configuredOrigin(value: string) {
 
 export default {
   async fetch(request: Request, env: McpWorkerBindings, ctx: ExecutionContext): Promise<Response> {
+    if (env.MCP_ENABLED !== "true")
+      return new Response("Not found", { status: 404, headers: { "Cache-Control": "no-store" } });
     const url = new URL(request.url);
     if (url.pathname === "/health" && (request.method === "GET" || request.method === "HEAD")) {
       return new Response(
@@ -269,7 +271,7 @@ export default {
         },
       });
     }
-    if (env.MCP_ENABLED !== "true" || env.MAINTENANCE_MODE === "true")
+    if (env.MAINTENANCE_MODE === "true")
       return new Response("Service unavailable", {
         status: 503,
         headers: { "Cache-Control": "no-store" },
