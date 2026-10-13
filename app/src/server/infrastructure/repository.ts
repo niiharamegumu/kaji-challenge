@@ -40,6 +40,11 @@ function required<T>(rows: T[], operation: string): T {
   if (!rows[0]) throw new AppError(404, "not_found", `${operation}: not found`);
   return rows[0];
 }
+type AccessState = { authenticated: number; member: number };
+function requireAccess(row: AccessState | undefined): asserts row is AccessState {
+  if (!row?.authenticated) throw new AppError(401, "unauthorized", "認証が失効しています。");
+  if (!row.member) throw new AppError(403, "forbidden", "所属が変わりました。再取得してください。");
+}
 const emptyText = (column: SQLWrapper) => sql<string>`COALESCE(${column}, '')`;
 const iso = (column: SQLWrapper) =>
   sql<string>`${column}`.mapWith((value: string) => new Date(value).toISOString());
@@ -188,12 +193,32 @@ export class D1Repository implements P.Repository {
       throw new AppError(403, "forbidden", "System operation required");
   }
   async assertAccess(): Promise<void> {
-    const row = await this.db.get<{ authenticated: number; member: number }>(sql`
+    const row = await this.db.get<AccessState>(sql`
       SELECT ${this.authentication()} AS authenticated, ${this.membershipAccess()} AS member
     `);
-    if (!row?.authenticated) throw new AppError(401, "unauthorized", "認証が失効しています。");
-    if (!row.member)
-      throw new AppError(403, "forbidden", "所属が変わりました。再取得してください。");
+    requireAccess(row);
+  }
+  async ResolveMembershipByUserID(userID: string): Promise<P.ListMembershipsByUserIDRow> {
+    const actor = this.authorization?.userId ?? this.member?.userId;
+    const row = await this.db.get<
+      AccessState & { TeamID: string | null; Role: string | null; TeamName: string | null }
+    >(sql`
+      SELECT access.authenticated, access.member,
+        teams.id AS TeamID, membership.role AS Role, teams.name AS TeamName
+      FROM (
+        SELECT ${this.authentication()} AS authenticated, ${this.membershipAccess()} AS member
+      ) AS access
+      LEFT JOIN team_members AS membership ON access.authenticated AND access.member
+        AND membership.user_id=${userID}
+        AND ${actor === undefined ? sql`1` : sql`membership.user_id=${actor}`}
+      LEFT JOIN teams ON teams.id=membership.team_id
+    `);
+    // Preserve an error row even when authentication or a fixed membership is gone.
+    // The guarded join exposes no membership fields unless both checks pass.
+    requireAccess(row);
+    if (row.TeamID === null || row.Role === null || row.TeamName === null)
+      throw new AppError(403, "forbidden", "user has no team membership");
+    return { TeamID: row.TeamID, Role: row.Role, TeamName: row.TeamName };
   }
   async GetTaskCompletionWeeklyEntryCount(
     arg: P.GetTaskCompletionWeeklyEntryCountParams,
