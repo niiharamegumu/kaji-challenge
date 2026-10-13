@@ -44,8 +44,7 @@ export async function executeOperation(
   input: Operation,
   context: OperationContext,
 ): Promise<{ data: unknown; changedTeams: string[] }> {
-  await repository.assertAccess();
-  let member = await membership(repository, context.userId);
+  let member = await repository.ResolveMembershipByUserID(context.userId);
 
   let didChange = true;
   const teamId = member.TeamID;

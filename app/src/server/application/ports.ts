@@ -534,6 +534,7 @@ export interface Repository {
   forSession(userId: string, sessionId: string): Repository;
   forMember(teamId: string, userId: string): Repository;
   assertAccess(): Promise<void>;
+  ResolveMembershipByUserID(userID: string): Promise<ListMembershipsByUserIDRow>;
   ProvisionUser(userId: string, teamId: string, name: string, now: string): Promise<void>;
   MoveMember(arg: MoveMemberParams): Promise<void>;
   ReplaceInvite(arg: CreateInviteCodeParams, userId: string): Promise<void>;

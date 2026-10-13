@@ -382,55 +382,49 @@ describe("App", () => {
     expect(mockPrefetchHomeData).not.toHaveBeenCalled();
   });
 
-  it("warms route chunks and home data after session restore outside the home route", async () => {
-    const originalRequestIdleCallback = globalThis.requestIdleCallback;
-    const originalCancelIdleCallback = globalThis.cancelIdleCallback;
-    let idleCallback: IdleRequestCallback | undefined;
+  it.each(["/", "/summary"])(
+    "does not warm unrelated routes after session restore on %s",
+    async (path) => {
+      const originalRequestIdleCallback = globalThis.requestIdleCallback;
+      const originalCancelIdleCallback = globalThis.cancelIdleCallback;
+      let idleCallback: IdleRequestCallback | undefined;
 
-    globalThis.requestIdleCallback = vi.fn((callback: IdleRequestCallback) => {
-      idleCallback = callback;
-      return 1;
-    });
-    globalThis.cancelIdleCallback = vi.fn();
-
-    try {
-      window.history.pushState({}, "", "/summary");
-      mockGetMe.mockResolvedValue({
-        data: { user: { id: "u1", displayName: "Owner" }, memberships: [] },
+      globalThis.requestIdleCallback = vi.fn((callback: IdleRequestCallback) => {
+        idleCallback = callback;
+        return 1;
       });
+      globalThis.cancelIdleCallback = vi.fn();
 
-      render(<App />);
+      try {
+        window.history.pushState({}, "", path);
+        mockGetMe.mockResolvedValue({
+          data: { user: { id: "u1", displayName: "Owner" }, memberships: [] },
+        });
 
-      await waitFor(() => {
-        expect(window.location.pathname).toBe("/summary");
-      });
+        render(<App />);
 
-      expect(mockPrefetchHomeData).not.toHaveBeenCalled();
-      expect(mockPreloadTasksPageChunk).not.toHaveBeenCalled();
+        expect(await screen.findByTestId("floating-nav-primary")).toBeInTheDocument();
+        expect(window.location.pathname).toBe(path);
 
-      await waitFor(() => {
-        expect(globalThis.requestIdleCallback).toHaveBeenCalledTimes(1);
-        expect(idleCallback).toBeTypeOf("function");
-      });
+        idleCallback?.({
+          didTimeout: false,
+          timeRemaining: () => 50,
+        });
 
-      idleCallback?.({
-        didTimeout: false,
-        timeRemaining: () => 50,
-      });
-
-      await waitFor(() => {
-        expect(mockPrefetchHomeData).toHaveBeenCalledTimes(1);
-        expect(mockPreloadTasksPageChunk).toHaveBeenCalledTimes(1);
-        expect(mockPreloadSummaryPageChunk).toHaveBeenCalledTimes(1);
-        expect(mockPreloadPenaltiesPageChunk).toHaveBeenCalledTimes(1);
-        expect(mockPreloadSettingsPageChunk).toHaveBeenCalledTimes(1);
-        expect(mockPreloadTodoPageChunk).toHaveBeenCalledTimes(1);
-      });
-    } finally {
-      globalThis.requestIdleCallback = originalRequestIdleCallback;
-      globalThis.cancelIdleCallback = originalCancelIdleCallback;
-    }
-  });
+        expect(mockPrefetchHomeData).toHaveBeenCalledTimes(path === "/" ? 1 : 0);
+        expect(mockPreloadTasksPageChunk).not.toHaveBeenCalled();
+        expect(mockPreloadSummaryPageChunk).not.toHaveBeenCalled();
+        expect(mockPreloadPenaltiesPageChunk).not.toHaveBeenCalled();
+        expect(mockPreloadSettingsPageChunk).not.toHaveBeenCalled();
+        expect(mockPreloadReminderCalendarPageChunk).not.toHaveBeenCalled();
+        expect(mockPreloadTodoPageChunk).not.toHaveBeenCalled();
+        expect(globalThis.requestIdleCallback).not.toHaveBeenCalled();
+      } finally {
+        globalThis.requestIdleCallback = originalRequestIdleCallback;
+        globalThis.cancelIdleCallback = originalCancelIdleCallback;
+      }
+    },
+  );
 
   it("keeps current URL on reload when session is valid", async () => {
     window.history.pushState({}, "", "/summary?month=2026-02");
@@ -508,5 +502,25 @@ describe("App", () => {
     expect(mockPreloadReminderCalendarPageChunk).toHaveBeenCalledTimes(1);
     expect(mockPreloadSummaryPageChunk).toHaveBeenCalledTimes(1);
     expect(mockPreloadTodoPageChunk).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries failed chunk preloads on the next intent and still navigates", async () => {
+    mockGetMe.mockResolvedValue({
+      data: { user: { id: "u1", displayName: "Owner" }, memberships: [] },
+    });
+    mockPreloadTodoPageChunk.mockRejectedValueOnce(new Error("offline"));
+    render(<App />);
+
+    const primaryNav = within(await screen.findByTestId("floating-nav-primary"));
+    const todoButton = primaryNav.getByRole("button", { name: "ToDo" });
+    fireEvent.touchStart(todoButton);
+    await waitFor(() => expect(mockPreloadTodoPageChunk).toHaveBeenCalledTimes(1));
+
+    fireEvent.pointerEnter(todoButton, { pointerType: "mouse" });
+    expect(mockPreloadTodoPageChunk).toHaveBeenCalledTimes(2);
+    fireEvent.click(todoButton);
+
+    expect(await screen.findByText("todo page")).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/todos");
   });
 });

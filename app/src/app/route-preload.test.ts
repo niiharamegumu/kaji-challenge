@@ -4,11 +4,12 @@ import { prefetchRouteData } from "./route-preload";
 import { todoItemsQueryOptions } from "../shared/query/todoQueries";
 import { queryKeys } from "../shared/query/queryKeys";
 
-const api = vi.hoisted(() => ({ items: vi.fn(), categories: vi.fn() }));
+const api = vi.hoisted(() => ({ items: vi.fn(), categories: vi.fn(), tasks: vi.fn() }));
 vi.mock("../lib/api/operations", async (original) => ({
   ...(await original<object>()),
   listTodoItems: api.items,
   listTodoCategories: api.categories,
+  listTasks: api.tasks,
 }));
 afterEach(() => vi.resetAllMocks());
 const makeClient = () =>
@@ -68,3 +69,32 @@ it("passes abort signals so canceled team requests cannot populate prefetched ca
   expect(client.getQueryData(queryKeys.todoItems)).toBeUndefined();
   client.clear();
 });
+
+it.each(["logout", "team change"])(
+  "discards intent data fetching after %s while its module is loading",
+  async (change) => {
+    const client = makeClient();
+    const me = { user: { id: "user-1" }, memberships: [{ teamId: "team-1" }] };
+    client.setQueryData(queryKeys.me, me);
+    api.tasks.mockResolvedValue({ data: { items: [] } });
+
+    const loading = prefetchRouteData(client, "/tasks");
+    // import() は必ず非同期なので、取得開始前の所属変更を待ち時間なしで再現できる。
+    expect(api.tasks).not.toHaveBeenCalled();
+    if (change === "logout") {
+      client.clear();
+    } else {
+      client.setQueryData(queryKeys.me, { ...me, memberships: [{ teamId: "team-2" }] });
+    }
+    await loading;
+
+    expect(api.tasks).not.toHaveBeenCalled();
+    expect(client.getQueryData(queryKeys.tasks)).toBeUndefined();
+
+    if (change === "logout") client.setQueryData(queryKeys.me, me);
+    await prefetchRouteData(client, "/tasks");
+    expect(api.tasks).toHaveBeenCalledTimes(1);
+    expect(client.getQueryData(queryKeys.tasks)).toEqual([]);
+    client.clear();
+  },
+);
