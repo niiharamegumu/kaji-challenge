@@ -733,9 +733,9 @@ describe("MCP application authorization and ToDos", () => {
       const guarded = repository(own.principal, "todos:write");
       const scoped = guarded.forMember(own.teamId, own.principal.userId);
       const memberBoundary = vi.spyOn(guarded, "forMember").mockReturnValueOnce(scoped);
-      const read = scoped.ListMembershipsByUserID.bind(scoped);
+      const read = scoped.ResolveMembershipByUserID.bind(scoped);
       const boundary = vi
-        .spyOn(scoped, "ListMembershipsByUserID")
+        .spyOn(scoped, "ResolveMembershipByUserID")
         .mockImplementationOnce(async (id) => {
           await connection.query(sql`UPDATE team_members SET team_id=${other.teamId},role='member'
           WHERE user_id=${own.principal.userId}`);
