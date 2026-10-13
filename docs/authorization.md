@@ -2,7 +2,7 @@
 
 ## 入口
 
-通常の全41 operationは `operations.functions.ts` の共通入口を通る。Zod入力検証、Origin検証、Better Auth認証の後、検証済みuserId/sessionIdだけで `forSession` を作る。ApplicationがDBから現在の所属を解決し、`forMember` で固定する。userId/teamIdをHTTPヘッダー、params、bodyから認可情報として採用しない。
+通常の全41 operationは `operations.functions.ts` の共通入口を通る。Zod入力検証、Origin検証、Better Auth認証の後、検証済みuserId/sessionIdだけで `forSession` を作る。Applicationは `ResolveMembershipByUserID` の1つのSQLで処理前の認証・固定済み所属の検査と現在の所属取得を行い、`forMember` で固定する。所属が返らない場合も認証失効と未所属を区別し、401/403で拒否する。userId/teamIdをHTTPヘッダー、params、bodyから認可情報として採用しない。
 
 業務SQLは現在所属・認証と対象行のteamIdを同じ文で照合する。通常セッションは本人・セッションID・DB上の有効期限を確認する。MCPは独立した連携の所有者・grant・scope・期限・失効を確認し、Cookieセッションとは結び付けない。検証済みprincipalのaccess token期限もRepositoryへ渡し、連携期限とともにSQLの実行時時計で確認する。1ユーザー1所属、owner/member以外のrole禁止は既存DB制約に従う。
 
@@ -24,7 +24,7 @@ Applicationは応答前にも認証と期待する所属を再確認し、所属
 
 | operation | RepositoryのSQL | 追加・既存テスト |
 | --- | --- | --- |
-| getMe、patchMeNickname、patchMeColor | ListMembershipsByUserID、GetUserByID、UpdateUserNickname、UpdateUserColorHex。本人口座のみ。メンバー表示は別のチーム一覧を使う | team-access：同チームの別本人も拒否。database：プロフィール正常系 |
+| getMe、patchMeNickname、patchMeColor | ResolveMembershipByUserID、GetUserByID、UpdateUserNickname、UpdateUserColorHex。本人口座のみ。メンバー表示は別のチーム一覧を使う | operation-access：所属解決の認可・照会数・応答前拒否。team-access：同チームの別本人も拒否。database：プロフィール正常系 |
 | getTeamCurrentMembers、patchTeamCurrent | ListTeamMembersByTeamID、UpdateTeamName | team-accessのread/update、database |
 | getTeamCurrentInvite、postTeamInvite | GetLatestInviteCodeByTeamID、ReplaceInvite。DELETE/INSERT双方で本人・team・ownerを確認 | team-access：他チーム、SQL前のowner喪失、失効時の旧招待保持 |
 | postTeamJoin、postTeamLeave | GetInviteCode、GetUserByID、MoveMember、ListMembershipsByUserID。本人・移動元所属・招待先/期限をbatchで確認 | team-access：不正/期限切れ/置換済み招待、別本人、空の他チーム、失敗時の副作用なし、正常参加/脱退、owner引継ぎ、rollback。d1-atomic：並行移動 |
