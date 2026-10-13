@@ -46,30 +46,15 @@ const FloatingNav = lazy(async () => {
   return { default: module.FloatingNav };
 });
 
-const idlePreloadDelayMs = 1200;
-
-function scheduleIdleWork(work: () => void) {
-  if (typeof globalThis === "undefined") {
-    return () => {};
-  }
-
-  if (
-    typeof globalThis.requestIdleCallback === "function" &&
-    typeof globalThis.cancelIdleCallback === "function"
-  ) {
-    const callbackId = globalThis.requestIdleCallback(() => {
-      work();
-    });
-    return () => {
-      if (typeof globalThis.cancelIdleCallback === "function") {
-        globalThis.cancelIdleCallback(callbackId);
-      }
-    };
-  }
-
-  const timeoutId = globalThis.setTimeout(work, idlePreloadDelayMs);
-  return () => globalThis.clearTimeout(timeoutId);
-}
+const routePreloaders: Record<string, () => Promise<unknown>> = {
+  "/tasks": preloadTasksPageChunk,
+  "/summary": preloadSummaryPageChunk,
+  "/penalties": preloadPenaltiesPageChunk,
+  "/settings": preloadSettingsPageChunk,
+  "/calendar": preloadReminderCalendarPageChunk,
+  "/todo-categories": preloadTodoCategoriesPageChunk,
+  "/todos": preloadTodoPageChunk,
+};
 
 export function RootLayout() {
   const { isInitialBootPending, markAuthResolved } = useBootFlow();
@@ -160,11 +145,10 @@ export function RootLayout() {
     if (flash != null) {
       setStatus(flash.message);
       if (flash.kind === "login_success") {
-        prefetchHomeDataOnce();
         refetchAfterLogin();
       }
     }
-  }, [prefetchHomeDataOnce, refetchAfterLogin, setStatus]);
+  }, [refetchAfterLogin, setStatus]);
 
   useEffect(() => {
     if (!isAuthChecking) {
@@ -184,54 +168,14 @@ export function RootLayout() {
     }
   }, [location.pathname, meQuery.isSuccess, prefetchHomeDataOnce]);
 
-  useEffect(() => {
-    if (!isAuthenticated || isInitialBootPending) {
-      return;
-    }
-
-    return scheduleIdleWork(() => {
-      void preloadTasksPageChunk();
-      void preloadSummaryPageChunk();
-      void preloadPenaltiesPageChunk();
-      void preloadSettingsPageChunk();
-      void preloadReminderCalendarPageChunk();
-      void preloadTodoPageChunk();
-
-      if (location.pathname !== "/") {
-        prefetchHomeDataOnce();
-      }
-    });
-  }, [isAuthenticated, isInitialBootPending, location.pathname, prefetchHomeDataOnce]);
-
   const handleRouteIntent = useCallback(
     (path: string) => {
       if (!isAuthenticated) return;
-      void prefetchRouteData(queryClient, path);
-      switch (path) {
-        case "/tasks":
-          void preloadTasksPageChunk();
-          break;
-        case "/summary":
-          void preloadSummaryPageChunk();
-          break;
-        case "/penalties":
-          void preloadPenaltiesPageChunk();
-          break;
-        case "/settings":
-          void preloadSettingsPageChunk();
-          break;
-        case "/calendar":
-          void preloadReminderCalendarPageChunk();
-          break;
-        case "/todo-categories":
-          void preloadTodoCategoriesPageChunk();
-          break;
-        case "/todos":
-          void preloadTodoPageChunk();
-          break;
-        default:
-          break;
-      }
+      void Promise.all([prefetchRouteData(queryClient, path), routePreloaders[path]?.()]).catch(
+        () => {
+          // 先読み失敗は遷移を妨げず、次の操作で再試行する。
+        },
+      );
     },
     [isAuthenticated, queryClient],
   );
