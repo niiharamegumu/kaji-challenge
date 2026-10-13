@@ -70,6 +70,8 @@ API応答の実行時検証は共通clientの出力schemaで行う。feature hoo
 
 `app/route-preload.ts` はナビゲーションのタッチ・ホバー・フォーカスで画面コードと並列にデータを先読みする。画面と先読みは同じquery optionsを使い、30秒の鮮度判定と実行中の通信をQueryClientで共有する。ToDo一覧・カテゴリーは `shared/query/todoQueries.ts` に集約する。先読みは `prefetchQuery` を使い、失敗でナビゲーションを止めず再試行できる。読み取りのAbortSignalは共通clientへ渡し、所属変更後の遅い応答でキャッシュを再作成しない。
 
+認証後のidle時間に全画面コードを読み込む処理や、ホーム以外でのホームデータ先読みは行わない。初期取得は現在画面に必要なものに限り、画面固有の先読み用queryもナビゲーション意図が発生したときに読み込む。WebSocketの初回接続・再接続時の同期は、購読成立前の変更を拾うため維持する。
+
 ## D1の更新
 
 認証・業務・Pushは `infrastructure/database.ts` で作るDrizzle D1 handleを使用する。業務テーブルは `schema.ts`、認証は `auth-schema.ts`。通常のCRUDはquery builder、集計・条件付きINSERTにはパラメーター化した `sql` を使用する。
