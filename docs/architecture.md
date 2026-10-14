@@ -54,7 +54,7 @@ feature adapter → 共通client → Server Function → Application → Reposit
 
 ### 操作のフィードバック
 
-ToDo完了は確認モーダルを表示せず、取消猶予中は完了待ちとして一覧に残し、各項目内のボタンから取り消せる。猶予は初期3.0秒で、設定画面の「このブラウザーの設定」から0.1〜5.0秒を0.1秒刻みで変更できる。`shared/state/todoCompletionDelay` のJotai atomが設定を共用し、version付きlocalStorageキーに整数ミリ秒だけを保存する。本人・チームのDB設定ではなく、同じブラウザープロファイルの設定として扱う。初期renderは3000msで一致させ、mount後に保存値を読む。数値以外・範囲外・100msの倍数以外は丸めず3000msへ戻す。保存に失敗しても現在の設定は適用し、設定画面で永続化失敗を知らせる。別タブの設定変更・削除はstorageイベントで同期する。
+ToDo完了は確認モーダルを表示せず、取消猶予中は完了待ちとして一覧に残し、各項目内のボタンから取り消せる。猶予は初期3秒で、設定画面の「このブラウザーの設定」からネイティブのselectで1秒・2秒・3秒・4秒・5秒を選べる。`shared/state/todoCompletionDelay` のJotai atomが設定を共用し、既存のversion付きlocalStorageキーに1000ms単位の整数ミリ秒を保存する。本人・チームのDB設定ではなく、同じブラウザープロファイルの設定として扱う。初期renderは3000msで一致させ、mount後に保存値を読む。旧スライダーの有効な保存値（100〜5000msの整数かつ100msの倍数）は最寄りの整数秒へ四捨五入し、最小1秒として読み込む。読込時には保存値を書き換えず、次の選択変更で新しい値を保存する。数値以外・旧範囲外・100msの倍数以外は丸めず3000msへ戻す。保存に失敗しても現在の設定は適用し、設定画面で永続化失敗を知らせる。別タブの設定変更・削除はstorageイベントで同期し、旧設定も同様に正規化する。
 
 ボタン内には残り時間を秒単位で切り上げ（初期値では3→2→1）て示す円形プログレスを表示し、画面下部に取り消しバナーは表示しない。認証済みRootLayout内の `shared/state/DelayedActionProvider` が項目ごとのタイマーを管理し、予約時にJotai storeの現在値を読み取って猶予と期限を固定する。設定の購読による再描画が遅れても直前の設定を使う。設定変更は次の予約から適用し、進行中の期限や円の長さは変えない。カテゴリーや画面を切り替えても待機を継続し、再表示した項目は元の期限から残り時間を計算する。ユーザー/チーム変更・ログアウトでproviderを破棄すると未実行の操作を取り消す。待機中はAPIや保存済みキャッシュを変更せず、猶予後に既存の削除mutationを1回実行する。ブラウザーの再読み込みや終了をまたいで未確定操作を保存・再送しない。
 
@@ -104,7 +104,7 @@ Better Authのnickname/colorHexは追加項目（input:false）としてアプ�
 
 `app/alchemy.run.ts` と `app/infra/` がWorker・D1・TeamRealtimeのDO binding・ドメイン・Secrets・Cronを管理する。Alchemyの公開DurableObject APIを使い、既存Workerからクラスをexportする。ローカルwrangler.jsoncには同じbindingと、公式の`exports`によるSQLite DOクラス宣言を持つ（D1のSQL migrationとは別）。SQLite DOなのでWorkers Freeでも利用できる（利用枠内）。配備時のSQL適用はAlchemyが管理する。ローカルはWranglerで同じSQLを適用する。環境はlocalとproductionだけとし、WranglerのローカルDBと本番D1を共有しない。本番のIaCはproduction以外のstageを拒否する。
 
-本番配備は `.github/workflows/deploy-production.yml` がmain更新時にproduction Environmentの設定でplan/deployを実行する。CIはPR時に実行し、CDでは再実行しない。mainの保護ルールでPRと `cloudflare-quality` の成功を必須にする。SecretsはCIへ渡さず、配備stepに限定する。配備を直列化し、公開先のhealthとcommit SHAを検証する。
+本番配備は `.github/workflows/deploy-production.yml` がmain更新時にproduction Environmentの設定でplan/deployを実行する。CIはPR時に実行し、CDでは再実行しない。mainの保護ルールでPRと `cloudflare-quality` の成功を必須にする。SecretsはCIへ渡さず、配備stepに限定する。配備の直列化を維持する。
 
 ### ビルドと配備の分担
 
@@ -112,7 +112,7 @@ TanStack Start/Cloudflare公式の `@cloudflare/vite-plugin` で `vp dev` / `vp 
 
 Alchemyは `Cloudflare.Worker("Application", { bundle: false, ... })` でbuild済み生成物を配備する。`Website.Vite` とAlchemy独自Vite pluginは使用しない。stack名・Application/Databaseの論理ID・本番bindingは維持する。ローカルはwrangler.jsonc、本番のリソースと実行時設定はalchemy.run.ts/infra/config.tsが管理する。build出力のローカル用DB IDやvarsを本番へコピーしない。
 
-CDは本番Secretsを渡さずbuildし、その後のstepでAlchemy bootstrap → plan → deploy → health確認を実行する。CIの再実行はしない。build出力の入口・assetsディレクトリを変えた場合はIaCも更新し、test:localで一致を検証する。
+CDは本番Secretsを渡さずbuildし、その後のstepでAlchemy bootstrap → plan → deployを実行する。CIの再実行はしない。build出力の入口・assetsディレクトリを変えた場合はIaCも更新し、test:localで一致を検証する。
 
 公式資料: [CloudflareのTanStack Start構成](https://developers.cloudflare.com/workers/framework-guides/web-apps/tanstack-start/)、[Alchemyのビルド済みWorker配備](https://alchemy.run/providers/cloudflare/workers/worker/#configuration)。
 
