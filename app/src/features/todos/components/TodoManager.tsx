@@ -145,7 +145,7 @@ function SortableTodoItem({
   isEditing,
   isSaving,
   isReordering,
-  completionDeadline,
+  pendingCompletion,
   editState,
   onStartEdit,
   onChangeEditState,
@@ -158,7 +158,7 @@ function SortableTodoItem({
   isEditing: boolean;
   isSaving: boolean;
   isReordering: boolean;
-  completionDeadline?: number;
+  pendingCompletion?: { deadline: number; durationMs: number };
   editState: TodoItemFormState;
   onStartEdit: (item: TodoItem) => void;
   onChangeEditState: (updater: (prev: TodoItemFormState) => TodoItemFormState) => void;
@@ -166,7 +166,7 @@ function SortableTodoItem({
   onSaveEdit: (itemId: string) => void;
   onComplete: () => void;
 }) {
-  const isCompleting = completionDeadline !== undefined;
+  const isCompleting = pendingCompletion !== undefined;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id,
     disabled: isEditing || isReordering || isCompleting,
@@ -262,8 +262,12 @@ function SortableTodoItem({
                 aria-label={isCompleting ? "取り消す" : "完了にする"}
                 onPointerDown={(event) => event.stopPropagation()}
               >
-                {completionDeadline !== undefined ? (
-                  <ActionCountdown key={completionDeadline} deadline={completionDeadline} />
+                {pendingCompletion !== undefined ? (
+                  <ActionCountdown
+                    key={pendingCompletion.deadline}
+                    deadline={pendingCompletion.deadline}
+                    durationMs={pendingCompletion.durationMs}
+                  />
                 ) : (
                   <CircleCheck size={12} aria-hidden="true" />
                 )}
@@ -363,7 +367,7 @@ export function TodoItemsSection({
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editState, setEditState] = useTodoItemFormState(categoriesQuery.data);
   const { pendingActions, schedule, undo } = useDelayedActions();
-  const completionDeadlines = new Map(pendingActions.map((item) => [item.id, item.deadline]));
+  const pendingCompletions = new Map(pendingActions.map((item) => [item.id, item]));
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 8 },
@@ -476,7 +480,7 @@ export function TodoItemsSection({
                       isEditing={editingItemId === item.id}
                       isSaving={isUpdating}
                       isReordering={isReordering}
-                      completionDeadline={completionDeadlines.get(`todo:${item.id}`)}
+                      pendingCompletion={pendingCompletions.get(`todo:${item.id}`)}
                       editState={editState}
                       onStartEdit={startEdit}
                       onChangeEditState={setEditState}
@@ -486,7 +490,7 @@ export function TodoItemsSection({
                       }}
                       onComplete={() => {
                         const actionId = `todo:${item.id}`;
-                        if (completionDeadlines.has(actionId)) undo(actionId);
+                        if (pendingCompletions.has(actionId)) undo(actionId);
                         else schedule(actionId, () => onDelete(item.id));
                       }}
                     />
