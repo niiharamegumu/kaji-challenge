@@ -17,6 +17,7 @@ import { appQueryClient } from "../../../shared/query/queryClient";
 import { queryKeys } from "../../../shared/query/queryKeys";
 import { TodoPage } from "./TodoPage";
 import { TodoCategoriesPage } from "./TodoCategoriesPage";
+import { TODO_COMPLETION_DELAY_STORAGE_KEY } from "../../../shared/state/todoCompletionDelay";
 
 const renderWithProviders: typeof renderWithAppProviders = (ui, options) => {
   const view = renderWithAppProviders(<DelayedActionProvider>{ui}</DelayedActionProvider>, options);
@@ -62,6 +63,7 @@ vi.mock("../../../lib/api/operations", async () => {
 
 describe("ToDo pages", () => {
   beforeEach(() => {
+    window.localStorage.clear();
     resetTestQueryClient();
     resetApiMocks(apiMocks);
     mockListTodoCategories.mockResolvedValue(resolvedData({ categories: order(null) }));
@@ -100,6 +102,7 @@ describe("ToDo pages", () => {
 
   afterEach(() => {
     cleanup();
+    window.localStorage.clear();
     vi.useRealTimers();
   });
 
@@ -537,20 +540,27 @@ describe("ToDo pages", () => {
     );
   });
 
-  it("restores a ToDo when completion fails after the undo window", async () => {
-    mockListTodoItems.mockResolvedValue(resolvedData({ items: [fixture("milk", "牛乳", null)] }));
-    mockDeleteTodoItem.mockRejectedValueOnce(new Error("offline"));
-    renderPage();
-    const button = await screen.findByRole("button", { name: "完了にする" });
-    vi.useFakeTimers();
-    fireEvent.click(button);
-    await act(async () => vi.advanceTimersByTimeAsync(3_000));
-    vi.useRealTimers();
-    expect(mockDeleteTodoItem).toHaveBeenCalledExactlyOnceWith("milk");
-    expect(await screen.findByText("牛乳", { exact: true })).toBeVisible();
-    expect(screen.getByRole("button", { name: "完了にする" })).toBeEnabled();
-    expect(screen.queryByRole("img", { name: /完了まで/ })).not.toBeInTheDocument();
-  });
+  it.each([100, 3_000, 5_000])(
+    "restores a ToDo when completion fails after %sms",
+    async (duration) => {
+      window.localStorage.setItem(TODO_COMPLETION_DELAY_STORAGE_KEY, String(duration));
+      mockListTodoItems.mockResolvedValue(resolvedData({ items: [fixture("milk", "牛乳", null)] }));
+      mockDeleteTodoItem.mockRejectedValueOnce(new Error("offline"));
+      renderPage();
+      const button = await screen.findByRole("button", { name: "完了にする" });
+      vi.useFakeTimers();
+      fireEvent.click(button);
+      expect(
+        screen.getByRole("img", { name: `完了まで${Math.ceil(duration / 1_000)}秒` }),
+      ).toBeVisible();
+      await act(async () => vi.advanceTimersByTimeAsync(duration));
+      vi.useRealTimers();
+      expect(mockDeleteTodoItem).toHaveBeenCalledExactlyOnceWith("milk");
+      expect(await screen.findByText("牛乳", { exact: true })).toBeVisible();
+      expect(screen.getByRole("button", { name: "完了にする" })).toBeEnabled();
+      expect(screen.queryByRole("img", { name: /完了まで/ })).not.toBeInTheDocument();
+    },
+  );
 
   it("prevents duplicate inline saves and keeps the draft when saving fails", async () => {
     mockListTodoItems.mockResolvedValue(
