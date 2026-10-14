@@ -13,6 +13,7 @@ import {
   TeamNameSection,
 } from "./SettingsSections";
 import { getColorHexError, getNicknameError, getTeamNameError } from "./settingsUtils";
+import { TodoCompletionSettings } from "./TodoCompletionSettings";
 
 type Props = {
   invite: InviteState | null;
@@ -119,8 +120,12 @@ export function SettingsManager({
     <section className="space-y-2 pb-1 md:space-y-4">
       <header className="py-0.5 md:px-6">
         <h2 className="text-lg font-semibold text-stone-900">設定</h2>
-        <p className="mt-2 text-xs text-stone-500">チーム設定とアカウント設定を管理できます。</p>
+        <p className="mt-2 text-xs text-stone-500">
+          チーム・アカウント・ブラウザーの設定を管理できます。
+        </p>
       </header>
+
+      <TodoCompletionSettings />
 
       <article
         className={`rounded-xl px-0 py-2.5 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}

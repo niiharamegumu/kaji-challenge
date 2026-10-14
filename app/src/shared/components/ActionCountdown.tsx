@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
-import { DELAYED_ACTION_MS } from "../state/DelayedActionProvider";
 
 const circumference = 2 * Math.PI * 9;
 
 export function ActionCountdown({
   deadline,
+  durationMs,
   label = "完了まで",
 }: {
   deadline: number;
+  durationMs: number;
   label?: string;
 }) {
   const [remainingMs, setRemainingMs] = useState(() => Math.max(0, deadline - Date.now()));
@@ -20,7 +21,7 @@ export function ActionCountdown({
   }, [deadline]);
 
   const seconds = Math.max(1, Math.ceil(remainingMs / 1_000));
-  const progress = Math.min(1, remainingMs / DELAYED_ACTION_MS);
+  const progress = Math.min(1, remainingMs / durationMs);
 
   return (
     <span

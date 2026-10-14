@@ -12,6 +12,7 @@ const peerToken = crypto.randomUUID(),
   swipeAreaToken = crypto.randomUUID(),
   summaryToken = crypto.randomUUID(),
   bulkDailyToken = crypto.randomUUID(),
+  todoDelayToken = crypto.randomUUID(),
   performanceToken = crypto.randomUUID();
 test.beforeAll(async () => {
   const path = process.env.KAJI_D1_TEST_PATH;
@@ -36,6 +37,7 @@ test.beforeAll(async () => {
       ["スワイプ領域", swipeAreaToken],
       ["サマリー検証", summaryToken],
       ["日間一括検証", bulkDailyToken],
+      ["ToDo猶予検証", todoDelayToken],
       ["キャッシュ検証", performanceToken],
     ]) {
       const id = crypto.randomUUID();
@@ -140,6 +142,93 @@ test("existing identity loads every route and updates todo through Workers", asy
   await page.screenshot({ path: testInfo.outputPath("home.png"), fullPage: true });
   expect(errors).toEqual([]);
 });
+test("persists the browser's ToDo undo delay and uses it on home and ToDo pages", async ({
+  page,
+  context,
+  browser,
+}, testInfo) => {
+  await authenticate(context, todoDelayToken);
+  await page.goto("/settings");
+  const slider = page.getByRole("slider", { name: "ToDo完了の取り消し猶予" });
+  await expect(slider).toHaveValue("3000");
+  await slider.focus();
+  await page.keyboard.press("Home");
+  await expect(slider).toHaveAttribute("aria-valuetext", "0.1秒");
+  await page.keyboard.press("ArrowRight");
+  await expect(slider).toHaveValue("200");
+  await page.keyboard.press("End");
+  await expect(slider).toHaveAttribute("aria-valuetext", "5.0秒");
+  await page.reload();
+  await expect(slider).toHaveValue("5000");
+  await expect(page.getByText("別の端末やブラウザーには引き継がれません。")).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  );
+  await page.screenshot({ path: testInfo.outputPath("todo-delay-settings.png"), fullPage: true });
+
+  // A separate browser profile for the same account must keep the default.
+  const otherContext = await browser.newContext({ baseURL: "http://localhost:5194" });
+  try {
+    await authenticate(otherContext, todoDelayToken);
+    const otherPage = await otherContext.newPage();
+    await otherPage.goto("/settings");
+    await expect(otherPage.getByRole("slider", { name: "ToDo完了の取り消し猶予" })).toHaveValue(
+      "3000",
+    );
+  } finally {
+    await otherContext.close();
+  }
+
+  await page.getByRole("button", { name: "ToDo", exact: true }).click();
+  for (const name of ["猶予検証ホーム", "猶予検証ToDo"]) {
+    await page.getByRole("button", { name: "追加", exact: true }).click();
+    await page.getByLabel("名前", { exact: true }).fill(name);
+    const saved = page.waitForResponse(
+      (response) =>
+        response.url().includes("/_serverFn/") &&
+        (response.request().postData()?.includes("postTodoItem") ?? false),
+    );
+    await page.getByRole("button", { name: "追加する", exact: true }).click();
+    expect((await saved).ok()).toBe(true);
+  }
+  await page.getByRole("button", { name: "ホーム", exact: true }).click();
+  const homeItem = page.getByRole("listitem").filter({ hasText: "猶予検証ホーム" });
+  let completions = 0;
+  page.on("request", (request) => {
+    if (request.url().includes("/_serverFn/") && request.postData()?.includes("deleteTodoItem"))
+      completions += 1;
+  });
+  await homeItem.getByRole("button", { name: "完了にする", exact: true }).click();
+  await expect(homeItem.getByRole("img", { name: "完了まで5秒" })).toBeVisible();
+  await homeItem.getByRole("button", { name: "取り消す", exact: true }).click();
+  await page.waitForTimeout(5_100);
+  expect(completions).toBe(0);
+  await page.goto("/settings");
+  await slider.focus();
+  await page.keyboard.press("Home");
+  await expect(slider).toHaveAttribute("aria-valuetext", "0.1秒");
+  await page.reload();
+  await expect(slider).toHaveValue("100");
+  for (const [route, name] of [
+    ["ホーム", "猶予検証ホーム"],
+    ["ToDo", "猶予検証ToDo"],
+  ]) {
+    await page.getByRole("button", { name: route, exact: true }).click();
+    const item = page.getByRole("listitem").filter({ hasText: name });
+    const saved = page.waitForResponse(
+      (response) =>
+        response.url().includes("/_serverFn/") &&
+        (response.request().postData()?.includes("deleteTodoItem") ?? false),
+    );
+    await item.getByRole("button", { name: "完了にする", exact: true }).click();
+    expect((await saved).ok()).toBe(true);
+    await page.reload();
+    await expect(page.getByRole("region", { name: "ToDo一覧", exact: true })).toBeVisible();
+    await expect(page.getByText(name, { exact: true })).toHaveCount(0);
+  }
+  expect(completions).toBe(2);
+});
+
 test("keeps Japanese dates across browser timezones at the month boundary", async ({ browser }) => {
   const signature = createHmac("sha256", secret).update(token).digest("base64");
   for (const timezoneId of ["UTC", "America/Los_Angeles", "Pacific/Auckland"]) {

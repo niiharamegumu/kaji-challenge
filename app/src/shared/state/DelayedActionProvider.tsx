@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { useAtomValue, useStore } from "jotai";
+import { todoCompletionDelayAtom } from "./todoCompletionDelay";
 
-type PendingAction = { id: string; deadline: number };
+type PendingAction = { id: string; deadline: number; durationMs: number };
 type DelayedActionContextValue = {
   pendingActions: PendingAction[];
   schedule: (id: string, onComplete: (id: string) => void) => void;
@@ -8,7 +10,6 @@ type DelayedActionContextValue = {
 };
 
 const DelayedActionContext = createContext<DelayedActionContextValue | null>(null);
-export const DELAYED_ACTION_MS = 3_000;
 
 export function useDelayedActions() {
   const context = useContext(DelayedActionContext);
@@ -17,6 +18,8 @@ export function useDelayedActions() {
 }
 
 export function DelayedActionProvider({ children }: { children: ReactNode }) {
+  const store = useStore();
+  useAtomValue(todoCompletionDelayAtom);
   const [pendingActions, setPendingActions] = useState<PendingAction[]>([]);
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
 
@@ -30,15 +33,17 @@ export function DelayedActionProvider({ children }: { children: ReactNode }) {
 
   const schedule = (id: string, onComplete: (id: string) => void) => {
     if (timers.current.has(id)) return;
-    const deadline = Date.now() + DELAYED_ACTION_MS;
+    // A storage update can arrive before the subscription has rerendered this provider.
+    const durationMs = store.get(todoCompletionDelayAtom);
+    const deadline = Date.now() + durationMs;
     const timer = setTimeout(() => {
       if (timers.current.get(id) !== timer) return;
       timers.current.delete(id);
       onComplete(id);
       setPendingActions((previous) => previous.filter((pending) => pending.id !== id));
-    }, DELAYED_ACTION_MS);
+    }, durationMs);
     timers.current.set(id, timer);
-    setPendingActions((previous) => [...previous, { id, deadline }]);
+    setPendingActions((previous) => [...previous, { id, deadline, durationMs }]);
   };
 
   const undo = (id: string) => {
