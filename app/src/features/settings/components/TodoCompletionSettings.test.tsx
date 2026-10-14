@@ -10,7 +10,7 @@ const settings = () => (
     <TodoCompletionSettings />
   </Provider>
 );
-const slider = () => screen.getByRole("slider", { name: "ToDo完了の取り消し猶予" });
+const select = () => screen.getByRole("combobox", { name: "ToDo完了の取り消し猶予" });
 
 beforeEach(() => window.localStorage.clear());
 afterEach(() => {
@@ -19,30 +19,57 @@ afterEach(() => {
   window.localStorage.clear();
 });
 
-it("shows the default, units, bounds and browser-only scope", () => {
+it("shows the default, five whole-second options and browser-only scope", () => {
   render(settings());
-  expect(slider()).toHaveValue("3000");
-  expect(slider()).toHaveAttribute("min", "100");
-  expect(slider()).toHaveAttribute("max", "5000");
-  expect(slider()).toHaveAttribute("step", "100");
-  expect(slider()).toHaveAttribute("aria-valuetext", "3.0秒");
-  expect(screen.getByText("3.0秒", { exact: true })).toBeVisible();
-  expect(slider()).toHaveAccessibleDescription(
-    /0.1秒刻み.*初期値は3.0秒.*このブラウザー.*次に完了するToDo/,
+  expect(select()).toHaveValue("3000");
+  expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual([
+    "1秒",
+    "2秒",
+    "3秒",
+    "4秒",
+    "5秒",
+  ]);
+  expect(screen.getByRole("option", { selected: true })).toHaveTextContent("3秒");
+  expect(select()).toHaveAccessibleDescription(
+    /1〜5秒.*初期値は3秒.*このブラウザー.*次に完了するToDo/,
   );
   expect(screen.getByText("別の端末やブラウザーには引き継がれません。")).toBeVisible();
   expect(window.localStorage.getItem(storageKey)).toBeNull();
 });
 
-it.each([100, 1_700, 3_000, 5_000])("persists %sms and restores it in a fresh app", (value) => {
-  const view = render(settings());
-  fireEvent.change(slider(), { target: { value: String(value) } });
-  // The unchanged default needs no write; all other values are stored as numeric milliseconds.
-  if (value !== 3_000) expect(JSON.parse(window.localStorage.getItem(storageKey)!)).toBe(value);
-  view.unmount();
+it.each([1_000, 2_000, 3_000, 4_000, 5_000])(
+  "persists %sms and restores it in a fresh app",
+  (value) => {
+    const view = render(settings());
+    fireEvent.change(select(), { target: { value: String(value) } });
+    expect(JSON.parse(window.localStorage.getItem(storageKey)!)).toBe(value);
+    view.unmount();
+    render(settings());
+    expect(select()).toHaveValue(String(value));
+    expect(screen.getByRole("option", { selected: true })).toHaveTextContent(`${value / 1_000}秒`);
+  },
+);
+
+it.each([
+  [100, 1_000],
+  [400, 1_000],
+  [500, 1_000],
+  [900, 1_000],
+  [1_400, 1_000],
+  [1_500, 2_000],
+  [1_700, 2_000],
+  [2_400, 2_000],
+  [2_500, 3_000],
+  [3_400, 3_000],
+  [3_500, 4_000],
+  [4_400, 4_000],
+  [4_500, 5_000],
+  [4_900, 5_000],
+])("restores legacy %sms as %sms without rewriting storage", (stored, normalized) => {
+  window.localStorage.setItem(storageKey, String(stored));
   render(settings());
-  expect(slider()).toHaveValue(String(value));
-  expect(slider()).toHaveAttribute("aria-valuetext", `${(value / 1_000).toFixed(1)}秒`);
+  expect(select()).toHaveValue(String(normalized));
+  expect(window.localStorage.getItem(storageKey)).toBe(String(stored));
 });
 
 it.each([
@@ -58,13 +85,15 @@ it.each([
   "99",
   "100.5",
   "150",
+  "1499",
+  "1500.5",
   "5001",
   "5100",
   "1e999",
 ])("rejects corrupt, out-of-range or off-step storage %s without rounding", (stored) => {
   window.localStorage.setItem(storageKey, stored);
   render(settings());
-  expect(slider()).toHaveValue("3000");
+  expect(select()).toHaveValue("3000");
 });
 
 it.each(["getter", "read"])("uses the default when the storage %s throws", (failure) => {
@@ -78,7 +107,7 @@ it.each(["getter", "read"])("uses the default when the storage %s throws", (fail
     });
   }
   render(settings());
-  expect(slider()).toHaveValue("3000");
+  expect(select()).toHaveValue("3000");
 });
 
 it("keeps an unsaved change usable and clears its warning after a successful retry", () => {
@@ -86,12 +115,12 @@ it("keeps an unsaved change usable and clears its warning after a successful ret
     throw new DOMException("Full", "QuotaExceededError");
   });
   render(settings());
-  fireEvent.change(slider(), { target: { value: "100" } });
-  expect(slider()).toHaveValue("100");
+  fireEvent.change(select(), { target: { value: "1000" } });
+  expect(select()).toHaveValue("1000");
   expect(screen.getByRole("alert")).toHaveTextContent("再読み込み後は保持されません");
-  fireEvent.change(slider(), { target: { value: "200" } });
+  fireEvent.change(select(), { target: { value: "2000" } });
   expect(write).toHaveBeenCalledTimes(2);
-  expect(window.localStorage.getItem(storageKey)).toBe("200");
+  expect(window.localStorage.getItem(storageKey)).toBe("2000");
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 });
 
@@ -102,18 +131,27 @@ it("reacts to this localStorage key and clearing storage from another tab", () =
   window.localStorage.setItem(storageKey, "5000");
   emitStorage("unrelated");
   emitStorage(storageKey, window.sessionStorage);
-  expect(slider()).toHaveValue("3000");
+  expect(select()).toHaveValue("3000");
   emitStorage(storageKey);
-  expect(slider()).toHaveValue("5000");
+  expect(select()).toHaveValue("5000");
   window.localStorage.setItem(storageKey, "150");
   emitStorage(storageKey);
-  expect(slider()).toHaveValue("3000");
+  expect(select()).toHaveValue("3000");
+  window.localStorage.setItem(storageKey, "1700");
+  emitStorage(storageKey);
+  expect(select()).toHaveValue("2000");
   window.localStorage.setItem(storageKey, "100");
   emitStorage(storageKey);
-  expect(slider()).toHaveValue("100");
+  expect(select()).toHaveValue("1000");
+  window.localStorage.removeItem(storageKey);
+  emitStorage(storageKey);
+  expect(select()).toHaveValue("3000");
+  window.localStorage.setItem(storageKey, "4000");
+  emitStorage(storageKey);
+  expect(select()).toHaveValue("4000");
   window.localStorage.clear();
   emitStorage(null);
-  expect(slider()).toHaveValue("3000");
+  expect(select()).toHaveValue("3000");
 });
 
 it("does not access browser storage during SSR and hydrates before loading the saved value", () => {
@@ -123,13 +161,13 @@ it("does not access browser storage during SSR and hydrates before loading the s
   const markup = renderToString(settings());
   expect(storage).not.toHaveBeenCalled();
   storage.mockRestore();
-  window.localStorage.setItem(storageKey, "100");
+  window.localStorage.setItem(storageKey, "1700");
   const container = document.createElement("div");
   container.innerHTML = markup;
   document.body.appendChild(container);
-  expect(container.querySelector("input")).toHaveValue("3000");
+  expect(container.querySelector("select")).toHaveValue("3000");
   const onRecoverableError = vi.fn();
   render(settings(), { container, hydrate: true, onRecoverableError });
   expect(onRecoverableError).not.toHaveBeenCalled();
-  expect(slider()).toHaveValue("100");
+  expect(select()).toHaveValue("2000");
 });
