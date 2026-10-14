@@ -2,9 +2,9 @@ import { atom } from "jotai";
 
 export const TODO_COMPLETION_DELAY_STORAGE_KEY = "kaji:todo-completion-delay-ms:v1";
 export const DEFAULT_TODO_COMPLETION_DELAY_MS = 3_000;
-export const MIN_TODO_COMPLETION_DELAY_MS = 100;
+export const MIN_TODO_COMPLETION_DELAY_MS = 1_000;
 export const MAX_TODO_COMPLETION_DELAY_MS = 5_000;
-export const TODO_COMPLETION_DELAY_STEP_MS = 100;
+export const TODO_COMPLETION_DELAY_STEP_MS = 1_000;
 
 function validatedDelay(value: unknown): number {
   return typeof value === "number" &&
@@ -16,10 +16,27 @@ function validatedDelay(value: unknown): number {
     : DEFAULT_TODO_COMPLETION_DELAY_MS;
 }
 
+function normalizedStoredDelay(value: unknown): number {
+  // The existing key also holds the previous slider's 100ms increments.
+  if (
+    typeof value !== "number" ||
+    !Number.isInteger(value) ||
+    value < 100 ||
+    value > MAX_TODO_COMPLETION_DELAY_MS ||
+    value % 100 !== 0
+  ) {
+    return DEFAULT_TODO_COMPLETION_DELAY_MS;
+  }
+  return Math.max(
+    MIN_TODO_COMPLETION_DELAY_MS,
+    Math.round(value / TODO_COMPLETION_DELAY_STEP_MS) * TODO_COMPLETION_DELAY_STEP_MS,
+  );
+}
+
 function readDelay(): number {
   try {
     const stored = window.localStorage.getItem(TODO_COMPLETION_DELAY_STORAGE_KEY);
-    return validatedDelay(stored === null ? null : JSON.parse(stored));
+    return normalizedStoredDelay(stored === null ? null : JSON.parse(stored));
   } catch {
     return DEFAULT_TODO_COMPLETION_DELAY_MS;
   }
