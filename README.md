@@ -132,7 +132,7 @@ Alchemyはビルド済みの `dist/server/index.js` と `dist/client` を、公�
 
 環境は **localとproductionのみ** です。localはWranglerのD1（`kaji-local`）、productionはAlchemy管理のD1（`kaji-production`）を使います。
 
-[Deploy production](.github/workflows/deploy-production.yml) が `main` へのpushで実行されます。**build → 設定検証 → Alchemy状態保存先の確保 → plan → deploy（未適用SQL・Worker更新）→ 公開先health/release確認**を自動化しています。CIはPR時に実行し、CDでは再実行しません。CIへ本番Secretsを渡しません。`APP_RELEASE` は対象commit SHAを自動設定します。
+[Deploy production](.github/workflows/deploy-production.yml) が `main` へのpushで実行されます。**build → 設定検証 → Alchemy状態保存先の確保 → plan → deploy（未適用SQL・Worker更新）**を自動化しています。CIはPR時に実行し、CDでは再実行しません。CIへ本番Secretsを渡しません。`APP_RELEASE` は対象commit SHAを自動設定します。
 
 ### 初回だけ行うこと
 
@@ -173,9 +173,8 @@ OAuthの標準失効もD1先行にするため、providerの固定versionにBun 
 
 1. PRのCI成功を確認して `main` へマージします。CIが失敗しているPRはマージしません。
 2. Actionsの **Deploy production** を開き、`deploy` の成功を確認します。planはログに出力され、その後deployを自動実行します。**plan確認の手動停止はありません。** SQLやIaCの意図しない変更はPRで確認してください。
-3. 公開先 `/health` の `status: ok` と `release: 対象SHA` はCDが確認します。`MCP_ENABLED=true` のときはMCP Workerも確認します。伝播待ちのため最大12回・各5秒タイムアウトで再試行します。health確認は実OAuthやMCPツールの動作確認を代替しません。
-4. ブラウザーでログイン、家事・ToDo・予定の保存と再読込、ログアウトを確認します。認証/PWA/Push変更時は新規登録許可・拒否、PWA更新、iPhone実機Pushも確認します。これはCDのhealth確認では代替しません。
-5. CloudflareのWorkerログでエラー・締め・通知結果を確認します。通常の更新では鍵の再作成・手動bootstrap・ジョブ無効化は不要です。
+3. ブラウザーでログイン、家事・ToDo・予定の保存と再読込、ログアウトを確認します。認証/PWA/Push変更時は新規登録許可・拒否、PWA更新、iPhone実機Pushも確認します。CDは配備後のHTTP疎通・release一致を検証しません。
+4. CloudflareのWorkerログでエラー・締め・通知結果を確認します。通常の更新では鍵の再作成・手動bootstrap・ジョブ無効化は不要です。
 
 同時に配備しないようworkflow全体を直列化し、開始済みの処理は新しいpushで中断しません。待機中の古いrunは新しいrunに置き換わる場合があります。配備job開始時、mainに新しいcommitがあるrunは配備をスキップします。手動再実行も最新mainを対象にしてください。
 

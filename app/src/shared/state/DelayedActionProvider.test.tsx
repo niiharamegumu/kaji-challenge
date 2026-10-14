@@ -30,7 +30,7 @@ function Actions({ onComplete }: { onComplete: (id: string) => void }) {
 
 function Preferences() {
   const setDelay = useSetAtom(todoCompletionDelayAtom);
-  return <button onClick={() => setDelay(100)}>猶予を0.1秒に変更</button>;
+  return <button onClick={() => setDelay(1_000)}>猶予を1秒に変更</button>;
 }
 
 function ChangeAndComplete({ onComplete }: { onComplete: (id: string) => void }) {
@@ -39,7 +39,7 @@ function ChangeAndComplete({ onComplete }: { onComplete: (id: string) => void })
   return (
     <button
       onClick={() => {
-        setDelay(100);
+        setDelay(1_000);
         schedule("牛乳", onComplete);
       }}
     >
@@ -66,30 +66,56 @@ it("uses the current preference before its subscription rerenders", () => {
     </DelayedActionProvider>,
   );
   fireEvent.click(screen.getByText("猶予を変更して完了"));
-  act(() => vi.advanceTimersByTime(99));
+  act(() => vi.advanceTimersByTime(999));
   expect(onComplete).not.toHaveBeenCalled();
   act(() => vi.advanceTimersByTime(1));
   expect(onComplete).toHaveBeenCalledExactlyOnceWith("牛乳");
 });
 
-it.each([100, 1_700, 5_000])("executes once at the configured %sms boundary", (duration) => {
-  window.localStorage.setItem(storageKey, String(duration));
+it.each([1_000, 2_000, 3_000, 4_000, 5_000])(
+  "executes once at the configured %sms boundary",
+  (duration) => {
+    window.localStorage.setItem(storageKey, String(duration));
+    const onComplete = vi.fn();
+    render(
+      <DelayedActionProvider>
+        <Actions onComplete={onComplete} />
+      </DelayedActionProvider>,
+    );
+    act(() => {
+      screen.getByText("牛乳を完了").click();
+      screen.getByText("牛乳を完了").click();
+    });
+    act(() => vi.advanceTimersByTime(duration - 1));
+    expect(onComplete).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(1));
+    expect(onComplete).toHaveBeenCalledExactlyOnceWith("牛乳");
+    act(() => vi.advanceTimersByTime(5_000));
+    expect(onComplete).toHaveBeenCalledTimes(1);
+  },
+);
+
+it.each([
+  [100, 1_000],
+  [1_400, 1_000],
+  [1_500, 2_000],
+  [1_700, 2_000],
+  [4_900, 5_000],
+  [150, 3_000],
+])("uses the normalized %sms storage value for a %sms timer", (stored, duration) => {
+  window.localStorage.setItem(storageKey, String(stored));
   const onComplete = vi.fn();
   render(
     <DelayedActionProvider>
       <Actions onComplete={onComplete} />
     </DelayedActionProvider>,
   );
-  act(() => {
-    screen.getByText("牛乳を完了").click();
-    screen.getByText("牛乳を完了").click();
-  });
+  fireEvent.click(screen.getByText("牛乳を完了"));
+  expect(screen.getByRole("img", { name: `完了まで${duration / 1_000}秒` })).toBeVisible();
   act(() => vi.advanceTimersByTime(duration - 1));
   expect(onComplete).not.toHaveBeenCalled();
   act(() => vi.advanceTimersByTime(1));
   expect(onComplete).toHaveBeenCalledExactlyOnceWith("牛乳");
-  act(() => vi.advanceTimersByTime(5_000));
-  expect(onComplete).toHaveBeenCalledTimes(1);
 });
 
 it("preserves a pending deadline and progress when another page changes the setting", () => {
@@ -107,7 +133,7 @@ it("preserves a pending deadline and progress when another page changes the sett
       <Preferences />
     </DelayedActionProvider>,
   );
-  fireEvent.click(screen.getByText("猶予を0.1秒に変更"));
+  fireEvent.click(screen.getByText("猶予を1秒に変更"));
   view.rerender(
     <DelayedActionProvider>
       <Actions onComplete={onComplete} />
@@ -117,11 +143,11 @@ it("preserves a pending deadline and progress when another page changes the sett
   const ring = countdown.querySelectorAll("circle")[1];
   expect(Number(ring.getAttribute("stroke-dashoffset"))).toBeCloseTo(2 * Math.PI * 9 * 0.4);
   fireEvent.click(screen.getByText("卵を完了"));
-  act(() => vi.advanceTimersByTime(99));
+  act(() => vi.advanceTimersByTime(999));
   expect(onComplete).not.toHaveBeenCalled();
   act(() => vi.advanceTimersByTime(1));
   expect(onComplete).toHaveBeenCalledExactlyOnceWith("卵");
-  act(() => vi.advanceTimersByTime(2_899));
+  act(() => vi.advanceTimersByTime(1_999));
   expect(onComplete).toHaveBeenCalledTimes(1);
   act(() => vi.advanceTimersByTime(1));
   expect(onComplete.mock.calls).toEqual([["卵"], ["牛乳"]]);
@@ -137,15 +163,15 @@ it("cancels just before the minimum deadline and reschedules with the latest pre
     </DelayedActionProvider>,
   );
   fireEvent.click(screen.getByText("牛乳を完了"));
-  fireEvent.click(screen.getByText("猶予を0.1秒に変更"));
+  fireEvent.click(screen.getByText("猶予を1秒に変更"));
   fireEvent.click(screen.getByText("牛乳の完了を取り消す"));
   fireEvent.click(screen.getByText("牛乳を完了"));
-  act(() => vi.advanceTimersByTime(99));
+  act(() => vi.advanceTimersByTime(999));
   fireEvent.click(screen.getByText("牛乳の完了を取り消す"));
   act(() => vi.advanceTimersByTime(5_000));
   expect(onComplete).not.toHaveBeenCalled();
   fireEvent.click(screen.getByText("牛乳を完了"));
-  act(() => vi.advanceTimersByTime(100));
+  act(() => vi.advanceTimersByTime(1_000));
   expect(onComplete).toHaveBeenCalledExactlyOnceWith("牛乳");
 });
 

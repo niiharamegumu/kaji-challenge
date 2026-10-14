@@ -540,7 +540,7 @@ describe("ToDo pages", () => {
     );
   });
 
-  it.each([100, 3_000, 5_000])(
+  it.each([1_000, 3_000, 5_000])(
     "restores a ToDo when completion fails after %sms",
     async (duration) => {
       window.localStorage.setItem(TODO_COMPLETION_DELAY_STORAGE_KEY, String(duration));

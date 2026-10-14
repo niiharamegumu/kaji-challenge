@@ -149,17 +149,30 @@ test("persists the browser's ToDo undo delay and uses it on home and ToDo pages"
 }, testInfo) => {
   await authenticate(context, todoDelayToken);
   await page.goto("/settings");
-  const slider = page.getByRole("slider", { name: "ToDo完了の取り消し猶予" });
-  await expect(slider).toHaveValue("3000");
-  await slider.focus();
-  await page.keyboard.press("Home");
-  await expect(slider).toHaveAttribute("aria-valuetext", "0.1秒");
-  await page.keyboard.press("ArrowRight");
-  await expect(slider).toHaveValue("200");
-  await page.keyboard.press("End");
-  await expect(slider).toHaveAttribute("aria-valuetext", "5.0秒");
+  const select = page.getByRole("combobox", { name: "ToDo完了の取り消し猶予" });
+  const chooseDelay = async (seconds: number) => {
+    await select.selectOption(String(seconds * 1_000));
+    await expect(select).toHaveValue(String(seconds * 1_000));
+  };
+  await expect(select).toHaveValue("3000");
+  await expect(select.locator("option")).toHaveText(["1秒", "2秒", "3秒", "4秒", "5秒"]);
+  // Existing browser profiles can still hold a fractional-second slider setting.
+  await page.evaluate(() => localStorage.setItem("kaji:todo-completion-delay-ms:v1", "1700"));
   await page.reload();
-  await expect(slider).toHaveValue("5000");
+  await expect(select).toHaveValue("2000");
+  if (testInfo.project.name === "desktop") {
+    const teamName = page.getByRole("textbox", { name: "チーム名", exact: true });
+    await teamName.focus();
+    await page.keyboard.press("Shift+Tab");
+    await expect(select).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(teamName).toBeFocused();
+  }
+  await chooseDelay(1);
+  await chooseDelay(2);
+  await chooseDelay(5);
+  await page.reload();
+  await expect(select).toHaveValue("5000");
   await expect(page.getByText("別の端末やブラウザーには引き継がれません。")).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
@@ -172,7 +185,7 @@ test("persists the browser's ToDo undo delay and uses it on home and ToDo pages"
     await authenticate(otherContext, todoDelayToken);
     const otherPage = await otherContext.newPage();
     await otherPage.goto("/settings");
-    await expect(otherPage.getByRole("slider", { name: "ToDo完了の取り消し猶予" })).toHaveValue(
+    await expect(otherPage.getByRole("combobox", { name: "ToDo完了の取り消し猶予" })).toHaveValue(
       "3000",
     );
   } finally {
@@ -204,11 +217,9 @@ test("persists the browser's ToDo undo delay and uses it on home and ToDo pages"
   await page.waitForTimeout(5_100);
   expect(completions).toBe(0);
   await page.goto("/settings");
-  await slider.focus();
-  await page.keyboard.press("Home");
-  await expect(slider).toHaveAttribute("aria-valuetext", "0.1秒");
+  await chooseDelay(1);
   await page.reload();
-  await expect(slider).toHaveValue("100");
+  await expect(select).toHaveValue("1000");
   for (const [route, name] of [
     ["ホーム", "猶予検証ホーム"],
     ["ToDo", "猶予検証ToDo"],
@@ -221,6 +232,7 @@ test("persists the browser's ToDo undo delay and uses it on home and ToDo pages"
         (response.request().postData()?.includes("deleteTodoItem") ?? false),
     );
     await item.getByRole("button", { name: "完了にする", exact: true }).click();
+    await expect(item.getByRole("img", { name: "完了まで1秒" })).toBeVisible();
     expect((await saved).ok()).toBe(true);
     await page.reload();
     await expect(page.getByRole("region", { name: "ToDo一覧", exact: true })).toBeVisible();
