@@ -128,6 +128,49 @@ test("existing identity loads every route and updates todo through Workers", asy
   await expect(page.getByText("検証用の牛乳", { exact: true })).toBeVisible();
   await page.goto("/calendar");
   await expect(page.getByText(/今月と来月以降の予定を表示します/)).toBeVisible();
+  const calendarGrid = page.locator(".reminder-calendar-grid");
+  await expect(calendarGrid).toBeVisible();
+  await expect(page.getByRole("status", { name: "カレンダーを読み込み中" })).toHaveCount(0);
+  await expect(async () => {
+    const [grid, header, firstDay, lastDay] = await Promise.all([
+      calendarGrid.boundingBox(),
+      calendarGrid.getByRole("columnheader").first().boundingBox(),
+      calendarGrid.getByRole("cell").first().boundingBox(),
+      calendarGrid.getByRole("cell").last().boundingBox(),
+    ]);
+    if (!grid || !header || !firstDay || !lastDay) {
+      throw new Error("The calendar grid, header and boundary days must be rendered");
+    }
+    // Check the grid rather than the viewport: desktop calendars may extend below the fold.
+    // The header remains fixed when the day grid scrolls, so it is the visible top boundary.
+    for (const day of [firstDay, lastDay]) {
+      expect(day.x).toBeGreaterThanOrEqual(grid.x - 1);
+      expect(day.x + day.width).toBeLessThanOrEqual(grid.x + grid.width + 1);
+      expect(day.y).toBeGreaterThanOrEqual(header.y + header.height - 1);
+      expect(day.y + day.height).toBeLessThanOrEqual(grid.y + grid.height + 1);
+    }
+    const overflowingContent = await calendarGrid.getByRole("cell").evaluateAll((cells) =>
+      cells.flatMap((cell) => {
+        const bounds = cell.getBoundingClientRect();
+        return Array.from(cell.querySelectorAll('button, [role="img"]')).flatMap((content) => {
+          const rect = content.getBoundingClientRect();
+          return rect.left < bounds.left - 1 ||
+            rect.top < bounds.top - 1 ||
+            rect.right > bounds.right + 1 ||
+            rect.bottom > bounds.bottom + 1
+            ? [
+                {
+                  date: cell.getAttribute("data-date"),
+                  content: content.getAttribute("aria-label"),
+                },
+              ]
+            : [];
+        });
+      }),
+    );
+    expect(overflowingContent).toEqual([]);
+  }).toPass({ timeout: 5_000 });
+  await page.screenshot({ path: testInfo.outputPath("calendar.png"), fullPage: true });
   await page.goto("/settings");
   await expect(page.getByText("テストユーザー", { exact: true }).first()).toBeVisible();
   expect(new URL(page.url()).pathname).toBe("/settings");
@@ -263,12 +306,16 @@ test("keeps Japanese dates across browser timezones at the month boundary", asyn
       await page.clock.setFixedTime(new Date("2026-03-31T15:30:00Z"));
       await page.goto("/calendar");
       await expect(page.getByText("2026年4月1日（水）", { exact: true })).toBeVisible();
-      await expect(page.locator(".fc-day-today")).toHaveAttribute("data-date", "2026-04-01");
-      const aprilSecond = page.locator('.fc-daygrid-day[data-date="2026-04-02"]');
+      await expect(
+        page.locator('.reminder-calendar [role="cell"][aria-current="date"]'),
+      ).toHaveAttribute("data-date", "2026-04-01");
+      const aprilSecond = page.locator('.reminder-calendar [role="cell"][data-date="2026-04-02"]');
       await expect(aprilSecond.getByRole("button", { name: "4月2日(木)を選択" })).toBeVisible();
       await page.getByRole("button", { name: "次の月" }).click();
       await page.getByRole("button", { name: "今日", exact: true }).click();
-      await expect(page.locator(".fc-day-today")).toHaveAttribute("data-date", "2026-04-01");
+      await expect(
+        page.locator('.reminder-calendar [role="cell"][aria-current="date"]'),
+      ).toHaveAttribute("data-date", "2026-04-01");
       await page.goto("/summary");
       await expect(page.getByRole("button", { name: "対象月を選択" })).toHaveText("2026年04月");
     } finally {
@@ -539,6 +586,58 @@ test("uses the same calendar form shell for creation and editing and persists bo
   await expect(editDialog).toBeVisible();
   await editDialog.getByRole("button", { name: "閉じる", exact: true }).click();
   await expect(editDialog).not.toBeVisible();
+
+  if (testInfo.project.name === "desktop") {
+    const nextMonth = new Date();
+    nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1, 10);
+    const sourceDate = nextMonth.toISOString().slice(0, 10);
+    nextMonth.setUTCDate(11);
+    const targetDate = nextMonth.toISOString().slice(0, 10);
+    const title = "ドラッグによる予定の日付変更";
+    await page.goto(`/calendar?date=${sourceDate}`);
+    await page.getByRole("button", { name: "追加", exact: true }).click();
+    await createDialog.getByLabel("タイトル", { exact: true }).fill(title);
+    await expect(createDialog.getByRole("combobox", { name: "種別", exact: true })).toHaveValue(
+      "one_time",
+    );
+    await expect(createDialog.getByLabel("開始日", { exact: true })).toHaveValue(sourceDate);
+    const created = page.waitForResponse(
+      (response) => response.request().postData()?.includes("postReminder") ?? false,
+    );
+    await createDialog.getByRole("button", { name: "追加する", exact: true }).click();
+    expect((await created).ok()).toBe(true);
+    await expect(createDialog).not.toBeVisible();
+    const sourceCell = page.locator(`.reminder-calendar [role="cell"][data-date="${sourceDate}"]`);
+    const targetCell = page.locator(`.reminder-calendar [role="cell"][data-date="${targetDate}"]`);
+    const event = sourceCell.locator(".reminder-calendar-event").filter({ hasText: title });
+    await expect(event).toBeVisible();
+    await expect(page.getByRole("status", { name: "カレンダーを読み込み中" })).toHaveCount(0);
+    await targetCell.scrollIntoViewIfNeeded();
+    const from = await event.boundingBox();
+    const to = await targetCell.boundingBox();
+    if (!from || !to) throw new Error("Calendar drag source and target must be visible");
+    const moved = page.waitForResponse(
+      (response) =>
+        (response.request().postData()?.includes("patchReminder") ?? false) &&
+        (response.request().postData()?.includes(targetDate) ?? false),
+    );
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 20 });
+    await page.mouse.up();
+    expect((await moved).ok()).toBe(true);
+    await page.reload();
+    await expect(
+      targetCell.locator(".reminder-calendar-event").filter({ hasText: title }),
+    ).toBeVisible();
+    await expect(
+      sourceCell.locator(".reminder-calendar-event").filter({ hasText: title }),
+    ).toHaveCount(0);
+    await targetCell.locator(".reminder-calendar-event").filter({ hasText: title }).click();
+    await expect(editDialog.getByLabel("開始日", { exact: true })).toHaveValue(targetDate);
+    await editDialog.getByRole("button", { name: "閉じる", exact: true }).click();
+    await page.screenshot({ path: testInfo.outputPath("calendar-dragged.png"), fullPage: true });
+  }
 });
 
 test("completion responds before a delayed request and rolls back when it fails", async ({

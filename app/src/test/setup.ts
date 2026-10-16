@@ -1,4 +1,7 @@
-import "@testing-library/jest-dom/vitest";
+import * as matchers from "@testing-library/jest-dom/matchers";
+import { expect } from "vitest";
+
+expect.extend(matchers);
 
 // jsdom has no scroll implementation; router scroll behavior is covered in Playwright.
 if (typeof window !== "undefined") {
