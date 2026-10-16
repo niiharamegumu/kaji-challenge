@@ -1,13 +1,18 @@
-import type {
-  DayCellContentArg,
-  EventClickArg,
-  EventContentArg,
-  EventDropArg,
-} from "@fullcalendar/core";
-import jaLocale from "@fullcalendar/core/locales/ja";
-import dayGridPlugin from "@fullcalendar/daygrid";
-import interactionPlugin, { type DateClickArg } from "@fullcalendar/interaction";
-import FullCalendar from "@fullcalendar/react";
+import FullCalendar, {
+  type CalendarRef,
+  type DateClickInfo,
+  type DayCellInfo,
+  type EventClickInfo,
+  type EventDisplayInfo,
+  type EventDropInfo,
+} from "@fullcalendar/react";
+import dayGridPlugin from "@fullcalendar/react/daygrid";
+import interactionPlugin from "@fullcalendar/react/interaction";
+import jaLocale from "@fullcalendar/react/locales/ja";
+import classicThemePlugin from "@fullcalendar/react/themes/classic";
+import "@fullcalendar/react/skeleton.css";
+import "@fullcalendar/react/themes/classic/theme.css";
+import "@fullcalendar/react/themes/classic/palette.css";
 import { useSetAtom } from "jotai";
 import { CalendarDays, ChevronLeft, ChevronRight, Pencil, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -350,7 +355,7 @@ export function ReminderCalendarPage() {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [form, setForm] = useState(() => buildInitialFormState(initialSelectedDate));
   const setStatus = useSetAtom(statusMessageAtom);
-  const calendarRef = useRef<FullCalendar | null>(null);
+  const calendarRef = useRef<CalendarRef | null>(null);
   const definitionsQuery = useReminderDefinitionsQuery();
   const calendarQuery = useReminderCalendarQuery(visibleMonth);
   const { createReminder, updateReminder, removeReminder } = useReminderMutations(setStatus);
@@ -391,15 +396,6 @@ export function ReminderCalendarPage() {
         : mobileCalendarHeight < 520
           ? 9
           : 12;
-  const mobileDayHeight =
-    mobileCalendarHeight == null
-      ? "3.7rem"
-      : mobileCalendarHeight >= 470
-        ? "4.75rem"
-        : mobileCalendarHeight >= 410
-          ? "4.2rem"
-          : "3.7rem";
-
   const events = useMemo(
     () =>
       isMobile
@@ -410,7 +406,7 @@ export function ReminderCalendarPage() {
               title: item.title,
               start: item.date,
               allDay: true,
-              classNames: ["reminder-event"],
+              className: "reminder-event",
               extendedProps: {
                 reminderId: item.reminderId,
                 reminderDate: item.date,
@@ -454,7 +450,7 @@ export function ReminderCalendarPage() {
     setSheetMode("edit");
   };
 
-  const handleDateClick = (arg: DateClickArg) => {
+  const handleDateClick = (arg: DateClickInfo) => {
     if (isMobile) {
       updateSelectedDate(arg.dateStr);
       setMobileAgendaOpen(true);
@@ -464,7 +460,7 @@ export function ReminderCalendarPage() {
     updateSelectedDate(arg.dateStr);
   };
 
-  const renderDayCellContent = (arg: DayCellContentArg) => {
+  const renderDayCellContent = (arg: DayCellInfo) => {
     const dateKey = formatDateKey(arg.date);
     const isSelected = dateKey === selectedDate;
     const occurrenceCount = occurrencesByDate.get(dateKey)?.length ?? 0;
@@ -571,7 +567,7 @@ export function ReminderCalendarPage() {
     );
   };
 
-  const handleEventClick = (arg: EventClickArg) => {
+  const handleEventClick = (arg: EventClickInfo) => {
     const reminderId = String(arg.event.extendedProps.reminderId);
     const reminderDate = String(arg.event.extendedProps.reminderDate);
     const reminder = reminderMap.get(reminderId);
@@ -581,7 +577,7 @@ export function ReminderCalendarPage() {
     openEditSheet(reminder, reminderDate);
   };
 
-  const handleEventDrop = (arg: EventDropArg) => {
+  const handleEventDrop = (arg: EventDropInfo) => {
     const reminderId = String(arg.event.extendedProps.reminderId);
     const reminder = reminderMap.get(reminderId);
     if (reminder == null) {
@@ -625,7 +621,7 @@ export function ReminderCalendarPage() {
     });
   };
 
-  const renderEventContent = (arg: EventContentArg) => {
+  const renderEventContent = (arg: EventDisplayInfo) => {
     const kind = String(arg.event.extendedProps.kind) as ReminderKind;
     const scheduleType = (arg.event.extendedProps.scheduleType ??
       null) as ReminderScheduleType | null;
@@ -642,83 +638,83 @@ export function ReminderCalendarPage() {
   return (
     <section className="mt-2 w-full pb-1 md:mt-4">
       <style>{`
-        .reminder-calendar .fc .fc-highlight {
+        .reminder-calendar {
+          --fc-classic-border: rgb(231 229 228);
+        }
+        .reminder-calendar .reminder-calendar-highlight {
           background: transparent;
         }
-        .reminder-calendar .fc .fc-scrollgrid {
+        .reminder-calendar .reminder-calendar-grid {
           border: 0;
-          border-collapse: separate;
-          border-spacing: 0;
           border-radius: 1rem;
           overflow: hidden;
           background: white;
         }
-        .reminder-calendar .fc-theme-standard td,
-        .reminder-calendar .fc-theme-standard th {
-          border-color: rgb(231 229 228);
+        .reminder-calendar .reminder-calendar-day-header {
+          font-weight: bold;
         }
-        .reminder-calendar .fc .fc-daygrid-day {
+        .reminder-calendar .reminder-calendar-day {
           background: white;
         }
-        .reminder-calendar .fc-theme-standard tr > :last-child {
-          border-right: 0;
-        }
-        .reminder-calendar .fc-theme-standard tbody tr:last-child td {
-          border-bottom: 0;
-        }
-        .reminder-calendar .fc .fc-daygrid-body-balanced .fc-daygrid-day-events {
+        .reminder-calendar .reminder-calendar-day-events {
           min-height: 0;
         }
-        .reminder-calendar .fc .fc-daygrid-day.fc-day-today {
+        .reminder-calendar .reminder-calendar-day[aria-current="date"] {
           background: rgb(254 249 195 / 0.55);
         }
-        .reminder-calendar .fc .fc-daygrid-day.reminder-selected-day {
+        .reminder-calendar .reminder-calendar-day.reminder-selected-day {
           background: rgb(250 245 235);
         }
-        .reminder-calendar .fc .fc-daygrid-day-top {
+        .reminder-calendar .reminder-calendar-day-top {
           display: block;
+          margin: 0;
         }
-        .reminder-calendar .fc .fc-daygrid-day-number {
+        .reminder-calendar .reminder-calendar-day-top-content {
           display: block;
           padding: 0;
         }
-        .reminder-calendar .fc .fc-daygrid-event {
+        .reminder-calendar .reminder-calendar-other-month {
+          opacity: 0.3;
+        }
+        .reminder-calendar .reminder-calendar-event {
           border: 0;
           background: transparent;
           box-shadow: none;
           margin: 0;
           cursor: pointer;
         }
-        .reminder-calendar .fc .fc-event:focus,
-        .reminder-calendar .fc .fc-event:focus-visible,
-        .reminder-calendar .fc .fc-daygrid-event:focus,
-        .reminder-calendar .fc .fc-daygrid-event:focus-visible {
+        .reminder-calendar .reminder-calendar-event-content {
+          width: 100%;
+          padding: 0;
+        }
+        .reminder-calendar .reminder-calendar-event:focus,
+        .reminder-calendar .reminder-calendar-event:focus-visible {
           outline: none;
           box-shadow: none;
         }
         @media (max-width: 767px) {
-          .reminder-calendar .fc .fc-col-header-cell-cushion {
+          .reminder-calendar .reminder-calendar-day-header-content {
             padding: 0.4rem 0;
             font-size: 0.95rem;
           }
-          .reminder-calendar .fc .fc-daygrid-day-frame {
-            min-height: var(--mobile-reminder-day-height, 3.55rem);
-            padding: 0.2rem 0.15rem 0.15rem;
+          .reminder-calendar .reminder-calendar-day-top {
+            padding: 0 0.15rem;
           }
-          .reminder-calendar .fc .fc-daygrid-day-top {
-            display: block;
+          .reminder-calendar .reminder-calendar-day-top-content {
+            margin: 0;
           }
-          .reminder-calendar .fc .fc-daygrid-day-number {
-            padding: 0;
+          .reminder-calendar .reminder-calendar-day-top-content > div {
+            height: auto;
           }
           .reminder-calendar .reminder-day-number {
             width: 100%;
             border-radius: 0.9rem;
           }
-          .reminder-calendar .fc .fc-daygrid-day-events {
+          .reminder-calendar .reminder-calendar-day-events,
+          .reminder-calendar .reminder-calendar-day-bottom {
             display: none;
           }
-          .reminder-calendar .fc .fc-scrollgrid-section-header th {
+          .reminder-calendar .reminder-calendar-day-header {
             border-bottom: 1px solid rgb(231 229 228);
           }
         }
@@ -767,21 +763,12 @@ export function ReminderCalendarPage() {
           </button>
         </div>
 
-        <div
-          className="reminder-calendar relative mt-3 overflow-hidden rounded-2xl border border-stone-200 bg-white"
-          style={
-            isMobile
-              ? {
-                  ["--mobile-reminder-day-height" as string]: mobileDayHeight,
-                }
-              : undefined
-          }
-        >
+        <div className="reminder-calendar relative mt-3 overflow-hidden rounded-2xl border border-stone-200 bg-white">
           {/* All events are date-only. UTC preserves their keys; today is determined in JST. */}
           <FullCalendar
             ref={calendarRef}
             locale={jaLocale}
-            plugins={[dayGridPlugin, interactionPlugin]}
+            plugins={[classicThemePlugin, dayGridPlugin, interactionPlugin]}
             initialView="dayGridMonth"
             initialDate={selectedDate}
             timeZone="UTC"
@@ -791,16 +778,33 @@ export function ReminderCalendarPage() {
             editable
             dayMaxEventRows={3}
             height={isMobile && mobileCalendarHeight != null ? mobileCalendarHeight : "auto"}
+            aspectRatio={2.3}
             longPressDelay={250}
             eventDurationEditable={false}
             dateClick={handleDateClick}
             eventClick={handleEventClick}
             eventDrop={handleEventDrop}
             eventAllow={(dropInfo) => dropInfo.startStr.slice(0, 10) >= todayKey}
-            dayCellContent={renderDayCellContent}
-            dayCellClassNames={(arg) => {
+            tableClass="reminder-calendar-grid"
+            highlightClass="reminder-calendar-highlight"
+            dayHeaderClass="reminder-calendar-day-header"
+            dayHeaderInnerClass="reminder-calendar-day-header-content"
+            dayCellInnerClass="reminder-calendar-day-events"
+            dayCellTopClass="reminder-calendar-day-top"
+            dayCellTopInnerClass={(arg) =>
+              `reminder-calendar-day-top-content${arg.isOther ? " reminder-calendar-other-month" : ""}`
+            }
+            dayCellBottomClass="reminder-calendar-day-bottom"
+            dayCellTopContent={renderDayCellContent}
+            dayCellDidMount={({ el }) => {
+              // v7 hides the default day number; our replacement contains interactive buttons.
+              el.querySelector(".reminder-calendar-day-top-content")?.removeAttribute(
+                "aria-hidden",
+              );
+            }}
+            dayCellClass={(arg) => {
               const dateKey = formatDateKey(arg.date);
-              return dateKey === selectedDate ? ["reminder-selected-day"] : [];
+              return `reminder-calendar-day${dateKey === selectedDate ? " reminder-selected-day" : ""}`;
             }}
             datesSet={(arg) => {
               const monthKey = formatDateKey(arg.view.currentStart).slice(0, 7);
@@ -817,6 +821,8 @@ export function ReminderCalendarPage() {
               }
             }}
             eventContent={renderEventContent}
+            eventClass="reminder-calendar-event"
+            eventInnerClass="reminder-calendar-event-content"
           />
           {calendarQuery.isFetching ? (
             <div className="absolute inset-2 z-10 flex items-center justify-center rounded-[calc(1rem-2px)] bg-white/65 backdrop-blur-[1px]">
