@@ -107,7 +107,7 @@ function setup(data = fixture()) {
   const status = vi.fn();
   const wrap = (selectedMonth = month) => (
     <QueryClientProvider client={client}>
-      <Probe key={selectedMonth} status={status} selectedMonth={selectedMonth} />
+      <Probe status={status} selectedMonth={selectedMonth} />
     </QueryClientProvider>
   );
   const view = render(wrap());
