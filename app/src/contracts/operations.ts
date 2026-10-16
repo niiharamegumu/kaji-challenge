@@ -286,6 +286,12 @@ export const MonthCloseCandidateResponseSchema = z.object({
   pendingMonthCount: z.number().int().min(0),
 });
 
+// Monthly calculations need both the month's first day and the next month's boundary.
+const summaryMonthSchema = z
+  .string()
+  .regex(/^\d{4}-(0[1-9]|1[0-2])$/)
+  .refine((month) => !month.startsWith("0000-") && month !== "9999-12", "unsupported month");
+
 export const operationSchema = z.discriminatedUnion("operation", [
   z.object({
     operation: z.literal("getMe"),
@@ -371,10 +377,15 @@ export const operationSchema = z.discriminatedUnion("operation", [
   }),
   z.object({
     operation: z.literal("listReminders"),
-    params: z.object({
-      from: z.string().refine(isDate, "invalid date"),
-      to: z.string().refine(isDate, "invalid date"),
-    }),
+    params: z
+      .object({
+        from: z.string().refine(isDate, "invalid date"),
+        to: z.string().refine(isDate, "invalid date"),
+      })
+      .refine(
+        ({ from, to }) => from <= to && Date.parse(to) - Date.parse(from) <= 365 * 86_400_000,
+        "reminder period must be ordered and at most 366 days",
+      ),
   }),
   z.object({
     operation: z.literal("postReminder"),
@@ -466,10 +477,7 @@ export const operationSchema = z.discriminatedUnion("operation", [
     operation: z.literal("getPenaltySummaryMonthly"),
     params: z
       .object({
-        month: z
-          .string()
-          .regex(/^\d{4}-(0[1-9]|1[0-2])$/)
-          .optional(),
+        month: summaryMonthSchema.optional(),
       })
       .default({}),
   }),
@@ -479,7 +487,7 @@ export const operationSchema = z.discriminatedUnion("operation", [
   }),
   z.object({
     operation: z.literal("postMonthClose"),
-    params: z.object({ month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/) }),
+    params: z.object({ month: summaryMonthSchema }),
   }),
 ]);
 export type Operation = z.infer<typeof operationSchema>;
