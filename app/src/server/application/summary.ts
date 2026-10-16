@@ -2,7 +2,7 @@ import type { Repository } from "./ports";
 import type * as M from "../../contracts/models";
 import * as map from "./mappers";
 import { addDays, midnightJST, nextMonth, todayJST, weekday, weekStart } from "../domain/dates";
-import { effectiveAt, occurrenceDates } from "../domain/rules";
+import { effectiveAt, occurrenceDates, validateReminderRange } from "../domain/rules";
 import { invariant } from "../domain/errors";
 
 function groupBy<T>(items: T[], keyOf: (item: T) => string): Map<string, T[]> {
@@ -75,6 +75,9 @@ export async function reminderOccurrences(
   to: string,
   today: string = from,
 ): Promise<M.ReminderOccurrence[]> {
+  // A past window can become empty after the caller clamps it to the current month.
+  if (from > to) return [];
+  validateReminderRange(from, to);
   const records = await repo.ListRemindersByTeamID(teamId, { from, to, today });
   return records
     .flatMap((row) => {
