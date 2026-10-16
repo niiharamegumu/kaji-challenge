@@ -13,6 +13,7 @@ import { AppError } from "../domain/errors";
 import { D1McpRepository } from "../infrastructure/mcp-repository";
 import { createDatabase } from "../infrastructure/database";
 import { createRuntime, type RuntimeBindings } from "./runtime.server";
+import { boundRequestBody } from "./request-body";
 import {
   mcpConnectionsPage,
   mcpConsentPage,
@@ -456,7 +457,9 @@ export async function handleMcpHttp(
       );
     // The provider owns discovery, DCR, token exchange and revocation, including
     // their cross-origin protocol validation. Browser-form CSRF checks do not apply.
-    return await server.fetch(request, bindings, ctx);
+    const bounded = await boundRequestBody(request);
+    if (bounded instanceof Response) return bounded;
+    return await server.fetch(bounded, bindings, ctx);
   } catch (error) {
     if (error instanceof AppError) return mcpErrorPage(error.message, error.status);
     if (error instanceof AuthorizationError) {
