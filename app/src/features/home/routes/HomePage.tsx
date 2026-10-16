@@ -1,4 +1,4 @@
-import { useAtom } from "jotai";
+import { useSetAtom } from "jotai";
 
 import { statusMessageAtom } from "../../../shared/state/status";
 import { useOutletContext } from "../../../shared/router/navigation";
@@ -75,7 +75,7 @@ export function HomePageSkeleton() {
 }
 
 export function HomePage() {
-  const [, setStatus] = useAtom(statusMessageAtom);
+  const setStatus = useSetAtom(statusMessageAtom);
   const {
     homeQuery,
     todoItemsQuery,

@@ -1,5 +1,13 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Suspense } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -110,6 +118,31 @@ function setup(home = fixture()) {
 beforeEach(() => {
   api.save.mockReset();
   api.load.mockReset().mockReturnValue(new Promise(() => {}));
+});
+
+it.each([
+  ["A:未完了", "weeklyTasks"],
+  ["増やす", "dailyTasks"],
+] as const)("keeps unrelated task lists stable while saving %s", async (button, unchangedList) => {
+  const { client, user } = setup();
+  const pending = deferred<{ data: { completed: boolean; weeklyCompletedCount: number } }>();
+  api.save.mockReturnValue(pending.promise);
+  const { result } = renderHook(() => useHomePageQueries().homeQuery.data, {
+    wrapper: ({ children }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    ),
+  });
+  const original = result.current;
+  await user.click(screen.getByRole("button", { name: button }));
+  await waitFor(() => expect(result.current).not.toBe(original));
+  expect(result.current[unchangedList]).toBe(original[unchangedList]);
+  expect(result.current.weeklyReminders).toBe(original.weeklyReminders);
+  if (unchangedList === "dailyTasks") {
+    expect(result.current.weeklyTasks[0].completionSlots[0]).toBe(
+      original.weeklyTasks[0].completionSlots[0],
+    );
+  }
+  await act(async () => pending.resolve({ data: { completed: true, weeklyCompletedCount: 2 } }));
 });
 
 it("bulk completes only unfinished daily tasks and then clears all daily completions", async () => {

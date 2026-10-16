@@ -17,13 +17,13 @@ export function useTodoCategoryFilter() {
   }
 
   const filterItems = (items: TodoItem[]) =>
-    items.filter(
-      (item) =>
-        selection.kind === "all" ||
-        (selection.kind === "unclassified"
-          ? item.categoryId == null
-          : item.categoryId === selection.id),
-    );
+    selection.kind === "all"
+      ? items
+      : items.filter((item) =>
+          selection.kind === "unclassified"
+            ? item.categoryId == null
+            : item.categoryId === selection.id,
+        );
 
   const switchCategory = (direction: TodoCategorySwipeDirection) => {
     if (query.data === undefined) return;

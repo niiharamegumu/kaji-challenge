@@ -1,4 +1,4 @@
-import { useAtom } from "jotai";
+import { useAtom, useSetAtom } from "jotai";
 import { Plus } from "lucide-react";
 import { useState } from "react";
 
@@ -18,7 +18,7 @@ export function PenaltiesPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
   const [ruleForm, setRuleForm] = useAtom(ruleFormAtom);
-  const [, setStatus] = useAtom(statusMessageAtom);
+  const setStatus = useSetAtom(statusMessageAtom);
   const { createRule, removeRule, updateRule } = usePenaltyRuleMutations(setStatus);
 
   const handleCreateRule = async () => {

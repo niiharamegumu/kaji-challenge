@@ -26,6 +26,26 @@ const completedCount = (item: MonthlyTaskStatusItem) =>
     ? item.completionSlots.length
     : item.completionSlots.filter((slot) => slot.actor != null).length;
 
+function applyItemChange(item: MonthlyTaskStatusItem, change: CompletionChange) {
+  const required = item.completionSlots.length;
+  const count = isStateChange(change)
+    ? change.action === "complete"
+      ? required
+      : 0
+    : Math.max(
+        0,
+        Math.min(required, completedCount(item) + (change.action === "increment" ? 1 : -1)),
+      );
+  return {
+    ...item,
+    completed: count >= required,
+    completionSlots: item.completionSlots.map((slot) => ({
+      ...slot,
+      actor: slot.slot <= count ? (slot.actor ?? change.actor) : null,
+    })),
+  };
+}
+
 function applyChange(summary: MonthlyPenaltySummary, change: CompletionChange) {
   return {
     ...summary,
@@ -34,29 +54,11 @@ function applyChange(summary: MonthlyPenaltySummary, change: CompletionChange) {
         ? group
         : {
             ...group,
-            items: group.items.map((item) => {
-              if (item.taskId !== change.taskId || item.type !== change.type) return item;
-              const required = item.completionSlots.length;
-              const count = isStateChange(change)
-                ? change.action === "complete"
-                  ? required
-                  : 0
-                : Math.max(
-                    0,
-                    Math.min(
-                      required,
-                      completedCount(item) + (change.action === "increment" ? 1 : -1),
-                    ),
-                  );
-              return {
-                ...item,
-                completed: count >= required,
-                completionSlots: item.completionSlots.map((slot) => ({
-                  ...slot,
-                  actor: slot.slot <= count ? (slot.actor ?? change.actor) : null,
-                })),
-              };
-            }),
+            items: group.items.map((item) =>
+              item.taskId === change.taskId && item.type === change.type
+                ? applyItemChange(item, change)
+                : item,
+            ),
           },
     ),
   };
@@ -98,10 +100,11 @@ export function usePastTaskCompletion(
     },
   });
 
+  const monthPending = pending.filter((change) => change.month === month);
+  const savingTargets = new Set(monthPending.filter(isStateChange).map(actionId));
   return {
-    data: pending.filter((change) => change.month === month).reduce(applyChange, summary),
-    isSaving: (target: Omit<PastTaskUpdate, "action">) =>
-      pending.some((change) => isStateChange(change) && actionId(change) === actionId(target)),
+    data: monthPending.reduce(applyChange, summary),
+    isSaving: (target: Omit<PastTaskUpdate, "action">) => savingTargets.has(actionId(target)),
     update: (target: PastTaskUpdate) => {
       const saved = queryClient.getQueryData<MonthlyPenaltySummary>([
         ...queryKeys.monthlySummary,
@@ -113,17 +116,17 @@ export function usePastTaskCompletion(
         .getMutationCache()
         .findAll({ mutationKey, status: "pending" })
         .map((entry) => entry.state.variables as CompletionChange)
-        .filter((change) => change.month === month);
-      const visible = inFlight.reduce(applyChange, saved);
-      const item = visible.taskStatusByDate
+        .filter((change) => change.month === month && actionId(change) === actionId(target));
+      const savedItem = saved.taskStatusByDate
         .find((group) => group.date === target.targetDate)
         ?.items.find((entry) => entry.taskId === target.taskId && entry.type === target.type);
-      if (!item) return;
+      if (!savedItem) return;
+      const item = inFlight.reduce(applyItemChange, savedItem);
 
       const single = item.type === "daily" || item.completionSlots.length === 1;
       let action = target.action;
       if (single) {
-        if (inFlight.some((change) => actionId(change) === actionId(target))) return;
+        if (inFlight.length > 0) return;
         action = action === "complete" || action === "increment" ? "complete" : "incomplete";
         if (item.completed === (action === "complete")) return;
       } else {

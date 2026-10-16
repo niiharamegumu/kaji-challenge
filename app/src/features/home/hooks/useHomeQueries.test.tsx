@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { Suspense } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -37,7 +37,7 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-function QueryProbe() {
+function QueryProbe({ onRender }: { onRender?: () => void }) {
   const {
     homeQuery,
     todoItemsQuery,
@@ -45,6 +45,7 @@ function QueryProbe() {
     previousMonthPenaltySummaryQuery,
     penaltyRulesQuery,
   } = useHomePageQueries();
+  onRender?.();
   return (
     <div>
       {homeQuery.isSuccess ? "home-ready" : "home-pending"}:{todoItemsQuery.data.length}:
@@ -101,5 +102,32 @@ describe("useHomePageQueries", () => {
     summary.resolve({ data: { totalPenalty: 3 } });
     rules.resolve({ data: { items: [] } });
     expect(await screen.findByText("home-ready:0:2026-07:3:0")).toBeInTheDocument();
+  });
+
+  it("does not rerender the page when background refetches return unchanged data", async () => {
+    mockGetTaskOverview.mockResolvedValue({ data: {} });
+    mockListTodoItems.mockResolvedValue({ data: { items: [] } });
+    mockGetPenaltySummaryMonthly.mockResolvedValue({ data: { totalPenalty: 3 } });
+    mockListPenaltyRules.mockResolvedValue({ data: { items: [] } });
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+    });
+    const onRender = vi.fn();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <Suspense fallback={<div>loading</div>}>
+          <QueryProbe onRender={onRender} />
+        </Suspense>
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByText("home-ready:0:2026-07:3:0")).toBeInTheDocument();
+    const initialRenders = onRender.mock.calls.length;
+    await act(async () => {
+      await queryClient.refetchQueries();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(mockGetTaskOverview).toHaveBeenCalledTimes(2);
+    expect(mockListTodoItems).toHaveBeenCalledTimes(2);
+    expect(onRender).toHaveBeenCalledTimes(initialRenders);
   });
 });

@@ -1,4 +1,4 @@
-import { addDays, midnightJST, weekStart, weekday } from "./dates";
+import { addDays, isDate, midnightJST, weekStart, weekday } from "./dates";
 import { invariant } from "./errors";
 
 export function effectiveName(displayName: string, nickname?: string | null) {
@@ -72,8 +72,19 @@ export function occurrenceDates(
       (record.scheduleType === "monthly" && date.slice(8) === record.startDate.slice(8))
     )
       result.push(date);
+    // Do not advance past the inclusive end (9999-12-31 has no next 4-digit date).
+    if (date === to) break;
   }
   return result;
+}
+export function validateReminderRange(from: string, to: string) {
+  invariant(isDate(from) && isDate(to), "invalid reminder date range");
+  invariant(to >= from, "to must be on or after from");
+  // Inclusive endpoints allow a full leap year while bounding recurrence expansion.
+  invariant(
+    Date.parse(to) - Date.parse(from) <= 365 * 86_400_000,
+    "reminder date range must be 366 days or fewer",
+  );
 }
 export function validateReminder(r: {
   kind: string;

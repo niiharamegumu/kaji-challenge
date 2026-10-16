@@ -1,4 +1,4 @@
-import { useAtom } from "jotai";
+import { useAtom, useSetAtom } from "jotai";
 import { Plus } from "lucide-react";
 import { useState } from "react";
 
@@ -15,7 +15,7 @@ export function TasksPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
   const [taskForm, setTaskForm] = useAtom(taskFormAtom);
-  const [, setStatus] = useAtom(statusMessageAtom);
+  const setStatus = useSetAtom(statusMessageAtom);
   const { createTask, removeTask, updateTask, reorderTasks } = useTaskMutations(setStatus);
 
   const handleCreateTask = async () => {

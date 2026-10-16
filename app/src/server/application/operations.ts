@@ -10,6 +10,7 @@ import {
   ownTeamName,
   validateReorder,
   validateReminder,
+  validateReminderRange,
 } from "../domain/rules";
 import * as map from "./mappers";
 import {
@@ -416,7 +417,7 @@ export async function executeOperation(
       break;
     case "listReminders": {
       const { from, to } = input.params;
-      invariant(to >= from, "to must be on or after from");
+      validateReminderRange(from, to);
       const start = from > today.slice(0, 7) + "-01" ? from : today.slice(0, 7) + "-01";
       const items = await reminderOccurrences(repo, teamId, start, to, todayJST(context.now));
       const itemsByDate = new Map<string, typeof items>();

@@ -16,6 +16,7 @@ import { getColorHexError, getNicknameError, getTeamNameError } from "./settings
 import { TodoCompletionSettings } from "./TodoCompletionSettings";
 
 type Props = {
+  identityKey: string;
   invite: InviteState | null;
   joinCode: string;
   members: TeamMember[];
@@ -41,6 +42,7 @@ type Props = {
 };
 
 export function SettingsManager({
+  identityKey,
   invite,
   joinCode,
   members,
@@ -66,6 +68,7 @@ export function SettingsManager({
 }: Props) {
   const [copied, setCopied] = useState(false);
   const [currentTime, setCurrentTime] = useState(() => Date.now());
+  const inviteExpiresAt = invite == null ? null : new Date(invite.expiresAt).getTime();
 
   useEffect(() => {
     if (!copied) {
@@ -78,19 +81,22 @@ export function SettingsManager({
   }, [copied]);
 
   useEffect(() => {
-    if (invite == null) {
+    if (inviteExpiresAt == null || inviteExpiresAt <= currentTime) {
       return;
     }
-    const timer = window.setInterval(() => {
-      setCurrentTime(Date.now());
-    }, 60_000);
-    return () => window.clearInterval(timer);
-  }, [invite]);
+    const timer = window.setTimeout(
+      () => {
+        setCurrentTime(Date.now());
+      },
+      Math.min(2_147_483_647, Math.max(0, inviteExpiresAt - Date.now())),
+    );
+    return () => window.clearTimeout(timer);
+  }, [inviteExpiresAt, currentTime]);
 
   const nicknameError = getNicknameError(nickname);
   const colorHexError = getColorHexError(colorHex);
   const teamNameError = getTeamNameError(teamName);
-  const inviteExpired = invite != null && new Date(invite.expiresAt).getTime() < currentTime;
+  const inviteExpired = inviteExpiresAt != null && inviteExpiresAt <= currentTime;
 
   const handleCopyInviteCode = async () => {
     if (!invite?.code) {
@@ -189,7 +195,7 @@ export function SettingsManager({
             onSaveNickname={onSaveNickname}
             onSaveColor={onSaveColor}
           />
-          <PushNotificationsSection />
+          <PushNotificationsSection key={identityKey} />
         </div>
       </article>
     </section>

@@ -1,6 +1,8 @@
-import { afterAll, beforeAll, expect, it } from "vitest";
+import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { createTestDatabase } from "../helpers/d1";
-import { reminders, teams } from "../../src/server/infrastructure/schema";
+import { reminders, teams, teamMembers } from "../../src/server/infrastructure/schema";
+import { user } from "../../src/server/infrastructure/auth-schema";
+import { executeOperation } from "../../src/server/application/operations";
 import { reminderOccurrences } from "../../src/server/application/summary";
 
 let connection: Awaited<ReturnType<typeof createTestDatabase>>;
@@ -11,6 +13,17 @@ beforeAll(async () => {
     { id: "period-team", name: "period", created_at: "2026-10-01T00:00:00.000Z" },
     { id: "other-team", name: "other", created_at: "2026-10-01T00:00:00.000Z" },
   ]);
+  await connection.db.insert(user).values({
+    id: "period-user",
+    name: "period",
+    email: "period@example.com",
+  });
+  await connection.db.insert(teamMembers).values({
+    team_id: "period-team",
+    user_id: "period-user",
+    role: "owner",
+    created_at: "2026-10-01T00:00:00.000Z",
+  });
   const once = (id: string, date: string, team = "period-team") => ({
     id,
     team_id: team,
@@ -97,4 +110,71 @@ it("preserves inclusive boundaries and recurring occurrences earlier than today"
     period.today,
   );
   expect(empty).toEqual([]);
+});
+
+it.each([
+  ["2026-10-01", "2027-10-02"],
+  ["2026-10-01", "9999-12-31"],
+])(
+  "rejects an oversized reminder window before reading definitions (%s to %s)",
+  async (from, to) => {
+    const list = vi.spyOn(connection.repository, "ListRemindersByTeamID").mockResolvedValue([]);
+    try {
+      await expect(
+        reminderOccurrences(connection.repository, "period-team", from, to),
+      ).rejects.toMatchObject({ status: 400, code: "invalid_request" });
+      expect(list).not.toHaveBeenCalled();
+    } finally {
+      list.mockRestore();
+    }
+  },
+);
+
+it("rejects an oversized operation before clamping its start to the current month", async () => {
+  await expect(
+    executeOperation(
+      connection.repository,
+      {
+        operation: "listReminders",
+        params: { from: "2000-01-01", to: "2026-10-02" },
+      },
+      { userId: "period-user", now: new Date("2026-10-01T00:00:00.000Z"), vapidPublicKey: "" },
+    ),
+  ).rejects.toMatchObject({ status: 400, code: "invalid_request" });
+});
+
+it("allows all 366 days of a leap year and returns no occurrences for a clamped past range", async () => {
+  const list = vi.spyOn(connection.repository, "ListRemindersByTeamID").mockResolvedValue([
+    {
+      ID: "daily-leap-year",
+      TeamID: "period-team",
+      Title: "daily",
+      Notes: null,
+      Kind: "recurring",
+      ScheduleType: "daily",
+      StartDate: "2028-01-01",
+      EndDate: null,
+      CreatedAt: "2026-10-01T00:00:00.000Z",
+      UpdatedAt: "2026-10-01T00:00:00.000Z",
+    },
+  ]);
+  try {
+    const result = await reminderOccurrences(
+      connection.repository,
+      "period-team",
+      "2028-01-01",
+      "2028-12-31",
+    );
+    expect(result).toHaveLength(366);
+    expect(result[0].date).toBe("2028-01-01");
+    expect(result.at(-1)?.date).toBe("2028-12-31");
+
+    list.mockClear();
+    expect(
+      await reminderOccurrences(connection.repository, "period-team", "2026-10-01", "2026-09-30"),
+    ).toEqual([]);
+    expect(list).not.toHaveBeenCalled();
+  } finally {
+    list.mockRestore();
+  }
 });

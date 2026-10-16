@@ -71,6 +71,7 @@ export function SettingsPage() {
   return (
     <section className="mt-2 pb-1 md:mt-4">
       <SettingsManager
+        identityKey={currentTeamKey}
         invite={invite}
         joinCode={joinCode}
         members={membersQuery.data}

@@ -59,6 +59,8 @@ type EditTaskState = {
   notes: string;
 };
 
+const emptyEditTaskState: EditTaskState = { title: "", notes: "" };
+
 type PendingDeleteTask = {
   id: string;
   title: string;
@@ -326,10 +328,7 @@ function TaskItemsSection({
   onUpdate,
 }: TaskItemsSectionProps) {
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
-  const [editState, setEditState] = useState<EditTaskState>({
-    title: "",
-    notes: "",
-  });
+  const [editState, setEditState] = useState(emptyEditTaskState);
   const [pendingDeleteTask, setPendingDeleteTask] = useState<PendingDeleteTask | null>(null);
   const [optimisticTaskIds, setOptimisticTaskIds] = useState<string[] | null>(null);
 
@@ -380,14 +379,11 @@ function TaskItemsSection({
     if (oldIndex < 0 || newIndex < 0) {
       return;
     }
-    const nextTasks = arrayMove(optimisticTasks, oldIndex, newIndex).map((task, index) => ({
-      ...task,
-      sortKey: index + 1,
-    }));
+    const nextTaskIds = arrayMove(taskIds, oldIndex, newIndex);
     startTransition(() => {
-      setOptimisticTaskIds(nextTasks.map((task) => task.id));
+      setOptimisticTaskIds(nextTaskIds);
     });
-    onReorder({ taskIds: nextTasks.map((task) => task.id) });
+    onReorder({ taskIds: nextTaskIds });
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -409,7 +405,7 @@ function TaskItemsSection({
 
   const cancelEdit = () => {
     setEditingTaskId(null);
-    setEditState({ title: "", notes: "" });
+    setEditState(emptyEditTaskState);
   };
 
   const saveEdit = async (taskId: string) => {
@@ -472,7 +468,7 @@ function TaskItemsSection({
                     task={task}
                     isEditing={editingTaskId === task.id}
                     isSaving={isUpdating}
-                    editState={editState}
+                    editState={editingTaskId === task.id ? editState : emptyEditTaskState}
                     onStartEdit={startEdit}
                     onChangeEditState={setEditState}
                     onCancelEdit={cancelEdit}

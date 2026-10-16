@@ -7,6 +7,7 @@ import { McpServer, type CallToolResult } from "@modelcontextprotocol/server";
 import { createMcpHandler } from "agents/mcp/server";
 import brandIcon from "../../../public/icons/pwa-192x192.png?inline";
 import type { McpEnv } from "../../../mcp-worker-configuration";
+import { readBoundedBody } from "./request-body";
 import {
   AddTodoInputSchema,
   CompleteTodoInputSchema,
@@ -151,39 +152,11 @@ function record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-async function boundedBody(request: Request): Promise<Uint8Array<ArrayBuffer> | null> {
-  if (!request.body) return new Uint8Array();
-  const reader = request.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let length = 0;
-  try {
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      length += value.byteLength;
-      if (length > MAX_BODY_BYTES) {
-        await reader.cancel();
-        return null;
-      }
-      chunks.push(value);
-    }
-  } finally {
-    reader.releaseLock();
-  }
-  const body = new Uint8Array(length);
-  let offset = 0;
-  for (const chunk of chunks) {
-    body.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return body;
-}
-
 async function handleMcp(request: Request, env: McpWorkerBindings, ctx: ResourceContext) {
   const resource = `${env.MCP_ORIGIN}/mcp`;
   let parsedBody: unknown;
   if (request.method === "POST") {
-    const body = await boundedBody(request);
+    const body = await readBoundedBody(request, MAX_BODY_BYTES);
     if (body === null) return new Response("Request too large", { status: 413 });
     // Keep malformed JSON for the SDK's protocol error handling.
     request = new Request(request, { method: "POST", body });

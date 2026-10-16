@@ -124,6 +124,39 @@ it("does not link another Google subject based on matching email", async () => {
   expect(other.error).toBe("account not linked");
   expect(await counts()).toEqual(before);
 });
+it.each([null, "github"])(
+  "rejects session creation without this user's Google identity (provider: %s)",
+  async (provider) => {
+    const userId = crypto.randomUUID();
+    const otherUserId = crypto.randomUUID();
+    for (const id of [userId, otherUserId])
+      await connection.binding
+        .prepare("INSERT INTO auth_user(id,name,email) VALUES (?,'Identity fixture',?)")
+        .bind(id, `${id}@example.com`)
+        .run();
+    // Another user's Google identity must not satisfy the new session's identity check.
+    await connection.binding
+      .prepare(
+        "INSERT INTO auth_account(id,user_id,provider_id,account_id) VALUES (?,?,'google',?)",
+      )
+      .bind(crypto.randomUUID(), otherUserId, crypto.randomUUID())
+      .run();
+    if (provider)
+      await connection.binding
+        .prepare("INSERT INTO auth_account(id,user_id,provider_id,account_id) VALUES (?,?,?,?)")
+        .bind(crypto.randomUUID(), userId, provider, crypto.randomUUID())
+        .run();
+    const before = await counts();
+    const auth = createAuth(connection.db, settings);
+    await expect((await auth.$context).internalAdapter.createSession(userId)).rejects.toMatchObject(
+      {
+        status: "FORBIDDEN",
+        body: { message: "Google identity is required" },
+      },
+    );
+    expect(await counts()).toEqual(before);
+  },
+);
 it.each([false, undefined])(
   "rejects Google profiles without a verified email (%s)",
   async (email_verified) => {

@@ -134,6 +134,22 @@ describe("PushSettings", () => {
     cleanup();
   });
 
+  it("cancels the push subscriptions read when the settings screen leaves", async () => {
+    mockGetPushSubscriptionsMe.mockReturnValue(new Promise(() => {}));
+    const view = render(
+      <AppProviders>
+        <SuspenseQueryBoundary errorMessage="テスト用エラー">
+          <SettingsPage />
+        </SuspenseQueryBoundary>
+      </AppProviders>,
+    );
+    await waitFor(() => expect(mockGetPushSubscriptionsMe).toHaveBeenCalledOnce());
+    const signal: AbortSignal = mockGetPushSubscriptionsMe.mock.calls[0][0].signal;
+    expect(signal.aborted).toBe(false);
+    view.unmount();
+    expect(signal.aborted).toBe(true);
+  });
+
   it("does not sync browser subscription automatically on render", async () => {
     const encoder = new TextEncoder();
     vi.stubGlobal("Notification", createNotificationMock("granted"));

@@ -13,15 +13,18 @@ type Props = {
   onDecrement: (taskId: string) => void;
 };
 
+const emptyPendingTaskIds: string[] = [];
+
 export function WeeklyTasksPanel({
   items,
-  pendingTaskIds = [],
+  pendingTaskIds = emptyPendingTaskIds,
   elapsedDaysInWeek,
   weeklyProgress,
   onToggle,
   onIncrement,
   onDecrement,
 }: Props) {
+  const pendingTasks = new Set(pendingTaskIds);
   const normalizedElapsedDaysInWeek = Math.min(7, Math.max(0, elapsedDaysInWeek));
   const elapsedDaysBeforeToday = Math.max(0, normalizedElapsedDaysInWeek - 1);
   const remainingDaysInWeek = Math.max(0, 7 - elapsedDaysBeforeToday);
@@ -65,8 +68,8 @@ export function WeeklyTasksPanel({
                 <li key={item.task.id}>
                   <button
                     type="button"
-                    disabled={pendingTaskIds.includes(item.task.id)}
-                    aria-busy={pendingTaskIds.includes(item.task.id)}
+                    disabled={pendingTasks.has(item.task.id)}
+                    aria-busy={pendingTasks.has(item.task.id)}
                     className={`relative w-full overflow-hidden rounded-xl border p-2.5 text-left transition-colors duration-200 ${isDone ? "border-[color:var(--color-matcha-400)]" : "border-stone-300 bg-white"}`}
                     onClick={() => onToggle(item.task.id)}
                   >
@@ -148,8 +151,8 @@ export function WeeklyTasksPanel({
                     type="button"
                     className="absolute inset-y-0 left-0 z-20 w-1/2 touch-manipulation rounded-l-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-matcha-500)] focus-visible:ring-offset-2 disabled:cursor-not-allowed"
                     onClick={() => onDecrement(item.task.id)}
-                    disabled={item.weekCompletedCount <= 0 || pendingTaskIds.includes(item.task.id)}
-                    aria-busy={pendingTaskIds.includes(item.task.id)}
+                    disabled={item.weekCompletedCount <= 0 || pendingTasks.has(item.task.id)}
+                    aria-busy={pendingTasks.has(item.task.id)}
                     aria-label={`${item.task.title} を1減らす`}
                   />
                   <button
@@ -158,9 +161,9 @@ export function WeeklyTasksPanel({
                     onClick={() => onIncrement(item.task.id)}
                     disabled={
                       item.weekCompletedCount >= item.requiredCompletionsPerWeek ||
-                      pendingTaskIds.includes(item.task.id)
+                      pendingTasks.has(item.task.id)
                     }
-                    aria-busy={pendingTaskIds.includes(item.task.id)}
+                    aria-busy={pendingTasks.has(item.task.id)}
                     aria-label={`${item.task.title} を1増やす`}
                   />
                 </div>

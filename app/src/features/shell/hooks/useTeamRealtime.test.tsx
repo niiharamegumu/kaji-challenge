@@ -55,6 +55,42 @@ function mount() {
     }),
   };
 }
+it("keeps the presence snapshot stable when another tab publishes the same members", () => {
+  const hook = mount();
+  act(() => Socket.instances[0].message({ type: "presence", userIds: ["self", "peer"] }));
+  const presence = hook.result.current;
+  act(() => Socket.instances[0].message({ type: "presence", userIds: ["self", "peer"] }));
+  expect(hook.result.current).toBe(presence);
+  act(() => Socket.instances[0].message({ type: "presence", userIds: ["self"] }));
+  expect(hook.result.current).toMatchObject({ connected: true, userIds: ["self"] });
+  hook.unmount();
+});
+
+it("ignores queued events from a closed socket after resuming with a new connection", () => {
+  const hook = mount();
+  const previous = Socket.instances[0];
+  act(() => {
+    previous.open();
+    previous.message({ type: "presence", userIds: ["self", "peer"] });
+  });
+  previous.readyState = 3;
+  act(() => window.dispatchEvent(new Event("online")));
+  expect(Socket.instances).toHaveLength(2);
+  expect(hook.result.current).toMatchObject({ connected: false, userIds: [] });
+  act(() => {
+    Socket.instances[1].open();
+    Socket.instances[1].message({ type: "presence", userIds: ["self", "peer"] });
+  });
+  hook.invalidate.mockClear();
+  act(() => {
+    previous.message({ type: "presence", userIds: ["stale"] });
+    previous.message({ type: "team-changed" });
+    previous.close(1008);
+  });
+  expect(hook.result.current).toMatchObject({ connected: true, userIds: ["self", "peer"] });
+  expect(hook.invalidate).not.toHaveBeenCalled();
+  hook.unmount();
+});
 it("keeps one connection across renders, clears stale presence, and reconnects with a fresh fetch", async () => {
   const hook = mount();
   act(() => {

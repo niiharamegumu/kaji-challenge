@@ -49,6 +49,18 @@ function startTeamRealtime({
   onStateChange,
 }: TeamRealtimeOptions): () => void {
   const identity = { teamId, userId };
+  let lastState: ConnectionState | null = null;
+
+  function publishState(userIds: string[], connected: boolean) {
+    if (
+      lastState?.connected === connected &&
+      lastState.userIds.length === userIds.length &&
+      lastState.userIds.every((id, index) => id === userIds[index])
+    )
+      return;
+    lastState = { ...identity, userIds, connected };
+    onStateChange(lastState);
+  }
 
   // この呼び出しの接続だけに属する値。チーム・ユーザーの変更時に作り直す。
   let disposed = false;
@@ -93,7 +105,7 @@ function startTeamRealtime({
 
     switch (result.data.type) {
       case "presence":
-        onStateChange({ ...identity, userIds: result.data.userIds, connected: true });
+        publishState(result.data.userIds, true);
         break;
       case "team-changed":
         requestRefresh(result.data.changes);
@@ -109,7 +121,7 @@ function startTeamRealtime({
 
   function handleClose(event: CloseEvent) {
     if (disposed) return;
-    onStateChange({ ...identity, userIds: [], connected: false });
+    publishState([], false);
 
     // 1008はセッション・所属などの拒否。タイマーで再接続せず本人情報を確認する。
     if (event.code === 1008) {
@@ -126,15 +138,23 @@ function startTeamRealtime({
     const hasActiveConnection =
       socket?.readyState === WebSocket.OPEN || socket?.readyState === WebSocket.CONNECTING;
     if (disposed || hasActiveConnection) return;
+    if (lastState?.connected) publishState([], false);
 
     const url = new URL("/api/realtime", window.location.href);
     url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
 
     const connection = new WebSocket(url);
     socket = connection;
-    connection.onopen = handleOpen;
-    connection.onmessage = handleMessage;
-    connection.onclose = handleClose;
+    // A resume can replace a closed socket before its queued events are delivered.
+    connection.onopen = () => {
+      if (socket === connection) handleOpen();
+    };
+    connection.onmessage = (event) => {
+      if (socket === connection) handleMessage(event);
+    };
+    connection.onclose = (event) => {
+      if (socket === connection) handleClose(event);
+    };
     connection.onerror = () => connection.close();
   }
 
