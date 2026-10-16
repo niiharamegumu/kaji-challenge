@@ -1,9 +1,11 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { createStore, Provider } from "jotai";
 import type { ReactElement } from "react";
 import { MemoryRouter } from "../../../test/router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ReminderCalendarPage } from "./ReminderCalendarPage";
+import { statusMessageAtom } from "../../../shared/state/status";
 
 const mockUseReminderDefinitionsQuery = vi.fn();
 const mockUseReminderCalendarQuery = vi.fn();
@@ -108,6 +110,54 @@ describe("ReminderCalendarPage", () => {
     const calls = mockFullCalendar.mock.calls;
     return calls[calls.length - 1]?.[0] as Record<string, unknown> | undefined;
   }
+
+  it("does not rerender the calendar for status messages it only writes", () => {
+    setViewport(1280);
+    const store = createStore();
+    render(
+      <Provider store={store}>
+        <MemoryRouter initialEntries={["/calendar"]}>
+          <ReminderCalendarPage />
+        </MemoryRouter>
+      </Provider>,
+    );
+    const initialRenders = mockFullCalendar.mock.calls.length;
+    act(() => store.set(statusMessageAtom, "保存しました"));
+    expect(mockFullCalendar).toHaveBeenCalledTimes(initialRenders);
+  });
+
+  it("only observes viewport height changes for the mobile calendar", () => {
+    const initialHeight = window.innerHeight;
+    const resizeHeight = () => {
+      Object.defineProperty(window, "innerHeight", {
+        configurable: true,
+        value: initialHeight + 100,
+      });
+      fireEvent(window, new Event("resize"));
+    };
+    setViewport(1280);
+    const desktop = render(
+      <MemoryRouter initialEntries={["/calendar"]}>
+        <ReminderCalendarPage />
+      </MemoryRouter>,
+    );
+    const initialRenders = mockFullCalendar.mock.calls.length;
+    resizeHeight();
+    expect(mockFullCalendar).toHaveBeenCalledTimes(initialRenders);
+    desktop.unmount();
+
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 640 });
+    setViewport(390);
+    render(
+      <MemoryRouter initialEntries={["/calendar"]}>
+        <ReminderCalendarPage />
+      </MemoryRouter>,
+    );
+    expect(latestCalendarProps()?.height).toBe(360);
+    resizeHeight();
+    expect(latestCalendarProps()?.height).toBe(520);
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: initialHeight });
+  });
 
   it("does not switch to creation or reset a mutation while an edit is saving", () => {
     setViewport(1280);
