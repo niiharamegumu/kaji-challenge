@@ -14,7 +14,7 @@ const millisecondsUntilNextJSTDay = () => {
 export function useMonthCloseCandidate() {
   const query = useQuery({
     queryKey: queryKeys.monthCloseCandidate,
-    queryFn: getMonthCloseCandidate,
+    queryFn: ({ signal }) => getMonthCloseCandidate(signal),
     refetchOnWindowFocus: true,
   });
   const refetch = query.refetch;
@@ -24,7 +24,7 @@ export function useMonthCloseCandidate() {
     let active = true;
     const schedule = () => {
       timer = window.setTimeout(() => {
-        void refetch().finally(() => {
+        void refetch({ cancelRefetch: false }).finally(() => {
           if (active) {
             schedule();
           }
