@@ -64,14 +64,14 @@ export function useAuthGate({
       handledInvalidSessionRef.current = false;
       hasValidatedSessionRef.current = true;
       retriedAfterLoginRef.current = false;
-      setSession({ authenticated: true });
+      if (!loggedIn) setSession({ authenticated: true });
       return;
     }
     if (!meIsError) {
       return;
     }
 
-    setSession({ authenticated: false });
+    if (loggedIn) setSession({ authenticated: false });
     const statusCode = extractHttpStatus(meError);
 
     if (statusCode === 401) {
