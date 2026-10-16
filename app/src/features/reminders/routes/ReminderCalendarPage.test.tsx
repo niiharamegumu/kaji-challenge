@@ -28,11 +28,12 @@ vi.mock("@fullcalendar/react", async () => {
   };
 });
 
-vi.mock("@fullcalendar/daygrid", () => ({ default: {} }));
-vi.mock("@fullcalendar/interaction", () => ({
+vi.mock("@fullcalendar/react/daygrid", () => ({ default: {} }));
+vi.mock("@fullcalendar/react/interaction", () => ({
   default: {},
 }));
-vi.mock("@fullcalendar/core/locales/ja", () => ({ default: {} }));
+vi.mock("@fullcalendar/react/locales/ja", () => ({ default: {} }));
+vi.mock("@fullcalendar/react/themes/classic", () => ({ default: {} }));
 
 function setViewport(width: number) {
   Object.defineProperty(window, "innerWidth", {
@@ -326,6 +327,78 @@ describe("ReminderCalendarPage", () => {
     expect(eventAllow?.({ startStr: "2026-04-14" })).toBe(false);
     expect(eventAllow?.({ startStr: "2026-04-15" })).toBe(true);
   });
+
+  it.each([
+    { reminderId: "rem-1", startStr: "2026-03-31", reason: "a past date" },
+    { reminderId: "missing", startStr: "2026-04-03", reason: "an unknown reminder" },
+  ])("reverts a calendar drop for $reason without saving", ({ reminderId, startStr }) => {
+    setViewport(1280);
+    const updateReminder = vi.fn();
+    mockUseReminderMutations.mockReturnValue({
+      createReminder: { reset: vi.fn(), isPending: false, isError: false, mutateAsync: vi.fn() },
+      updateReminder: {
+        reset: vi.fn(),
+        isPending: false,
+        isError: false,
+        mutateAsync: updateReminder,
+      },
+      removeReminder: { reset: vi.fn(), isPending: false, isError: false, mutateAsync: vi.fn() },
+    });
+    render(
+      <MemoryRouter initialEntries={["/calendar?date=2026-04-02"]}>
+        <ReminderCalendarPage />
+      </MemoryRouter>,
+    );
+    const eventDrop = latestCalendarProps()?.eventDrop as (arg: {
+      event: { extendedProps: { reminderId: string }; startStr: string };
+      revert: () => void;
+    }) => void;
+    const revert = vi.fn();
+
+    act(() => eventDrop({ event: { extendedProps: { reminderId }, startStr }, revert }));
+
+    expect(updateReminder).not.toHaveBeenCalled();
+    expect(revert).toHaveBeenCalledOnce();
+  });
+
+  it("reverts a dropped event when saving its new date fails", async () => {
+    setViewport(1280);
+    const updateReminder = vi.fn().mockRejectedValue(new Error("保存失敗"));
+    mockUseReminderMutations.mockReturnValue({
+      createReminder: { reset: vi.fn(), isPending: false, isError: false, mutateAsync: vi.fn() },
+      updateReminder: {
+        reset: vi.fn(),
+        isPending: false,
+        isError: false,
+        mutateAsync: updateReminder,
+      },
+      removeReminder: { reset: vi.fn(), isPending: false, isError: false, mutateAsync: vi.fn() },
+    });
+    render(
+      <MemoryRouter initialEntries={["/calendar?date=2026-04-02"]}>
+        <ReminderCalendarPage />
+      </MemoryRouter>,
+    );
+    const eventDrop = latestCalendarProps()?.eventDrop as (arg: {
+      event: { extendedProps: { reminderId: string }; startStr: string };
+      revert: () => void;
+    }) => void;
+    const revert = vi.fn();
+
+    await act(async () => {
+      eventDrop({
+        event: { extendedProps: { reminderId: "rem-1" }, startStr: "2026-04-03" },
+        revert,
+      });
+    });
+
+    expect(updateReminder).toHaveBeenCalledExactlyOnceWith({
+      reminderId: "rem-1",
+      payload: { startDate: "2026-04-03" },
+    });
+    expect(revert).toHaveBeenCalledOnce();
+  });
+
   it.each([390, 1280])(
     "edits a recurring reminder and retains validation at width %i",
     async (width) => {
