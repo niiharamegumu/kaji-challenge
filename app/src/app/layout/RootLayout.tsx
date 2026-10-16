@@ -2,7 +2,7 @@ import { prefetchRouteData } from "../route-preload";
 import { ConnectedMembers } from "../../features/shell/components/ConnectedMembers";
 import { useTeamRealtime } from "../../features/shell/hooks/useTeamRealtime";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAtom, useAtomValue } from "jotai";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, Outlet, useLocation, useNavigate } from "../../shared/router/navigation";
 
@@ -60,7 +60,7 @@ export function RootLayout() {
   const { isInitialBootPending, markAuthResolved } = useBootFlow();
   const homeDataPrefetchedRef = useRef(false);
   const queryClient = useQueryClient();
-  const [, setSession] = useAtom(sessionAtom);
+  const setSession = useSetAtom(sessionAtom);
   const [status, setStatus] = useAtom(statusMessageAtom);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const loggedIn = useAtomValue(isLoggedInAtom);
