@@ -41,29 +41,32 @@ function showCompletion(
   change: CompletionChange,
 ): TaskOverviewResponse {
   if (home.today !== change.targetDate) return home;
+  const dailyIndex = home.dailyTasks.findIndex((item) => item.task.id === change.taskId);
+  if (dailyIndex !== -1) {
+    const item = home.dailyTasks[dailyIndex];
+    const dailyTasks = home.dailyTasks.slice();
+    dailyTasks[dailyIndex] = {
+      ...item,
+      completedToday: change.completed,
+      completedBy: change.completed ? (item.completedBy ?? change.actor) : null,
+    };
+    return { ...home, dailyTasks };
+  }
+  const weeklyIndex = home.weeklyTasks.findIndex((item) => item.task.id === change.taskId);
+  if (weeklyIndex === -1) return home;
+  const item = home.weeklyTasks[weeklyIndex];
+  const weeklyTasks = home.weeklyTasks.slice();
+  weeklyTasks[weeklyIndex] = {
+    ...item,
+    weekCompletedCount: change.count,
+    completionSlots: item.completionSlots.map((slot) => {
+      const actor = slot.slot <= change.count ? (slot.actor ?? change.actor) : null;
+      return actor === slot.actor ? slot : { ...slot, actor };
+    }),
+  };
   return {
     ...home,
-    dailyTasks: home.dailyTasks.map((item) =>
-      item.task.id === change.taskId
-        ? {
-            ...item,
-            completedToday: change.completed,
-            completedBy: change.completed ? (item.completedBy ?? change.actor) : null,
-          }
-        : item,
-    ),
-    weeklyTasks: home.weeklyTasks.map((item) =>
-      item.task.id === change.taskId
-        ? {
-            ...item,
-            weekCompletedCount: change.count,
-            completionSlots: item.completionSlots.map((slot) => ({
-              ...slot,
-              actor: slot.slot <= change.count ? (slot.actor ?? change.actor) : null,
-            })),
-          }
-        : item,
-    ),
+    weeklyTasks,
   };
 }
 
@@ -145,9 +148,11 @@ export function useHomePageQueries() {
   const todoItems = useOptimisticTodoItems(todoItemsQuery.data);
 
   return {
-    homeQuery: { ...homeQuery, data: pendingCompletions.reduce(applyChange, homeQuery.data) },
+    homeQuery: {
+      data: pendingCompletions.reduce(applyChange, homeQuery.data),
+      isSuccess: homeQuery.isSuccess,
+    },
     todoItemsQuery: {
-      ...todoItemsQuery,
       data: todoItems,
     },
     previousMonth,
