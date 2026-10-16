@@ -141,6 +141,7 @@ function renderNotesWithLinks(value: string): ReactNode {
 
 function SortableTodoItem({
   categoriesQuery,
+  categoryLabel,
   item,
   isEditing,
   isSaving,
@@ -154,6 +155,7 @@ function SortableTodoItem({
   onComplete,
 }: {
   categoriesQuery: TodoCategoriesQuery;
+  categoryLabel: string;
   item: TodoItem;
   isEditing: boolean;
   isSaving: boolean;
@@ -179,11 +181,6 @@ function SortableTodoItem({
     transition: isDragging ? undefined : transition,
   };
 
-  const categoryLabel =
-    item.categoryId === null
-      ? "未分類"
-      : (categoriesQuery.data?.find((category) => category?.id === item.categoryId)?.name ??
-        (categoriesQuery.isPending ? "カテゴリー取得中…" : "カテゴリー不明"));
   const canSave = editState.name.trim().length > 0 && categoriesQuery.data !== undefined;
   const dragProps = isEditing
     ? {}
@@ -368,6 +365,11 @@ export function TodoItemsSection({
   const [editState, setEditState] = useTodoItemFormState(categoriesQuery.data);
   const { pendingActions, schedule, undo } = useDelayedActions();
   const pendingCompletions = new Map(pendingActions.map((item) => [item.id, item]));
+  const categoryNames = new Map(
+    (categoriesQuery.data ?? []).flatMap((category) =>
+      category ? [[category.id, category.name] as const] : [],
+    ),
+  );
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 8 },
@@ -475,13 +477,19 @@ export function TodoItemsSection({
                   {items.map((item) => (
                     <SortableTodoItem
                       categoriesQuery={categoriesQuery}
+                      categoryLabel={
+                        item.categoryId === null
+                          ? "未分類"
+                          : (categoryNames.get(item.categoryId) ??
+                            (categoriesQuery.isPending ? "カテゴリー取得中…" : "カテゴリー不明"))
+                      }
                       key={item.id}
                       item={item}
                       isEditing={editingItemId === item.id}
                       isSaving={isUpdating}
                       isReordering={isReordering}
                       pendingCompletion={pendingCompletions.get(`todo:${item.id}`)}
-                      editState={editState}
+                      editState={editingItemId === item.id ? editState : emptyTodoItemForm}
                       onStartEdit={startEdit}
                       onChangeEditState={setEditState}
                       onCancelEdit={cancelEdit}
