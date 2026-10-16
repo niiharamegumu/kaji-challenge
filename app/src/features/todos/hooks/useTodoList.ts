@@ -39,19 +39,30 @@ export function useOptimisticTodoItems(items: TodoItem[]) {
     filters: { mutationKey: reorderMutationKey, status: "pending" },
     select: (mutation) => mutation.state.variables as ReorderTodoItemsRequest,
   });
-  let result = items;
+  const updatesById = new Map<string, UpdateTodoItemRequest>();
   for (const { itemId, payload } of updates) {
-    result = result.map((item) =>
-      item.id === itemId
-        ? {
-            ...item,
-            name: payload.name ?? item.name,
-            notes: payload.notes === undefined ? item.notes : payload.notes,
-            categoryId: payload.categoryId === undefined ? item.categoryId : payload.categoryId,
-          }
-        : item,
-    );
+    const previous = updatesById.get(itemId);
+    updatesById.set(itemId, {
+      name: payload.name ?? previous?.name,
+      notes: payload.notes === undefined ? previous?.notes : payload.notes,
+      categoryId: payload.categoryId === undefined ? previous?.categoryId : payload.categoryId,
+    });
   }
+  // Apply each item's pending edits once, preserving the cache reference when there is no edit.
+  let result =
+    updatesById.size === 0
+      ? items
+      : items.map((item) => {
+          const payload = updatesById.get(item.id);
+          return payload
+            ? {
+                ...item,
+                name: payload.name ?? item.name,
+                notes: payload.notes === undefined ? item.notes : payload.notes,
+                categoryId: payload.categoryId === undefined ? item.categoryId : payload.categoryId,
+              }
+            : item;
+        });
   const order = orders.at(-1);
   if (order) {
     const byId = new Map(result.map((item) => [item.id, item]));
@@ -64,7 +75,7 @@ export function useOptimisticTodoItems(items: TodoItem[]) {
     // 並べ替え中に追加された項目の位置は保持し、削除された項目は復活させない。
     result = result.map((item) => (ids.has(item.id) ? ordered[index++] : item));
   }
-  return result.filter((item) => !removed.has(item.id));
+  return removed.size === 0 ? result : result.filter((item) => !removed.has(item.id));
 }
 
 export function usePendingTodoRemovals() {
@@ -77,7 +88,8 @@ export function usePendingTodoRemovals() {
 export function useTodoItemsQuery() {
   const query = useSuspenseQuery(todoItemsQueryOptions);
   const data = useOptimisticTodoItems(query.data);
-  return { ...query, data };
+  // Only data is consumed by the list; spreading the result subscribes to every query field.
+  return { data };
 }
 
 export function useTodoItemMutations(setStatus: StatusSetter) {
