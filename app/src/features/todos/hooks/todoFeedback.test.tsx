@@ -3,7 +3,7 @@ import {
   categoryIdFixture as cid,
 } from "../../../test/todoCategories";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, renderHook, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import type { TodoItem } from "../../../lib/api/operations";
@@ -123,6 +123,68 @@ it("uses the saved response for edits without another list request", async () =>
   expect(await screen.findByRole("button", { name: "更新済み" })).toBeVisible();
   expect(api.load).not.toHaveBeenCalled();
   expect(api.categories).not.toHaveBeenCalled();
+});
+
+it("keeps the original list and does not rerender for an unchanged background refetch", async () => {
+  const { client, items } = setup();
+  const renders = vi.fn();
+  const { result } = renderHook(
+    () => {
+      const { data } = useTodoItemsQuery();
+      renders();
+      return data;
+    },
+    {
+      wrapper: ({ children }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    },
+  );
+  const initialRenders = renders.mock.calls.length;
+  expect(result.current).toBe(client.getQueryData(queryKeys.todoItems));
+  api.load.mockResolvedValueOnce({ data: { items: structuredClone(items) } });
+  await act(async () => {
+    await client.refetchQueries({ queryKey: queryKeys.todoItems });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  expect(api.load).toHaveBeenCalledOnce();
+  expect(renders).toHaveBeenCalledTimes(initialRenders);
+  expect(result.current).toBe(client.getQueryData(queryKeys.todoItems));
+});
+
+it("combines concurrent edits of one item while preserving untouched items and null clears", async () => {
+  const { client } = setup();
+  api.update.mockReturnValue(new Promise(() => {}));
+  const { result } = renderHook(
+    () => ({
+      data: useTodoItemsQuery().data,
+      mutations: useTodoItemMutations(vi.fn()),
+    }),
+    {
+      wrapper: ({ children }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    },
+  );
+  const untouched = result.current.data[1];
+  act(() => {
+    result.current.mutations.updateItem.mutate({
+      itemId: "A",
+      payload: { name: "先の編集", notes: "メモ", categoryId: cid("登録済み") },
+    });
+    result.current.mutations.updateItem.mutate({
+      itemId: "A",
+      payload: { notes: null, categoryId: null },
+    });
+  });
+  await waitFor(() =>
+    expect(result.current.data[0]).toMatchObject({
+      name: "先の編集",
+      notes: null,
+      categoryId: null,
+    }),
+  );
+  expect(result.current.data[1]).toBe(untouched);
 });
 
 it.each(["編集を保存", "新規保存"])(
