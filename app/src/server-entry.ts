@@ -4,6 +4,7 @@ import { scheduled } from "./server/transport/scheduled.server";
 import { AppError } from "./server/domain/errors";
 import { connectRealtime } from "./server/transport/realtime.server";
 import { handleMcpHttp, isMcpHttpPath } from "./server/transport/mcp-oauth";
+import { boundRequestBody } from "./server/transport/request-body";
 
 export { TeamRealtime } from "./server/infrastructure/team-realtime";
 export { McpApplication } from "./server/transport/mcp-entrypoint";
@@ -46,9 +47,11 @@ async function handleRequest(request: Request, bindings: RuntimeBindings, ctx: E
   if (path === "/health") return Response.json({ status: "ok", release: bindings.APP_RELEASE });
   if (path.startsWith("/api/auth/")) {
     if (bindings.MAINTENANCE_MODE === "true") return new Response("Maintenance", { status: 503 });
+    const bounded = await boundRequestBody(request);
+    if (bounded instanceof Response) return bounded;
     try {
       const runtime = createRuntime(bindings);
-      return await runtime.auth.handler(request);
+      return await runtime.auth.handler(bounded);
     } catch (error) {
       if (error instanceof AppError)
         return Response.json(
@@ -65,6 +68,11 @@ async function handleRequest(request: Request, bindings: RuntimeBindings, ctx: E
         { status: 500 },
       );
     }
+  }
+  if (path === "/_serverFn" || path.startsWith("/_serverFn/")) {
+    const bounded = await boundRequestBody(request);
+    if (bounded instanceof Response) return bounded;
+    return start.fetch(bounded);
   }
   return start.fetch(request);
 }
