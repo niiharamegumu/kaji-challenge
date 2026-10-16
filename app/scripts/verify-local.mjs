@@ -27,6 +27,7 @@ const excluded = new Set([
   ".alchemy",
   ".tanstack",
   ".vite",
+  ".vitest",
   "test-results",
   "playwright-report",
   "coverage",
