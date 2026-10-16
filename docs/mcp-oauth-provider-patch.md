@@ -51,15 +51,15 @@ Bearer tokenが漏えいすると、解除・所属喪失・期限切れまで�
 
 MCP [2026-07-28 Refresh Tokens](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization#refresh-tokens)はrefresh対応ASのmetadataで`offline_access`を広告し、clientが要求へ追加できるとする一方、RSのPRM・401 challengeには含めないことを推奨する。Kajiはrefreshを無効化したため、新規AS広告からも除外する。要求外scopeや必須scopeへ追加せず、新規同意は読み取り・書き込みの範囲だけを縮小可能とする。
 
-## 関連するMCP SDKの限定peer例外
+## 関連するMCP SDKの互換性
 
-Agents 0.27.0の安定版はclient 2.0.0・sdk 1.30.0・server 2.0.0を完全固定のpeerとして宣言している。一方、[GHSA-6qxp-vccf-f47h](https://github.com/modelcontextprotocol/typescript-sdk/security/advisories/GHSA-6qxp-vccf-f47h) の修正下限はclient 2.2.0・sdk 1.31.0である。
+2026-10-16に[Agents 0.28.1の公開peer](https://github.com/cloudflare/agents/blob/agents%400.28.1/packages/agents/package.json)を確認し、client 2.3.1・server 2.3.1・sdk 1.32.1へ揃える。これらは[GHSA-6qxp-vccf-f47h](https://github.com/modelcontextprotocol/typescript-sdk/security/advisories/GHSA-6qxp-vccf-f47h)の修正下限client 2.2.0・sdk 1.31.0を満たす。Agents 0.27.0向けに設けていたclient/sdkのoverrideと、その旧versionを固定する検査は撤去する。
 
-このリポジトリではclient 2.2.0・sdk 1.31.0の2件だけを `overrides` に固定し、Agents 0.27.0とserver 2.0.0を維持する。これは上流peer指定に対する明示的な互換例外であり、公式の対応保証ではない。使っている `agents/mcp/server` のruntime importはMCP serverとNodeのasync_hooksで、client側OAuth機能は使用しない。公式advisoryもMCP serverを対象外と説明しているが、未使用依存を監査から除外せず修正版をインストールする。
+[Agents 0.28.1の変更](https://github.com/cloudflare/agents/releases/tag/agents%400.28.1)には、MCP client transportのredirectを同一originへ制限するSDK更新と、legacy要求のserver factoryが並行処理中の同一インスタンスを返す場合の保護が含まれる。Kajiは`agents/mcp/server`で要求ごとに新しい`McpServer`を生成する。client側OAuth機能は使用しないが、未使用依存も監査から除外せず公式peerの修正版をインストールする。
 
-server側core 2.0.0とclient側core 2.2.0は、それぞれの要求に従って共存させる。core全体をoverrideしてserverの依存まで変更しない。公開配布物のexports・参照型の確認に加え、クリーンインストール、監査、型・build、実Workers回帰、一括検証の成功を採用条件とする。
+`check-oauth-provider-patch.mjs`はreview済みAgents 0.28.1の宣言・インストールを確認し、インストール済みAgentsの完全固定peerと、アプリおよびAgentsを起点に解決したclient/server/sdkのversionが一致することを検査する。アプリのserver宣言も同じpeerに揃え、client/server/sdk/coreへのoverrideを拒否する。coreは各MCP packageの依存指定に従って解決する。検査は互換性の代わりにならず、クリーンインストール、監査、型・build、実Workers回帰、一括検証の成功を採用条件とする。
 
-Agentsの更新時は公式peer範囲を再確認し、修正版を正式に許容する版になったらこの2件のoverrideと確認スクリプトの対応する固定条件を同時に撤去する。client側機能を新たに使用する変更では、そのOAuth経路を別途検証する。providerの失効patchとは独立した保守項目として扱う。
+Agentsの更新時は公式peer・変更内容を再確認し、確認スクリプトのreview済みversionと本書を更新する。peerが範囲指定へ変わった場合も、検査を省略せず新しい互換性条件をreviewする。client側機能を新たに使用する変更では、そのOAuth経路を別途検証する。provider 1.2.3の失効patchとそのversion検査は引き続き維持し、MCP SDKとは独立した保守項目として扱う。
 
 ## 検証
 
