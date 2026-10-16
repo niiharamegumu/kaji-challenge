@@ -67,9 +67,7 @@ describe("useAuthGate", () => {
       initialProps: params,
     });
 
-    await waitFor(() => {
-      expect(params.setSession).toHaveBeenCalledWith({ authenticated: true });
-    });
+    expect(params.setSession).not.toHaveBeenCalled();
 
     const errorParams = {
       ...params,
@@ -106,5 +104,26 @@ describe("useAuthGate", () => {
       expect(params.navigate).not.toHaveBeenCalled();
       expect(params.queryClient.removeQueries).not.toHaveBeenCalled();
     });
+  });
+
+  it("does not rewrite an unchanged session during navigation or query refreshes", () => {
+    const params = buildParams({
+      loggedIn: true,
+      meData: buildParams()._meDataFixture,
+      meStatus: "success",
+      meIsSuccess: true,
+    });
+    const hook = renderHook((value) => useAuthGate(value), { initialProps: params });
+    hook.rerender({ ...params, pathname: "/summary" });
+    hook.rerender({ ...params, meData: { ...params.meData! }, pathname: "/settings" });
+    expect(params.setSession).not.toHaveBeenCalled();
+  });
+
+  it("publishes a newly validated session once the login state changes", () => {
+    const params = buildParams({ meStatus: "success", meIsSuccess: true });
+    const hook = renderHook((value) => useAuthGate(value), { initialProps: params });
+    expect(params.setSession).toHaveBeenCalledExactlyOnceWith({ authenticated: true });
+    hook.rerender({ ...params, loggedIn: true });
+    expect(params.setSession).toHaveBeenCalledTimes(1);
   });
 });
