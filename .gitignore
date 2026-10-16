@@ -44,6 +44,7 @@ id_ed25519
 
 # Runtime artifacts
 app/.vite/
+app/.vitest/
 .wrangler/
 *.log
 coverage/
