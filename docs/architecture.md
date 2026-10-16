@@ -44,6 +44,10 @@ feature adapter → 共通client → Server Function → Application → Reposit
 
 共通Server FunctionはPOST。読み取りoperationはD1を更新しない。予定の発生日取得では、既存のチーム/開始日indexを使い、対象期間に重ならない定義と期限切れ単発予定をD1で除外してから発生日を展開する。期限切れ単発予定は表示時に除外し、日次ジョブで削除する。集計の保存は締め・過去の完了修正時だけ行う。Startのredirectを返さず既存のエラー処理を使うため、共通clientから静的importした関数を直接呼ぶ。`useServerFn` はredirect等をRouterと連携するときに検討する。Server Function応答はWorker入口でno-storeにする。
 
+認証HTTP・Server Functions・OAuth providerに渡す本文は、frameworkのJSON/form解析前に実ストリームのバイト数を数え、1 MiB超過で413を返す。Content-Lengthの欠落や過少申告にも同じ上限を適用する。MCPツールの128 KiB、ブラウザー同意フォームの16 KiBという既存の小さい上限も保持する。予定の発生日取得は開始日から終了日まで両端を含め366日以内に制限し、契約とApplicationの両方で、DB取得・繰り返し展開・今日への期間補正より前に検査する。
+
+日付計算は年0001〜9999の4桁形式を対象とし、加減算が範囲外になる場合は400で拒否する。月次集計・締めは翌月境界を必要とするため、入力で0000年と9999年12月も拒否する。繰り返し予定は終了日を処理した時点で停止し、9999年12月31日の翌日へ進めない。
+
 ## UIの境界
 
 - 他featureのcomponents/hooks/state/libを直接importせず、`features/<feature>/index.ts` の公開APIを使います。
