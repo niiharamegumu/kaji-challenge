@@ -1,9 +1,17 @@
+import { invariant } from "./errors";
+
 const DAY = 86_400_000;
+function formatDay(date: Date): string {
+  // Extended ISO years cannot be truncated or compared with our YYYY-MM-DD strings.
+  const year = date.getUTCFullYear();
+  invariant(year >= 1 && year <= 9999, "date must use a year from 0001 through 9999");
+  return date.toISOString().slice(0, 10);
+}
 export function todayJST(now: Date): string {
   return new Date(now.getTime() + 9 * 3_600_000).toISOString().slice(0, 10);
 }
 export function addDays(day: string, amount: number): string {
-  return new Date(Date.parse(`${day}T00:00:00Z`) + amount * DAY).toISOString().slice(0, 10);
+  return formatDay(new Date(Date.parse(`${day}T00:00:00Z`) + amount * DAY));
 }
 export function weekday(day: string): number {
   return new Date(`${day}T00:00:00Z`).getUTCDay();
@@ -14,7 +22,7 @@ export function weekStart(day: string): string {
 export function nextMonth(month: string): string {
   const d = new Date(`${month}-01T00:00:00Z`);
   d.setUTCMonth(d.getUTCMonth() + 1);
-  return d.toISOString().slice(0, 10);
+  return formatDay(d);
 }
 export function midnightJST(day: string): string {
   return new Date(`${day}T00:00:00+09:00`).toISOString();
@@ -22,6 +30,7 @@ export function midnightJST(day: string): string {
 export function isDate(value: string): boolean {
   return (
     /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+    !value.startsWith("0000-") &&
     Number.isFinite(Date.parse(value)) &&
     new Date(value).toISOString().slice(0, 10) === value
   );
