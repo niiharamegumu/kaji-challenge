@@ -98,20 +98,19 @@ export function createAuth(db: Database, settings: AuthSettings) {
       session: {
         create: {
           before: async (session) => {
-            const users = await db
-              .select()
+            const identities = await db
+              .select({ userId: schema.user.id })
               .from(schema.user)
-              .where(eq(schema.user.id, session.userId));
-            const accounts = await db
-              .select()
-              .from(schema.account)
-              .where(
+              .innerJoin(
+                schema.account,
                 and(
-                  eq(schema.account.userId, session.userId),
+                  eq(schema.account.userId, schema.user.id),
                   eq(schema.account.providerId, "google"),
                 ),
-              );
-            if (!users[0] || !accounts[0])
+              )
+              .where(eq(schema.user.id, session.userId))
+              .limit(1);
+            if (!identities[0])
               throw new APIError("FORBIDDEN", { message: "Google identity is required" });
             await provisionUser(new D1Repository(db), session.userId, new Date());
             return { data: session };
