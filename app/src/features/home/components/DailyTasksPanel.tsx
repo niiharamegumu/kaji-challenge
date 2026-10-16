@@ -10,11 +10,19 @@ type Props = {
   onToggleAll: () => void;
 };
 
-export function DailyTasksPanel({ items, onToggle, onToggleAll, pendingTaskIds = [] }: Props) {
+const emptyPendingTaskIds: string[] = [];
+
+export function DailyTasksPanel({
+  items,
+  onToggle,
+  onToggleAll,
+  pendingTaskIds = emptyPendingTaskIds,
+}: Props) {
+  const pendingTasks = new Set(pendingTaskIds);
   const completedCount = items.filter((item) => item.completedToday).length;
   const incompleteCount = items.length - completedCount;
   const allCompleted = items.length > 0 && incompleteCount === 0;
-  const isSaving = items.some((item) => pendingTaskIds.includes(item.task.id));
+  const isSaving = items.some((item) => pendingTasks.has(item.task.id));
 
   return (
     <article className={HOME_PANEL_CLASS_NAME}>
@@ -57,8 +65,8 @@ export function DailyTasksPanel({ items, onToggle, onToggleAll, pendingTaskIds =
             <button
               key={item.task.id}
               type="button"
-              disabled={pendingTaskIds.includes(item.task.id)}
-              aria-busy={pendingTaskIds.includes(item.task.id)}
+              disabled={pendingTasks.has(item.task.id)}
+              aria-busy={pendingTasks.has(item.task.id)}
               className={`min-h-11 rounded-xl p-2.5 text-left ring-1 transition-colors duration-200 ${item.completedToday ? "bg-[color:var(--color-matcha-50)] ring-[color:var(--color-matcha-400)]" : "bg-white ring-stone-200"}`}
               onClick={() => onToggle(item.task.id)}
             >
