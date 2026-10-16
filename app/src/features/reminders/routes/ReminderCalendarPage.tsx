@@ -8,7 +8,7 @@ import jaLocale from "@fullcalendar/core/locales/ja";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin, { type DateClickArg } from "@fullcalendar/interaction";
 import FullCalendar from "@fullcalendar/react";
-import { useAtom } from "jotai";
+import { useSetAtom } from "jotai";
 import { CalendarDays, ChevronLeft, ChevronRight, Pencil, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -190,13 +190,13 @@ function useIsMobile(breakpoint = 768) {
   return isMobile;
 }
 
-function useViewportHeight() {
+function useViewportHeight(enabled: boolean) {
   const [viewportHeight, setViewportHeight] = useState(() =>
     typeof window !== "undefined" ? window.innerHeight : 0,
   );
 
   useEffect(() => {
-    if (typeof window === "undefined") {
+    if (!enabled || typeof window === "undefined") {
       return;
     }
 
@@ -207,7 +207,7 @@ function useViewportHeight() {
     handleResize();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, []);
+  }, [enabled]);
 
   return viewportHeight;
 }
@@ -339,7 +339,7 @@ export function ReminderCalendarPage() {
   const currentMonthKey = monthKeyFromDateKey(todayKey);
   const initialSelectedDate = normalizeVisibleDateKey(normalizeDateKey(initialDateParam), todayKey);
   const isMobile = useIsMobile();
-  const viewportHeight = useViewportHeight();
+  const viewportHeight = useViewportHeight(isMobile);
   const [selectedDate, setSelectedDate] = useState(initialSelectedDate);
   const [mobileAgendaOpen, setMobileAgendaOpen] = useState(
     () => isMobile && initialDateParam != null,
@@ -348,8 +348,8 @@ export function ReminderCalendarPage() {
   const [sheetMode, setSheetMode] = useState<"create" | "edit" | null>(null);
   const [editingReminderId, setEditingReminderId] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
-  const [form, setForm] = useState(buildInitialFormState(initialSelectedDate));
-  const [, setStatus] = useAtom(statusMessageAtom);
+  const [form, setForm] = useState(() => buildInitialFormState(initialSelectedDate));
+  const setStatus = useSetAtom(statusMessageAtom);
   const calendarRef = useRef<FullCalendar | null>(null);
   const definitionsQuery = useReminderDefinitionsQuery();
   const calendarQuery = useReminderCalendarQuery(visibleMonth);
@@ -375,10 +375,6 @@ export function ReminderCalendarPage() {
   const occurrencesByDate = useMemo(() => {
     return new Map(calendarDays.map((day) => [day.date, day.items]));
   }, [calendarDays]);
-  const occurrenceCountByDate = useMemo(
-    () => new Map(calendarDays.map((day) => [day.date, day.items.length])),
-    [calendarDays],
-  );
 
   const selectedOccurrences = occurrencesByDate.get(selectedDate) ?? [];
   const canCreateOnSelectedDate = selectedDate >= todayKey;
@@ -406,22 +402,24 @@ export function ReminderCalendarPage() {
 
   const events = useMemo(
     () =>
-      calendarDays.flatMap((day) =>
-        day.items.map((item) => ({
-          id: `${item.reminderId}-${item.date}`,
-          title: item.title,
-          start: item.date,
-          allDay: true,
-          classNames: ["reminder-event"],
-          extendedProps: {
-            reminderId: item.reminderId,
-            reminderDate: item.date,
-            kind: item.kind,
-            scheduleType: item.scheduleType,
-          },
-        })),
-      ),
-    [calendarDays],
+      isMobile
+        ? []
+        : calendarDays.flatMap((day) =>
+            day.items.map((item) => ({
+              id: `${item.reminderId}-${item.date}`,
+              title: item.title,
+              start: item.date,
+              allDay: true,
+              classNames: ["reminder-event"],
+              extendedProps: {
+                reminderId: item.reminderId,
+                reminderDate: item.date,
+                kind: item.kind,
+                scheduleType: item.scheduleType,
+              },
+            })),
+          ),
+    [calendarDays, isMobile],
   );
 
   const updateSelectedDate = (nextDate: string) => {
@@ -469,7 +467,7 @@ export function ReminderCalendarPage() {
   const renderDayCellContent = (arg: DayCellContentArg) => {
     const dateKey = formatDateKey(arg.date);
     const isSelected = dateKey === selectedDate;
-    const occurrenceCount = occurrenceCountByDate.get(dateKey) ?? 0;
+    const occurrenceCount = occurrencesByDate.get(dateKey)?.length ?? 0;
     const dayNumber = String(arg.date.getUTCDate());
     const mobileDots = mobileDotIds.slice(0, Math.min(occurrenceCount, mobileMarkerLimit));
     const canCreate = dateKey >= todayKey;
@@ -789,7 +787,7 @@ export function ReminderCalendarPage() {
             timeZone="UTC"
             now={todayKey}
             headerToolbar={false}
-            events={isMobile ? [] : events}
+            events={events}
             editable
             dayMaxEventRows={3}
             height={isMobile && mobileCalendarHeight != null ? mobileCalendarHeight : "auto"}
