@@ -24,6 +24,7 @@ import {
 import { mcpConnectionsPage, mcpConsentPage, mcpHtml } from "../../src/server/transport/mcp-pages";
 import { McpApplication } from "../../src/server/transport/mcp-entrypoint";
 import type { RuntimeBindings } from "../../src/server/transport/runtime.server";
+import { MAX_REQUEST_BODY_BYTES } from "../../src/server/transport/request-body";
 import { createTestDatabase } from "../helpers/d1";
 
 vi.mock("cloudflare:workers", () => ({
@@ -48,6 +49,41 @@ let proxy: Awaited<ReturnType<typeof getPlatformProxy<{ OAUTH_KV: KVNamespace }>
 let directory: string;
 let bindings: RuntimeBindings;
 let repository: D1McpRepository;
+
+it.each(["register", "token", "revoke"])(
+  "bounds the OAuth %s stream before the provider parses it",
+  async (endpoint) => {
+    const provider = vi.spyOn(OAuthAuthorizationServer.prototype, "fetch");
+    const cancel = vi.fn();
+    const body = new ReadableStream<Uint8Array>(
+      {
+        pull(controller) {
+          controller.enqueue(new Uint8Array(MAX_REQUEST_BODY_BYTES / 2 + 1));
+        },
+        cancel,
+      },
+      { highWaterMark: 0 },
+    );
+    const init = {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Content-Length": "1",
+        Origin: "https://client.example.com",
+      },
+      body,
+      duplex: "half",
+    };
+    try {
+      const response = await handleMcpHttp(new Request(`${base}/${endpoint}`, init), bindings, ctx);
+      expect(response.status).toBe(413);
+      expect(cancel).toHaveBeenCalledOnce();
+      expect(provider).not.toHaveBeenCalled();
+    } finally {
+      provider.mockRestore();
+    }
+  },
+);
 
 beforeAll(async () => {
   database = await createTestDatabase();
