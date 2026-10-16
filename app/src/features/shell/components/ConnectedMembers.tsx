@@ -25,9 +25,10 @@ export function ConnectedMembers({ members, userIds, connected }: Props) {
   const [openPanel, setOpenPanel] = useState<OpenPanel>(null);
   const panelId = useId();
   if (!members.length) return null;
+  const connectedUserIds = new Set(userIds);
   // 自分の接続が切れたときは、古いpresenceを使って他の人を接続中と表示しない。
   const memberStates = members.map((member) => {
-    const online = connected && userIds.includes(member.userId);
+    const online = connected && connectedUserIds.has(member.userId);
     const status = !connected ? "接続確認中" : online ? "接続中" : "未接続";
     return { member, online, label: `${member.effectiveName}（${status}）` };
   });
