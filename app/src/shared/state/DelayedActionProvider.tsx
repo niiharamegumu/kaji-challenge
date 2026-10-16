@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { useAtomValue, useStore } from "jotai";
+import { useStore } from "jotai";
 import { todoCompletionDelayAtom } from "./todoCompletionDelay";
 
 type PendingAction = { id: string; deadline: number; durationMs: number };
@@ -19,9 +19,12 @@ export function useDelayedActions() {
 
 export function DelayedActionProvider({ children }: { children: ReactNode }) {
   const store = useStore();
-  useAtomValue(todoCompletionDelayAtom);
   const [pendingActions, setPendingActions] = useState<PendingAction[]>([]);
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+
+  // Keep storage synchronization mounted without rerendering every action consumer.
+  // The preference is only needed when scheduling, where store.get reads its latest value.
+  useEffect(() => store.sub(todoCompletionDelayAtom, () => {}), [store]);
 
   useEffect(() => {
     const scheduled = timers.current;
