@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { StrictMode } from "react";
+import { Profiler, StrictMode } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { DelayedActionProvider, useDelayedActions } from "./DelayedActionProvider";
 import { ActionCountdown } from "../components/ActionCountdown";
@@ -66,6 +66,35 @@ it("uses the current preference before its subscription rerenders", () => {
     </DelayedActionProvider>,
   );
   fireEvent.click(screen.getByText("猶予を変更して完了"));
+  act(() => vi.advanceTimersByTime(999));
+  expect(onComplete).not.toHaveBeenCalled();
+  act(() => vi.advanceTimersByTime(1));
+  expect(onComplete).toHaveBeenCalledExactlyOnceWith("牛乳");
+});
+
+it("syncs settings from another tab without rerendering pending action consumers", () => {
+  const onComplete = vi.fn();
+  const onRender = vi.fn();
+  render(
+    <Profiler id="delayed-actions" onRender={onRender}>
+      <DelayedActionProvider>
+        <Actions onComplete={onComplete} />
+      </DelayedActionProvider>
+    </Profiler>,
+  );
+  onRender.mockClear();
+  act(() => {
+    window.localStorage.setItem(storageKey, "1000");
+    window.dispatchEvent(
+      new StorageEvent("storage", {
+        key: storageKey,
+        newValue: "1000",
+        storageArea: window.localStorage,
+      }),
+    );
+  });
+  expect(onRender).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByText("牛乳を完了"));
   act(() => vi.advanceTimersByTime(999));
   expect(onComplete).not.toHaveBeenCalled();
   act(() => vi.advanceTimersByTime(1));
