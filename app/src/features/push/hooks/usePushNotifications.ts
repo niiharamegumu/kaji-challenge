@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { ensureLatestPWARegistration, waitForPWARegistration } from "../../../app/pwa-register";
 import {
@@ -30,10 +30,18 @@ async function getCurrentBrowserSubscription() {
 export function usePushNotifications(setStatus: StatusSetter) {
   const queryClient = useQueryClient();
   const [deviceEndpoint, setDeviceEndpoint] = useState<string | null>(null);
+  const active = useRef(false);
+
+  useEffect(() => {
+    active.current = true;
+    return () => {
+      active.current = false;
+    };
+  }, []);
 
   const subscriptionsQuery = useQuery({
     queryKey: queryKeys.pushSubscriptions,
-    queryFn: async () => (await getPushSubscriptionsMe()).data,
+    queryFn: async ({ signal }) => (await getPushSubscriptionsMe({ signal })).data,
     staleTime: 60_000,
     retry: false,
   });
@@ -64,17 +72,24 @@ export function usePushNotifications(setStatus: StatusSetter) {
         setDeviceEndpoint(null);
         return;
       }
-      const subscription = await getCurrentBrowserSubscription();
-      if (!cancelled) {
-        setDeviceEndpoint(subscription?.endpoint ?? null);
+      try {
+        const subscription = await getCurrentBrowserSubscription();
+        if (!cancelled) {
+          setDeviceEndpoint(subscription?.endpoint ?? null);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setStatus(`プッシュ通知の購読情報の取得に失敗しました: ${formatError(error)}`);
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [setStatus]);
 
   const enableCurrentDevice = async () => {
+    if (!active.current) return;
     if (!isPushSupported()) {
       setStatus("この端末では Web Push を利用できません。");
       return;
@@ -90,6 +105,7 @@ export function usePushNotifications(setStatus: StatusSetter) {
     }
 
     const permission = await Notification.requestPermission();
+    if (!active.current) return;
     if (permission !== "granted") {
       setStatus(
         permission === "denied"
@@ -100,17 +116,20 @@ export function usePushNotifications(setStatus: StatusSetter) {
     }
 
     const registration = await ensureLatestPWARegistration();
+    if (!active.current) return;
     if (registration == null) {
       setStatus("Service Worker の準備がまだ完了していません。");
       return;
     }
 
     let subscription = await registration.pushManager.getSubscription();
+    if (!active.current) return;
     if (subscription == null) {
       subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
       });
+      if (!active.current) return;
     }
     const serialized = serializePushSubscription(subscription);
     if (serialized == null) {
@@ -123,31 +142,37 @@ export function usePushNotifications(setStatus: StatusSetter) {
       platform: PushPlatform.ios_safari_pwa,
       userAgent: navigator.userAgent,
     });
+    if (!active.current) return;
     setDeviceEndpoint(serialized.endpoint);
     setStatus("この端末のプッシュ通知をオンにしました。");
   };
 
   const disableCurrentDevice = async () => {
+    if (!active.current) return;
     if (!isPushSupported()) {
       setStatus("この端末では Web Push を利用できません。");
       return;
     }
     const subscription = await getCurrentBrowserSubscription();
+    if (!active.current) return;
     const endpoint = subscription?.endpoint ?? deviceEndpoint;
     const match = subscriptionsQuery.data?.items.find(
       (item) => item.endpoint === endpoint && item.isActive,
     );
     if (match != null) {
       await deleteMutation.mutateAsync(match.id);
+      if (!active.current) return;
     }
     if (subscription != null) {
       await subscription.unsubscribe();
+      if (!active.current) return;
     }
     setDeviceEndpoint(null);
     setStatus("この端末のプッシュ通知をオフにしました。");
   };
 
   const sendLocalTestNotification = async () => {
+    if (!active.current) return;
     if (!isPushSupported()) {
       setStatus("この端末では Web Push を利用できません。");
       return;
@@ -161,6 +186,7 @@ export function usePushNotifications(setStatus: StatusSetter) {
       return;
     }
     const registration = await waitForPWARegistration();
+    if (!active.current) return;
     if (registration == null) {
       setStatus("Service Worker の準備がまだ完了していません。");
       return;
@@ -183,6 +209,7 @@ export function usePushNotifications(setStatus: StatusSetter) {
       timestamp: Date.now(),
     };
     await registration.showNotification("家事チャレンジ", notificationOptions);
+    if (!active.current) return;
     setStatus("プッシュ通知テストを送信しました。");
   };
 
@@ -206,21 +233,21 @@ export function usePushNotifications(setStatus: StatusSetter) {
       try {
         await enableCurrentDevice();
       } catch (error) {
-        setStatus(`プッシュ通知の有効化に失敗しました: ${formatError(error)}`);
+        if (active.current) setStatus(`プッシュ通知の有効化に失敗しました: ${formatError(error)}`);
       }
     },
     disableCurrentDevice: async () => {
       try {
         await disableCurrentDevice();
       } catch (error) {
-        setStatus(`プッシュ通知の解除に失敗しました: ${formatError(error)}`);
+        if (active.current) setStatus(`プッシュ通知の解除に失敗しました: ${formatError(error)}`);
       }
     },
     sendLocalTestNotification: async () => {
       try {
         await sendLocalTestNotification();
       } catch (error) {
-        setStatus(`プッシュ通知テストに失敗しました: ${formatError(error)}`);
+        if (active.current) setStatus(`プッシュ通知テストに失敗しました: ${formatError(error)}`);
       }
     },
   };
