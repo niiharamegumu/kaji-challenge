@@ -1,6 +1,6 @@
 # データベースの責務
 
-Cloudflare D1に21テーブルを持つ。ユーザー情報の正本はBetter Authの `auth_user`。旧アプリ用 `users` は削除し、メール・表示名・作成日時の二重保存と同期処理をなくした。
+Cloudflare D1に22テーブルを持つ。ユーザー情報の正本はBetter Authの `auth_user`。旧アプリ用 `users` は削除し、メール・表示名・作成日時の二重保存と同期処理をなくした。
 
 | 領域 | テーブル | 残す理由 |
 | --- | --- | --- |
@@ -11,6 +11,7 @@ Cloudflare D1に21テーブルを持つ。ユーザー情報の正本はBetter A
 | 認証リクエスト制限 | `auth_rate_limit` | Workerをまたいで共有する認証APIのレート制限 |
 | チーム | `teams`・`team_members`・`invite_codes` | チーム名、owner/member権限、所属と招待。Better Authのorganization pluginは利用しない |
 | 家事 | `tasks` | 家事定義、担当、並び順、論理削除 |
+| 週間必要回数 | `task_weekly_requirements` | 翌週からの回数変更と適用週の履歴。初期回数はtasksに保持し、過去の集計と完了上限を再現 |
 | 日次完了 | `task_completion_daily` | 1家事・1日に最大1件という制約 |
 | 週次完了 | `task_completion_weekly_entries` | 1週間に複数回の完了・実行者・取り消す順番。日次と制約が異なる |
 | ToDo・予定 | `todo_items`・`reminders` | チーム共有のToDoと予定。カテゴリーは`teams.todo_categories`に保持 |
@@ -37,7 +38,7 @@ Better Authの追加項目と入力制御は [公式Databaseガイド](https://b
 
 ## Drizzleによるアクセス
 
-`app/src/server/infrastructure/schema.ts` が業務14テーブル、`auth-schema.ts` が認証5テーブルの実行時定義です。`database.ts` でリクエスト単位のDB handleを作り、Repository・Better Auth・Pushへ渡します。通常のCRUDはquery builder、再帰CTE等はパラメーター化したDrizzle `sql` を使用します。
+`app/src/server/infrastructure/schema.ts` が業務17テーブル、`auth-schema.ts` が認証5テーブルの実行時定義です。`database.ts` でリクエスト単位のDB handleを作り、Repository・Better Auth・Pushへ渡します。通常のCRUDはquery builder、再帰CTE等はパラメーター化したDrizzle `sql` を使用します。
 
 SQL migrationがDDLの正本です。schemaの変更だけではDBは更新されないため、今後の列・制約の変更では新しいmigrationとDrizzle定義を一緒に更新し、`drizzle-schema.test.ts` で照合してください。
 
