@@ -693,10 +693,10 @@ test("completion responds before a delayed request and rolls back when it fails"
   await expect(card.getByRole("img")).toHaveAttribute("aria-label", "1回目: テストユーザー");
 });
 
-test("retains three weekly completions after stale refetch, summary navigation and reload", async ({
+test("retains weekly completions through reload and scheduling a target change", async ({
   page,
   context,
-}) => {
+}, testInfo) => {
   await authenticate(context);
   await page.goto("/tasks");
   await page.getByRole("button", { name: "追加", exact: true }).click();
@@ -751,6 +751,41 @@ test("retains three weekly completions after stale refetch, summary navigation a
   await page.getByRole("button", { name: "ホーム", exact: true }).click();
   await expectComplete();
   await page.reload();
+  await expectComplete();
+  await page.goto("/tasks");
+  const managed = page
+    .getByRole("listitem")
+    .filter({ has: page.getByText("週間3回の保持確認", { exact: true }) });
+  await managed.getByRole("button", { name: "編集", exact: true }).click();
+  const editor = page
+    .getByRole("listitem")
+    .filter({ has: page.getByLabel("週の必要回数", { exact: true }) });
+  await expect(editor.getByLabel("週の必要回数")).toHaveValue("3");
+  await expect(editor.getByText(/回数の変更は翌週月曜から適用/)).toBeVisible();
+  await editor.getByLabel("週の必要回数").selectOption("1");
+  await page.screenshot({
+    path: testInfo.outputPath("weekly-requirement-edit.png"),
+    fullPage: true,
+  });
+  const saved = page.waitForResponse(
+    (response) =>
+      response.url().includes("/_serverFn/") &&
+      (response.request().postData()?.includes("patchTask") ?? false),
+  );
+  await editor.getByRole("button", { name: "保存", exact: true }).click();
+  expect((await saved).ok()).toBe(true);
+  await expect(managed.getByText(/から週1回/)).toBeVisible();
+  await page.reload();
+  await expect(managed.getByText("必要 3回/週", { exact: true })).toBeVisible();
+  await expect(managed.getByText(/から週1回/)).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(
+    false,
+  );
+  await page.screenshot({
+    path: testInfo.outputPath("weekly-requirement-saved.png"),
+    fullPage: true,
+  });
+  await page.goto("/");
   await expectComplete();
 });
 
