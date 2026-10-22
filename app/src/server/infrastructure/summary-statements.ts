@@ -6,6 +6,7 @@ import {
   closeRuns,
 } from "./schema";
 import { addDays, nextMonth, weekStart } from "../domain/dates";
+import { requiredForWeekSql } from "./task-requirements";
 
 type SummaryOptions = {
   teamId: string;
@@ -92,7 +93,7 @@ export function summaryStatements(db: Database, options: SummaryOptions) {
       AND (
         SELECT COUNT(*) FROM task_completion_weekly_entries w
         WHERE w.task_id = t.id AND w.week_start = c.target_date
-      ) < t.required_completions_per_week
+      ) < ${requiredForWeekSql(sql`t.id`, sql`t.required_completions_per_week`, sql`c.target_date`)}
   )`;
   const updateTotals = db
     .update(summaries)
