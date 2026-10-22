@@ -1,3 +1,5 @@
+import type { WeeklyRequirement } from "../domain/task-requirements";
+
 export interface TodoCategory {
   id: string;
   name: string;
@@ -118,6 +120,7 @@ export interface CreateTaskParams {
 }
 
 export interface GetTaskByIDRow {
+  WeeklyRequirements?: WeeklyRequirement[];
   ID: string;
   TeamID: string;
   Title: string;
@@ -133,6 +136,7 @@ export interface GetTaskByIDRow {
 }
 
 export interface ListTasksByTeamIDRow {
+  WeeklyRequirements?: WeeklyRequirement[];
   ID: string;
   TeamID: string;
   Title: string;
@@ -154,6 +158,7 @@ export interface ListTasksEffectiveForCloseByTeamAndTypeParams {
 }
 
 export interface ListTasksEffectiveForCloseByTeamAndTypeRow {
+  WeeklyRequirements?: WeeklyRequirement[];
   ID: string;
   TeamID: string;
   Title: string;
@@ -175,6 +180,7 @@ export interface ListTasksForMonthlyStatusByTeamParams {
 }
 
 export interface ListTasksForMonthlyStatusByTeamRow {
+  WeeklyRequirements?: WeeklyRequirement[];
   ID: string;
   Title: string;
   Notes: string | null;
