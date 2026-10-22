@@ -4,6 +4,7 @@ import * as map from "./mappers";
 import { addDays, midnightJST, nextMonth, todayJST, weekday, weekStart } from "../domain/dates";
 import { effectiveAt, occurrenceDates, validateReminderRange } from "../domain/rules";
 import { invariant } from "../domain/errors";
+import { requiredForWeek } from "../domain/task-requirements";
 
 function groupBy<T>(items: T[], keyOf: (item: T) => string): Map<string, T[]> {
   const groups = new Map<string, T[]>();
@@ -127,7 +128,7 @@ export async function overview(
     dailyTasks: tasks
       .filter((t) => t.Type === "daily")
       .map((t) => ({
-        task: map.task(t),
+        task: map.task(t, today),
         completedToday: daily.has(t.ID),
         completedBy: daily.has(t.ID) ? map.actor(daily.get(t.ID)!) : undefined,
       })),
@@ -135,14 +136,12 @@ export async function overview(
       .filter((t) => t.Type === "weekly")
       .map((t) => {
         const entries = weeklyByTask.get(t.ID) ?? [];
+        const required = requiredForWeek(t, start);
         return {
-          task: map.task(t),
+          task: map.task(t, today),
           weekCompletedCount: entries.length,
-          requiredCompletionsPerWeek: t.RequiredCompletionsPerWeek,
-          completionSlots: map.slots(
-            t.RequiredCompletionsPerWeek,
-            new Map(entries.map((e) => [e.Slot, map.actor(e)])),
-          ),
+          requiredCompletionsPerWeek: required,
+          completionSlots: map.slots(required, new Map(entries.map((e) => [e.Slot, map.actor(e)]))),
         };
       }),
     weeklyReminders,
@@ -213,10 +212,11 @@ export async function monthlySummary(
 
       const dailyCompletion = dailyByTaskAndDate.get(`${task.ID}:${date}`);
       const weeklyCompletions = weeklyByTaskAndWeek.get(`${task.ID}:${week}`) ?? [];
+      const required = dailyTask ? 1 : requiredForWeek(task, week!);
       const completionSlots = dailyTask
         ? map.slots(1, new Map([[1, dailyCompletion ? map.actor(dailyCompletion) : undefined]]))
         : map.slots(
-            task.RequiredCompletionsPerWeek,
+            required,
             new Map(weeklyCompletions.map((entry) => [entry.Slot, map.actor(entry)])),
           );
       items.push({
@@ -226,9 +226,7 @@ export async function monthlySummary(
         type: task.Type,
         penaltyPoints: task.PenaltyPoints,
         isDeleted: task.DeletedAt !== null,
-        completed: dailyTask
-          ? !!dailyCompletion
-          : weeklyCompletions.length >= task.RequiredCompletionsPerWeek,
+        completed: dailyTask ? !!dailyCompletion : weeklyCompletions.length >= required,
         completionSlots,
       });
     }

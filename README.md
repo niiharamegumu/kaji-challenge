@@ -54,7 +54,7 @@ eval "$(mise activate zsh)"
 
 シェル設定を変更しない場合は、各コマンドの先頭に `mise exec --` を付けます。例えば `cd app && mise exec -- bun run typecheck` です。詳細は [miseのセットアップ](https://mise.jdx.dev/getting-started) を参照してください。
 
-現在の設定はNode.js `24`・Bun `latest` です。動作確認時はNode.js `24.21.0`・Bun `1.4.2` が選択されました。CIはNode.js 24・Bun 1.4.2、DockerはNode.js 24.21.0・Bun 1.4.2を使用し、miseの設定とは独立しています。Bunを更新する際は、`app/package.json` の `packageManager`・`app/Dockerfile.dev`・`.github/workflows/ci.yml`・`.github/workflows/deploy-production.yml` のバージョンも揃えて検証してください。
+現在の設定はNode.js `24.22.1`・Bun `latest` です。動作確認時はNode.js `24.22.1`・Bun `1.4.2` が選択されました。CI/CD・DockerもNode.js 24.22.1・Bun 1.4.2を使用します。Node.js・Bunを更新する際は、`app/package.json` の `engines`・`packageManager`・`app/Dockerfile.dev`・`.github/workflows/ci.yml`・`.github/workflows/deploy-production.yml` のバージョンも揃えて検証してください。
 
 ### アプリの設定と起動
 

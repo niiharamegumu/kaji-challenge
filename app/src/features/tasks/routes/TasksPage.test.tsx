@@ -365,6 +365,79 @@ describe("TasksPage", () => {
     });
   });
 
+  it("edits weekly targets, preserves input on failure and shows the saved plan", async () => {
+    const task = {
+      id: "weekly-edit",
+      teamId: "team-1",
+      title: "週間の掃除",
+      notes: "土曜",
+      type: "weekly",
+      penaltyPoints: 2,
+      requiredCompletionsPerWeek: 3,
+      sortKey: 100,
+      createdAt: "2026-09-23T03:00:00Z",
+      updatedAt: "2026-09-23T03:00:00Z",
+    };
+    const scheduled = {
+      ...task,
+      scheduledWeeklyRequirement: { effectiveWeek: "2026-09-28", requiredCompletionsPerWeek: 1 },
+    };
+    mockListTasks.mockResolvedValue({ data: { items: [task] } });
+    mockPatchTask
+      .mockRejectedValueOnce(new Error("通信エラー"))
+      .mockImplementationOnce(async () => {
+        mockListTasks.mockResolvedValue({ data: { items: [scheduled] } });
+        return { data: scheduled };
+      });
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole("button", { name: "編集" }));
+    const select = screen.getByLabelText("週の必要回数");
+    expect(select).toHaveValue("3");
+    expect(within(select).getAllByRole("option")).toHaveLength(7);
+    expect(screen.getByText(/回数の変更は翌週月曜から適用/)).toBeInTheDocument();
+    await user.selectOptions(select, "1");
+    await user.click(screen.getByRole("button", { name: "保存" }));
+    await waitFor(() => expect(mockPatchTask).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByRole("button", { name: "保存" })).toBeEnabled());
+    expect(select).toHaveValue("1");
+    await user.click(screen.getByRole("button", { name: "保存" }));
+    expect(mockPatchTask).toHaveBeenLastCalledWith("weekly-edit", {
+      title: task.title,
+      notes: task.notes,
+      requiredCompletionsPerWeek: 1,
+    });
+    await screen.findByText("2026-09-28から週1回");
+    expect(screen.getByText("必要 3回/週")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "編集" }));
+    expect(screen.getByLabelText("週の必要回数")).toHaveValue("1");
+    // A title/notes-only save must not reschedule an unchanged requirement.
+    mockPatchTask.mockResolvedValueOnce({ data: scheduled });
+    await user.click(screen.getByRole("button", { name: "保存" }));
+    await waitFor(() =>
+      expect(mockPatchTask).toHaveBeenLastCalledWith("weekly-edit", {
+        title: task.title,
+        notes: task.notes,
+      }),
+    );
+    await screen.findByText("2026-09-28から週1回");
+    await user.click(screen.getByRole("button", { name: "編集" }));
+    await user.selectOptions(screen.getByLabelText("週の必要回数"), "3");
+    mockPatchTask.mockImplementationOnce(async () => {
+      mockListTasks.mockResolvedValue({ data: { items: [task] } });
+      return { data: task };
+    });
+    await user.click(screen.getByRole("button", { name: "保存" }));
+    await waitFor(() =>
+      expect(mockPatchTask).toHaveBeenLastCalledWith("weekly-edit", {
+        title: task.title,
+        notes: task.notes,
+        requiredCompletionsPerWeek: 3,
+      }),
+    );
+    await waitFor(() => expect(screen.queryByText("2026-09-28から週1回")).not.toBeInTheDocument());
+  });
+
   it("allows clearing task notes", async () => {
     mockListTasks.mockResolvedValue({
       data: {

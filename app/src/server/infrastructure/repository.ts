@@ -16,7 +16,9 @@ import {
 } from "drizzle-orm";
 import type * as P from "../application/ports";
 import { AppError } from "../domain/errors";
-import { addDays } from "../domain/dates";
+import { addDays, todayJST, weekStart } from "../domain/dates";
+import type { WeeklyRequirement } from "../domain/task-requirements";
+import { requiredForWeekSql } from "./task-requirements";
 import { summaryStatements } from "./summary-statements";
 import type { Database } from "./database";
 import { user } from "./auth-schema";
@@ -24,6 +26,7 @@ import {
   teams,
   teamMembers,
   tasks,
+  taskWeeklyRequirements,
   taskCompletionDaily,
   taskCompletionWeeklyEntries,
   inviteCodes,
@@ -60,6 +63,11 @@ const inviteFields = {
   CreatedAt: iso(inviteCodes.created_at),
 };
 const monthlyTaskFields = {
+  WeeklyRequirements: sql<string>`(
+    SELECT json_group_array(json_object('effectiveWeek', r.effective_week,
+      'requiredCompletionsPerWeek', r.required_completions_per_week))
+    FROM task_weekly_requirements r WHERE r.task_id = ${tasks.id}
+  )`.mapWith((value: string): WeeklyRequirement[] => JSON.parse(value)),
   ID: tasks.id,
   Title: tasks.title,
   Notes: tasks.notes,
@@ -555,26 +563,42 @@ export class D1Repository implements P.Repository {
       .orderBy(tasks.type, tasks.sort_key, tasks.created_at, tasks.id);
   }
   async UpdateTask(arg: P.UpdateTaskParams): Promise<void> {
-    const rows = await this.db
+    const scope = and(
+      eq(tasks.id, arg.ID),
+      isNull(tasks.deleted_at),
+      this.teamAccess(tasks.team_id),
+      arg.AssigneeUserID
+        ? sql`EXISTS(SELECT 1 FROM team_members WHERE team_id=${tasks.team_id} AND user_id=${arg.AssigneeUserID})`
+        : undefined,
+    );
+    const update = this.db
       .update(tasks)
       .set({
         title: arg.Title,
         notes: arg.Notes,
         penalty_points: arg.PenaltyPoints,
         assignee_user_id: arg.AssigneeUserID === undefined ? undefined : arg.AssigneeUserID || null,
-        required_completions_per_week: arg.RequiredCompletionsPerWeek,
         updated_at: arg.UpdatedAt,
       })
-      .where(
-        and(
-          eq(tasks.id, arg.ID),
-          this.teamAccess(tasks.team_id),
-          arg.AssigneeUserID
-            ? sql`EXISTS(SELECT 1 FROM team_members WHERE team_id=${tasks.team_id} AND user_id=${arg.AssigneeUserID})`
-            : undefined,
-        ),
-      )
-      .returning();
+      .where(scope)
+      .returning({ id: tasks.id });
+    // Keep the initial value and all completed weeks. Re-editing replaces only next week's plan.
+    const rows =
+      arg.RequiredCompletionsPerWeek === undefined
+        ? await update
+        : (
+            await this.db.batch([
+              update,
+              this.db
+                .insert(taskWeeklyRequirements)
+                .select(sql`SELECT ${tasks.id}, ${addDays(weekStart(todayJST(new Date(arg.UpdatedAt))), 7)}, ${arg.RequiredCompletionsPerWeek}
+              FROM ${tasks} WHERE ${scope} AND ${tasks.type} = 'weekly'`)
+                .onConflictDoUpdate({
+                  target: [taskWeeklyRequirements.task_id, taskWeeklyRequirements.effective_week],
+                  set: { required_completions_per_week: arg.RequiredCompletionsPerWeek },
+                }),
+            ])
+          )[0];
     if (!rows.length)
       throw new AppError(
         409,
@@ -1309,7 +1333,7 @@ export class D1Repository implements P.Repository {
           AND (
             SELECT COUNT(*) FROM task_completion_weekly_entries
             WHERE task_id = ${arg.taskId} AND week_start = ${arg.target}
-          ) < (SELECT required_completions_per_week FROM tasks WHERE id = ${arg.taskId})
+          ) < ${requiredForWeekSql(sql`${arg.taskId}`, sql`(SELECT required_completions_per_week FROM tasks WHERE id = ${arg.taskId})`, sql`${arg.target}`)}
       `);
     }
     // 取消は新しい完了記録から1件だけ削除する。
@@ -1326,7 +1350,7 @@ export class D1Repository implements P.Repository {
     const settingWeeklyState =
       arg.type === "weekly" && (arg.action === "complete" || arg.action === "incomplete");
     const singleCompletionRequired = settingWeeklyState
-      ? sql`(SELECT required_completions_per_week FROM tasks WHERE id = ${arg.taskId}) = 1`
+      ? sql`${requiredForWeekSql(sql`${arg.taskId}`, sql`(SELECT required_completions_per_week FROM tasks WHERE id = ${arg.taskId})`, sql`${arg.target}`)} = 1`
       : sql`1`;
     // 読み取り後に所属・回数設定が変わっても、更新時点のDBで条件を再確認する。
     const allowed = sql`

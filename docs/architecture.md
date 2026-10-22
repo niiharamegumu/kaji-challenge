@@ -50,6 +50,10 @@ feature adapter → 共通client → Server Function → Application → Reposit
 
 ## UIの境界
 
+週間タスクの回数編集はJSTの翌週月曜から適用する。`tasks.required_completions_per_week` は初期回数として保持し、`task_weekly_requirements` にタスクID・適用週・回数を追加する。同じ適用週の再編集は予定を置換する。今週と同じ回数への変更で予定を取り消せる。名前・メモなどの更新と予定の保存は、所属・担当者・論理削除をSQLで検査した同じD1 batchで確定する。
+
+各週の回数は「対象週以前の最新設定、なければ初期回数」で決定する。ホーム・月次の各週・過去の完了操作・SQLの完了上限・締め/再計算・Pushで同じ規則を使う。タスクID、完了記録、並び順は維持する。DTOは今週の回数と任意の `scheduledWeeklyRequirement` を返し、管理画面には適用日を表示する。変更前に既に上書きされた設定の復元や、名前・減点の履歴化は行わない。
+
 - 他featureのcomponents/hooks/state/libを直接importせず、`features/<feature>/index.ts` の公開APIを使います。
 - 共通UIは `shared/components`、共通query/stateは `shared/query` と `shared/state` に配置します。
 - ヘッダーと設定画面のチームメンバー一覧は `shared/query/teamMembersQuery.ts` のquery定義とキャッシュを共有する。設定の保存状態はmutationから取得し、編集中の値はユーザーID・チームIDで区別する。

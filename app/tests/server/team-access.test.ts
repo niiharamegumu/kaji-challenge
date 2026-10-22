@@ -33,6 +33,7 @@ const tables = [
   "teams",
   "team_members",
   "tasks",
+  "task_weekly_requirements",
   "todo_items",
   "reminders",
   "penalty_rules",
@@ -296,6 +297,16 @@ const writes: WriteCase[] = [
   {
     name: "UpdateTask",
     run: (r, f) => r.UpdateTask({ ID: f.daily, Title: "Changed", UpdatedAt: now }),
+  },
+  {
+    name: "UpdateTask weekly requirement",
+    run: (r, f) =>
+      r.UpdateTask({
+        ID: f.weekly,
+        Title: "Changed",
+        RequiredCompletionsPerWeek: 3,
+        UpdatedAt: now,
+      }),
   },
   { name: "DeleteTask", run: (r, f) => r.DeleteTask(f.daily) },
   {
