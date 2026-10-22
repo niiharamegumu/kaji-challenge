@@ -32,7 +32,11 @@ import {
   WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MAX,
   WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MIN,
 } from "../constants/tasks";
-import { canSubmitTaskForm, TaskTypeConst } from "../model/tasks";
+import {
+  canSubmitTaskForm,
+  getWeeklyRequiredCompletionsError,
+  TaskTypeConst,
+} from "../model/tasks";
 import type { TaskFormState } from "../state/forms";
 import { DeleteConfirmModal } from "../../../shared/components/DeleteConfirmModal";
 
@@ -57,9 +61,10 @@ type Props = {
 type EditTaskState = {
   title: string;
   notes: string;
+  requiredCompletionsPerWeek: string;
 };
 
-const emptyEditTaskState: EditTaskState = { title: "", notes: "" };
+const emptyEditTaskState: EditTaskState = { title: "", notes: "", requiredCompletionsPerWeek: "1" };
 
 type PendingDeleteTask = {
   id: string;
@@ -200,8 +205,10 @@ function SortableTaskItem({
     transform: CSS.Transform.toString(transform),
     transition: isDragging ? undefined : transition,
   };
-  const canSave = editState.title.trim().length > 0;
   const isWeekly = task.type === TaskTypeConst.weekly;
+  const canSave =
+    editState.title.trim().length > 0 &&
+    (!isWeekly || getWeeklyRequiredCompletionsError(editState.requiredCompletionsPerWeek) == null);
   const dragProps = isEditing
     ? {}
     : {
@@ -236,6 +243,37 @@ function SortableTaskItem({
             value={editState.notes}
             onChange={(event) => onChangeEditState({ ...editState, notes: event.target.value })}
           />
+          {isWeekly ? (
+            <>
+              <label className="text-xs text-stone-700" htmlFor={`task-edit-weekly-${task.id}`}>
+                週の必要回数
+              </label>
+              <select
+                id={`task-edit-weekly-${task.id}`}
+                className="h-10 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
+                value={editState.requiredCompletionsPerWeek}
+                onChange={(event) =>
+                  onChangeEditState({
+                    ...editState,
+                    requiredCompletionsPerWeek: event.target.value,
+                  })
+                }
+                aria-describedby={`task-edit-weekly-help-${task.id}`}
+              >
+                {[1, 2, 3, 4, 5, 6, 7].map((count) => (
+                  <option key={count} value={count}>
+                    {count}回
+                  </option>
+                ))}
+              </select>
+              <p id={`task-edit-weekly-help-${task.id}`} className="text-xs text-stone-600">
+                回数の変更は翌週月曜から適用されます。今週と過去の完了記録・集計は変わりません。
+                {task.scheduledWeeklyRequirement
+                  ? ` 現在は${task.scheduledWeeklyRequirement.effectiveWeek}から週${task.scheduledWeeklyRequirement.requiredCompletionsPerWeek}回に変更予定です。今週と同じ回数を選ぶと変更を取り消せます。`
+                  : null}
+              </p>
+            </>
+          ) : null}
           <div className="mt-1 flex flex-wrap gap-2">
             <button
               type="button"
@@ -279,6 +317,12 @@ function SortableTaskItem({
                 </span>
                 <span>減点 {task.penaltyPoints}</span>
                 {isWeekly ? <span>必要 {task.requiredCompletionsPerWeek}回/週</span> : null}
+                {task.scheduledWeeklyRequirement ? (
+                  <span className="text-emerald-700">
+                    {task.scheduledWeeklyRequirement.effectiveWeek}から週
+                    {task.scheduledWeeklyRequirement.requiredCompletionsPerWeek}回
+                  </span>
+                ) : null}
               </div>
             </div>
           </div>
@@ -400,6 +444,10 @@ function TaskItemsSection({
     setEditState({
       title: task.title,
       notes: task.notes ?? "",
+      requiredCompletionsPerWeek: String(
+        task.scheduledWeeklyRequirement?.requiredCompletionsPerWeek ??
+          task.requiredCompletionsPerWeek,
+      ),
     });
   };
 
@@ -410,14 +458,26 @@ function TaskItemsSection({
 
   const saveEdit = async (taskId: string) => {
     const title = editState.title.trim();
-    if (title.length === 0) {
+    if (
+      title.length === 0 ||
+      (taskType === "weekly" &&
+        getWeeklyRequiredCompletionsError(editState.requiredCompletionsPerWeek) != null)
+    ) {
       return;
     }
     if (isUpdating) return;
+    const task = tasks.find((item) => item.id === taskId);
+    const previousRequired =
+      task?.scheduledWeeklyRequirement?.requiredCompletionsPerWeek ??
+      task?.requiredCompletionsPerWeek;
     try {
       await onUpdate(taskId, {
         title,
         notes: editState.notes,
+        ...(taskType === "weekly" &&
+        Number(editState.requiredCompletionsPerWeek) !== previousRequired
+          ? { requiredCompletionsPerWeek: Number(editState.requiredCompletionsPerWeek) }
+          : {}),
       });
       cancelEdit();
     } catch {
