@@ -2,6 +2,7 @@ import { operationChanges } from "./operation-changes";
 import type { Operation } from "../../contracts/operations";
 import type { Repository } from "./ports";
 import { invariant } from "../domain/errors";
+import { requiredForWeek } from "../domain/task-requirements";
 import { addDays, midnightJST, todayJST, weekStart } from "../domain/dates";
 import {
   completionCount,
@@ -153,7 +154,7 @@ export async function executeOperation(
       data = {
         items: (await repo.ListTasksByTeamID(teamId))
           .filter((task) => !input.params.type || task.Type === input.params.type)
-          .map(map.task),
+          .map((task) => map.task(task, today)),
       };
       break;
     case "postTask": {
@@ -179,7 +180,7 @@ export async function executeOperation(
         CreatedAt: now,
         UpdatedAt: now,
       });
-      data = map.task(await repo.GetTaskByID(id));
+      data = map.task(await repo.GetTaskByID(id), today);
       break;
     }
     case "patchTask": {
@@ -198,10 +199,11 @@ export async function executeOperation(
         Notes: body.notes,
         PenaltyPoints: body.penaltyPoints,
         AssigneeUserID: assignee,
-        RequiredCompletionsPerWeek: task.Type === "daily" ? 1 : body.requiredCompletionsPerWeek,
+        RequiredCompletionsPerWeek:
+          task.Type === "daily" ? undefined : body.requiredCompletionsPerWeek,
         UpdatedAt: now,
       });
-      data = map.task(await repo.GetTaskByID(task.ID));
+      data = map.task(await repo.GetTaskByID(task.ID), today);
       break;
     }
     case "deleteTask": {
@@ -232,7 +234,7 @@ export async function executeOperation(
       data = {
         items: (await repo.ListTasksByTeamID(teamId))
           .filter((task) => task.Type === firstTask.Type)
-          .map(map.task),
+          .map((task) => map.task(task, today)),
       };
       break;
     }
@@ -248,7 +250,8 @@ export async function executeOperation(
         effectiveAt({ createdAt: task.CreatedAt, deletedAt: task.DeletedAt }, periodEnd),
         "task was not effective in target period",
       );
-      completionCount(task.Type, 0, task.RequiredCompletionsPerWeek, action, targetDate, today);
+      const required = requiredForWeek(task, periodStart);
+      completionCount(task.Type, 0, required, action, targetDate, today);
       const isPastPeriod =
         task.Type === "daily" ? targetDate < today : periodStart < weekStart(today);
       const month = (task.Type === "daily" ? targetDate : addDays(periodStart, 6)).slice(0, 7);
@@ -267,7 +270,7 @@ export async function executeOperation(
       data = {
         taskId: task.ID,
         targetDate,
-        completed: completedCount >= (task.Type === "daily" ? 1 : task.RequiredCompletionsPerWeek),
+        completed: completedCount >= (task.Type === "daily" ? 1 : required),
         weeklyCompletedCount: task.Type === "daily" ? 0 : completedCount,
       };
       break;
