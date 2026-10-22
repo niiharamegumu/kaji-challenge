@@ -1,9 +1,16 @@
 import type * as P from "./ports";
 import type * as M from "../../contracts/models";
 import { invariant } from "../domain/errors";
+import { weekStart } from "../domain/dates";
+import { requiredForWeek } from "../domain/task-requirements";
 
-export function task(r: P.GetTaskByIDRow): M.Task {
+export function task(r: P.GetTaskByIDRow, today: string): M.Task {
   invariant(r.Type === "daily" || r.Type === "weekly", "invalid task type");
+  const week = weekStart(today);
+  const required = requiredForWeek(r, week);
+  const scheduled = r.WeeklyRequirements?.filter((entry) => entry.effectiveWeek > week).sort(
+    (a, b) => a.effectiveWeek.localeCompare(b.effectiveWeek),
+  )[0];
   return {
     id: r.ID,
     teamId: r.TeamID,
@@ -12,7 +19,9 @@ export function task(r: P.GetTaskByIDRow): M.Task {
     type: r.Type,
     penaltyPoints: r.PenaltyPoints,
     assigneeUserId: r.AssigneeUserID || undefined,
-    requiredCompletionsPerWeek: r.RequiredCompletionsPerWeek,
+    requiredCompletionsPerWeek: required,
+    scheduledWeeklyRequirement:
+      scheduled?.requiredCompletionsPerWeek !== required ? scheduled : undefined,
     sortKey: r.SortKey,
     createdAt: r.CreatedAt,
     updatedAt: r.UpdatedAt,
