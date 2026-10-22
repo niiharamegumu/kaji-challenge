@@ -1,5 +1,6 @@
 import type { Repository, ListActivePushSubscriptionsByTeamIDRow } from "./ports";
 import { addDays, todayJST, weekStart } from "../domain/dates";
+import { requiredForWeek } from "../domain/task-requirements";
 export const crons = {
   day: "5 15 * * *",
   // Cloudflareの曜日指定はSUN/SATを使い、数字の曜日解釈の違いを避ける。
@@ -115,7 +116,7 @@ async function loadOutstandingTasks(
     tasks: rows
       .map((t) => ({
         title: t.Title,
-        remaining: (daily ? 1 : t.RequiredCompletionsPerWeek) - (counts.get(t.ID) ?? 0),
+        remaining: (daily ? 1 : requiredForWeek(t, weekStart(today))) - (counts.get(t.ID) ?? 0),
       }))
       .filter((t) => t.remaining > 0),
     subscriptions: await repo.ListActivePushSubscriptionsByTeamID(teamId),
