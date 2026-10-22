@@ -128,6 +128,12 @@ export const TaskSchema = z.object({
   penaltyPoints: z.number().int().min(0).max(1000),
   assigneeUserId: z.string().optional(),
   requiredCompletionsPerWeek: z.number().int().min(1).max(7),
+  scheduledWeeklyRequirement: z
+    .object({
+      effectiveWeek: z.string().refine(isDate, "invalid date"),
+      requiredCompletionsPerWeek: z.number().int().min(1).max(7),
+    })
+    .optional(),
   sortKey: z.number().int().min(1),
   createdAt: z.iso.datetime({ offset: true }),
   updatedAt: z.iso.datetime({ offset: true }),
