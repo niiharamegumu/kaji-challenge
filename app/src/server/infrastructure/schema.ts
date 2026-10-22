@@ -253,6 +253,27 @@ export const tasks = sqliteTable(
   ],
 );
 
+export const taskWeeklyRequirements = sqliteTable(
+  "task_weekly_requirements",
+  {
+    task_id: text("task_id").notNull(),
+    effective_week: text("effective_week").notNull(),
+    required_completions_per_week: integer("required_completions_per_week").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.task_id, t.effective_week] }),
+    foreignKey({ columns: [t.task_id], foreignColumns: [tasks.id] }).onDelete("cascade"),
+    check(
+      "task_weekly_requirements_count",
+      sql`${t.required_completions_per_week} BETWEEN 1 AND 7`,
+    ),
+    check(
+      "task_weekly_requirements_week",
+      sql`length(${t.effective_week}) = 10 AND strftime('%w', ${t.effective_week}) IS '1'`,
+    ),
+  ],
+);
+
 export const taskCompletionDaily = sqliteTable(
   "task_completion_daily",
   {
