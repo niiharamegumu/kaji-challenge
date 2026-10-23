@@ -20,11 +20,18 @@ export default Alchemy.Stack(
       jobs,
       maintenance: yield* Config.String("MAINTENANCE_MODE").pipe(Config.withDefault("false")),
       release: yield* Config.String("APP_RELEASE"),
+      assistEnabled: yield* Config.String("ASSIST_ENABLED").pipe(Config.withDefault("false")),
       mcpEnabled: yield* Config.String("MCP_ENABLED").pipe(Config.withDefault("false")),
       mcpOrigin: yield* Config.String("MCP_ORIGIN").pipe(Config.withDefault("")),
     });
     const database = yield* Cloudflare.D1.Database("Database", resources.database);
     const realtime = Cloudflare.DurableObject("TeamRealtime", { className: "TeamRealtime" });
+    // No Gateway resource is created until Assist is explicitly enabled.
+    if (resources.settings.assistEnabled === "true") {
+      yield* Cloudflare.AI.Gateway("AssistGateway", resources.assist.gateway).pipe(
+        Alchemy.RemovalPolicy.retain(),
+      );
+    }
     const oauthKv = resources.mcp
       ? yield* Cloudflare.KV.Namespace("McpOAuthKV", resources.mcp.oauthKv).pipe(
           Alchemy.RemovalPolicy.retain(),
@@ -35,6 +42,10 @@ export default Alchemy.Stack(
       env: {
         DB: database,
         TEAM_REALTIME: realtime,
+        AI: Cloudflare.Workers.AI(),
+        ASSIST_LIMITER: Cloudflare.Workers.RateLimit("ASSIST_LIMITER", resources.assist.limiter),
+        ASSIST_ENABLED: resources.settings.assistEnabled,
+        ASSIST_GATEWAY_ID: resources.assist.gateway.id,
         APP_ORIGIN: origin,
         APP_RELEASE: resources.settings.release,
         JOBS_ENABLED: jobs,

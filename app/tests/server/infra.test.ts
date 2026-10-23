@@ -9,6 +9,28 @@ const config = {
   release: "fixture",
 };
 describe("Alchemy deployment configuration", () => {
+  it("keeps Assist off and prevents remote AI in local tests; prepares private gateway limits", () => {
+    const local = unstable_readConfig({
+      config: new URL("../../wrangler.jsonc", import.meta.url).pathname,
+    });
+    const result = deploymentResources(config);
+    expect(result.settings.assistEnabled).toBe("false");
+    expect(local.vars.ASSIST_ENABLED).toBe("false");
+    expect(local.ai).toMatchObject({ binding: "AI", remote: true });
+    expect(result.assist.gateway).toMatchObject({
+      id: "kaji-voice",
+      collectLogs: false,
+      cacheTtl: null,
+      spendLimits: { enabled: true },
+    });
+    expect(result.assist.limiter).toEqual({
+      namespaceId: "1001",
+      simple: { limit: 12, period: 60 },
+    });
+    expect(deploymentResources({ ...config, assistEnabled: "true" }).settings.assistEnabled).toBe(
+      "true",
+    );
+  });
   it("keeps the local and deployment Worker compatibility settings aligned", () => {
     const local = unstable_readConfig({
       config: new URL("../../wrangler.jsonc", import.meta.url).pathname,
