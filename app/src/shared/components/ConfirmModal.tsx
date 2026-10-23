@@ -1,4 +1,5 @@
 import { createPortal } from "react-dom";
+import { useFormPresence } from "../state/overlay";
 
 type ConfirmModalProps = {
   isOpen: boolean;
@@ -19,6 +20,7 @@ export function ConfirmModal({
   onCancel,
   onConfirm,
 }: ConfirmModalProps) {
+  useFormPresence(isOpen);
   if (!isOpen || typeof document === "undefined") {
     return null;
   }

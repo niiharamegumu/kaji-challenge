@@ -110,6 +110,9 @@ try {
   assert.equal(built.exports.TeamRealtime.type, "durable-object");
   assert.equal(built.exports.TeamRealtime.storage, "sqlite");
   assert.equal(built.exports.McpApplication.type, "worker");
+  assert.equal(built.ai, undefined, "Local verification must not have an AI binding");
+  assert.equal(built.vars.ASSIST_ENABLED, "false");
+  assert(built.ratelimits.some((binding) => binding.name === "ASSIST_LIMITER"));
   assert(built.kv_namespaces.some((binding) => binding.binding === "OAUTH_KV"));
   assert.match(
     await readFile(join(appDirectory, "dist/server/index.js"), "utf8"),

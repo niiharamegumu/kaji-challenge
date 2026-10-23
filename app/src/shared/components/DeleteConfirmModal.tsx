@@ -1,5 +1,6 @@
 import { AlertTriangle } from "lucide-react";
 import { createPortal } from "react-dom";
+import { useFormPresence } from "../state/overlay";
 
 type DeleteConfirmModalProps = {
   isOpen: boolean;
@@ -16,6 +17,7 @@ export function DeleteConfirmModal({
   onCancel,
   onConfirm,
 }: DeleteConfirmModalProps) {
+  useFormPresence(isOpen);
   if (!isOpen || typeof document === "undefined") {
     return null;
   }

@@ -1,0 +1,318 @@
+import { sql } from "drizzle-orm";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  assistRequestSchema,
+  assistIntentSchema,
+  assistResultSchema,
+  type AssistRequest,
+} from "../../src/contracts/assist";
+import { provisionUser } from "../../src/server/application/provision-user";
+import { executeOperation } from "../../src/server/application/operations";
+import { executeAssistTurn } from "../../src/server/application/assist-operations";
+import { createTestDatabase } from "../helpers/d1";
+import { encodeWav, wavBase64 } from "../../src/features/assist/lib/audio";
+import { validateAssistAudio } from "../../src/server/transport/assist-audio";
+
+const add = { intent: "add_todo", items: [{ name: "牛乳", categoryName: null }] };
+const validWav = () => encodeWav([new Float32Array(16000).fill(0.2)], 16000);
+describe("assist contract and audio boundary", () => {
+  it.each([
+    { ...add, teamId: crypto.randomUUID() },
+    { ...add, items: [{ name: "x".repeat(101), categoryName: null }] },
+    { ...add, items: Array.from({ length: 11 }, () => add.items[0]) },
+    { ...add, items: [] },
+    { ...add, items: [{ ...add.items[0], dueDate: "2026-10-24" }] },
+    { intent: "delete_todo", id: crypto.randomUUID() },
+    { ...add, dueDate: "2026-10-24" },
+    { ...add, names: ["牛乳", "卵"] },
+    { ...add, notes: "ignored?" },
+  ])("rejects unsafe or unsupported model fields: %j", (input) => {
+    expect(assistIntentSchema.safeParse(input).success).toBe(false);
+  });
+  it("rejects arbitrary conversation context and forged draft fields", () => {
+    const input = { audioBase64: wavBase64(validWav()), expectedTeamId: crypto.randomUUID() };
+    expect(assistRequestSchema.safeParse(input).success).toBe(true);
+    expect(assistRequestSchema.safeParse({ ...input, history: [] }).success).toBe(false);
+    expect(
+      assistRequestSchema.safeParse({
+        ...input,
+        pendingDraft: {
+          items: add.items,
+          missing: "category",
+          expiresAt: Date.now() + 120000,
+          operation: "postTodoItem",
+        },
+      }).success,
+    ).toBe(false);
+  });
+  it("validates actual WAV format, lengths, duration and signal before inference", () => {
+    expect(() => validateAssistAudio(wavBase64(validWav()))).not.toThrow();
+    for (const offset of [4, 16, 20, 22, 24, 28, 32, 34, 40]) {
+      const bad = validWav();
+      bad[offset] ^= 1;
+      expect(() => validateAssistAudio(wavBase64(bad))).toThrow();
+    }
+    expect(() => validateAssistAudio(wavBase64(validWav().subarray(0, 100)))).toThrow();
+    expect(() =>
+      validateAssistAudio(wavBase64(encodeWav([new Float32Array(16000 * 16).fill(0.2)], 16000))),
+    ).toThrow();
+    expect(() =>
+      validateAssistAudio(wavBase64(encodeWav([new Float32Array(16000)], 16000))),
+    ).toThrow();
+  });
+});
+
+describe("assist with real D1 and fixture AI", () => {
+  let connection: Awaited<ReturnType<typeof createTestDatabase>>;
+  let userId: string, teamId: string, sessionId: string;
+  const ai = { transcribe: vi.fn(), interpret: vi.fn() };
+  const budget = { reserve: vi.fn() };
+  beforeAll(async () => {
+    connection = await createTestDatabase();
+  });
+  beforeEach(async () => {
+    userId = crypto.randomUUID();
+    sessionId = crypto.randomUUID();
+    await connection.query(
+      sql`INSERT INTO auth_user(id,name,email) VALUES (${userId},'Assist',${userId + "@example.com"})`,
+    );
+    await provisionUser(connection.repository, userId, new Date());
+    teamId = (await connection.repository.ListMembershipsByUserID(userId))[0].TeamID;
+    await connection.query(
+      sql`INSERT INTO auth_session(id,token,user_id,expires_at) VALUES (${sessionId},${sessionId},${userId},${new Date(Date.now() + 120000).toISOString()})`,
+    );
+    ai.transcribe.mockReset().mockResolvedValue("牛乳を追加して");
+    ai.interpret.mockReset().mockResolvedValue(add);
+    budget.reserve.mockReset().mockResolvedValue(undefined);
+  });
+  afterAll(async () => {
+    await connection?.close();
+  });
+  const request = (extra: Partial<AssistRequest> = {}, signal = new AbortController().signal) =>
+    executeAssistTurn(
+      connection.repository.forSession(userId, sessionId),
+      ai,
+      { audioBase64: "fixture", expectedTeamId: teamId, ...extra },
+      { userId, signal, budget },
+    );
+  const items = () => connection.repository.ListTodoItemsByTeamID(teamId);
+  const category = async (name = "買い物") => {
+    await executeOperation(
+      connection.repository.forSession(userId, sessionId),
+      { operation: "postTodoCategory", params: {}, body: { name } },
+      { userId, now: new Date(), vapidPublicKey: "" },
+    );
+  };
+  it("adds one item, returns the saved DTO and lists real data", async () => {
+    const added = await request();
+    expect(added.changedTeams).toEqual([teamId]);
+    expect(assistResultSchema.parse(added.data)).toMatchObject({
+      kind: "added",
+      items: [{ name: "牛乳", teamId, categoryId: null }],
+      replyText: "未分類に牛乳を追加しました。",
+    });
+    ai.interpret.mockResolvedValue({ intent: "list_todos", categoryName: null });
+    expect((await request()).data).toMatchObject({
+      kind: "listed",
+      total: 1,
+      items: [{ name: "牛乳" }],
+    });
+  });
+  it("adds multiple named items to distinct existing categories with one AI interpretation", async () => {
+    await category("買い物");
+    await category("家事");
+    const requested = [
+      { name: "牛乳", categoryName: "買い物" },
+      { name: "卵", categoryName: "買い物" },
+      { name: "洗濯", categoryName: "家事" },
+    ];
+    ai.interpret.mockResolvedValue({ intent: "add_todo", items: requested });
+    const result = await request();
+    expect(result.data).toMatchObject({
+      kind: "added",
+      items: requested.map(({ name }) => ({ name })),
+      replyText: "3件追加しました。牛乳、卵、ほか1件です。",
+    });
+    expect(result.changedTeams).toEqual([teamId]);
+    expect(ai.transcribe).toHaveBeenCalledOnce();
+    expect(ai.interpret).toHaveBeenCalledOnce();
+    expect(budget.reserve).toHaveBeenCalledOnce();
+    expect(budget.reserve.mock.invocationCallOrder[0]).toBeLessThan(
+      ai.transcribe.mock.invocationCallOrder[0],
+    );
+    const rows = await items();
+    const categories = await connection.repository.ListTodoCategories(teamId);
+    expect(rows.map((row) => row.CategoryID)).toEqual(
+      requested.map((item) => categories.find((value) => value?.name === item.categoryName)?.id),
+    );
+  });
+  it("keeps all names while asking for one missing category and only writes the completed batch", async () => {
+    await category("買い物");
+    await category("家事");
+    ai.interpret.mockResolvedValue({
+      intent: "add_todo",
+      items: [
+        { name: "牛乳", categoryName: "買い物" },
+        { name: "洗濯", categoryName: null },
+      ],
+    });
+    const draft = (await request()).data;
+    expect(draft).toMatchObject({
+      kind: "clarify",
+      pendingDraft: {
+        items: [
+          { name: "牛乳", categoryName: "買い物" },
+          { name: "洗濯", categoryName: null },
+        ],
+        missing: "category",
+      },
+    });
+    expect(await items()).toHaveLength(0);
+    if (draft.kind !== "clarify") throw new Error("Expected draft");
+    ai.transcribe.mockResolvedValue("洗濯は家事");
+    ai.interpret.mockResolvedValue({
+      intent: "add_todo",
+      items: [
+        { name: "牛乳", categoryName: "買い物" },
+        { name: "洗濯", categoryName: "家事" },
+      ],
+    });
+    const result = await request({ pendingDraft: draft.pendingDraft });
+    expect(result.data.kind).toBe("added");
+    expect(await items()).toHaveLength(2);
+    expect(ai.interpret.mock.lastCall?.[1]).toEqual(draft.pendingDraft);
+  });
+  it("does not turn an unknown requested category into unclassified when no categories exist", async () => {
+    ai.interpret.mockResolvedValue({
+      intent: "add_todo",
+      items: [
+        { name: "牛乳", categoryName: "買い物" },
+        { name: "卵", categoryName: "未分類" },
+      ],
+    });
+    expect((await request()).data).toMatchObject({
+      kind: "clarify",
+      pendingDraft: {
+        items: [
+          { name: "牛乳", categoryName: null },
+          { name: "卵", categoryName: "未分類" },
+        ],
+      },
+    });
+    expect(await items()).toHaveLength(0);
+  });
+  it("does not call AI or write when the inference budget cannot be reserved", async () => {
+    budget.reserve.mockRejectedValue(new Error("quota unavailable"));
+    await expect(request()).rejects.toThrow("quota unavailable");
+    expect(ai.transcribe).not.toHaveBeenCalled();
+    expect(ai.interpret).not.toHaveBeenCalled();
+    expect(await items()).toHaveLength(0);
+  });
+  it("rechecks the session after reserving budget and before any AI inference", async () => {
+    budget.reserve.mockImplementation(async () => {
+      await connection.query(sql`DELETE FROM auth_session WHERE id=${sessionId}`);
+    });
+    await expect(request()).rejects.toMatchObject({ status: 401 });
+    expect(ai.transcribe).not.toHaveBeenCalled();
+    expect(ai.interpret).not.toHaveBeenCalled();
+    expect(await items()).toHaveLength(0);
+  });
+  it("asks for a real category and uses a short follow-up without a second mutation", async () => {
+    await category();
+    const result = (await request()).data;
+    expect(result.kind).toBe("clarify");
+    expect(await items()).toHaveLength(0);
+    if (result.kind !== "clarify") throw new Error("Expected draft");
+    ai.transcribe.mockResolvedValue("買い物");
+    ai.interpret.mockResolvedValue({ ...add, items: [{ name: "牛乳", categoryName: "買い物" }] });
+    expect((await request({ pendingDraft: result.pendingDraft })).data.kind).toBe("added");
+    expect(ai.interpret.mock.lastCall?.[1]).toEqual(result.pendingDraft);
+    expect(await items()).toHaveLength(1);
+  });
+  it("does not invent unknown categories, and ignores expired or distant-future drafts", async () => {
+    await category();
+    ai.interpret.mockResolvedValue({ ...add, items: [{ name: "牛乳", categoryName: "仕事" }] });
+    expect((await request()).data.kind).toBe("clarify");
+    expect(await items()).toHaveLength(0);
+    for (const expiresAt of [Date.now() - 1, Date.now() + 300000]) {
+      await request({
+        pendingDraft: {
+          items: [{ name: "古い項目", categoryName: null }],
+          missing: "category",
+          expiresAt,
+        },
+      });
+      expect(ai.interpret.mock.lastCall?.[1]).toBeUndefined();
+    }
+  });
+  it.each([
+    { intent: "unsupported", reason: "too_many" },
+    { intent: "unsupported", reason: "operation" },
+    { intent: "cancel_draft" },
+    { intent: "clarify" },
+  ])("does not write for %j", async (intent) => {
+    ai.interpret.mockResolvedValue(intent);
+    await request();
+    expect(await items()).toHaveLength(0);
+  });
+  it("returns a bounded list and a short truthful reply", async () => {
+    for (let i = 0; i < 22; i++) {
+      ai.interpret.mockResolvedValue({
+        ...add,
+        items: [{ name: String(i).padStart(3, "0") + "長い名前".repeat(20), categoryName: null }],
+      });
+      await request();
+    }
+    ai.interpret.mockResolvedValue({ intent: "list_todos", categoryName: null });
+    const result = (await request()).data;
+    expect(result).toMatchObject({ kind: "listed", total: 22 });
+    if (result.kind === "listed") expect(result.items).toHaveLength(20);
+    expect(result.replyText.length).toBeLessThanOrEqual(100);
+  });
+  it("rejects wrong expected team before calling AI", async () => {
+    await expect(request({ expectedTeamId: crypto.randomUUID() })).rejects.toMatchObject({
+      status: 403,
+    });
+    expect(ai.transcribe).not.toHaveBeenCalled();
+    expect(budget.reserve).not.toHaveBeenCalled();
+  });
+  it("rechecks expired sessions after inference", async () => {
+    ai.interpret.mockImplementation(async () => {
+      await connection.query(sql`DELETE FROM auth_session WHERE id=${sessionId}`);
+      return add;
+    });
+    await expect(request()).rejects.toMatchObject({ status: 401 });
+    expect(await items()).toHaveLength(0);
+  });
+  it("pins the original team across an AI wait", async () => {
+    const otherId = crypto.randomUUID();
+    await connection.query(
+      sql`INSERT INTO auth_user(id,name,email) VALUES (${otherId},'Other',${otherId + "@example.com"})`,
+    );
+    await provisionUser(connection.repository, otherId, new Date());
+    const otherTeam = (await connection.repository.ListMembershipsByUserID(otherId))[0].TeamID;
+    ai.interpret.mockImplementation(async () => {
+      await connection.query(
+        sql`UPDATE team_members SET team_id=${otherTeam} WHERE user_id=${userId}`,
+      );
+      return add;
+    });
+    await expect(request()).rejects.toMatchObject({ status: 403 });
+    expect(await items()).toHaveLength(0);
+    expect(await connection.repository.ListTodoItemsByTeamID(otherTeam)).toHaveLength(0);
+  });
+  it("does not write after an aborted inference", async () => {
+    const controller = new AbortController();
+    ai.interpret.mockImplementation(async () => {
+      controller.abort();
+      return add;
+    });
+    await expect(request({}, controller.signal)).rejects.toBeDefined();
+    expect(await items()).toHaveLength(0);
+  });
+  it("rejects malformed AI output without saving", async () => {
+    ai.interpret.mockResolvedValue({ ...add, teamId });
+    await expect(request()).rejects.toMatchObject({ code: "invalid_intent" });
+    expect(await items()).toHaveLength(0);
+  });
+});

@@ -34,6 +34,9 @@ it("protects dynamic HTML and preserves response cookies and redirects", async (
   expect(response.headers.get("location")).toBe("/");
   expect(response.headers.getSetCookie()).toHaveLength(2);
   expect(response.headers.get("x-frame-options")).toBe("DENY");
+  expect(response.headers.get("permissions-policy")).toBe(
+    "camera=(), microphone=(self), geolocation=()",
+  );
   expect(response.headers.get("x-content-type-options")).toBe("nosniff");
   expect(response.headers.get("referrer-policy")).toBe("strict-origin-when-cross-origin");
 });

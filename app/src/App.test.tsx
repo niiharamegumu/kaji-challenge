@@ -208,7 +208,8 @@ describe("App", () => {
     await waitFor(() => {
       expect(primaryNav.getByRole("button", { name: "ホーム" })).toBeInTheDocument();
       expect(primaryNav.getByRole("button", { name: "ToDo" })).toBeInTheDocument();
-      expect(primaryNav.getByRole("button", { name: "カレンダー" })).toBeInTheDocument();
+      expect(primaryNav.queryByRole("button", { name: "カレンダー" })).not.toBeInTheDocument();
+      expect(floatingNav.getByRole("button", { name: "アシスト" })).toBeInTheDocument();
       expect(primaryNav.getByRole("button", { name: "サマリー" })).toBeInTheDocument();
       expect(floatingNav.getByRole("button", { name: "その他" })).toBeInTheDocument();
       expect(screen.queryAllByTestId("boot-screen")).toHaveLength(0);
@@ -216,6 +217,7 @@ describe("App", () => {
 
     await user.click(floatingNav.getByRole("button", { name: "その他" }));
 
+    expect(screen.getByRole("button", { name: "カレンダー" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "タスク" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "設定" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "ログアウト" })).toBeInTheDocument();
@@ -484,16 +486,13 @@ describe("App", () => {
     const todoButton = primaryNav.getByRole("button", {
       name: "ToDo",
     });
-    const calendarButton = primaryNav.getByRole("button", {
-      name: "カレンダー",
-    });
     const summaryButton = primaryNav.getByRole("button", { name: "サマリー" });
     const moreButton = floatingNav.getByRole("button", { name: "その他" });
 
     fireEvent.touchStart(todoButton);
-    fireEvent.pointerEnter(calendarButton, { pointerType: "mouse" });
     fireEvent.pointerEnter(summaryButton, { pointerType: "mouse" });
     await user.click(moreButton);
+    fireEvent.mouseEnter(screen.getByRole("button", { name: "カレンダー" }));
 
     const taskButton = screen.getByRole("button", { name: "タスク" });
     fireEvent.mouseEnter(taskButton);

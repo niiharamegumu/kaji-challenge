@@ -5,6 +5,7 @@ import { AppError } from "./server/domain/errors";
 import { connectRealtime } from "./server/transport/realtime.server";
 import { handleMcpHttp, isMcpHttpPath } from "./server/transport/mcp-oauth";
 import { boundRequestBody } from "./server/transport/request-body";
+import { handleAssistTurn } from "./server/transport/assist.server";
 
 export { TeamRealtime } from "./server/infrastructure/team-realtime";
 export { McpApplication } from "./server/transport/mcp-entrypoint";
@@ -13,7 +14,7 @@ function withResponseHeaders(response: Response, path: string): Response {
   // WebSocketを保持したUpgrade応答は通常のHTTP Responseとして作り直さない。
   if (response.status === 101) return response;
   const headers = new Headers(response.headers);
-  headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  headers.set("Permissions-Policy", "camera=(), microphone=(self), geolocation=()");
   if (!headers.has("Referrer-Policy"))
     headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   headers.set("X-Content-Type-Options", "nosniff");
@@ -35,6 +36,7 @@ function withResponseHeaders(response: Response, path: string): Response {
 
 async function handleRequest(request: Request, bindings: RuntimeBindings, ctx: ExecutionContext) {
   const path = new URL(request.url).pathname;
+  if (path === "/api/assist/turn") return handleAssistTurn(request, bindings);
   if (isMcpHttpPath(path)) return handleMcpHttp(request, bindings, ctx);
   if (path === "/api/realtime") {
     try {

@@ -883,6 +883,33 @@ export class D1Repository implements P.Repository {
     return inserted.length === 1;
   }
 
+  async CreateTodoItemsAtomic(items: P.CreateTodoItemParams[]): Promise<P.TodoItem[]> {
+    const teamId = items[0]?.TeamID;
+    if (!teamId || items.length > 10 || items.some((item) => item.TeamID !== teamId)) return [];
+    // Every category must still exist before either statement can change data. The INSERT
+    // adds the entire list in one statement; a duplicate ID or other error rolls back the batch.
+    const allowed = and(
+      this.teamAccess(teamId),
+      ...items.map((item) => this.todoCategoryExists(teamId, item.CategoryID)),
+    );
+    const [, inserted] = await this.db.batch([
+      this.db
+        .update(todoItems)
+        .set({ sort_key: sql`${todoItems.sort_key}+${items.length * 100}` })
+        .where(and(eq(todoItems.team_id, teamId), allowed)),
+      this.db
+        .insert(todoItems)
+        .select(sql`SELECT
+          json_extract(value,'$.ID'), ${teamId}, json_extract(value,'$.Name'),
+          json_extract(value,'$.Notes'), json_extract(value,'$.CategoryID'),
+          (CAST(key AS INTEGER)+1)*100, json_extract(value,'$.CreatedAt'),
+          json_extract(value,'$.UpdatedAt')
+          FROM json_each(${JSON.stringify(items)}) WHERE ${allowed}`)
+        .returning(todoFields),
+    ]);
+    return inserted.sort((a, b) => a.SortKey - b.SortKey);
+  }
+
   async DeleteTodoItem(id: string): Promise<number> {
     return this.db
       .delete(todoItems)
