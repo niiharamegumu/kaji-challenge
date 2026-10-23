@@ -2,6 +2,8 @@
 
 家事をチームで分担し、毎日・毎週の達成状況を記録するPWAです。カテゴリー付きToDo、カレンダーの予定、月次ペナルティ集計、Push通知をまとめて利用できます。
 
+常駐アシストは、どの画面からでも音声でToDoをまとめて追加・一覧確認するための試作です。カレンダーは「その他」から引き続き利用できます。音声の実推論は既定で無効です。有効化・費用・iPhoneでの実機確認は [音声アシスト](docs/voice-assist.md) を参照してください。
+
 ## 構成
 
 | 領域 | 使用技術 |
@@ -158,6 +160,7 @@ Alchemyはビルド済みの `dist/server/index.js` と `dist/client` を、公�
 | Variable | `VAPID_SUBJECT` | `mailto:` 連絡先またはHTTPS URL |
 | Variable | `JOBS_ENABLED` | 初回は `false`、初回動作確認後 `true` |
 | Variable | `MAINTENANCE_MODE` | 通常 `false`、停止時のみ `true` |
+| Variable | `ASSIST_ENABLED` | 未設定は `false`。`true` で音声AIと専用Gatewayを有効化。時間単位・日次・試用累計の上限は [音声アシスト](docs/voice-assist.md) を参照 |
 | Variable | `MCP_ORIGIN` | 未設定ならMCPリソースを作成しない。設定時はOAuth用KVを保持する。`APP_ORIGIN` と異なるHTTPS origin。パス・ポートなし。停止中も維持する |
 | Variable | `MCP_ENABLED` | 未設定は `false`。`true` のときだけMCP Workerを配備し、MCP/OAuthの受付を有効にする |
 

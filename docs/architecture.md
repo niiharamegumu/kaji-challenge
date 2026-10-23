@@ -1,5 +1,15 @@
 # アーキテクチャ
 
+## 常駐音声アシスト
+
+`features/assist` の公開APIをRootLayoutが組み立て、shellへ起動callbackと状態だけを渡す。新しいページは追加せず、カレンダーを「その他」に残す。共通ダイアログは `shared/state/overlay` で競合を避ける。
+
+音声は `contracts/assist.ts` → `transport/assist.server.ts` → `application/assist-operations.ts` → 既存 `executeOperation` / Repositoryで扱う。Applicationの `AssistAi` portを `infrastructure/assist-ai.ts` が実装する。音声認識・意図解析は既存アプリWorkerからのみ呼び、LLMの出力をDB命令として実行しない。WAV検証・本人/所属の固定・再送抑止と運用手順は [voice-assist.md](voice-assist.md) を参照する。
+
+`AssistBudget` portを `infrastructure/assist-budget.ts` が実装し、AIの前に永続カウンターを条件付きUPDATEで予約する。複数ToDoは全件を検証後、Repositoryの単一D1 batchで保存する。どちらも並行リクエストで上限超過や部分保存が起きないことを実D1で検証する。
+
+## 既存アプリの構成
+
 現在の実装は `app/` 内のTanStack Start SPAと、同じWorkerのServer Functions・認証HTTP入口・scheduled入口で構成する。画面は既存のFeature-Based Architectureを維持する。
 
 - `src/router.tsx` がRouterを構築し、`src/routes` は薄い画面入口。画面実装は `src/features`、全体組み立ては `src/app`。
