@@ -3,6 +3,7 @@ import { createHmac } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { createTestDatabase } from "../helpers/d1";
 import { provisionUser } from "../../src/server/application/provision-user";
+import { installAssistMediaFixture } from "./assist-fixture";
 const secret = "kaji-e2e-only-secret-do-not-use-in-production";
 const userId = crypto.randomUUID(),
   token = crypto.randomUUID();
@@ -84,6 +85,9 @@ test("login screen and API paths never fall back to cached HTML", async ({
   const document = await request.get("/");
   expect(document.headers()["x-frame-options"]).toBe("DENY");
   expect(document.headers()["x-content-type-options"]).toBe("nosniff");
+  expect(document.headers()["permissions-policy"]).toBe(
+    "camera=(), microphone=(self), geolocation=()",
+  );
   const serviceWorker = await request.get("/sw.js");
   expect(serviceWorker.headers()["cache-control"]).toContain("no-store");
   const response = await request.get("/api/auth/get-session");
@@ -422,6 +426,7 @@ test("creates tasks, reorders with real drag sensors, and preserves navigation",
   await expect(dailyButton.getByRole("img")).toHaveAttribute("aria-label", "1回目: テストユーザー");
   await dailyButton.click();
   await expect(dailyButton.getByRole("img")).toHaveAttribute("aria-label", "1回目: 未完了");
+  await page.getByRole("button", { name: "その他", exact: true }).click();
   await page.getByRole("button", { name: "カレンダー", exact: true }).click();
   await expect(page).toHaveURL(/calendar/);
   await page.goBack();
@@ -1634,4 +1639,126 @@ test("shares optimistic ToDo order across navigation, rolls back failure, and pe
   await expect.poll(order).toEqual(nextOrder);
   await page.reload();
   await expect.poll(order).toEqual(nextOrder);
+});
+
+test("persistent assist adds and lists through explicit HTTP and media fixtures without navigation", async ({
+  page,
+  context,
+}, testInfo) => {
+  await authenticate(context, token);
+  await installAssistMediaFixture(page);
+  let requests = 0;
+  await page.route("**/api/assist/turn", async (route) => {
+    requests++;
+    const input = route.request().postDataJSON();
+    expect(input.audioBase64.length).toBeGreaterThan(1000);
+    const item = {
+      id: "22222222-2222-4222-8222-222222222222",
+      teamId: input.expectedTeamId,
+      name: "音声確認の牛乳",
+      notes: null,
+      categoryId: null,
+      sortKey: 100,
+      createdAt: "2026-10-23T00:00:00.000Z",
+      updatedAt: "2026-10-23T00:00:00.000Z",
+    };
+    await route.fulfill({
+      json:
+        requests === 1
+          ? {
+              kind: "added",
+              transcript: "牛乳を追加して",
+              replyText: "未分類に牛乳を追加しました。",
+              items: [item],
+            }
+          : {
+              kind: "listed",
+              transcript: "やることを教えて",
+              replyText: "ToDoは1件です。牛乳です。",
+              total: 1,
+              items: [item],
+            },
+    });
+  });
+  await page.goto("/todos");
+  const launcher = page.getByRole("button", { name: "アシスト", exact: true });
+  await expect(launcher).toBeEnabled();
+  await expect(page.getByTestId("floating-nav-primary").getByRole("button")).toHaveCount(3);
+  await expect(page.getByRole("heading", { name: "現在のToDo" })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("assist-launcher.png"), fullPage: true });
+  await launcher.click();
+  const dialog = page.getByRole("dialog", { name: "音声アシスト" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("status")).toHaveText("話しかけてください");
+  await expect(dialog.getByRole("button")).toHaveCount(1);
+  await expect(dialog.getByRole("checkbox")).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath("assist-listening.png"), fullPage: true });
+  expect(new URL(page.url()).pathname).toBe("/todos");
+  await page.evaluate(() => window.assistFixture.emit());
+  await expect(dialog.getByText("未分類に牛乳を追加しました。")).toBeVisible();
+  await expect(dialog.getByRole("status")).toHaveText("話しかけてください");
+  await page.evaluate(() => window.assistFixture.emit());
+  await expect(dialog.getByText("音声確認の牛乳", { exact: false })).toBeVisible();
+  await expect(dialog.getByRole("status")).toHaveText("話しかけてください");
+  expect(requests).toBe(2);
+  expect(await page.evaluate(() => window.assistFixture.workletLoaded)).toBe(true);
+  expect(await page.evaluate(() => window.assistFixture.spoken)).toEqual([
+    "どうぞ。",
+    "未分類に牛乳を追加しました。",
+    "ToDoは1件です。牛乳です。",
+  ]);
+  await page.screenshot({ path: testInfo.outputPath("assist-conversation.png"), fullPage: true });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  for (let i = 0; i < 4; i++) {
+    await page.keyboard.press(i % 2 === 0 ? "Tab" : "Shift+Tab");
+    expect(await dialog.evaluate((element) => element.contains(document.activeElement))).toBe(true);
+  }
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(launcher).toBeFocused();
+  await launcher.click();
+  await expect(dialog.getByRole("status")).toHaveText("話しかけてください");
+  await page.evaluate(() => {
+    Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await expect(dialog).toHaveCount(0);
+  await page.evaluate(() => {
+    Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await expect(dialog).toHaveCount(0);
+  expect(await page.evaluate(() => window.assistFixture.stopped)).toBeGreaterThan(0);
+  await expect(launcher).toBeFocused();
+  // The existing editor keeps its input, and blocks starting another dialog.
+  await page.getByRole("button", { name: "追加", exact: true }).click();
+  await page.getByPlaceholder("例: 牛乳", { exact: true }).fill("入力途中");
+  await expect(launcher).toBeDisabled();
+  await expect(page.getByPlaceholder("例: 牛乳", { exact: true })).toHaveValue("入力途中");
+});
+
+test("disabled assist stops recording and shows an error with only the exit action", async ({
+  page,
+  context,
+  request,
+}) => {
+  await authenticate(context, token);
+  await installAssistMediaFixture(page);
+  const response = await request.post("/api/assist/turn", {
+    headers: { origin: "http://localhost:5194" },
+    data: {},
+  });
+  expect(response.status()).toBe(503);
+  expect(response.headers()["cache-control"]).toContain("no-store");
+  expect(await response.json()).toMatchObject({ code: "assist_disabled" });
+  await page.goto("/");
+  await page.getByRole("button", { name: "アシスト", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "音声アシスト" });
+  await expect(dialog.getByRole("status")).toHaveText("話しかけてください");
+  await page.evaluate(() => window.assistFixture.emit());
+  await expect(dialog.getByRole("button")).toHaveCount(1);
+  await expect(dialog.getByRole("checkbox")).toHaveCount(0);
+  await expect(dialog.getByRole("alert")).toHaveText("音声アシストはまだ有効になっていません。");
+  await expect(dialog.getByRole("status")).toHaveText("音声を終了しました");
+  expect(await page.evaluate(() => window.assistFixture.stopped)).toBeGreaterThan(0);
 });

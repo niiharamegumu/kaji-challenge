@@ -125,3 +125,9 @@ MCP停止は `infra.test.ts` で有効/無効/再有効化のWorker構成とKV�
 RFC 7009失効は新access/合成した旧refresh両方でD1先行を確認し、別client・不正tokenでD1が変わらないこと、D1障害時の503、KV削除障害後や切替前から進行中の旧refresh発行後もlist/add/update/completeと以後のrefreshが拒否されることを検証する。旧設定のSDKは既存テスト内にのみ置き、本番入口を追加・変更しない。障害注入はテストfixtureに限定する。`check-oauth-provider-patch.mjs` はbuildと一括検証で依存versionとpatch登録を確認する。上流更新時の確認範囲は [mcp-oauth-provider-patch.md](mcp-oauth-provider-patch.md) を参照する。
 
 実ChatGPT/Codex接続では先に公開先とOAuth権限の承認を得る。読み取り、承認済みテスト項目の追加、同じ項目だけの完了、解除後の拒否を順に確認し、サーバーのHTTP/認可失敗とクライアントプランの制約を分けて記録する。
+
+## 常駐音声アシスト
+
+`assist.test.ts` / `assist-transport.test.ts` は実D1とfixture AIを使い、追加・一覧・聞き返し、AI待機中の所属固定と失効、不正WAV/未知キー/本文上限/Origin/頻度制限を検証する。フロントの音声ライフサイクルとブラウザー検証、最初の対象であるiPhone Safari/PWAの手動受け入れは [voice-assist.md](voice-assist.md) に記載する。通常の `test:local` はAI bindingなしで起動し、実推論を行わない。実AIの認識精度・速度・費用と端末のマイク/TTSは未検証の別項目として報告する。
+
+`assist-budget.test.ts` は全体の60秒・UTC日・試用累計上限の同時予約と欠損時停止、`todo-batch.test.ts` は複数追加の全件保存/全件拒否・SQL時の認可・rollbackを検証する。`assist-ai.test.ts` はモデルと入力/出力の形式・上限・自動再送なしを検証する。

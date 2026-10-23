@@ -602,6 +602,7 @@ export interface Repository {
   RenameTodoCategory(teamId: string, categoryId: string, name: string): Promise<boolean>;
   DeleteTodoCategory(teamId: string, categoryId: string, now: string): Promise<boolean>;
   CreateTodoItem(arg: CreateTodoItemParams): Promise<boolean>;
+  CreateTodoItemsAtomic(items: CreateTodoItemParams[]): Promise<TodoItem[]>;
   DeleteTodoItem(id: string): Promise<number>;
   GetTodoItemByID(id: string): Promise<TodoItem>;
   ListTodoItemsByTeamID(teamID: string): Promise<TodoItem[]>;

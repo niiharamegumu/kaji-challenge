@@ -31,6 +31,7 @@ import { statusMessageAtom } from "../../shared/state/status";
 import { isLoggedInAtom, sessionAtom } from "../../state/session";
 import { useBootFlow } from "../boot";
 import { AppHeader } from "./AppHeader";
+import { AssistHost } from "../../features/assist";
 import {
   preloadSettingsPageChunk,
   preloadPenaltiesPageChunk,
@@ -227,18 +228,27 @@ export function RootLayout() {
 
       {!isInitialBootPending ? (
         <Suspense fallback={null}>
-          <FloatingNav
-            currentUserName={currentUserName}
-            currentUserColorHex={currentUserColorHex}
-            isRefreshing={isRefreshing}
-            onRouteIntent={handleRouteIntent}
-            onLogout={() => {
-              void logoutAction();
-            }}
-            onRefresh={() => {
-              void refreshTeamState();
-            }}
-          />
+          <AssistHost key={`${currentUserId}:${currentTeamId}`} teamId={currentTeamId}>
+            {(assist) => (
+              <FloatingNav
+                currentUserName={currentUserName}
+                currentUserColorHex={currentUserColorHex}
+                isRefreshing={isRefreshing}
+                onRouteIntent={handleRouteIntent}
+                onLogout={() => {
+                  assist.close();
+                  void logoutAction();
+                }}
+                onRefresh={() => {
+                  assist.close();
+                  void refreshTeamState();
+                }}
+                onAssist={assist.open}
+                assistOpen={assist.isOpen}
+                assistDisabled={assist.disabled}
+              />
+            )}
+          </AssistHost>
         </Suspense>
       ) : null}
     </main>

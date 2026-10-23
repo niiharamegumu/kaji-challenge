@@ -19,6 +19,12 @@
   ],
   "durable_objects": { "bindings": [{ "name": "TEAM_REALTIME", "class_name": "TeamRealtime" }] },
   "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "00000000000000000000000000000002" }],
+  // Binding types only in local Vite: vite.config.ts removes AI before starting workerd.
+  // Direct wrangler dev would access remote AI; use bun run dev instead.
+  "ai": { "binding": "AI", "remote": true },
+  "ratelimits": [
+    { "name": "ASSIST_LIMITER", "namespace_id": "1001", "simple": { "limit": 12, "period": 60 } },
+  ],
   // DOクラスと保存基盤を宣言する。D1のSQL migrationとは別の設定。
   "exports": {
     "TeamRealtime": { "type": "durable-object", "storage": "sqlite" },
@@ -26,6 +32,8 @@
   },
   "vars": {
     "APP_ORIGIN": "http://localhost:5174",
+    "ASSIST_ENABLED": "false",
+    "ASSIST_GATEWAY_ID": "kaji-voice",
     "MCP_ENABLED": "false",
     "MCP_ORIGIN": "http://localhost:5176",
     "JOBS_ENABLED": "false",

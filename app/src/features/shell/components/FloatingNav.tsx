@@ -10,6 +10,7 @@ import {
   Shield,
   ShieldAlert,
   ListTodo,
+  AudioLines,
   Tags,
   UserCircle2,
 } from "lucide-react";
@@ -26,10 +27,13 @@ type Props = {
   onRouteIntent: (path: string) => void;
   onRefresh: () => void;
   onLogout: () => void;
+  onAssist?: () => void;
+  assistOpen?: boolean;
+  assistDisabled?: boolean;
 };
 
 type PrimaryNavItem = {
-  id: "home" | "todo" | "calendar" | "summary";
+  id: "home" | "todo" | "summary";
   label: string;
   icon: LucideIcon;
   path?: string;
@@ -71,13 +75,6 @@ const primaryItems: PrimaryNavItem[] = [
     intentPath: "/todos",
   },
   {
-    id: "calendar",
-    label: "カレンダー",
-    icon: CalendarDays,
-    path: "/calendar",
-    intentPath: "/calendar",
-  },
-  {
     id: "summary",
     label: "サマリー",
     icon: ChartColumn,
@@ -95,11 +92,8 @@ function getPrimaryIndex(pathname: string) {
   if (pathname.startsWith("/todos")) {
     return 1;
   }
-  if (pathname.startsWith("/calendar")) {
-    return 2;
-  }
   if (pathname.startsWith("/summary")) {
-    return 3;
+    return 2;
   }
   return null;
 }
@@ -111,6 +105,9 @@ export function FloatingNav({
   onRouteIntent,
   onRefresh,
   onLogout,
+  onAssist,
+  assistOpen = false,
+  assistDisabled = false,
 }: Props) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -135,6 +132,13 @@ export function FloatingNav({
   const userTextColor = getReadableTextColor(userBgColor);
 
   const secondaryItems: SecondaryNavItem[] = [
+    {
+      id: "calendar",
+      label: "カレンダー",
+      icon: CalendarDays,
+      path: "/calendar",
+      intentPath: "/calendar",
+    },
     {
       id: "todo-categories",
       label: "カテゴリー",
@@ -566,7 +570,7 @@ export function FloatingNav({
           <div
             ref={navRef}
             data-testid="floating-nav-primary"
-            className="relative min-w-0 flex-1 grid grid-cols-4 gap-0.5 overflow-hidden rounded-[2rem] border border-white/34 p-1 shadow-[0_18px_40px_-26px_rgba(68,56,36,0.44),0_8px_22px_-18px_rgba(34,29,21,0.22),inset_0_1px_0_rgba(255,255,255,0.62),inset_0_0_0_1px_rgba(158,150,138,0.12)]"
+            className="relative min-w-0 flex-1 grid grid-cols-3 gap-0.5 overflow-hidden rounded-[2rem] border border-white/34 p-1 shadow-[0_18px_40px_-26px_rgba(68,56,36,0.44),0_8px_22px_-18px_rgba(34,29,21,0.22),inset_0_1px_0_rgba(255,255,255,0.62),inset_0_0_0_1px_rgba(158,150,138,0.12)]"
             style={{
               background: "linear-gradient(180deg, rgba(244,242,238,0.52), rgba(225,221,214,0.22))",
               backdropFilter: "blur(30px) saturate(220%) brightness(0.94) contrast(1.08)",
@@ -702,6 +706,31 @@ export function FloatingNav({
             })}
           </div>
 
+          {onAssist ? (
+            <button
+              type="button"
+              onClick={() => {
+                setMenuOpen(false);
+                onAssist();
+              }}
+              disabled={assistDisabled}
+              aria-label="アシスト"
+              aria-haspopup="dialog"
+              aria-expanded={assistOpen}
+              title="アシストに話しかける"
+              className="group relative z-[55] grid size-[54px] shrink-0 cursor-pointer place-items-center self-center rounded-full border border-white/90 bg-white/80 text-[#635c72] shadow-[0_3px_16px_-6px_rgba(110,94,135,0.25)] transition-colors duration-200 hover:bg-white hover:text-stone-800 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-stone-600 disabled:cursor-default disabled:opacity-40 motion-reduce:transition-none"
+            >
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-1 rounded-full bg-[conic-gradient(from_30deg,#ebd6ef,#dcd8f5,#cde9e2,#f4e5d1,#ebd6ef)] opacity-70 blur-[5px] transition-opacity group-hover:opacity-100 motion-reduce:transition-none"
+              />
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-[7px] rounded-full bg-white/55"
+              />
+              <AudioLines size={23} strokeWidth={1.7} aria-hidden="true" className="relative" />
+            </button>
+          ) : null}
           <button
             type="button"
             className={`relative z-[55] flex h-[62px] w-[62px] shrink-0 flex-col items-center justify-center gap-1 overflow-hidden rounded-full border text-center transition-all duration-200 motion-reduce:transition-none focus-visible:outline-none ${

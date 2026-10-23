@@ -11,6 +11,7 @@ Applicationは応答前にも認証と期待する所属を再確認し、所属
 | 入口 | 本人・所属の決定と認可 | 検証 |
 | --- | --- | --- |
 | 通常Server Function | Cookieセッション→DBの本人所属→用途別SQL。招待作成だけowner限定、通常業務はmemberも可能 | `operations-functions.test.ts`：無認証/別Origin、SQL前のセッション失効・期限切れ・別本人、15種類の他チームID、ヘッダー/params/bodyの偽装 |
+| 音声 `/api/assist/turn` | strict Origin・Cookieセッション→AI待機前に本人/所属を固定→各待機後と業務操作前後の再検査。expectedTeamIdは不一致拒否だけに使用。draft/AI出力を認可元にしない | `assist.test.ts` / `assist-transport.test.ts`：無認証/別Origin、実WAV・本文上限、頻度制限、所属移動/失効、未知キー、対象外時のDB無変更 |
 | 公開MCP→Service Binding | providerでtoken検証→principal/連携/必要scope/現在所属→本人・チームを固定したRepository。公開ツールはlist/add/update/complete ToDoだけ | `mcp-operations.test.ts`、`mcp-worker.test.ts`、`mcp-workers.test.ts`：他チームID、scope、失効、所属移動、実OAuth/RPC/D1 |
 | Realtime | Cookieセッションと所属をSQLで再確認。サーバーが接続先と内部identityヘッダーを設定。配信時にもsession/所属を照合 | `realtime-route.test.ts`、`team-realtime.test.ts`、既存Realtime E2E |
 | Cron | Cloudflare scheduled入口、maintenance/JOBS_ENABLED。ユーザーのHTTP操作へ公開しない | `scheduled.test.ts`、`push.test.ts`、`database.test.ts` |

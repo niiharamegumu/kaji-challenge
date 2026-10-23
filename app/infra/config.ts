@@ -22,6 +22,7 @@ export const deploymentSchema = z
     jobs: booleanSetting,
     maintenance: booleanSetting,
     release: z.string().min(1),
+    assistEnabled: booleanSetting.default("false"),
     mcpEnabled: booleanSetting.default("false"),
     mcpOrigin: z
       .union([productionOrigin.transform((value) => new URL(value).origin), z.literal("")])
@@ -49,6 +50,24 @@ export function deploymentResources(input: unknown) {
   const settings = deploymentSchema.parse(input);
   return {
     settings,
+    assist: {
+      gateway: {
+        id: "kaji-voice",
+        collectLogs: false,
+        cacheTtl: null,
+        rateLimitingInterval: 60,
+        rateLimitingLimit: 24,
+        rateLimitingTechnique: "sliding" as const,
+        spendLimits: {
+          enabled: true,
+          rules: [
+            { limit: 100, limitType: "cost" as const, window: "1 day" as const },
+            { limit: 500, limitType: "cost" as const, window: "30 days" as const },
+          ],
+        },
+      },
+      limiter: { namespaceId: "1001", simple: { limit: 12, period: 60 as const } },
+    },
     database: {
       name: `kaji-${settings.stage}`,
       primaryLocationHint: "apac" as const,

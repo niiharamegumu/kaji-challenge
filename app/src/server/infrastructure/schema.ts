@@ -361,3 +361,21 @@ export const pushDelivery = sqliteTable(
     ),
   ],
 );
+
+export const assistUsage = sqliteTable(
+  "assist_usage",
+  {
+    id: text("id").primaryKey().notNull(),
+    window_start: integer("window_start").notNull(),
+    window_count: integer("window_count").notNull(),
+    usage_day: text("usage_day").notNull(),
+    daily_count: integer("daily_count").notNull(),
+    total_count: integer("total_count").notNull(),
+  },
+  (t) => [
+    check("assist_usage_id", sql`${t.id} = 'voice'`),
+    check("assist_usage_window", sql`${t.window_count} >= 0`),
+    check("assist_usage_daily", sql`${t.daily_count} >= 0`),
+    check("assist_usage_total", sql`${t.total_count} >= 0`),
+  ],
+);

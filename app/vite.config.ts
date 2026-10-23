@@ -56,6 +56,12 @@ export default defineConfig(({ mode }) => {
     plugins: [
       cloudflare({
         viteEnvironment: { name: "ssr" },
+        // AI has no local emulator. Production bindings come from alchemy.run.ts.
+        remoteBindings: false,
+        config: (config) => {
+          delete config.ai;
+          if (testD1Path || mode === "development-test") config.vars.APP_ORIGIN = testOrigin;
+        },
         auxiliaryWorkers: [
           {
             configPath: "wrangler.mcp.jsonc",
@@ -66,9 +72,6 @@ export default defineConfig(({ mode }) => {
           },
         ],
         ...(testD1Path ? { persistState: { path: testD1Path } } : {}),
-        ...(testD1Path || mode === "development-test"
-          ? { config: { vars: { APP_ORIGIN: testOrigin } } }
-          : {}),
       }),
       tanstackStart({ router: { enableRouteGeneration: true }, spa: { enabled: true } }),
       react(),
