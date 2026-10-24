@@ -22,7 +22,8 @@ jobs:
           node-version: 24.22.1
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.4
+      - run: bun run security:runtime
       - run: bun install --frozen-lockfile
       - run: bun audit --audit-level moderate
       - run: bunx playwright install --with-deps chromium

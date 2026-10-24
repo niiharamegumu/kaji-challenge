@@ -1,3 +1,7 @@
 [tools]
-bun = "latest"
+bun = "1.4.4"
 node = "24.22.1"
+
+[settings]
+# Keep the patched project runtimes ahead of system/Homebrew installations.
+activate_aggressive = true

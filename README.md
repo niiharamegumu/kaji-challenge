@@ -56,7 +56,13 @@ eval "$(mise activate zsh)"
 
 シェル設定を変更しない場合は、各コマンドの先頭に `mise exec --` を付けます。例えば `cd app && mise exec -- bun run typecheck` です。詳細は [miseのセットアップ](https://mise.jdx.dev/getting-started) を参照してください。
 
-現在の設定はNode.js `24.22.1`・Bun `latest` です。動作確認時はNode.js `24.22.1`・Bun `1.4.2` が選択されました。CI/CD・DockerもNode.js 24.22.1・Bun 1.4.2を使用します。Node.js・Bunを更新する際は、`app/package.json` の `engines`・`packageManager`・`app/Dockerfile.dev`・`.github/workflows/ci.yml`・`.github/workflows/deploy-production.yml` のバージョンも揃えて検証してください。
+ホスト・CI/CD・DockerはNode.js `24.22.1`・Bun `1.4.4` に揃えています。[CVE-2026-111497のNode.js修正](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases)と[Bun修正](https://github.com/oven-sh/bun/security/advisories/GHSA-663w-cv8g-jj2p)を含むバージョンです。Node.js・Bunを更新する際は、`mise.toml`・`app/package.json` の `engines` / `packageManager`・`app/Dockerfile.dev`・`.github/workflows/ci.yml`・`.github/workflows/deploy-production.yml` のバージョンも揃えて検証してください。
+
+更新後は `mise install` を実行し、ホストの開発サーバーを修正版の環境で起動し直します。既存の開発コンテナは `docker compose build --pull app` と `docker compose up -d --force-recreate app` で作り直してください。単なるrestartでは古いBunが残ります。`cd app && mise exec -- bun run security:runtime` でNode.jsとBunの実際のBrotli decoderを検証できます。依存導入・開発起動・build・配備・一括検証でもこのチェックを実行し、未修正runtimeを拒否します。Node.jsの修正版はBrotliのバージョン表示が `1.2.0` のままなので、表示だけでは判定しません。`bun audit` はnpm依存の監査であり、このruntime検証の代わりにはなりません。
+
+miseの `activate_aggressive` を有効にし、Homebrewなどの別のNode.jsがPATHにあってもプロジェクト指定を優先します。runtimeとnpm依存をまとめて確認するには `make security`（ホストでは `cd app && mise exec -- bun run security`）を実行してください。
+
+本番のCloudflare WorkersはCloudflare管理のruntimeです。Node.js/Bunのチェックは、その基盤の修正適用を証明するものではありません。2026年10月25日の調査では、ローカルのworkerd依存と公開最新版のソースにはBrotli `1.2.0.bcr.3` が残っており、修正済みとは判定していません。現在のアプリにはBrotli解凍APIの直接利用がなく、互換日 `2026-09-14`・`brotli_content_encoding` 無効の設定で、fetch応答がBrotli解凍されないことを隔離したローカルWorkerで確認しています。Brotli利用を追加する際は[workerdの依存](https://github.com/cloudflare/workerd/blob/v1.20261024.1/build/deps/gen/deps.MODULE.bazel)とCloudflareの修正状況を再確認してください。
 
 ### アプリの設定と起動
 
