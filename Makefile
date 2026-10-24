@@ -36,7 +36,7 @@ test:
 	$(APP_RUN) bun run test --run
 
 security:
-	$(APP_RUN) bun audit --audit-level high
+	$(APP_RUN) bun run security
 
 architecture-check:
 	$(APP_RUN) bun run architecture:check
