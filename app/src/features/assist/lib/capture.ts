@@ -15,6 +15,7 @@ type AudioResources = {
 };
 const preparationFailed =
   "音声の準備ができませんでした。閉じて、もう一度アシストを開いてください。";
+type CaptureStatus = { type: "started" } | { type: "finished"; sampleCount: number };
 
 function bounded<T>(promise: Promise<T>, ms: number, message: string, signal: AbortSignal) {
   let timer: ReturnType<typeof setTimeout>;
@@ -53,13 +54,17 @@ export function createCapture(callbacks: Callbacks) {
     listening = false;
   let stream: MediaStream | undefined;
   let detector: SpeechDetector | undefined;
+  let receivedSamples = 0;
   let idleTimer: ReturnType<typeof setTimeout> | undefined;
   let finishing = false;
-  let finished: (() => void) | undefined;
+  let finished: ((sampleCount: number) => void) | undefined;
+  let started: (() => void) | undefined;
+  let starting: Promise<void> | undefined;
   let audio: AudioResources;
   const disable = () => {
     listening = false;
     detector = undefined;
+    audio.node?.port.postMessage({ type: "cancel" });
     clearTimeout(idleTimer);
     stream?.getTracks().forEach((track) => {
       track.enabled = false;
@@ -127,8 +132,8 @@ export function createCapture(callbacks: Callbacks) {
     clearTimeout(idleTimer);
     try {
       // Port messages are ordered: consume queued PCM and the final partial block first.
-      await bounded(
-        new Promise<void>((resolve) => {
+      const sampleCount = await bounded(
+        new Promise<number>((resolve) => {
           finished = resolve;
           audio.node?.port.postMessage({ type: "finish" });
         }),
@@ -137,6 +142,9 @@ export function createCapture(callbacks: Callbacks) {
         lifetime.signal,
       );
       lifetime.signal.throwIfAborted();
+      if (!Number.isInteger(sampleCount) || sampleCount < 0 || receivedSamples !== sampleCount) {
+        throw new Error("録音の一部を確認できませんでした。もう一度録音してください。");
+      }
       const wav = detector?.finish();
       if (!wav) {
         stopWithReason("声を確認できませんでした。もう一度話してください。");
@@ -176,12 +184,14 @@ export function createCapture(callbacks: Callbacks) {
     current.source.connect(current.node);
     current.node.connect(current.mute);
     current.mute.connect(context.destination);
-    current.node.port.onmessage = (event: MessageEvent<Float32Array | { type: "finished" }>) => {
+    current.node.port.onmessage = (event: MessageEvent<Float32Array | CaptureStatus>) => {
       if (closed || audio !== current || !listening || !detector) return;
       if (!(event.data instanceof Float32Array)) {
-        if (event.data.type === "finished") finished?.();
+        if (event.data.type === "started") started?.();
+        if (event.data.type === "finished") finished?.(event.data.sampleCount);
         return;
       }
+      receivedSamples += event.data.length;
       const state = detector.push(event.data);
       if (state === "recording" && !finishing) callbacks.onRecording();
       if (state === "too_long") void send(true);
@@ -218,29 +228,46 @@ export function createCapture(callbacks: Callbacks) {
     stop,
     disable,
     send,
-    async listen() {
-      if (closed) return;
-      try {
-        await ready;
-        lifetime.signal.throwIfAborted();
-        // SpeechSynthesis can interrupt Safari's audio session while input is disabled.
-        if (audio.context.state !== "running") await prepareWithRecovery();
-        lifetime.signal.throwIfAborted();
-        detector = new SpeechDetector(audio.context.sampleRate);
-        listening = true;
-        finishing = false;
-        stream?.getTracks().forEach((track) => {
-          track.enabled = true;
-        });
-        clearTimeout(idleTimer);
-        audio.node?.port.postMessage({ type: "start" });
-        idleTimer = setTimeout(() => {
-          void send(true);
-        }, assistAudio.maxSeconds * 1000);
-      } catch (error) {
-        stop();
-        throw error;
-      }
+    listen() {
+      if (starting) return starting;
+      if (closed || listening) return Promise.resolve();
+      starting = (async () => {
+        try {
+          await ready;
+          lifetime.signal.throwIfAborted();
+          // SpeechSynthesis can interrupt Safari's audio session while input is disabled.
+          if (audio.context.state !== "running") await prepareWithRecovery();
+          lifetime.signal.throwIfAborted();
+          detector = new SpeechDetector(audio.context.sampleRate);
+          receivedSamples = 0;
+          listening = true;
+          finishing = false;
+          stream?.getTracks().forEach((track) => {
+            track.enabled = true;
+          });
+          clearTimeout(idleTimer);
+          await bounded(
+            new Promise<void>((resolve) => {
+              started = resolve;
+              audio.node?.port.postMessage({ type: "start" });
+            }),
+            5000,
+            preparationFailed,
+            lifetime.signal,
+          );
+          lifetime.signal.throwIfAborted();
+          idleTimer = setTimeout(() => {
+            void send(true);
+          }, assistAudio.maxSeconds * 1000);
+        } catch (error) {
+          stop();
+          throw error;
+        }
+      })().finally(() => {
+        starting = undefined;
+        started = undefined;
+      });
+      return starting;
     },
   };
 }
