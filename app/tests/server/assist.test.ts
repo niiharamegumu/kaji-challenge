@@ -29,6 +29,11 @@ describe("assist contract and audio boundary", () => {
     { ...add, items: [] },
     { ...add, items: [{ ...add.items[0], dueDate: "2026-10-24" }] },
     { intent: "delete_todo", id: crypto.randomUUID() },
+    { intent: "delete_todos", names: [], categoryName: null },
+    { intent: "complete_todos", names: ["牛乳"], categoryName: null, id: crypto.randomUUID() },
+    { intent: "delete_todos", names: Array(51).fill("牛乳"), categoryName: null },
+    { intent: "list_todos", categoryName: null, nameQuery: "" },
+    { intent: "update_todo", name: "牛乳" },
     { ...add, dueDate: "2026-10-24" },
     { ...add, names: ["牛乳", "卵"] },
     { ...add, notes: "ignored?" },
@@ -162,7 +167,7 @@ describe("assist with real D1 and fixture AI", () => {
     }));
     ai.interpret.mockResolvedValue({ intent: "add_todo", items: requested });
     const result = await request({ transcript });
-    expect(ai.interpret).toHaveBeenCalledWith(transcript, undefined, expect.any(AbortSignal));
+    expect(ai.interpret).toHaveBeenCalledWith(transcript, undefined, expect.any(AbortSignal), []);
     expect(result.data).toMatchObject({
       kind: "added",
       transcript,
@@ -372,6 +377,117 @@ describe("assist with real D1 and fixture AI", () => {
     if (result.kind === "listed") expect(result.items).toHaveLength(20);
     expect(result.replyText.length).toBeLessThanOrEqual(100);
   });
+  it("passes current registered categories to inference and accepts an inferred existing category", async () => {
+    await category("買い物");
+    await category("仕事");
+    ai.interpret.mockResolvedValue({
+      intent: "add_todo",
+      items: [{ name: "納豆", categoryName: "買い物" }],
+    });
+    const result = (await request({ transcript: "ToDoに納豆を追加して" })).data;
+    expect(ai.interpret.mock.lastCall?.[3]).toEqual(["買い物", "仕事"]);
+    expect(result).toMatchObject({
+      kind: "added",
+      items: [{ name: "納豆", categoryId: expect.any(String) }],
+    });
+    const categories = await connection.repository.ListTodoCategories(teamId);
+    expect((await items())[0].CategoryID).toBe(categories.find((c) => c?.name === "買い物")?.id);
+  });
+  it("combines category and normalized name substring searches without changing data", async () => {
+    await category("買い物");
+    ai.interpret.mockResolvedValue({
+      intent: "add_todo",
+      items: [
+        { name: "低脂肪牛乳", categoryName: "買い物" },
+        { name: "牛乳", categoryName: "未分類" },
+        { name: "納豆", categoryName: "買い物" },
+        { name: "ＭＩＬＫ", categoryName: "買い物" },
+      ],
+    });
+    await request();
+    const before = await items();
+    for (const [categoryName, nameQuery, names] of [
+      [null, "牛乳", ["低脂肪牛乳", "牛乳"]],
+      ["買い物", "牛乳", ["低脂肪牛乳"]],
+      [null, "milk", ["ＭＩＬＫ"]],
+      ["未分類", "牛乳", ["牛乳"]],
+      [null, "存在しない", []],
+    ] as const) {
+      ai.interpret.mockResolvedValue({ intent: "list_todos", categoryName, nameQuery });
+      const result = (await request()).data;
+      expect(result.kind).toBe("listed");
+      if (result.kind === "listed") {
+        expect(result.items.map((item) => item.name)).toEqual(names);
+        expect(result.total).toBe(names.length);
+      }
+    }
+    expect(await items()).toEqual(before);
+  });
+  it.each(["complete_todos", "delete_todos"] as const)(
+    "%s removes every full-name duplicate, not partial matches",
+    async (intent) => {
+      ai.interpret.mockResolvedValue({
+        intent: "add_todo",
+        items: [
+          { name: "牛乳", categoryName: null },
+          { name: "牛乳", categoryName: null },
+          { name: "低脂肪牛乳", categoryName: null },
+          { name: "納豆", categoryName: null },
+        ],
+      });
+      await request();
+      ai.interpret.mockResolvedValue({ intent, names: ["牛乳"], categoryName: null });
+      expect(await request()).toMatchObject({
+        data: {
+          kind: "removed",
+          count: 2,
+          action: intent === "complete_todos" ? "complete" : "delete",
+        },
+        changedTeams: [teamId],
+      });
+      expect((await items()).map((item) => item.Name)).toEqual(["低脂肪牛乳", "納豆"]);
+      expect(await request()).toMatchObject({ data: { count: 0 }, changedTeams: [] });
+    },
+  );
+  it("limits removal to the explicitly requested category and never falls back for an unknown one", async () => {
+    await category("買い物");
+    ai.interpret.mockResolvedValue({
+      intent: "add_todo",
+      items: [
+        { name: "牛乳", categoryName: "買い物" },
+        { name: "牛乳", categoryName: "未分類" },
+      ],
+    });
+    await request();
+    ai.interpret.mockResolvedValue({
+      intent: "delete_todos",
+      names: ["牛乳"],
+      categoryName: "不存在",
+    });
+    expect((await request()).data.kind).toBe("unsupported");
+    expect(await items()).toHaveLength(2);
+    ai.interpret.mockResolvedValue({
+      intent: "complete_todos",
+      names: ["牛乳"],
+      categoryName: "買い物",
+    });
+    expect((await request()).data).toMatchObject({ kind: "removed", count: 1 });
+    expect(await items()).toMatchObject([{ Name: "牛乳", CategoryID: null }]);
+  });
+  it.each(["session", "membership"])(
+    "does not remove ToDos when %s changes during inference",
+    async (boundary) => {
+      await request();
+      ai.interpret.mockImplementation(async () => {
+        if (boundary === "session")
+          await connection.query(sql`DELETE FROM auth_session WHERE id=${sessionId}`);
+        else await connection.query(sql`DELETE FROM team_members WHERE user_id=${userId}`);
+        return { intent: "delete_todos", names: ["牛乳"], categoryName: null };
+      });
+      await expect(request()).rejects.toMatchObject({ status: boundary === "session" ? 401 : 403 });
+      expect(await items()).toHaveLength(1);
+    },
+  );
   it("rejects wrong expected team before calling AI", async () => {
     await expect(request({ expectedTeamId: crypto.randomUUID() })).rejects.toMatchObject({
       status: 403,
