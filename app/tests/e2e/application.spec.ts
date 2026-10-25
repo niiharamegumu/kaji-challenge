@@ -3,7 +3,11 @@ import { createHmac } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { createTestDatabase } from "../helpers/d1";
 import { provisionUser } from "../../src/server/application/provision-user";
-import { installAssistMediaFixture, installNativeAssistAudioFixture } from "./assist-fixture";
+import {
+  installAssistEncodingLoad,
+  installAssistMediaFixture,
+  installNativeAssistAudioFixture,
+} from "./assist-fixture";
 const secret = "kaji-e2e-only-secret-do-not-use-in-production";
 const userId = crypto.randomUUID(),
   token = crypto.randomUUID();
@@ -1766,6 +1770,49 @@ test(
     await expect.poll(order).toEqual(nextOrder);
     await page.reload();
     await expect.poll(order).toEqual(nextOrder);
+  },
+);
+
+test(
+  "paints submission feedback during CPU-heavy audio encoding before immediate AI responses",
+  { tag: ["@assist"] },
+  async ({ page, context }) => {
+    await authenticate(context, token);
+    await installAssistMediaFixture(page);
+    await installAssistEncodingLoad(page);
+    let transcriptions = 0,
+      turns = 0;
+    await page.route("**/api/assist/transcribe", async (route) => {
+      transcriptions++;
+      await route.fulfill({ json: { transcript: "粒マスタードを追加して" } });
+    });
+    await page.route("**/api/assist/turn", async (route) => {
+      turns++;
+      await route.fulfill({
+        json: {
+          kind: "listed",
+          transcript: "粒マスタードを追加して",
+          replyText: "応答が完了しました。",
+          items: [],
+          total: 0,
+        },
+      });
+    });
+    await page.goto("/todos");
+    await page.getByRole("button", { name: "アシスト", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "音声アシスト" });
+    await dialog.getByRole("button", { name: "録音を開始", exact: true }).click();
+    await expect(dialog.getByRole("status")).toHaveText("録音中");
+    await page.evaluate(() => window.assistFixture.emit());
+    await dialog.getByRole("button", { name: "停止して送信", exact: true }).click();
+    await expect(dialog.getByText("応答が完了しました。")).toBeVisible();
+    const observed = await page.evaluate(() => window.assistPaintFixture);
+    console.log(JSON.stringify({ encodingFeedback: observed }));
+    expect(observed.framesBeforeTranscribe).toBeGreaterThanOrEqual(3);
+    expect(observed.workers).toBe(1);
+    expect(transcriptions).toBe(1);
+    expect(turns).toBe(1);
+    expect(await page.evaluate(() => window.assistFixture.activeTracks)).toBe(0);
   },
 );
 
