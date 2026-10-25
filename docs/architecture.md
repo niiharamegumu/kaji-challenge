@@ -6,6 +6,8 @@
 
 `features/assist` の公開APIをRootLayoutが組み立て、shellへ起動callbackと状態だけを渡す。新しいページは追加せず、カレンダーを「その他」に残す。共通ダイアログは `shared/state/overlay` で競合を避ける。
 
+ブラウザーの録音終了では、AudioWorkletから受信したPCMの総数を照合してマイクを解放する。WAV化とbase64化は同featureのDedicated WorkerへPCMの所有権を転送して実施し、画面描画のスレッドを占有しない。送信表示の更新後は描画の機会を挟んでから変換/実行へ進む。終了・中断・変換エラーではWorkerも破棄し、同期変換へ戻すfallbackは持たない。
+
 音声は `contracts/assist.ts` → `transport/assist.server.ts` → `application/assist-operations.ts` → 既存 `executeOperation` / Repositoryで扱う。Applicationの `AssistAi` portを `infrastructure/assist-ai.ts` が実装する。音声認識・意図解析は既存アプリWorkerからのみ呼び、LLMの出力をDB命令として実行しない。WAV検証・本人/所属の固定・再送抑止と運用手順は [voice-assist.md](voice-assist.md) を参照する。
 
 `AssistBudget` portを `infrastructure/assist-budget.ts` が実装し、AIの前に永続カウンターを条件付きUPDATEで予約する。複数ToDoは全件を検証後、Repositoryの単一D1 batchで保存する。どちらも並行リクエストで上限超過や部分保存が起きないことを実D1で検証する。
