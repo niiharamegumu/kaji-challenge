@@ -29,7 +29,7 @@ export type VoiceState = {
 };
 type Dependencies = { capture: typeof createCapture };
 const interrupted =
-  "処理を中断しました。追加されている可能性があります。ToDo一覧を確認してください。";
+  "処理を中断しました。操作が反映されている可能性があります。ToDo一覧を確認してください。";
 const textLimit = `${assistLimits.transcript}文字を超えています。短くしてから送信してください。`;
 
 /** Opening, dictating and submitting are separate user actions. */

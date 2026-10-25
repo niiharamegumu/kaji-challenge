@@ -94,7 +94,7 @@ it.each([additions, JSON.stringify(additions)])(
       expiresAt: Date.now() + 60_000,
     };
     run.mockResolvedValue({ response, usage: { completion_tokens: 90 } });
-    expect(await ai.interpret("どちらも買い物", pendingDraft, signal)).toEqual(additions);
+    expect(await ai.interpret("どちらも買い物", pendingDraft, signal, [])).toEqual(additions);
     expect(run).toHaveBeenCalledTimes(1);
     expect(run).toHaveBeenCalledWith(
       "@cf/google/gemma-4-26b-a4b-it",
@@ -125,7 +125,7 @@ it.each([additions, JSON.stringify(additions)])(
     );
     expect(run.mock.calls[0][1].messages.at(-1)).toEqual({
       role: "user",
-      content: JSON.stringify({ transcript: "どちらも買い物", pendingDraft }),
+      content: JSON.stringify({ transcript: "どちらも買い物", pendingDraft, categoryNames: [] }),
     });
   },
 );
@@ -133,7 +133,7 @@ it.each([additions, JSON.stringify(additions)])(
 it("provides separate category-specific and all-category dialogue examples before the actual request", async () => {
   const { ai, run, signal } = fixture();
   run.mockResolvedValue({ response: { intent: "list_todos", categoryName: "買い物" } });
-  await ai.interpret("買い物リストを教えて", undefined, signal);
+  await ai.interpret("買い物リストを教えて", undefined, signal, []);
   const messages = run.mock.calls[0][1].messages;
   expect(messages[0]).toMatchObject({ role: "system" });
   const examples = messages.slice(1, -1);
@@ -157,15 +157,42 @@ it("provides separate category-specific and all-category dialogue examples befor
   }
   expect(messages.at(-1)).toEqual({
     role: "user",
-    content: JSON.stringify({ transcript: "買い物リストを教えて", pendingDraft: null }),
+    content: JSON.stringify({
+      transcript: "買い物リストを教えて",
+      pendingDraft: null,
+      categoryNames: [],
+    }),
   });
 });
 
 it("accepts Gemma's documented OpenAI completion shape without another inference", async () => {
   const { ai, run, signal } = fixture();
   run.mockResolvedValue(chatCompletion);
-  expect(await ai.interpret("買い物に牛乳と卵を追加して", undefined, signal)).toEqual(additions);
+  expect(await ai.interpret("買い物に牛乳と卵を追加して", undefined, signal, [])).toEqual(
+    additions,
+  );
   expect(run).toHaveBeenCalledTimes(1);
+});
+
+it("provides registered category names and routes explicit ToDo commands, inference, search and removal", async () => {
+  const { ai, run, signal } = fixture();
+  run.mockResolvedValue({
+    response: { intent: "complete_todos", names: ["牛乳"], categoryName: null },
+  });
+  expect(await ai.interpret("ToDoの牛乳を完了して", undefined, signal, ["買い物", "仕事"])).toEqual(
+    {
+      intent: "complete_todos",
+      names: ["牛乳"],
+      categoryName: null,
+    },
+  );
+  const messages = run.mock.calls[0][1].messages;
+  expect(JSON.parse(messages.at(-1).content)).toEqual({
+    transcript: "ToDoの牛乳を完了して",
+    pendingDraft: null,
+    categoryNames: ["買い物", "仕事"],
+  });
+  expect(run).toHaveBeenCalledOnce();
 });
 
 it.each([
@@ -198,7 +225,7 @@ it.each([
     const { ai, run, signal } = fixture();
     run.mockResolvedValue(result);
     await expect(
-      ai.interpret("買い物に牛乳と卵を追加して", undefined, signal),
+      ai.interpret("買い物に牛乳と卵を追加して", undefined, signal, []),
     ).rejects.toMatchObject({
       code: "invalid_completion",
     });
@@ -223,7 +250,7 @@ it.each([
   async (result) => {
     const { ai, run, signal } = fixture();
     run.mockResolvedValue(result);
-    await expect(ai.interpret("牛乳と卵を追加して", undefined, signal)).rejects.toMatchObject({
+    await expect(ai.interpret("牛乳と卵を追加して", undefined, signal, [])).rejects.toMatchObject({
       code: "invalid_completion",
     });
     expect(run).toHaveBeenCalledTimes(1);
@@ -240,10 +267,12 @@ it("bounds the serialized prompt and schema before invoking Gemma, including JSO
     missing: "category",
     expiresAt: Date.now() + 60_000,
   };
-  await expect(ai.interpret("\u0000".repeat(2000), pendingDraft, signal)).rejects.toMatchObject({
-    status: 413,
-    code: "assist_input_too_long",
-  });
+  await expect(ai.interpret("\u0000".repeat(2000), pendingDraft, signal, [])).rejects.toMatchObject(
+    {
+      status: 413,
+      code: "assist_input_too_long",
+    },
+  );
   expect(run).not.toHaveBeenCalled();
 });
 
@@ -255,7 +284,7 @@ it.each(["transcribe", "interpret"] as const)(
     const operation =
       method === "transcribe"
         ? ai.transcribe("UklGRg==", signal)
-        : ai.interpret("牛乳と卵を追加して", undefined, signal);
+        : ai.interpret("牛乳と卵を追加して", undefined, signal, []);
     await expect(operation).rejects.toMatchObject({ status: 503, code: "ai_unavailable" });
     await expect(operation).rejects.not.toThrow("secret");
     expect(run).toHaveBeenCalledTimes(1);
@@ -266,7 +295,7 @@ it("never starts inference for an aborted request", async () => {
   const { ai, run, signal, controller } = fixture();
   controller.abort();
   await expect(ai.transcribe("UklGRg==", signal)).rejects.toMatchObject({ name: "AbortError" });
-  await expect(ai.interpret("一覧を教えて", undefined, signal)).rejects.toMatchObject({
+  await expect(ai.interpret("一覧を教えて", undefined, signal, [])).rejects.toMatchObject({
     name: "AbortError",
   });
   expect(run).not.toHaveBeenCalled();
@@ -278,7 +307,7 @@ it("discards a completed inference after cancellation without trying again", asy
     controller.abort();
     return { response: additions };
   });
-  await expect(ai.interpret("牛乳と卵を追加して", undefined, signal)).rejects.toMatchObject({
+  await expect(ai.interpret("牛乳と卵を追加して", undefined, signal, [])).rejects.toMatchObject({
     name: "AbortError",
   });
   expect(run).toHaveBeenCalledTimes(1);

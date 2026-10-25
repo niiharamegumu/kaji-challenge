@@ -1938,6 +1938,92 @@ test(
 );
 
 test(
+  "assist help explains ToDo commands, bounded searches and completed results in a compact layout",
+  { tag: ["@assist"] },
+  async ({ page, context }, testInfo) => {
+    await authenticate(context, token);
+    await installAssistMediaFixture(page);
+    await page.route("**/api/assist/turn", async (route) => {
+      const input = route.request().postDataJSON();
+      if (input.transcript === "買い物の牛乳を探して") {
+        await route.fulfill({
+          json: {
+            kind: "listed",
+            transcript: input.transcript,
+            replyText: "買い物の検索結果は23件です。",
+            total: 23,
+            items: Array.from({ length: 20 }, (_, index) => ({
+              id: crypto.randomUUID(),
+              teamId: input.expectedTeamId,
+              name: `牛乳${index + 1}`,
+              categoryId: null,
+              notes: null,
+              sortKey: index + 1,
+              createdAt: "2026-10-25T00:00:00.000Z",
+              updatedAt: "2026-10-25T00:00:00.000Z",
+            })),
+          },
+        });
+      } else {
+        expect(input.transcript).toBe("牛乳を買った");
+        await route.fulfill({
+          json: {
+            kind: "removed",
+            action: "complete",
+            count: 2,
+            transcript: input.transcript,
+            replyText: "2件完了しました。同じ名前のToDoをすべて対象にしました。",
+          },
+        });
+      }
+    });
+    await page.goto("/todos");
+    const launcher = page.getByRole("button", { name: "アシスト", exact: true });
+    await launcher.click();
+    const dialog = page.getByRole("dialog", { name: "音声アシスト" });
+    const helpButton = dialog.getByRole("button", { name: "できること", exact: true });
+    await helpButton.click();
+    const help = dialog.getByRole("region", { name: "アシストでできること" });
+    await expect(help).toBeVisible();
+    await expect(help.getByText("「ToDoに牛乳と卵を追加して」")).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath("assist-help.png"), fullPage: false });
+    await page.keyboard.press("Escape");
+    await expect(help).toBeHidden();
+    await expect(dialog).toBeVisible();
+    await expect(helpButton).toBeFocused();
+    await page.setViewportSize({ width: 320, height: 480 });
+    await helpButton.click();
+    const bounds = (await help.boundingBox())!;
+    expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(320);
+    expect(bounds.y + bounds.height).toBeLessThanOrEqual(480);
+    await helpButton.click();
+    const text = dialog.getByRole("textbox", { name: "送信する内容" });
+    const send = dialog.getByRole("button", { name: "送信", exact: true });
+    await text.fill("買い物の牛乳を探して");
+    await send.click();
+    const results = dialog.getByLabel("ToDo 23件", { exact: true });
+    await expect(results.getByRole("listitem")).toHaveCount(20);
+    const notice = results.getByText(
+      "全23件のうち先頭20件を表示しています。続きはToDo画面で確認してください。",
+    );
+    await notice.scrollIntoViewIfNeeded();
+    await expect(notice).toBeVisible();
+    await expect(notice).toBeInViewport({ ratio: 1 });
+    await page.screenshot({ path: testInfo.outputPath("assist-search.png"), fullPage: false });
+    await text.fill("牛乳を買った");
+    await send.click();
+    await expect(
+      dialog.getByText("2件完了しました。同じ名前のToDoをすべて対象にしました。"),
+    ).toBeVisible();
+    expect(await page.evaluate(() => window.assistFixture.captureRequests)).toBe(0);
+    await dialog.getByRole("button", { name: "アシストを閉じる" }).click();
+    await launcher.click();
+    await expect(help).toBeHidden();
+  },
+);
+
+test(
   "assist typed input needs no microphone and fits a compact viewport",
   { tag: ["@assist"] },
   async ({ page, context }, testInfo) => {

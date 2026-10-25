@@ -147,6 +147,41 @@ it("rejects truncated or malformed completions without a write", async () => {
   expect(await connection.repository.ListTodoItemsByTeamID(teamId)).toHaveLength(count);
 });
 
+it("searches and removes matching duplicates through HTTP with one change notification", async () => {
+  const now = new Date().toISOString();
+  await connection.repository.CreateTodoItemsAtomic(
+    ["HTTP牛乳", "HTTP牛乳", "HTTP低脂肪牛乳"].map((Name) => ({
+      ID: crypto.randomUUID(),
+      TeamID: teamId,
+      Name,
+      Notes: null,
+      CategoryID: null,
+      SortKey: 100,
+      CreatedAt: now,
+      UpdatedAt: now,
+    })),
+  );
+  mocks.run.mockResolvedValueOnce({
+    response: { intent: "list_todos", categoryName: null, nameQuery: "HTTP" },
+  });
+  const listed = await handleAssistTurn(request(), bindings);
+  expect(listed.status).toBe(200);
+  expect(await listed.json()).toMatchObject({ kind: "listed", total: 3 });
+  expect(mocks.notify).not.toHaveBeenCalled();
+  mocks.run.mockResolvedValueOnce({
+    response: { intent: "complete_todos", categoryName: null, names: ["HTTP牛乳"] },
+  });
+  const removed = await handleAssistTurn(request(), bindings);
+  expect(removed.status).toBe(200);
+  expect(await removed.json()).toMatchObject({ kind: "removed", action: "complete", count: 2 });
+  expect(mocks.notify).toHaveBeenCalledExactlyOnceWith(bindings, [teamId], ["todos"]);
+  expect(
+    (await connection.repository.ListTodoItemsByTeamID(teamId))
+      .filter((item) => item.Name.startsWith("HTTP"))
+      .map((item) => item.Name),
+  ).toEqual(["HTTP低脂肪牛乳"]);
+});
+
 it("stops exhausted or missing persistent quota before invoking AI", async () => {
   await connection.query(sql`UPDATE assist_usage SET total_count=500`);
   expect((await handleAssistTurn(request(), bindings)).status).toBe(429);

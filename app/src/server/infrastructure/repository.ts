@@ -937,6 +937,31 @@ export class D1Repository implements P.Repository {
       .where(and(eq(todoItems.id, id), this.teamAccess(todoItems.team_id)));
     return required(rows, "GetTodoItemByID");
   }
+  async DeleteTodoItemsByNames(
+    teamId: string,
+    names: string[],
+    categoryId?: string | null,
+  ): Promise<number> {
+    if (names.length === 0) return 0;
+    // One DELETE applies the entire name set and current session/team checks together.
+    // Names are bound as JSON, including large duplicate groups without per-item binds.
+    return this.db
+      .delete(todoItems)
+      .where(
+        and(
+          eq(todoItems.team_id, teamId),
+          this.teamAccess(teamId),
+          sql`${todoItems.name} IN (SELECT value FROM json_each(${JSON.stringify(names)}))`,
+          categoryId === undefined
+            ? undefined
+            : categoryId === null
+              ? isNull(todoItems.category_id)
+              : eq(todoItems.category_id, categoryId),
+        ),
+      )
+      .returning({ id: todoItems.id })
+      .then((rows) => rows.length);
+  }
   async ListTodoItemsByTeamID(teamID: string): Promise<P.TodoItem[]> {
     return this.db
       .select(todoFields)

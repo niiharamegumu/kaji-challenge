@@ -99,7 +99,7 @@ async function handleAssistRequest(
             ? error.message
             : stage === "transcribe"
               ? "文字起こしを完了できませんでした。ToDoは操作していません。もう一度録音してください。"
-              : "処理結果を確認できません。追加されている可能性があります。ToDo一覧を確認してください。",
+              : "処理結果を確認できません。操作が反映されている可能性があります。ToDo一覧を確認してください。",
       },
       { status, headers: status === 429 ? { "Retry-After": "60" } : undefined },
     );
