@@ -3,7 +3,7 @@ import { createHmac } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { createTestDatabase } from "../helpers/d1";
 import { provisionUser } from "../../src/server/application/provision-user";
-import { installAssistMediaFixture } from "./assist-fixture";
+import { installAssistMediaFixture, installNativeAssistAudioFixture } from "./assist-fixture";
 const secret = "kaji-e2e-only-secret-do-not-use-in-production";
 const userId = crypto.randomUUID(),
   token = crypto.randomUUID();
@@ -1766,6 +1766,75 @@ test(
     await expect.poll(order).toEqual(nextOrder);
     await page.reload();
     await expect.poll(order).toEqual(nextOrder);
+  },
+);
+
+test(
+  "native audio worklet sends the complete beginning middle and end and preserves the full transcript",
+  { tag: ["@assist"] },
+  async ({ page, context }) => {
+    await authenticate(context, token);
+    await installNativeAssistAudioFixture(page);
+    const transcript = "粒マスタードを追加して。レモンと牛乳も追加して。";
+    let transcribed = 0,
+      submitted = 0;
+    await page.route("**/api/assist/transcribe", async (route) => {
+      const wav = Buffer.from(route.request().postDataJSON().audioBase64, "base64");
+      expect(wav.toString("ascii", 0, 4)).toBe("RIFF");
+      expect(wav.readUInt16LE(22)).toBe(1);
+      expect(wav.readUInt32LE(24)).toBe(16000);
+      expect((wav.length - 44) / 32000).toBeGreaterThan(3.6);
+      const labels: number[] = [];
+      const count = (wav.length - 44) / 2;
+      for (let start = 0; start + 1600 <= count; start += 1600) {
+        const energies = [220, 440, 880].map((frequency) => {
+          let real = 0,
+            imaginary = 0;
+          for (let index = 0; index < 1600; index++) {
+            const sample = wav.readInt16LE(44 + (start + index) * 2) / 32768;
+            const angle = (2 * Math.PI * frequency * index) / 16000;
+            real += sample * Math.cos(angle);
+            imaginary += sample * Math.sin(angle);
+          }
+          return Math.hypot(real, imaginary) / 1600;
+        });
+        const strongest = Math.max(...energies);
+        if (strongest < 0.04) continue;
+        const label = [220, 440, 880][energies.indexOf(strongest)];
+        if (labels.at(-1) !== label) labels.push(label);
+      }
+      expect(labels).toEqual([220, 440, 880]);
+      transcribed++;
+      await route.fulfill({ json: { transcript } });
+    });
+    await page.route("**/api/assist/turn", async (route) => {
+      expect(route.request().postDataJSON().transcript).toBe(transcript);
+      submitted++;
+      await route.fulfill({
+        json: {
+          kind: "listed",
+          transcript,
+          replyText: "ToDoは今ありません。",
+          items: [],
+          total: 0,
+        },
+      });
+    });
+    await page.goto("/todos");
+    await page.getByRole("button", { name: "アシスト", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "音声アシスト" });
+    await dialog.getByRole("button", { name: "録音を開始", exact: true }).click();
+    await expect(dialog.getByRole("status")).toHaveText("録音中");
+    await page.evaluate(() => window.assistNativeFixture.play());
+    await dialog.getByRole("button", { name: "録音を停止", exact: true }).click();
+    const input = dialog.getByRole("textbox", { name: "送信する内容" });
+    await expect(input).toHaveValue(transcript);
+    expect(transcribed).toBe(1);
+    expect(submitted).toBe(0);
+    expect(await page.evaluate(() => window.assistNativeFixture.stopped)).toBe(1);
+    await dialog.getByRole("button", { name: "送信", exact: true }).click();
+    await expect(dialog.getByText("ToDoは今ありません。")).toBeVisible();
+    expect(submitted).toBe(1);
   },
 );
 
