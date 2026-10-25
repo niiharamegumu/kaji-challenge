@@ -166,6 +166,64 @@
   color: #67544c;
   line-height: 1.9;
 }
+.assist-review {
+  text-align: left;
+}
+.assist-review label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+.assist-review textarea {
+  width: 100%;
+  resize: vertical;
+  padding: 12px 14px;
+  border: 1px solid rgb(120 113 108 / 25%);
+  border-radius: 16px;
+  background: rgb(255 255 255 / 45%);
+  color: #292524;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.8;
+}
+.assist-review textarea:focus-visible {
+  outline: 2px solid #857a98;
+  outline-offset: 3px;
+}
+.assist-review p {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.8;
+  color: #6d6762;
+}
+.assist-actions {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 18px;
+}
+.assist-actions button {
+  min-height: 44px;
+  padding: 10px 20px;
+  border-radius: 24px;
+  border: 1px solid rgb(120 113 108 / 20%);
+  background: rgb(255 255 255 / 40%);
+  cursor: pointer;
+}
+.assist-actions button[type="submit"] {
+  background: #635c72;
+  color: white;
+  border-color: transparent;
+}
+.assist-actions button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.assist-actions button:focus-visible {
+  outline: 2px solid #857a98;
+  outline-offset: 4px;
+}
 .assist-exit {
   flex-shrink: 0;
   padding-top: 16px;

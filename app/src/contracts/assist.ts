@@ -1,24 +1,36 @@
 import { z } from "zod";
 import { responseSchemas } from "./operations";
 
-export const assistAudio = { sampleRate: 16_000, maxSeconds: 15, maxBase64: 640_060 } as const;
+export const assistAudio = { sampleRate: 16_000, maxSeconds: 30, maxBase64: 1_280_060 } as const;
+export const assistLimits = {
+  items: 50,
+  transcript: 2000,
+  audioBodyBytes: 2 * 1024 * 1024,
+} as const;
 const name = z.string().trim().min(1).max(100);
 const categoryName = z.string().trim().min(1).max(50);
 const draftItems = z
   .array(z.strictObject({ name: name.nullable(), categoryName: categoryName.nullable() }))
   .min(1)
-  .max(10);
+  .max(assistLimits.items);
 export const assistDraftSchema = z.strictObject({
   items: draftItems,
   missing: z.enum(["name", "category"]),
   expiresAt: z.number().int().positive(),
 });
-export const assistRequestSchema = z.strictObject({
+export const assistAudioRequestSchema = z.strictObject({
   audioBase64: z
     .string()
     .min(60)
     .max(assistAudio.maxBase64)
     .regex(/^[A-Za-z0-9+/]+={0,2}$/),
+  expectedTeamId: z.uuid(),
+});
+export const assistTranscriptionSchema = z.strictObject({
+  transcript: z.string().trim().min(1).max(assistLimits.transcript),
+});
+export const assistRequestSchema = z.strictObject({
+  transcript: assistTranscriptionSchema.shape.transcript,
   expectedTeamId: z.uuid(),
   pendingDraft: assistDraftSchema.optional(),
 });
@@ -36,12 +48,15 @@ export const assistIntentSchema = z.discriminatedUnion("intent", [
     reason: z.enum(["too_many", "operation", "unclear"]),
   }),
 ]);
-const common = { transcript: z.string().max(500), replyText: z.string().min(1).max(100) };
+const common = {
+  transcript: z.string().max(assistLimits.transcript),
+  replyText: z.string().min(1).max(100),
+};
 export const assistResultSchema = z.discriminatedUnion("kind", [
   z.strictObject({
     ...common,
     kind: z.literal("added"),
-    items: z.array(responseSchemas.postTodoItem).min(1).max(10),
+    items: z.array(responseSchemas.postTodoItem).min(1).max(assistLimits.items),
   }),
   z.strictObject({
     ...common,
@@ -61,4 +76,5 @@ export const assistErrorSchema = z.strictObject({ code: z.string(), message: z.s
 export type AssistDraft = z.infer<typeof assistDraftSchema>;
 export type AssistIntent = z.infer<typeof assistIntentSchema>;
 export type AssistRequest = z.infer<typeof assistRequestSchema>;
+export type AssistAudioRequest = z.infer<typeof assistAudioRequestSchema>;
 export type AssistResult = z.infer<typeof assistResultSchema>;

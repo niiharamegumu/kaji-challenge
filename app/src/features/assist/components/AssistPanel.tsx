@@ -3,15 +3,19 @@ import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import type { VoiceSession, VoiceState } from "../model/VoiceSession";
 import { useLocalVoice } from "../hooks/useLocalVoice";
+import { assistLimits } from "../../../contracts/assist";
 import "./assist.css";
 
 const labels: Record<VoiceState["phase"], string> = {
   closed: "終了しました",
-  starting: "準備しています",
+  starting: "マイクを準備しています",
   listening: "話しかけてください",
   recording: "聞いています",
+  transcribing: "文字にしています",
+  reviewing: "内容を確認して送信してください",
   processing: "考えています",
   speaking: "お返事しています",
+  done: "返事を確認してください",
   error: "音声を終了しました",
 };
 
@@ -19,6 +23,9 @@ export function AssistPanel({ session, state }: { session: VoiceSession; state: 
   // Warm the device's voice list before the first gesture, without exposing settings.
   useLocalVoice();
   const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    if (state.phase === "reviewing") dialog.current?.querySelector("textarea")?.focus();
+  }, [state.phase]);
   useEffect(() => {
     const element = dialog.current;
     if (!element || !state.open) return;
@@ -34,6 +41,7 @@ export function AssistPanel({ session, state }: { session: VoiceSession; state: 
   }, [state.open]);
   if (!state.open || typeof document === "undefined") return null;
   const result = state.result;
+  const reviewing = state.phase === "reviewing";
   return createPortal(
     <dialog
       ref={dialog}
@@ -44,7 +52,9 @@ export function AssistPanel({ session, state }: { session: VoiceSession; state: 
       onKeyDown={(event) => {
         if (event.key !== "Tab") return;
         const controls = Array.from(
-          event.currentTarget.querySelectorAll<HTMLElement>('button, [tabindex="0"]'),
+          event.currentTarget.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), textarea, [tabindex="0"]',
+          ),
         );
         const first = controls[0],
           last = controls.at(-1);
@@ -78,7 +88,33 @@ export function AssistPanel({ session, state }: { session: VoiceSession; state: 
           {labels[state.phase]}
         </p>
         <div className="assist-words">
-          {result ? (
+          {reviewing ? (
+            <form
+              className="assist-review"
+              onSubmit={(event) => {
+                event.preventDefault();
+                session.send();
+              }}
+            >
+              <label htmlFor="assist-transcript">送信する内容</label>
+              <textarea
+                id="assist-transcript"
+                value={state.transcript}
+                maxLength={assistLimits.transcript}
+                rows={4}
+                onChange={(event) => session.editTranscript(event.target.value)}
+              />
+              <p>必要なら修正できます。送信するとToDoを追加・確認します。</p>
+              <div className="assist-actions">
+                <button type="button" onClick={session.recordAgain}>
+                  録音し直す
+                </button>
+                <button type="submit" disabled={!state.transcript.trim()}>
+                  送信
+                </button>
+              </div>
+            </form>
+          ) : result ? (
             <>
               <p className="assist-transcript">{result.transcript}</p>
               <p className="assist-reply">{result.replyText}</p>
@@ -95,13 +131,22 @@ export function AssistPanel({ session, state }: { session: VoiceSession; state: 
                 </div>
               ) : null}
             </>
-          ) : !state.message ? (
+          ) : state.transcript ? (
+            <p className="assist-transcript">{state.transcript}</p>
+          ) : !state.message && state.phase !== "transcribing" ? (
             <p className="assist-example">「買い物に牛乳を追加して」</p>
           ) : null}
           {state.message ? (
             <p role="alert" className="assist-error">
               {state.message}
             </p>
+          ) : null}
+          {state.phase === "done" || state.phase === "error" ? (
+            <div className="assist-actions">
+              <button type="button" onClick={session.recordAgain}>
+                もう一度録音する
+              </button>
+            </div>
           ) : null}
         </div>
       </div>
@@ -114,7 +159,9 @@ export function AssistPanel({ session, state }: { session: VoiceSession; state: 
         >
           <X size={23} strokeWidth={1.5} aria-hidden="true" />
         </button>
-        <p id="assist-privacy">音声は認識のために送信されます</p>
+        <p id="assist-privacy">
+          音声は文字起こしのために送信されます。ToDoの操作は確認後の送信で実行します。
+        </p>
       </div>
     </dialog>,
     document.body,

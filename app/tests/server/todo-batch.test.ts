@@ -61,6 +61,21 @@ describe("atomic ToDo batch creation", () => {
     expect(result).toEqual([]);
     expect(await items()).toEqual(before);
   });
+  it("saves 50 items in different categories without exceeding D1's bind limit", async () => {
+    const requested = [];
+    for (let i = 0; i < 50; i++) {
+      const id = crypto.randomUUID();
+      await connection.repository.CreateTodoCategory(teamId, { id, name: `分類${i}` });
+      requested.push(row(`必要なもの${i}`, id));
+    }
+    const saved = await scoped().CreateTodoItemsAtomic(requested);
+    expect(saved.map((item) => item.Name)).toEqual(requested.map((item) => item.Name));
+    expect(saved.map((item) => item.CategoryID)).toEqual(requested.map((item) => item.CategoryID));
+    expect(await items()).toHaveLength(51);
+    const before = await items();
+    expect(await scoped().CreateTodoItemsAtomic([...requested, row("51件目")])).toEqual([]);
+    expect(await items()).toEqual(before);
+  });
   it("rechecks categories at the SQL boundary after deletion", async () => {
     const repository = scoped();
     const requested = [row("Unclassified", null), row("Deleted category")];

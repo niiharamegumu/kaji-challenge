@@ -1,6 +1,9 @@
 import {
   assistIntentSchema,
   assistResultSchema,
+  assistTranscriptionSchema,
+  assistLimits,
+  type AssistAudioRequest,
   type AssistDraft,
   type AssistRequest,
   type AssistResult,
@@ -15,6 +18,33 @@ import { todo } from "./mappers";
 const normalize = (value: string) => value.normalize("NFKC").trim().toLocaleLowerCase("ja");
 const short = (value: string, max = 28) =>
   value.length > max ? value.slice(0, max - 1) + "…" : value;
+
+/** Transcription cannot interpret a command or perform a write. */
+export async function transcribeAssistAudio(
+  repository: Repository,
+  ai: AssistAi,
+  input: AssistAudioRequest,
+  context: { userId: string; signal: AbortSignal; budget: AssistBudget },
+) {
+  const { userId, signal, budget } = context;
+  signal.throwIfAborted();
+  const member = await repository.ResolveMembershipByUserID(userId);
+  if (member.TeamID !== input.expectedTeamId)
+    throw new AppError(403, "team_changed", "チームが変わりました。画面を更新してください。");
+  const scoped = repository.forMember(member.TeamID, userId);
+  await scoped.assertAccess();
+  signal.throwIfAborted();
+  await budget.reserve();
+  await scoped.assertAccess();
+  signal.throwIfAborted();
+  const transcript = await ai.transcribe(input.audioBase64, signal);
+  await scoped.assertAccess();
+  signal.throwIfAborted();
+  const parsed = assistTranscriptionSchema.safeParse({ transcript });
+  if (!parsed.success)
+    throw new AppError(422, "unclear_audio", "うまく聞き取れませんでした。話し直してください。");
+  return parsed.data;
+}
 
 export async function executeAssistTurn(
   repository: Repository,
@@ -36,9 +66,8 @@ export async function executeAssistTurn(
   await check();
   await context.budget.reserve();
   await check();
-  const transcript = (await ai.transcribe(input.audioBase64, signal)).trim();
-  await check();
-  if (!transcript || transcript.length > 500)
+  const transcript = input.transcript.trim();
+  if (!transcript || transcript.length > assistLimits.transcript)
     throw new AppError(
       422,
       "unclear_audio",
@@ -72,7 +101,7 @@ export async function executeAssistTurn(
       transcript,
       replyText:
         intent.reason === "too_many"
-          ? "一度に追加できるのは10件までです。まだ追加していません。"
+          ? `一度に追加できるのは${assistLimits.items}件までです。まだ追加していません。`
           : intent.reason === "operation"
             ? "音声ではToDoの追加と確認ができます。その他の操作はToDo画面でお願いします。"
             : "ToDoの追加か確認を、短く話してください。",

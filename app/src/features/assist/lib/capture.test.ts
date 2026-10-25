@@ -173,6 +173,22 @@ it("does not retry denied microphone permission", async () => {
   expect(fixture.contexts[0].close).toHaveBeenCalledOnce();
 });
 
+it("keeps the granted track live while resuming the audio graph, then releases it on stop", async () => {
+  const fixture = setup((context) => {
+    context.state = "suspended";
+    context.resume.mockImplementation(async () => {
+      // A disabled input can leave Safari's audio session inactive.
+      if (context.resume.mock.calls.length > 1 && fixture.track.enabled) context.state = "running";
+    });
+  });
+  const capture = fixture.start();
+  await capture.ready;
+  await capture.listen();
+  expect(fixture.track.enabled).toBe(true);
+  capture.stop();
+  expect(fixture.track.stop).toHaveBeenCalledOnce();
+});
+
 it("ignores a late worklet load and never retries after closing", async () => {
   const module = deferred<void>();
   const fixture = setup((context) =>

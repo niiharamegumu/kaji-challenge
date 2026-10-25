@@ -1,5 +1,9 @@
-import { assistRequestSchema } from "../../contracts/assist";
-import { executeAssistTurn } from "../application/assist-operations";
+import {
+  assistAudioRequestSchema,
+  assistRequestSchema,
+  assistLimits,
+} from "../../contracts/assist";
+import { executeAssistTurn, transcribeAssistAudio } from "../application/assist-operations";
 import { AppError } from "../domain/errors";
 import { createAssistBudget } from "../infrastructure/assist-budget";
 import { createAssistAi } from "../infrastructure/assist-ai";
@@ -10,6 +14,18 @@ import { createRuntime, notifyChanges, type RuntimeBindings } from "./runtime.se
 export async function handleAssistTurn(
   request: Request,
   bindings: RuntimeBindings,
+): Promise<Response> {
+  return handleAssistRequest(request, bindings, "execute");
+}
+
+export async function handleAssistTranscription(request: Request, bindings: RuntimeBindings) {
+  return handleAssistRequest(request, bindings, "transcribe");
+}
+
+async function handleAssistRequest(
+  request: Request,
+  bindings: RuntimeBindings,
+  stage: "transcribe" | "execute",
 ): Promise<Response> {
   const start = Date.now();
   let status = 200;
@@ -37,7 +53,10 @@ export async function handleAssistTurn(
     await repository.assertAccess();
     const limit = await bindings.ASSIST_LIMITER.limit({ key: session.user.id });
     if (!limit.success) throw new AppError(429, "rate_limited", "少し待ってから再開してください。");
-    const bytes = await readBoundedBody(request, MAX_REQUEST_BODY_BYTES);
+    const bytes = await readBoundedBody(
+      request,
+      stage === "transcribe" ? assistLimits.audioBodyBytes : MAX_REQUEST_BODY_BYTES,
+    );
     if (!bytes) throw new AppError(413, "body_too_large", "音声が長すぎます。短く話してください。");
     let raw: unknown;
     try {
@@ -45,16 +64,18 @@ export async function handleAssistTurn(
     } catch {
       throw new AppError(400, "invalid_request", "入力を確認できません。");
     }
+    const ai = createAssistAi(bindings.AI, bindings.ASSIST_GATEWAY_ID);
+    const context = { userId: session.user.id, signal, budget: createAssistBudget(runtime.db) };
+    if (stage === "transcribe") {
+      const parsed = assistAudioRequestSchema.safeParse(raw);
+      if (!parsed.success) throw new AppError(400, "invalid_request", "入力を確認できません。");
+      validateAssistAudio(parsed.data.audioBase64);
+      return Response.json(await transcribeAssistAudio(repository, ai, parsed.data, context));
+    }
     const parsed = assistRequestSchema.safeParse(raw);
     if (!parsed.success) throw new AppError(400, "invalid_request", "入力を確認できません。");
-    validateAssistAudio(parsed.data.audioBase64);
     signal.throwIfAborted();
-    const result = await executeAssistTurn(
-      repository,
-      createAssistAi(bindings.AI, bindings.ASSIST_GATEWAY_ID),
-      parsed.data,
-      { userId: session.user.id, signal, budget: createAssistBudget(runtime.db) },
-    );
+    const result = await executeAssistTurn(repository, ai, parsed.data, context);
     if (result.changedTeams.length) {
       try {
         notifyChanges(bindings, result.changedTeams, ["todos"]);
@@ -76,12 +97,20 @@ export async function handleAssistTurn(
         message:
           error instanceof AppError
             ? error.message
-            : "処理結果を確認できません。追加されている可能性があります。ToDo一覧を確認してください。",
+            : stage === "transcribe"
+              ? "文字起こしを完了できませんでした。ToDoは操作していません。もう一度録音してください。"
+              : "処理結果を確認できません。追加されている可能性があります。ToDo一覧を確認してください。",
       },
       { status, headers: status === 429 ? { "Retry-After": "60" } : undefined },
     );
   } finally {
     clearTimeout(timer);
-    console.info(JSON.stringify({ event: "assist_turn", status, durationMs: Date.now() - start }));
+    console.info(
+      JSON.stringify({
+        event: stage === "transcribe" ? "assist_transcription" : "assist_turn",
+        status,
+        durationMs: Date.now() - start,
+      }),
+    );
   }
 }

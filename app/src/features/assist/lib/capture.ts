@@ -104,7 +104,9 @@ export function createCapture(callbacks: Callbacks) {
         else {
           stream = granted;
           stream.getTracks().forEach((track) => {
-            track.enabled = false;
+            // Keep input active during preparation. Discard PCM until listen() starts;
+            // disabling the input here can leave Safari's audio session suspended.
+            track.enabled = true;
             track.addEventListener("ended", () => {
               if (!closed) stopWithReason("マイクとの接続が切れました。");
             });
@@ -154,7 +156,7 @@ export function createCapture(callbacks: Callbacks) {
       if (state === "recording") callbacks.onRecording();
       if (state === "ready") send();
       if (state === "idle") stopWithReason("", "idle");
-      if (state === "too_long") stopWithReason("15秒を超えました。短く話し直してください。");
+      if (state === "too_long") stopWithReason("30秒を超えました。分けて話し直してください。");
     };
   };
   const prepareWithRecovery = async () => {

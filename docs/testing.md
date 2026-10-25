@@ -135,6 +135,8 @@ RFC 7009失効は新access/合成した旧refresh両方でD1先行を確認し�
 
 ## 常駐音声アシスト
 
-`assist.test.ts` / `assist-transport.test.ts` は実D1とfixture AIを使い、追加・一覧・聞き返し、AI待機中の所属固定と失効、不正WAV/未知キー/本文上限/Origin/頻度制限を検証する。フロントの音声ライフサイクルとブラウザー検証、最初の対象であるiPhone Safari/PWAの手動受け入れは [voice-assist.md](voice-assist.md) に記載する。通常の `test:local` はAI bindingなしで起動し、実推論を行わない。実AIの認識精度・速度・費用と端末のマイク/TTSは未検証の別項目として報告する。
+`assist.test.ts` / `assist-transport.test.ts` は実D1とfixture AIを使い、ASRだけでは保存しない・明示送信後の追加・一覧・聞き返し、AI待機中の所属固定と失効、不正WAV/未知キー/本文上限/Origin/頻度制限を検証する。フロントの音声ライフサイクルとブラウザー検証、最初の対象であるiPhone Safari/PWAの手動受け入れは [voice-assist.md](voice-assist.md) に記載する。通常の `test:local` はAI bindingなしで起動し、実推論を行わない。実AIの認識精度・速度・費用と端末のマイク/TTSは未検証の別項目として報告する。
 
 `assist-budget.test.ts` は全体の60秒・UTC日・試用累計上限の同時予約と欠損時停止、`todo-batch.test.ts` は複数追加の全件保存/全件拒否・SQL時の認可・rollbackを検証する。`assist-ai.test.ts` はモデルと入力/出力の形式・上限・自動再送なしを検証する。
+
+音声はASRと実行のHTTP入口を分け、両方で認証・Origin・所属・予算を検証する。50件/30秒/2,000文字の拡張境界と、50カテゴリーでのD1保存を確認する。Sessionとブラウザーでは文字起こし後の待機・編集・送信・未送信破棄・反復起動を確認する。

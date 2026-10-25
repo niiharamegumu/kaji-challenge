@@ -15,6 +15,7 @@ import {
   type SQL,
 } from "drizzle-orm";
 import type * as P from "../application/ports";
+import { assistLimits } from "../../contracts/assist";
 import { AppError } from "../domain/errors";
 import { addDays, todayJST, weekStart } from "../domain/dates";
 import type { WeeklyRequirement } from "../domain/task-requirements";
@@ -885,12 +886,24 @@ export class D1Repository implements P.Repository {
 
   async CreateTodoItemsAtomic(items: P.CreateTodoItemParams[]): Promise<P.TodoItem[]> {
     const teamId = items[0]?.TeamID;
-    if (!teamId || items.length > 10 || items.some((item) => item.TeamID !== teamId)) return [];
+    if (
+      !teamId ||
+      items.length > assistLimits.items ||
+      items.some((item) => item.TeamID !== teamId)
+    )
+      return [];
     // Every category must still exist before either statement can change data. The INSERT
     // adds the entire list in one statement; a duplicate ID or other error rolls back the batch.
     const allowed = and(
       this.teamAccess(teamId),
-      ...items.map((item) => this.todoCategoryExists(teamId, item.CategoryID)),
+      // One JSON parameter keeps 50 distinct categories below D1's bind limit.
+      sql`NOT EXISTS (
+        SELECT 1 FROM json_each(${JSON.stringify([...new Set(items.map((item) => item.CategoryID).filter((id) => id !== null))])}) AS requested
+        WHERE NOT EXISTS (
+          SELECT 1 FROM ${teams}, json_each(${teams.todo_categories}) AS category
+          WHERE ${teams.id}=${teamId} AND json_extract(category.value, '$.id')=requested.value
+        )
+      )`,
     );
     const [, inserted] = await this.db.batch([
       this.db

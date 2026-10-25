@@ -7,7 +7,7 @@ import { queryKeys } from "../../../shared/query/queryKeys";
 import { useLocation } from "../../../shared/router/navigation";
 import { statusMessageAtom } from "../../../shared/state/status";
 import { openFormCountAtom } from "../../../shared/state/overlay";
-import { sendAssistTurn } from "../api/assistApi";
+import { sendAssistTurn, transcribeAssistAudio } from "../api/assistApi";
 import { VoiceSession } from "../model/VoiceSession";
 import { AssistPanel } from "./AssistPanel";
 
@@ -37,7 +37,7 @@ export function AssistHost({
       sendAssistTurn(input, signal),
   });
   const [session] = useState(() => {
-    return new VoiceSession(teamId ?? "", async (input, signal) => {
+    return new VoiceSession(teamId ?? "", transcribeAssistAudio, async (input, signal) => {
       // StrictMode can replace the shared controller after mounting. Pin it per turn.
       const teamSignal = teamRequestSignal();
       try {
