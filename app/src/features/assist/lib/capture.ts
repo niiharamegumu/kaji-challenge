@@ -11,6 +11,7 @@ type AudioResources = {
   node?: AudioWorkletNode;
   source?: MediaStreamAudioSourceNode;
   mute?: GainNode;
+  moduleReady?: Promise<void>;
   disposed: boolean;
 };
 const preparationFailed =
@@ -92,6 +93,12 @@ export function createCapture(callbacks: Callbacks) {
         if (!closed && audio === current && listening && current.context.state !== "running")
           stopWithReason("音声が中断されました。もう一度アシストを開いてください。");
       });
+      // Independent of microphone permission; overlap the static module fetch with that wait.
+      current.moduleReady = current.context.audioWorklet.addModule(
+        new URL("./audio-capture.worklet.js?no-inline", import.meta.url),
+      );
+      // Permission may still be pending when loading fails. prepare() handles recovery later.
+      void current.moduleReady.catch(() => {});
       return current;
     } catch (error) {
       disposeAudio(current);
@@ -163,11 +170,7 @@ export function createCapture(callbacks: Callbacks) {
     await bounded(
       Promise.all([
         context.state === "running" ? Promise.resolve() : context.resume(),
-        current.node
-          ? Promise.resolve()
-          : context.audioWorklet.addModule(
-              new URL("./audio-capture.worklet.js?no-inline", import.meta.url),
-            ),
+        current.moduleReady,
       ]),
       5000,
       preparationFailed,

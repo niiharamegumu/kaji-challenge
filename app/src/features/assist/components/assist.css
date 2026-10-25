@@ -179,6 +179,33 @@
   font-size: 15px;
   line-height: 1.75;
 }
+.assist-pending-audio {
+  display: flex;
+  min-width: 116px;
+  min-height: 46px;
+  align-items: center;
+  gap: 12px;
+  color: #625c53;
+  animation: assist-appear 180ms ease-out;
+}
+.assist-audio-placeholder {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.assist-audio-placeholder i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: assist-think 900ms ease-in-out infinite alternate;
+}
+.assist-audio-placeholder i:nth-child(2) {
+  animation-delay: 150ms;
+}
+.assist-audio-placeholder i:nth-child(3) {
+  animation-delay: 300ms;
+}
 .assist-answer-part + .assist-answer-part {
   margin-top: 12px;
 }
@@ -282,6 +309,11 @@
   cursor: default;
   color: #8b847a;
   background: #ece8e0;
+}
+.assist-icon-button[aria-busy="true"],
+.assist-send[aria-busy="true"] {
+  background: #292524;
+  color: #fffefa;
 }
 .assist-icon-button:focus-visible,
 .assist-send:focus-visible,

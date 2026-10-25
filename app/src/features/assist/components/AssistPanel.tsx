@@ -13,6 +13,7 @@ const labels: Record<VoiceState["phase"], string> = {
   listening: "録音中",
   recording: "録音中",
   transcribing: "文字にしています",
+  submitting: "音声を受け付けました。文字起こし後に送信します",
   reviewing: "内容を確認して送信",
   processing: "考えています",
   done: "続けて入力できます",
@@ -44,7 +45,17 @@ export function AssistPanel({ session, state }: { session: VoiceSession; state: 
   const dialog = useRef<HTMLDialogElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const recording = state.phase === "listening" || state.phase === "recording";
-  const busy = ["starting", "transcribing", "processing"].includes(state.phase);
+  const starting = state.phase === "starting";
+  const submitting = state.phase === "submitting";
+  const sending = submitting || state.phase === "processing";
+  const sendLabel = submitting
+    ? "送信を準備中"
+    : sending
+      ? "処理中"
+      : recording
+        ? "停止して送信"
+        : "送信";
+  const busy = starting || sending || state.phase === "transcribing";
   const tooLong = state.transcript.length > assistLimits.transcript;
   useLayoutEffect(() => {
     fitInput(input.current);
@@ -129,7 +140,7 @@ export function AssistPanel({ session, state }: { session: VoiceSession; state: 
         </div>
       </header>
       <section className="assist-thread" aria-label="会話">
-        {!state.submittedTranscript ? (
+        {!state.submittedTranscript && !submitting ? (
           <div className="assist-welcome">
             <span className="assist-mark" aria-hidden="true">
               <AudioLines size={26} strokeWidth={1.7} />
@@ -139,7 +150,22 @@ export function AssistPanel({ session, state }: { session: VoiceSession; state: 
           </div>
         ) : (
           <div className="assist-messages">
-            <p className="assist-user-message">{state.submittedTranscript}</p>
+            {submitting ? (
+              <div
+                className="assist-user-message assist-pending-audio"
+                role="group"
+                aria-label="送信を準備している音声"
+              >
+                <AudioLines size={20} aria-hidden="true" />
+                <span className="assist-audio-placeholder" aria-hidden="true">
+                  <i />
+                  <i />
+                  <i />
+                </span>
+              </div>
+            ) : (
+              <p className="assist-user-message">{state.submittedTranscript}</p>
+            )}
             {result ? (
               <div className="assist-answer" aria-live="polite">
                 {replies.map((reply, index) => (
@@ -167,7 +193,7 @@ export function AssistPanel({ session, state }: { session: VoiceSession; state: 
                   </div>
                 ))}
               </div>
-            ) : state.phase === "processing" ? (
+            ) : sending ? (
               <div className="assist-thinking" aria-hidden="true">
                 <i />
                 <i />
@@ -200,7 +226,7 @@ export function AssistPanel({ session, state }: { session: VoiceSession; state: 
           <textarea
             ref={input}
             id="assist-transcript"
-            hidden={recording || state.phase === "starting" || state.phase === "transcribing"}
+            hidden={recording || starting || submitting || state.phase === "transcribing"}
             value={state.transcript}
             maxLength={assistLimits.transcript}
             rows={2}
@@ -216,7 +242,7 @@ export function AssistPanel({ session, state }: { session: VoiceSession; state: 
               </span>
             </div>
           ) : null}
-          {recording || state.phase === "starting" ? (
+          {recording || starting ? (
             <div className="assist-recording" aria-hidden="true">
               <div className="assist-wave">
                 {bars.map((height, index) => (
@@ -232,10 +258,17 @@ export function AssistPanel({ session, state }: { session: VoiceSession; state: 
               className={`assist-icon-button ${recording ? "assist-stop" : ""}`}
               disabled={busy}
               onClick={() => (recording ? session.stopRecording() : session.startRecording())}
-              aria-label={recording ? "録音を停止" : "録音を開始"}
-              title={recording ? "停止して入力欄に反映" : "音声で入力"}
+              aria-busy={starting}
+              aria-label={starting ? "マイクを準備中" : recording ? "録音を停止" : "録音を開始"}
+              title={
+                starting ? "マイクを準備中" : recording ? "停止して入力欄に反映" : "音声で入力"
+              }
             >
-              {recording ? (
+              {starting ? (
+                <span className="assist-spinner" aria-hidden="true">
+                  <LoaderCircle size={21} strokeWidth={1.8} />
+                </span>
+              ) : recording ? (
                 <Square size={17} fill="currentColor" aria-hidden="true" />
               ) : (
                 <Mic size={21} strokeWidth={1.8} aria-hidden="true" />
@@ -243,22 +276,24 @@ export function AssistPanel({ session, state }: { session: VoiceSession; state: 
             </button>
             <div aria-hidden="true" className="assist-state">
               {busy ? null : labels[state.phase]}
-              {state.phase === "starting" ? (
-                <span className="assist-spinner" aria-hidden="true">
-                  <LoaderCircle size={20} strokeWidth={1.8} />
-                </span>
-              ) : null}
             </div>
             <button
               type={recording ? "button" : "submit"}
               className={`assist-send ${recording ? "assist-send-recording" : ""}`}
               disabled={busy || (!recording && (!state.transcript.trim() || tooLong))}
               onClick={recording ? () => session.stopRecording(true) : undefined}
-              aria-label={recording ? "停止して送信" : "送信"}
-              title={recording ? "停止して送信" : "送信"}
+              aria-busy={sending}
+              aria-label={sendLabel}
+              title={sendLabel}
             >
               {recording ? <span>停止して送信</span> : null}
-              <ArrowUp size={20} strokeWidth={2} aria-hidden="true" />
+              {sending ? (
+                <span className="assist-spinner" aria-hidden="true">
+                  <LoaderCircle size={20} strokeWidth={1.8} />
+                </span>
+              ) : (
+                <ArrowUp size={20} strokeWidth={2} aria-hidden="true" />
+              )}
             </button>
           </div>
         </form>

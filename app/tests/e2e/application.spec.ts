@@ -1849,10 +1849,17 @@ test(
       requests = 0;
     let releaseTranscription!: () => void;
     let transcriptionGate = Promise.resolve();
+    let releaseTurn!: () => void;
+    let turnGate = Promise.resolve();
+    let failTranscription = false;
     await page.route("**/api/assist/transcribe", async (route) => {
       recordings++;
       expect(route.request().postDataJSON().audioBase64.length).toBeGreaterThan(1000);
       await transcriptionGate;
+      if (failTranscription) {
+        await route.abort("failed");
+        return;
+      }
       await route.fulfill({
         json: { transcript: recordings === 1 ? "買い物にナットを追加して" : "やることを教えて" },
       });
@@ -1862,6 +1869,7 @@ test(
       const input = route.request().postDataJSON();
       expect(input.audioBase64).toBeUndefined();
       expect(input.transcript).toBe(requests === 1 ? "買い物に納豆を追加して" : "やることを教えて");
+      await turnGate;
       const item = {
         id: "22222222-2222-4222-8222-222222222222",
         teamId: input.expectedTeamId,
@@ -1905,7 +1913,20 @@ test(
     await expect(text).toHaveValue("");
     expect(await page.evaluate(() => window.assistFixture.captureRequests)).toBe(0);
     await page.screenshot({ path: testInfo.outputPath("assist-idle.png"), fullPage: true });
+    await page.evaluate(() => {
+      window.assistFixture.holdPermission = true;
+    });
     await microphone.click();
+    const startingButton = dialog.getByRole("button", { name: "マイクを準備中", exact: true });
+    await expect(startingButton).toBeDisabled();
+    await expect(startingButton).toHaveAttribute("aria-busy", "true");
+    await expect(startingButton.locator(".assist-spinner")).toBeVisible();
+    await expect(dialog.getByRole("status")).toHaveText("マイクを準備しています");
+    // Loading does not wait for the permission decision, and the UI already acknowledges the tap.
+    await expect.poll(() => page.evaluate(() => window.assistFixture.workletLoaded)).toBe(true);
+    expect(await page.evaluate(() => window.assistFixture.activeTracks)).toBe(0);
+    await page.screenshot({ path: testInfo.outputPath("assist-starting.png"), fullPage: true });
+    await page.evaluate(() => window.assistFixture.allowMicrophone());
     await expect(dialog.getByRole("status")).toHaveText("録音中");
     await page.evaluate(() => window.assistFixture.emit());
     await expect(dialog.getByRole("status")).toHaveText("録音中");
@@ -1953,10 +1974,33 @@ test(
     transcriptionGate = new Promise<void>((resolve) => {
       releaseTranscription = resolve;
     });
+    turnGate = new Promise<void>((resolve) => {
+      releaseTurn = resolve;
+    });
     await dialog.getByRole("button", { name: "停止して送信", exact: true }).click();
-    await expect(transcriptionIcon).toBeVisible();
+    const pendingAudio = dialog.getByRole("group", { name: "送信を準備している音声" });
+    await expect(pendingAudio).toBeVisible();
+    await expect(dialog.locator(".assist-thinking")).toBeVisible();
+    await expect(dialog.getByText("買い物に納豆を追加しました。")).toHaveCount(0);
+    const submittingButton = dialog.getByRole("button", { name: "送信を準備中", exact: true });
+    await expect(submittingButton).toBeDisabled();
+    await expect(submittingButton.locator(".assist-spinner")).toBeVisible();
+    await expect(dialog.getByRole("status")).toHaveText(
+      "音声を受け付けました。文字起こし後に送信します",
+    );
+    await expect(transcriptionIcon).toHaveCount(0);
     expect(requests).toBe(1);
+    await page.screenshot({
+      path: testInfo.outputPath("assist-submitting-audio.png"),
+      fullPage: true,
+    });
     releaseTranscription();
+    await expect(dialog.locator(".assist-user-message")).toHaveText("やることを教えて");
+    await expect(pendingAudio).toHaveCount(0);
+    const processingButton = dialog.getByRole("button", { name: "処理中", exact: true });
+    await expect(processingButton.locator(".assist-spinner")).toBeVisible();
+    await expect(dialog.locator(".assist-thinking")).toBeVisible();
+    releaseTurn();
     await expect(dialog.getByText("音声確認の納豆", { exact: true })).toBeVisible();
     await expect(transcriptionIcon).toHaveCount(0);
     await expect(text).toHaveValue("");
@@ -1999,6 +2043,25 @@ test(
     await expect(dialog).toHaveCount(0);
     expect(await page.evaluate(() => window.assistFixture.activeTracks)).toBe(0);
     expect(new URL(page.url()).pathname).toBe("/todos");
+    // A failed transcription clears the optimistic message, retains the draft and never runs a turn.
+    failTranscription = true;
+    transcriptionGate = new Promise<void>((resolve) => {
+      releaseTranscription = resolve;
+    });
+    await launcher.click();
+    await text.fill("残す下書き");
+    await microphone.click();
+    await expect(dialog.getByRole("status")).toHaveText("録音中");
+    await page.evaluate(() => window.assistFixture.emit());
+    await dialog.getByRole("button", { name: "停止して送信", exact: true }).click();
+    await expect(pendingAudio).toBeVisible();
+    releaseTranscription();
+    await expect(dialog.getByRole("alert")).toContainText("文字にできませんでした");
+    await expect(pendingAudio).toHaveCount(0);
+    await expect(dialog.locator(".assist-thinking")).toHaveCount(0);
+    await expect(text).toHaveValue("残す下書き");
+    expect(requests).toBe(2);
+    await page.keyboard.press("Escape");
     await page.getByRole("button", { name: "追加", exact: true }).click();
     await page.getByPlaceholder("例: 牛乳", { exact: true }).fill("入力途中");
     await expect(launcher).toBeDisabled();
