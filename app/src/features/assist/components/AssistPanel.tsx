@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowUp, AudioLines, Mic, Square, X } from "lucide-react";
+import { ArrowUp, AudioLines, LoaderCircle, Mic, Square, X } from "lucide-react";
 import type { VoiceSession, VoiceState } from "../model/VoiceSession";
 import { assistLimits } from "../../../contracts/assist";
 import "./assist.css";
@@ -171,6 +171,9 @@ export function AssistPanel({ session, state }: { session: VoiceSession; state: 
             {state.message}
           </p>
         ) : null}
+        <p role="status" aria-live="polite" className="assist-sr-only">
+          {labels[state.phase]}
+        </p>
         <form
           className="assist-composer"
           onSubmit={(event) => {
@@ -185,7 +188,7 @@ export function AssistPanel({ session, state }: { session: VoiceSession; state: 
           <textarea
             ref={input}
             id="assist-transcript"
-            hidden={recording || state.phase === "starting"}
+            hidden={recording || state.phase === "starting" || state.phase === "transcribing"}
             value={state.transcript}
             maxLength={assistLimits.transcript}
             rows={2}
@@ -194,6 +197,13 @@ export function AssistPanel({ session, state }: { session: VoiceSession; state: 
             placeholder="買い物や、やることを入力"
             onChange={(event) => session.editTranscript(event.target.value)}
           />
+          {state.phase === "transcribing" ? (
+            <div className="assist-transcribing" aria-hidden="true">
+              <span className="assist-spinner">
+                <LoaderCircle size={28} strokeWidth={1.8} />
+              </span>
+            </div>
+          ) : null}
           {recording || state.phase === "starting" ? (
             <div className="assist-recording" aria-hidden="true">
               <div className="assist-wave">
@@ -219,9 +229,14 @@ export function AssistPanel({ session, state }: { session: VoiceSession; state: 
                 <Mic size={21} strokeWidth={1.8} aria-hidden="true" />
               )}
             </button>
-            <p role="status" aria-live="polite" className="assist-state">
-              {labels[state.phase]}
-            </p>
+            <div aria-hidden="true" className="assist-state">
+              {busy ? null : labels[state.phase]}
+              {state.phase === "starting" ? (
+                <span className="assist-spinner" aria-hidden="true">
+                  <LoaderCircle size={20} strokeWidth={1.8} />
+                </span>
+              ) : null}
+            </div>
             <button
               type={recording ? "button" : "submit"}
               className={`assist-send ${recording ? "assist-send-recording" : ""}`}
