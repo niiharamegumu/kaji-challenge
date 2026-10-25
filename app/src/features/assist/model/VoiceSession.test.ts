@@ -79,6 +79,30 @@ describe("voice conversation lifecycle", () => {
     await vi.advanceTimersByTimeAsync(350);
     expect(capture.listen).toHaveBeenCalledTimes(2);
   });
+  it("waits for microphone recovery before showing listening and ignores completion after close", async () => {
+    const listening = deferred<void>();
+    vi.mocked(capture.listen).mockReturnValue(listening.promise);
+    await start();
+    expect(session.getSnapshot().phase).toBe("starting");
+    callbacks.onAudio(new Uint8Array([1]));
+    expect(turn).not.toHaveBeenCalled();
+    session.close();
+    listening.resolve();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(session.getSnapshot()).toMatchObject({ open: false, phase: "closed" });
+  });
+  it("shows a recovery failure and stops the microphone without sending a turn", async () => {
+    vi.mocked(capture.listen).mockRejectedValue(
+      new Error("音声の準備ができません。もう一度開いてください。"),
+    );
+    await start();
+    expect(session.getSnapshot()).toMatchObject({
+      phase: "error",
+      message: expect.stringContaining("もう一度"),
+    });
+    expect(capture.stop).toHaveBeenCalled();
+    expect(turn).not.toHaveBeenCalled();
+  });
   it("stops pending permission preparation and ignores late callbacks after close", async () => {
     const ready = deferred<void>();
     capture.ready = ready.promise;
