@@ -40,7 +40,16 @@ export const assistIntentSchema = z.discriminatedUnion("intent", [
     intent: z.literal("add_todo"),
     items: draftItems,
   }),
-  z.strictObject({ intent: z.literal("list_todos"), categoryName: categoryName.nullable() }),
+  z.strictObject({
+    intent: z.literal("list_todos"),
+    categoryName: categoryName.nullable(),
+    nameQuery: name.nullable().optional(),
+  }),
+  z.strictObject({
+    intent: z.enum(["complete_todos", "delete_todos"]),
+    names: z.array(name).min(1).max(assistLimits.items),
+    categoryName: categoryName.nullable(),
+  }),
   z.strictObject({ intent: z.literal("clarify") }),
   z.strictObject({ intent: z.literal("cancel_draft") }),
   z.strictObject({
@@ -63,6 +72,12 @@ export const assistResultSchema = z.discriminatedUnion("kind", [
     kind: z.literal("listed"),
     items: responseSchemas.listTodoItems.shape.items.max(20),
     total: z.number().int().nonnegative(),
+  }),
+  z.strictObject({
+    ...common,
+    kind: z.literal("removed"),
+    action: z.enum(["complete", "delete"]),
+    count: z.number().int().nonnegative(),
   }),
   z.strictObject({
     ...common,
