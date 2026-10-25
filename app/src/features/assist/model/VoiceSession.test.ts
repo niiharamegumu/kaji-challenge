@@ -23,15 +23,13 @@ describe("explicit dictation and submission", () => {
   const transcribe = vi.fn(),
     turn = vi.fn(),
     create = vi.fn(),
-    encode = vi.fn(),
-    afterPaint = vi.fn();
+    encode = vi.fn();
   let session: VoiceSession;
   beforeEach(() => {
     vi.useFakeTimers();
     transcribe.mockReset().mockResolvedValue({ transcript: "納豆を追加して" });
     turn.mockReset().mockResolvedValue(listed);
     encode.mockReset().mockResolvedValue("AQI=");
-    afterPaint.mockReset().mockResolvedValue(undefined);
     capture = {
       ready: Promise.resolve(),
       listen: vi.fn(),
@@ -45,7 +43,7 @@ describe("explicit dictation and submission", () => {
       callbacks = cb;
       return capture;
     });
-    session = new VoiceSession("team", transcribe, turn, { capture: create, encode, afterPaint });
+    session = new VoiceSession("team", transcribe, turn, { capture: create, encode });
   });
   afterEach(() => {
     session.close();
@@ -66,6 +64,8 @@ describe("explicit dictation and submission", () => {
     session.editTranscript("買い物に卵を追加して");
     session.send();
     session.send();
+    expect(session.getSnapshot().phase).toBe("processing");
+    expect(turn).toHaveBeenCalledOnce();
     await tick();
     expect(turn).toHaveBeenCalledExactlyOnceWith(
       { transcript: "買い物に卵を追加して", expectedTeamId: "team" },
@@ -124,41 +124,21 @@ describe("explicit dictation and submission", () => {
     expect(phases).not.toContain("reviewing");
     expect(session.getSnapshot().phase).toBe("done");
   });
-  it("waits for feedback before encoding and ignores the encoder after closing", async () => {
-    const paint = deferred<void>();
+  it("starts background encoding immediately and ignores completion after closing", async () => {
     const encoded = deferred<string>();
-    afterPaint.mockReturnValueOnce(paint.promise);
     encode.mockReturnValueOnce(encoded.promise);
     await record();
     session.stopRecording(true);
     expect(session.getSnapshot().phase).toBe("submitting");
-    expect(encode).not.toHaveBeenCalled();
-    expect(transcribe).not.toHaveBeenCalled();
-    paint.resolve();
-    await tick();
     expect(encode).toHaveBeenCalledOnce();
+    expect(capture.stop).toHaveBeenCalled();
+    expect(transcribe).not.toHaveBeenCalled();
     const signal = encode.mock.lastCall![1] as AbortSignal;
     session.close();
     expect(signal.aborted).toBe(true);
     encoded.resolve("AQI=");
     await tick();
     expect(transcribe).not.toHaveBeenCalled();
-    expect(turn).not.toHaveBeenCalled();
-  });
-  it("renders typed submission feedback before starting a turn and cancels before it starts", async () => {
-    const paint = deferred<void>();
-    afterPaint.mockReturnValueOnce(paint.promise);
-    session.start();
-    session.editTranscript("納豆を追加して");
-    session.send();
-    expect(session.getSnapshot()).toMatchObject({
-      phase: "processing",
-      submittedTranscript: "納豆を追加して",
-    });
-    expect(turn).not.toHaveBeenCalled();
-    session.close();
-    paint.resolve();
-    await tick();
     expect(turn).not.toHaveBeenCalled();
   });
   it("acknowledges stop-and-send before audio flush and discards the previous answer", async () => {
