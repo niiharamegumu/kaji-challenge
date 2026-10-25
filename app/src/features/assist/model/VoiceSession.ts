@@ -125,10 +125,18 @@ export class VoiceSession {
   };
   private listenAfterReply(generation: number) {
     this.restartTimer = setTimeout(() => {
-      if (generation !== this.generation) return;
-      this.capture?.listen();
-      this.update({ phase: "listening", message: "" });
+      void this.listen(generation);
     }, 350);
+  }
+  private async listen(generation: number) {
+    if (generation !== this.generation) return;
+    try {
+      await this.capture?.listen();
+      if (generation === this.generation) this.update({ phase: "listening", message: "" });
+    } catch (error) {
+      if (generation === this.generation)
+        this.fail(error instanceof Error ? error.message : "録音を再開できませんでした。");
+    }
   }
   private async process(wav: Uint8Array<ArrayBuffer>, generation: number) {
     if (!["listening", "recording"].includes(this.state.phase)) return;
