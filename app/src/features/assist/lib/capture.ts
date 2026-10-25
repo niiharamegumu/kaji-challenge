@@ -1,9 +1,9 @@
-import { SpeechDetector } from "./audio";
+import { SpeechDetector, type CapturedAudio } from "./audio";
 import { assistAudio } from "../../../contracts/assist";
 
 type Callbacks = {
   onRecording: () => void;
-  onAudio: (wav: Uint8Array<ArrayBuffer>, limited?: boolean) => void;
+  onAudio: (audio: CapturedAudio, limited?: boolean) => void;
   onStop: (message: string, reason: "idle" | "error") => void;
 };
 type AudioResources = {
@@ -152,13 +152,13 @@ export function createCapture(callbacks: Callbacks) {
       if (!Number.isInteger(sampleCount) || sampleCount < 0 || receivedSamples !== sampleCount) {
         throw new Error("録音の一部を確認できませんでした。もう一度録音してください。");
       }
-      const wav = detector?.finish();
-      if (!wav) {
+      const pcm = detector?.pcm();
+      if (!pcm) {
         stopWithReason("声を確認できませんでした。もう一度話してください。");
         return;
       }
       stop();
-      callbacks.onAudio(wav, limited);
+      callbacks.onAudio(pcm, limited);
     } catch (error) {
       if (!closed) stopWithReason(error instanceof Error ? error.message : preparationFailed);
     } finally {
@@ -167,6 +167,15 @@ export function createCapture(callbacks: Callbacks) {
   };
   const prepare = async (current: AudioResources) => {
     const context = current.context;
+    if (!stream) throw new Error(preparationFailed);
+    if (!current.source) {
+      current.source = context.createMediaStreamSource(stream);
+      current.mute = context.createGain();
+      current.mute.gain.value = 0;
+      // Activate the live input graph before awaiting resume. Keep all output silent.
+      current.source.connect(current.mute);
+      current.mute.connect(context.destination);
+    }
     await bounded(
       Promise.all([
         context.state === "running" ? Promise.resolve() : context.resume(),
@@ -180,13 +189,10 @@ export function createCapture(callbacks: Callbacks) {
     if (current.disposed || context.state !== "running" || !stream)
       throw new Error(preparationFailed);
     if (current.node) return;
-    current.source = context.createMediaStreamSource(stream);
     current.node = new AudioWorkletNode(context, "assist-capture");
-    current.mute = context.createGain();
-    current.mute.gain.value = 0;
+    current.source.disconnect();
     current.source.connect(current.node);
-    current.node.connect(current.mute);
-    current.mute.connect(context.destination);
+    current.node.connect(current.mute!);
     current.node.port.onmessage = (event: MessageEvent<Float32Array | CaptureStatus>) => {
       if (closed || audio !== current || !listening || !detector) return;
       if (!(event.data instanceof Float32Array)) {

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createCapture } from "./capture";
+import { encodeWav, type CapturedAudio } from "./audio";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -147,6 +148,25 @@ it("loads the worklet while microphone permission is still pending", async () =>
   expect(fixture.contexts).toHaveLength(1);
 });
 
+it("connects the live input before waiting for resume instead of taking the recovery timeout", async () => {
+  const fixture = setup((context, index) => {
+    if (index !== 0) return;
+    context.state = "suspended";
+    context.resume.mockImplementation(async () => {
+      if (!context.source.connect.mock.calls.length) await new Promise(() => {});
+      context.state = "running";
+    });
+  });
+  const capture = fixture.start();
+  const ready = vi.fn();
+  void capture.ready.then(ready).catch(() => {});
+  await vi.advanceTimersByTimeAsync(0);
+  expect(ready).toHaveBeenCalledOnce();
+  expect(fixture.contexts).toHaveLength(1);
+  expect(fixture.getUserMedia).toHaveBeenCalledOnce();
+  expect(fixture.contexts[0].gain.gain.value).toBe(0);
+});
+
 it("handles an early module failure and recovers after permission without another prompt", async () => {
   const fixture = setup((context, index) => {
     if (index === 0) context.audioWorklet.addModule.mockRejectedValue(new Error("module failed"));
@@ -208,7 +228,8 @@ it.each(["resume", "worklet"] as const)(
     expect(fixture.track.stop).not.toHaveBeenCalled();
     late.resolve();
     await vi.advanceTimersByTimeAsync(0);
-    expect(fixture.contexts[0].createMediaStreamSource).not.toHaveBeenCalled();
+    expect(fixture.contexts[0].createMediaStreamSource).toHaveBeenCalledOnce();
+    expect(fixture.contexts[0].source.disconnect).toHaveBeenCalled();
     await capture.listen();
     expect(fixture.track.enabled).toBe(true);
   },
@@ -340,7 +361,8 @@ it("does not finish at silence, flushes the tail on explicit stop, and releases 
   await capture.send();
   await capture.send();
   expect(fixture.callbacks.onAudio).toHaveBeenCalledOnce();
-  expect(fixture.callbacks.onAudio.mock.calls[0][0].length).toBe(44 + 16000 * 9.2 * 2);
+  const audio = fixture.callbacks.onAudio.mock.calls[0][0] as CapturedAudio;
+  expect(encodeWav(audio.chunks, audio.sampleRate).length).toBe(44 + 16000 * 9.2 * 2);
   expect(fixture.track.stop).toHaveBeenCalledOnce();
   expect(fixture.nodes[0].port.postMessage).toHaveBeenCalledWith({ type: "finish" });
 });
@@ -375,7 +397,8 @@ it("keeps the complete beginning, middle and end even if listen is called again"
   expect(
     fixture.nodes[0].port.postMessage.mock.calls.filter(([message]) => message.type === "start"),
   ).toHaveLength(1);
-  const wav = fixture.callbacks.onAudio.mock.calls[0][0] as Uint8Array;
+  const audio = fixture.callbacks.onAudio.mock.calls[0][0] as CapturedAudio;
+  const wav = encodeWav(audio.chunks, audio.sampleRate);
   expect(wav.length).toBe(44 + 35 * 16000 * 2);
   const view = new DataView(wav.buffer);
   expect(view.getInt16(44, true)).toBeCloseTo(0.12 * 32767, 0);

@@ -1,5 +1,7 @@
+import { Buffer } from "node:buffer";
 import {
   assistAudioRequestSchema,
+  assistAudioUploadSchema,
   assistRequestSchema,
   assistLimits,
 } from "../../contracts/assist";
@@ -44,8 +46,10 @@ async function handleAssistRequest(
       throw new AppError(503, "maintenance", "メンテナンス中です。");
     if (bindings.ASSIST_ENABLED !== "true")
       throw new AppError(503, "assist_disabled", "音声アシストはまだ有効になっていません。");
-    if (request.headers.get("content-type")?.split(";")[0].trim() !== "application/json")
-      throw new AppError(415, "unsupported_media_type", "JSONで送信してください。");
+    const contentType = request.headers.get("content-type")?.split(";")[0].trim().toLowerCase();
+    const multipart = stage === "transcribe" && contentType === "multipart/form-data";
+    if (!multipart && contentType !== "application/json")
+      throw new AppError(415, "unsupported_media_type", "対応した形式で送信してください。");
     const runtime = createRuntime(bindings);
     const session = await runtime.auth.api.getSession({ headers: request.headers });
     if (!session) throw new AppError(401, "unauthorized", "ログインし直してください。");
@@ -55,18 +59,51 @@ async function handleAssistRequest(
     if (!limit.success) throw new AppError(429, "rate_limited", "少し待ってから再開してください。");
     const bytes = await readBoundedBody(
       request,
-      stage === "transcribe" ? assistLimits.audioBodyBytes : MAX_REQUEST_BODY_BYTES,
+      multipart
+        ? assistLimits.audioUploadBodyBytes
+        : stage === "transcribe"
+          ? assistLimits.audioBodyBytes
+          : MAX_REQUEST_BODY_BYTES,
     );
     if (!bytes) throw new AppError(413, "body_too_large", "音声が長すぎます。短く話してください。");
     let raw: unknown;
     try {
-      raw = JSON.parse(new TextDecoder().decode(bytes));
+      if (multipart) {
+        const form = await new Request(request.url, {
+          method: "POST",
+          headers: { "Content-Type": request.headers.get("content-type")! },
+          body: bytes,
+        }).formData();
+        const entries = [...form.entries()];
+        if (new Set(entries.map(([key]) => key)).size !== entries.length) throw new Error();
+        raw = Object.fromEntries(entries);
+      } else raw = JSON.parse(new TextDecoder().decode(bytes));
     } catch {
       throw new AppError(400, "invalid_request", "入力を確認できません。");
     }
     const ai = createAssistAi(bindings.AI, bindings.ASSIST_GATEWAY_ID);
     const context = { userId: session.user.id, signal, budget: createAssistBudget(runtime.db) };
     if (stage === "transcribe") {
+      if (multipart) {
+        const parsed = assistAudioUploadSchema.safeParse(raw);
+        if (!parsed.success) throw new AppError(400, "invalid_request", "入力を確認できません。");
+        const wav = new Uint8Array(await parsed.data.audio.arrayBuffer());
+        validateAssistAudio(wav);
+        signal.throwIfAborted();
+        return Response.json(
+          await transcribeAssistAudio(
+            repository,
+            ai,
+            {
+              audioBase64: Buffer.from(wav.buffer, wav.byteOffset, wav.byteLength).toString(
+                "base64",
+              ),
+              expectedTeamId: parsed.data.expectedTeamId,
+            },
+            context,
+          ),
+        );
+      }
       const parsed = assistAudioRequestSchema.safeParse(raw);
       if (!parsed.success) throw new AppError(400, "invalid_request", "入力を確認できません。");
       validateAssistAudio(parsed.data.audioBase64);

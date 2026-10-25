@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { VoiceSession } from "./VoiceSession";
 import type { createCapture } from "../lib/capture";
 import type { AssistResult } from "../../../contracts/assist";
+const audio = { chunks: [new Float32Array([0.2, 0.2])], sampleRate: 16000 };
+const wav = new Blob([new Uint8Array(3244)], { type: "audio/wav" });
 const listed: AssistResult = {
   kind: "listed",
   transcript: "やることは？",
@@ -21,26 +23,28 @@ describe("explicit dictation and submission", () => {
   let capture: ReturnType<typeof createCapture>;
   const transcribe = vi.fn(),
     turn = vi.fn(),
-    create = vi.fn();
+    create = vi.fn(),
+    encode = vi.fn();
   let session: VoiceSession;
   beforeEach(() => {
     vi.useFakeTimers();
     transcribe.mockReset().mockResolvedValue({ transcript: "納豆を追加して" });
     turn.mockReset().mockResolvedValue(listed);
+    encode.mockReset().mockResolvedValue(wav);
     capture = {
       ready: Promise.resolve(),
       listen: vi.fn(),
       disable: vi.fn(),
       stop: vi.fn(),
       send: vi.fn(async () => {
-        callbacks.onAudio(new Uint8Array([1, 2]));
+        callbacks.onAudio(audio);
       }),
     };
     create.mockReset().mockImplementation((cb) => {
       callbacks = cb;
       return capture;
     });
-    session = new VoiceSession("team", transcribe, turn, { capture: create });
+    session = new VoiceSession("team", transcribe, turn, { capture: create, encode });
   });
   afterEach(() => {
     session.close();
@@ -61,6 +65,8 @@ describe("explicit dictation and submission", () => {
     session.editTranscript("買い物に卵を追加して");
     session.send();
     session.send();
+    expect(session.getSnapshot().phase).toBe("processing");
+    expect(turn).toHaveBeenCalledOnce();
     await tick();
     expect(turn).toHaveBeenCalledExactlyOnceWith(
       { transcript: "買い物に卵を追加して", expectedTeamId: "team" },
@@ -116,8 +122,29 @@ describe("explicit dictation and submission", () => {
       { transcript: "納豆と卵を追加して", expectedTeamId: "team" },
       expect.any(AbortSignal),
     );
+    expect(transcribe).toHaveBeenCalledExactlyOnceWith(
+      { audio: wav, expectedTeamId: "team" },
+      expect.any(AbortSignal),
+    );
     expect(phases).not.toContain("reviewing");
     expect(session.getSnapshot().phase).toBe("done");
+  });
+  it("starts background encoding immediately and ignores completion after closing", async () => {
+    const encoded = deferred<Blob>();
+    encode.mockReturnValueOnce(encoded.promise);
+    await record();
+    session.stopRecording(true);
+    expect(session.getSnapshot().phase).toBe("submitting");
+    expect(encode).toHaveBeenCalledOnce();
+    expect(capture.stop).toHaveBeenCalled();
+    expect(transcribe).not.toHaveBeenCalled();
+    const signal = encode.mock.lastCall![1] as AbortSignal;
+    session.close();
+    expect(signal.aborted).toBe(true);
+    encoded.resolve(wav);
+    await tick();
+    expect(transcribe).not.toHaveBeenCalled();
+    expect(turn).not.toHaveBeenCalled();
   });
   it("acknowledges stop-and-send before audio flush and discards the previous answer", async () => {
     session.start();
@@ -140,7 +167,7 @@ describe("explicit dictation and submission", () => {
     expect(transcribe).not.toHaveBeenCalled();
     expect(turn).toHaveBeenCalledOnce();
     session.close();
-    callbacks.onAudio(new Uint8Array([1, 2]));
+    callbacks.onAudio(audio);
     await tick();
     expect(transcribe).not.toHaveBeenCalled();
     expect(turn).toHaveBeenCalledOnce();
@@ -149,7 +176,7 @@ describe("explicit dictation and submission", () => {
     vi.mocked(capture.send).mockResolvedValue(undefined);
     await record();
     session.stopRecording(true);
-    callbacks.onAudio(new Uint8Array([1]), true);
+    callbacks.onAudio(audio, true);
     await tick();
     expect(session.getSnapshot()).toMatchObject({
       phase: "reviewing",
@@ -189,6 +216,7 @@ describe("explicit dictation and submission", () => {
     transcribe.mockReturnValueOnce(response.promise);
     await record();
     session.stopRecording(true);
+    await tick();
     const signal = transcribe.mock.lastCall![1] as AbortSignal;
     session.close();
     session.start();
@@ -239,7 +267,7 @@ describe("explicit dictation and submission", () => {
       await tick();
       session.close();
       session.start();
-      old.onAudio(new Uint8Array([9]));
+      old.onAudio(audio);
       old.onStop("old", "error");
       expect(session.getSnapshot().phase).toBe("idle");
     }
@@ -252,6 +280,7 @@ describe("explicit dictation and submission", () => {
     session.start();
     session.editTranscript("卵を追加");
     session.send();
+    await tick();
     const signal = turn.mock.lastCall![1] as AbortSignal;
     session.close();
     expect(signal.aborted).toBe(true);

@@ -1,8 +1,30 @@
-import type { Page } from "@playwright/test";
+import { expect, type Page, type Request as BrowserRequest } from "@playwright/test";
+
+/** Inspect the actual browser multipart payload; never assume a JSON/base64 body. */
+export async function readAssistAudioUpload(request: BrowserRequest) {
+  expect(request.headers()["content-type"]).toContain("multipart/form-data; boundary=");
+  const body = request.postDataBuffer();
+  if (!body) throw new Error("Missing audio body");
+  const form = await new globalThis.Request(request.url(), {
+    method: "POST",
+    headers: request.headers(),
+    body: new Uint8Array(body),
+  }).formData();
+  expect([...form.keys()].sort()).toEqual(["audio", "expectedTeamId"]);
+  const audio = form.get("audio");
+  if (!(audio instanceof Blob)) throw new Error("Missing WAV Blob");
+  expect(audio.type).toBe("audio/wav");
+  expect(form.get("expectedTeamId")).toMatch(/^[0-9a-f-]{36}$/);
+  return {
+    wav: Buffer.from(await audio.arrayBuffer()),
+    expectedTeamId: form.get("expectedTeamId"),
+  };
+}
 
 declare global {
   interface Window {
     assistNativeFixture: { play: () => Promise<void>; stopped: number };
+    assistPaintFixture: { framesBeforeTranscribe: number; frames: number; workers: number };
     assistFixture: {
       emit: () => void;
       stopped: number;
@@ -15,6 +37,72 @@ declare global {
       allowMicrophone: () => void;
     };
   }
+}
+
+/** Inject equal CPU work into main-thread and Worker WAV paths, then count rendered frames. */
+export async function installAssistEncodingLoad(page: Page) {
+  await page.addInitScript(() => {
+    const fixture = { frames: 0, framesBeforeTranscribe: -1, workers: 0 };
+    window.assistPaintFixture = fixture;
+    const observe = () => {
+      if (
+        document.querySelector(
+          'dialog[data-phase="submitting"] .assist-send[aria-busy="true"] .assist-spinner',
+        )
+      )
+        fixture.frames++;
+      requestAnimationFrame(observe);
+    };
+    requestAnimationFrame(observe);
+    const nativeSetInt16 = DataView.prototype.setInt16;
+    let delayed = false;
+    DataView.prototype.setInt16 = function (offset, value, littleEndian) {
+      if (!delayed) {
+        delayed = true;
+        const until = performance.now() + 1000;
+        while (performance.now() < until) {
+          /* Deliberate fixture CPU load, once per encoding. */
+        }
+      }
+      return nativeSetInt16.call(this, offset, value, littleEndian);
+    };
+    const nativeFetch = window.fetch.bind(window);
+    window.fetch = (input, init) => {
+      if (String(input).includes("/api/assist/transcribe"))
+        fixture.framesBeforeTranscribe = fixture.frames;
+      return nativeFetch(input, init);
+    };
+    const NativeWorker = window.Worker;
+    window.Worker = class extends NativeWorker {
+      constructor(url: string | URL, options?: WorkerOptions) {
+        if (!String(url).includes("audio-encode")) {
+          super(url, options);
+          return;
+        }
+        fixture.workers++;
+        const source = `
+          const nativeSetInt16 = DataView.prototype.setInt16;
+          let delayed = false;
+          DataView.prototype.setInt16 = function(offset, value, littleEndian) {
+            if (!delayed) {
+              delayed = true;
+              const until = performance.now() + 1000;
+              while (performance.now() < until) {}
+            }
+            return nativeSetInt16.call(this, offset, value, littleEndian);
+          };
+          self.onmessage = async event => {
+            await import(${JSON.stringify(String(url))});
+            self.onmessage(event);
+          };
+        `;
+        const bootstrap = URL.createObjectURL(new Blob([source], { type: "text/javascript" }));
+        super(bootstrap, options);
+        this.addEventListener("message", () => URL.revokeObjectURL(bootstrap), { once: true });
+        this.addEventListener("error", () => URL.revokeObjectURL(bootstrap), { once: true });
+      }
+    };
+  });
 }
 
 /** Real AudioContext/AudioWorklet; only the microphone is replaced by generated tones. */

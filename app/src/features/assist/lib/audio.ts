@@ -1,5 +1,7 @@
 import { assistAudio } from "../../../contracts/assist";
 
+export type CapturedAudio = { chunks: Float32Array[]; sampleRate: number };
+
 /** Average source samples into 16 kHz frames; use the actual device sample rate. */
 export function encodeWav(chunks: Float32Array[], sampleRate: number): Uint8Array<ArrayBuffer> {
   const size = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
@@ -68,7 +70,11 @@ export class SpeechDetector {
     if (this.samples >= this.sampleRate * assistAudio.maxSeconds) return "too_long";
     return this.voiced > 0 ? "recording" : "waiting";
   }
+  pcm(): CapturedAudio | null {
+    return this.voiced >= 0.18 ? { chunks: this.chunks, sampleRate: this.sampleRate } : null;
+  }
   finish() {
-    return this.voiced >= 0.18 ? encodeWav(this.chunks, this.sampleRate) : null;
+    const audio = this.pcm();
+    return audio ? encodeWav(audio.chunks, audio.sampleRate) : null;
   }
 }

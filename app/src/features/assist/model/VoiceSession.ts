@@ -1,13 +1,14 @@
 import {
   assistLimits,
-  type AssistAudioRequest,
+  type AssistAudioUpload,
   type AssistDraft,
   type AssistRequest,
   type AssistResult,
 } from "../../../contracts/assist";
 import { isApiRequestError } from "../../../lib/api/api-client-state";
 import { createCapture } from "../lib/capture";
-import { wavBase64 } from "../lib/audio";
+import type { CapturedAudio } from "../lib/audio";
+import { encodeAudio } from "../lib/encode";
 
 export type VoiceState = {
   open: boolean;
@@ -28,7 +29,10 @@ export type VoiceState = {
   result: AssistResult | null;
   message: string;
 };
-type Dependencies = { capture: typeof createCapture };
+type Dependencies = {
+  capture: typeof createCapture;
+  encode: typeof encodeAudio;
+};
 const interrupted =
   "処理を中断しました。操作が反映されている可能性があります。ToDo一覧を確認してください。";
 const textLimit = `${assistLimits.transcript}文字を超えています。短くしてから送信してください。`;
@@ -54,11 +58,14 @@ export class VoiceSession {
   constructor(
     private teamId: string,
     private transcribe: (
-      input: AssistAudioRequest,
+      input: AssistAudioUpload,
       signal: AbortSignal,
     ) => Promise<{ transcript: string }>,
     private turn: (input: AssistRequest, signal: AbortSignal) => Promise<AssistResult>,
-    private dependencies: Dependencies = { capture: createCapture },
+    private dependencies: Dependencies = {
+      capture: createCapture,
+      encode: encodeAudio,
+    },
   ) {}
   getSnapshot = () => this.state;
   subscribe = (listener: () => void) => {
@@ -180,7 +187,7 @@ export class VoiceSession {
     void this.capture.send();
   };
   private async reviewAudio(
-    wav: Uint8Array<ArrayBuffer>,
+    audio: CapturedAudio,
     generation: number,
     base: string,
     limited: boolean,
@@ -195,11 +202,11 @@ export class VoiceSession {
     this.submitAfterTranscription = false;
     this.stopCapture();
     this.update({ phase: submit ? "submitting" : "transcribing" });
+    const signal = this.controller.signal;
     try {
-      const result = await this.transcribe(
-        { audioBase64: wavBase64(wav), expectedTeamId: this.teamId },
-        this.controller.signal,
-      );
+      const blob = await this.dependencies.encode(audio, signal);
+      if (generation !== this.generation) return;
+      const result = await this.transcribe({ audio: blob, expectedTeamId: this.teamId }, signal);
       if (generation !== this.generation) return;
       const transcript = [base.trimEnd(), result.transcript.trim()].filter(Boolean).join("\n");
       if (submit && transcript.trim() && transcript.length <= assistLimits.transcript) {
@@ -253,6 +260,7 @@ export class VoiceSession {
     void this.execute(transcript, generation);
   }
   private async execute(transcript: string, generation: number) {
+    const signal = this.controller.signal;
     try {
       const result = await this.turn(
         {
@@ -260,7 +268,7 @@ export class VoiceSession {
           expectedTeamId: this.teamId,
           ...(this.pending ? { pendingDraft: this.pending } : {}),
         },
-        this.controller.signal,
+        signal,
       );
       if (generation !== this.generation) return;
       this.pending = result.kind === "clarify" ? result.pendingDraft : undefined;
