@@ -430,6 +430,28 @@ const writes: WriteCase[] = [
   },
   { name: "DeleteTodoItem", run: (r, f) => r.DeleteTodoItem(f.todo) },
   {
+    name: "ApplyTodoAssistActionsAtomic",
+    run: (r, f) =>
+      r.ApplyTodoAssistActionsAtomic(f.team, [
+        { kind: "remove", names: ["Private item"] },
+        {
+          kind: "add",
+          items: [
+            {
+              ID: crypto.randomUUID(),
+              TeamID: f.team,
+              Name: "Denied",
+              Notes: null,
+              CategoryID: f.category,
+              SortKey: 100,
+              CreatedAt: now,
+              UpdatedAt: now,
+            },
+          ],
+        },
+      ]),
+  },
+  {
     name: "DeleteTodoItemsByNames",
     run: (r, f) => r.DeleteTodoItemsByNames(f.team, ["Private item"]),
   },
