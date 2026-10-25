@@ -126,6 +126,8 @@ bun run test:local
 
 `test:local` は一時ディレクトリへソースをコピーし、テスト専用の認証設定と使い捨てD1で、build・型・lint・UI・DB・ブラウザー・開発サーバーの検証を行います。普段の `.dev.vars` と `.wrangler` は使用しません。5194/5195ポートを空けて実行してください。結果は `app/test-results/` に保存します。Googleとの実OAuthとiPhone実機へのPushは別途確認します。
 
+PRのCIは `bun run test:ci` を使い、基本チェックとUI・server/DBテスト全件に加え、主要操作と変更した機能のブラウザーテストを実行します。認証・共通UI・DBなどの変更はブラウザー全件、依存関係・CI・build・インフラなどの変更は開発サーバー・Alchemy CLIを含む全件を実行します。`KAJI_CI_BASE` にPR baseのcommit SHAを指定できない場合や、未分類の変更がある場合も全件です。手動のActions実行と `test:local` は全件検証を維持します。選択ルールと結果の記録は [テスト方針](docs/testing.md) を参照してください。
+
 buildとpreviewはCloudflare公式Viteプラグインを使用します。
 
 ```sh
