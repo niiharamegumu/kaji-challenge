@@ -3,6 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import {
   assistRequestSchema,
   assistAudioRequestSchema,
+  assistAudioUploadSchema,
   assistLimits,
   assistAudio,
   assistIntentSchema,
@@ -22,6 +23,23 @@ import { validateAssistAudio } from "../../src/server/transport/assist-audio";
 const add = { intent: "add_todo", items: [{ name: "牛乳", categoryName: null }] };
 const validWav = () => encodeWav([new Float32Array(16000).fill(0.2)], 16000);
 describe("assist contract and audio boundary", () => {
+  it("accepts bounded WAV Blobs and rejects extra fields, wrong types and invalid teams", () => {
+    const input = {
+      audio: new Blob([validWav()], { type: "audio/wav" }),
+      expectedTeamId: crypto.randomUUID(),
+    };
+    expect(assistAudioUploadSchema.safeParse(input).success).toBe(true);
+    for (const extra of [
+      { audio: "not a file" },
+      { audio: new Blob() },
+      { audio: new Blob([validWav()], { type: "audio/mpeg" }) },
+      { audio: new Blob([new Uint8Array(assistAudio.maxBytes + 1)], { type: "audio/wav" }) },
+      { expectedTeamId: "invalid" },
+      { transcript: "追加して" },
+      { audioBase64: "forged" },
+    ])
+      expect(assistAudioUploadSchema.safeParse({ ...input, ...extra }).success).toBe(false);
+  });
   it.each([
     { ...add, teamId: crypto.randomUUID() },
     { ...add, items: [{ name: "x".repeat(101), categoryName: null }] },
@@ -81,10 +99,14 @@ describe("assist contract and audio boundary", () => {
   });
   it("validates actual WAV format, lengths, duration and signal before inference", () => {
     expect(() => validateAssistAudio(wavBase64(validWav()))).not.toThrow();
+    const offsetWav = new Uint8Array(validWav().length + 8);
+    offsetWav.set(validWav(), 8);
+    expect(() => validateAssistAudio(offsetWav.subarray(8))).not.toThrow();
     for (const offset of [4, 16, 20, 22, 24, 28, 32, 34, 40]) {
       const bad = validWav();
       bad[offset] ^= 1;
       expect(() => validateAssistAudio(wavBase64(bad))).toThrow();
+      expect(() => validateAssistAudio(bad)).toThrow();
     }
     expect(() => validateAssistAudio(wavBase64(validWav().subarray(0, 100)))).toThrow();
     expect(() =>
@@ -97,6 +119,12 @@ describe("assist contract and audio boundary", () => {
     expect(() =>
       validateAssistAudio(wavBase64(encodeWav([new Float32Array(16000)], 16000))),
     ).toThrow();
+  });
+  it("reads binary header offsets without treating size fields as UTF-8 text", () => {
+    const wav = encodeWav([new Float32Array(21455).fill(0.2)], 16000);
+    expect([...wav.subarray(4, 6)]).toEqual([0xc2, 0xa7]);
+    expect(() => validateAssistAudio(wav)).not.toThrow();
+    expect(() => validateAssistAudio(wavBase64(wav))).not.toThrow();
   });
   it("accepts quiet speech after a long pause and rejects a brief click in silence", () => {
     const quiet = encodeWav(
