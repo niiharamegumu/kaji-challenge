@@ -229,7 +229,7 @@ describe("explicit dictation and submission", () => {
     const signal = turn.mock.lastCall![1] as AbortSignal;
     session.close();
     expect(signal.aborted).toBe(true);
-    expect(session.getSnapshot().message).toContain("追加されている可能性");
+    expect(session.getSnapshot().message).toContain("操作が反映されている可能性");
     response.resolve(listed);
     await tick();
     expect(session.getSnapshot().result).toBeNull();
