@@ -1964,6 +1964,40 @@ test(
             })),
           },
         });
+      } else if (input.transcript === "塩は購入した、レモンを追加して") {
+        await route.fulfill({
+          json: {
+            kind: "batch",
+            transcript: input.transcript,
+            replyText: "2件完了しました。1件追加しました。",
+            results: [
+              {
+                kind: "removed",
+                action: "complete",
+                count: 2,
+                transcript: input.transcript,
+                replyText: "2件完了しました。",
+              },
+              {
+                kind: "added",
+                transcript: input.transcript,
+                replyText: "1件追加しました。",
+                items: [
+                  {
+                    id: crypto.randomUUID(),
+                    teamId: input.expectedTeamId,
+                    name: "レモン",
+                    categoryId: null,
+                    notes: null,
+                    sortKey: 100,
+                    createdAt: "2026-10-25T00:00:00.000Z",
+                    updatedAt: "2026-10-25T00:00:00.000Z",
+                  },
+                ],
+              },
+            ],
+          },
+        });
       } else {
         expect(input.transcript).toBe("牛乳を買った");
         await route.fulfill({
@@ -2016,6 +2050,11 @@ test(
     await expect(
       dialog.getByText("2件完了しました。同じ名前のToDoをすべて対象にしました。"),
     ).toBeVisible();
+    await text.fill("塩は購入した、レモンを追加して");
+    await send.click();
+    await expect(dialog.getByText("2件完了しました。", { exact: true })).toBeVisible();
+    await expect(dialog.getByText("1件追加しました。", { exact: true })).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath("assist-mixed.png"), fullPage: false });
     expect(await page.evaluate(() => window.assistFixture.captureRequests)).toBe(0);
     await dialog.getByRole("button", { name: "アシストを閉じる" }).click();
     await launcher.click();
