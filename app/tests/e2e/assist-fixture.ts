@@ -11,6 +11,8 @@ declare global {
       captureRequests: number;
       activeTracks: number;
       flushes: number;
+      holdPermission: boolean;
+      allowMicrophone: () => void;
     };
   }
 }
@@ -72,6 +74,10 @@ export async function installAssistMediaFixture(page: Page) {
       | null = null;
     let recording = false;
     let samples = 0;
+    let grantMicrophone!: () => void;
+    const permission = new Promise<void>((resolve) => {
+      grantMicrophone = resolve;
+    });
     const fixture = {
       stopped: 0,
       spoken: [] as string[],
@@ -79,6 +85,11 @@ export async function installAssistMediaFixture(page: Page) {
       captureRequests: 0,
       activeTracks: 0,
       flushes: 0,
+      holdPermission: false,
+      allowMicrophone() {
+        fixture.holdPermission = false;
+        grantMicrophone();
+      },
       emit() {
         if (!recording) return;
         for (let i = 0; i < 5; i++) {
@@ -95,6 +106,7 @@ export async function installAssistMediaFixture(page: Page) {
     Object.defineProperty(navigator.mediaDevices, "getUserMedia", {
       value: async () => {
         fixture.captureRequests++;
+        if (fixture.holdPermission) await permission;
         fixture.activeTracks++;
         const track = {
           enabled: true,
