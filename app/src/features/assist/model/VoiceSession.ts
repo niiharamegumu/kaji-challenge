@@ -9,7 +9,6 @@ import { isApiRequestError } from "../../../lib/api/api-client-state";
 import { createCapture } from "../lib/capture";
 import type { CapturedAudio } from "../lib/audio";
 import { encodeAudio } from "../lib/encode";
-import { afterPaint } from "../lib/after-paint";
 
 export type VoiceState = {
   open: boolean;
@@ -33,7 +32,6 @@ export type VoiceState = {
 type Dependencies = {
   capture: typeof createCapture;
   encode: typeof encodeAudio;
-  afterPaint: typeof afterPaint;
 };
 const interrupted =
   "処理を中断しました。操作が反映されている可能性があります。ToDo一覧を確認してください。";
@@ -67,7 +65,6 @@ export class VoiceSession {
     private dependencies: Dependencies = {
       capture: createCapture,
       encode: encodeAudio,
-      afterPaint,
     },
   ) {}
   getSnapshot = () => this.state;
@@ -207,8 +204,6 @@ export class VoiceSession {
     this.update({ phase: submit ? "submitting" : "transcribing" });
     const signal = this.controller.signal;
     try {
-      await this.dependencies.afterPaint(signal);
-      if (generation !== this.generation) return;
       const audioBase64 = await this.dependencies.encode(audio, signal);
       if (generation !== this.generation) return;
       const result = await this.transcribe({ audioBase64, expectedTeamId: this.teamId }, signal);
@@ -267,8 +262,6 @@ export class VoiceSession {
   private async execute(transcript: string, generation: number) {
     const signal = this.controller.signal;
     try {
-      await this.dependencies.afterPaint(signal);
-      if (generation !== this.generation) return;
       const result = await this.turn(
         {
           transcript,
