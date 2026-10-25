@@ -4,6 +4,7 @@ import { ArrowUp, AudioLines, LoaderCircle, Mic, Square, X } from "lucide-react"
 import type { VoiceSession, VoiceState } from "../model/VoiceSession";
 import { assistLimits } from "../../../contracts/assist";
 import "./assist.css";
+import { AssistHelp } from "./AssistHelp";
 
 const labels: Record<VoiceState["phase"], string> = {
   closed: "終了しました",
@@ -17,12 +18,12 @@ const labels: Record<VoiceState["phase"], string> = {
   done: "続けて入力できます",
   error: "入力を確認してください",
 };
-const bars = [8, 16, 28, 20, 36, 26, 44, 30, 18, 34, 24, 14, 8];
+const bars = [6, 12, 22, 16, 28, 20, 34, 24, 14, 26, 18, 10, 6];
 
 function fitInput(input: HTMLTextAreaElement | null) {
   if (!input || input.hidden) return;
   input.style.height = "auto";
-  input.style.height = `${Math.min(input.scrollHeight, 180)}px`;
+  input.style.height = `${Math.min(input.scrollHeight, 148)}px`;
 }
 
 function RecordingTime() {
@@ -114,14 +115,17 @@ export function AssistPanel({ session, state }: { session: VoiceSession; state: 
           <AudioLines size={20} strokeWidth={1.8} aria-hidden="true" />
           アシスト
         </span>
-        <button
-          type="button"
-          className="assist-icon-button assist-close"
-          onClick={session.close}
-          aria-label="アシストを閉じる"
-        >
-          <X size={20} aria-hidden="true" />
-        </button>
+        <div className="assist-header-actions">
+          <AssistHelp />
+          <button
+            type="button"
+            className="assist-icon-button assist-close"
+            onClick={session.close}
+            aria-label="アシストを閉じる"
+          >
+            <X size={20} aria-hidden="true" />
+          </button>
+        </div>
       </header>
       <section className="assist-thread" aria-label="会話">
         {!state.submittedTranscript ? (
@@ -144,14 +148,17 @@ export function AssistPanel({ session, state }: { session: VoiceSession; state: 
                     aria-label={`ToDo ${result.total}件`}
                     tabIndex={0}
                   >
+                    {result.total > result.items.length ? (
+                      <p className="assist-more">
+                        全{result.total}件のうち先頭{result.items.length}
+                        件を表示しています。続きはToDo画面で確認してください。
+                      </p>
+                    ) : null}
                     <ul>
                       {result.items.map((item) => (
                         <li key={item.id}>{item.name}</li>
                       ))}
                     </ul>
-                    {result.total > result.items.length ? (
-                      <p className="assist-more">続きはToDo画面で確認できます</p>
-                    ) : null}
                   </div>
                 ) : null}
               </div>
