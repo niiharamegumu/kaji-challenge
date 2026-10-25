@@ -2,13 +2,19 @@ import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   assistRequestSchema,
+  assistAudioRequestSchema,
+  assistLimits,
+  assistAudio,
   assistIntentSchema,
   assistResultSchema,
   type AssistRequest,
 } from "../../src/contracts/assist";
 import { provisionUser } from "../../src/server/application/provision-user";
 import { executeOperation } from "../../src/server/application/operations";
-import { executeAssistTurn } from "../../src/server/application/assist-operations";
+import {
+  executeAssistTurn,
+  transcribeAssistAudio,
+} from "../../src/server/application/assist-operations";
 import { createTestDatabase } from "../helpers/d1";
 import { encodeWav, wavBase64 } from "../../src/features/assist/lib/audio";
 import { validateAssistAudio } from "../../src/server/transport/assist-audio";
@@ -19,7 +25,7 @@ describe("assist contract and audio boundary", () => {
   it.each([
     { ...add, teamId: crypto.randomUUID() },
     { ...add, items: [{ name: "x".repeat(101), categoryName: null }] },
-    { ...add, items: Array.from({ length: 11 }, () => add.items[0]) },
+    { ...add, items: Array.from({ length: assistLimits.items + 1 }, () => add.items[0]) },
     { ...add, items: [] },
     { ...add, items: [{ ...add.items[0], dueDate: "2026-10-24" }] },
     { intent: "delete_todo", id: crypto.randomUUID() },
@@ -30,7 +36,19 @@ describe("assist contract and audio boundary", () => {
     expect(assistIntentSchema.safeParse(input).success).toBe(false);
   });
   it("rejects arbitrary conversation context and forged draft fields", () => {
-    const input = { audioBase64: wavBase64(validWav()), expectedTeamId: crypto.randomUUID() };
+    const input = { transcript: "牛乳を追加", expectedTeamId: crypto.randomUUID() };
+    expect(
+      assistAudioRequestSchema.safeParse({
+        audioBase64: wavBase64(validWav()),
+        expectedTeamId: input.expectedTeamId,
+      }).success,
+    ).toBe(true);
+    expect(
+      assistRequestSchema.safeParse({
+        audioBase64: wavBase64(validWav()),
+        expectedTeamId: input.expectedTeamId,
+      }).success,
+    ).toBe(false);
     expect(assistRequestSchema.safeParse(input).success).toBe(true);
     expect(assistRequestSchema.safeParse({ ...input, history: [] }).success).toBe(false);
     expect(
@@ -54,7 +72,11 @@ describe("assist contract and audio boundary", () => {
     }
     expect(() => validateAssistAudio(wavBase64(validWav().subarray(0, 100)))).toThrow();
     expect(() =>
-      validateAssistAudio(wavBase64(encodeWav([new Float32Array(16000 * 16).fill(0.2)], 16000))),
+      validateAssistAudio(
+        wavBase64(
+          encodeWav([new Float32Array(16000 * (assistAudio.maxSeconds + 1)).fill(0.2)], 16000),
+        ),
+      ),
     ).toThrow();
     expect(() =>
       validateAssistAudio(wavBase64(encodeWav([new Float32Array(16000)], 16000))),
@@ -92,7 +114,7 @@ describe("assist with real D1 and fixture AI", () => {
     executeAssistTurn(
       connection.repository.forSession(userId, sessionId),
       ai,
-      { audioBase64: "fixture", expectedTeamId: teamId, ...extra },
+      { transcript: "牛乳を追加して", expectedTeamId: teamId, ...extra },
       { userId, signal, budget },
     );
   const items = () => connection.repository.ListTodoItemsByTeamID(teamId);
@@ -103,6 +125,74 @@ describe("assist with real D1 and fixture AI", () => {
       { userId, now: new Date(), vapidPublicKey: "" },
     );
   };
+  const transcription = (
+    extra: Partial<Parameters<typeof transcribeAssistAudio>[2]> = {},
+    signal = new AbortController().signal,
+  ) =>
+    transcribeAssistAudio(
+      connection.repository.forSession(userId, sessionId),
+      ai,
+      { audioBase64: "fixture", expectedTeamId: teamId, ...extra },
+      { userId, signal, budget },
+    );
+  it("only transcribes before explicit submission, with no interpretation or ToDo changes", async () => {
+    expect(await transcription()).toEqual({ transcript: "牛乳を追加して" });
+    expect(ai.interpret).not.toHaveBeenCalled();
+    expect(await items()).toHaveLength(0);
+    expect(budget.reserve).toHaveBeenCalledOnce();
+  });
+  it("preserves a long reviewed transcript and all 50 requested additions", async () => {
+    const transcript = "買い物で必要なものです。".repeat(60);
+    const requested = Array.from({ length: 50 }, (_, i) => ({
+      name: `必要なもの${i}`,
+      categoryName: null,
+    }));
+    ai.interpret.mockResolvedValue({ intent: "add_todo", items: requested });
+    const result = await request({ transcript });
+    expect(ai.interpret).toHaveBeenCalledWith(transcript, undefined, expect.any(AbortSignal));
+    expect(result.data).toMatchObject({
+      kind: "added",
+      transcript,
+      items: requested.map(({ name }) => ({ name })),
+    });
+    expect((await items()).map((item) => item.Name)).toEqual(requested.map((item) => item.name));
+  });
+  it("rejects transcription with the wrong team before inference", async () => {
+    await expect(transcription({ expectedTeamId: crypto.randomUUID() })).rejects.toMatchObject({
+      status: 403,
+    });
+    expect(ai.transcribe).not.toHaveBeenCalled();
+    expect(budget.reserve).not.toHaveBeenCalled();
+  });
+  it("does not return a transcript after the session is revoked", async () => {
+    ai.transcribe.mockImplementationOnce(async () => {
+      await connection.query(sql`DELETE FROM auth_session WHERE id=${sessionId}`);
+      return "牛乳";
+    });
+    await expect(transcription()).rejects.toMatchObject({ status: 401 });
+    expect(ai.interpret).not.toHaveBeenCalled();
+    expect(await items()).toHaveLength(0);
+  });
+  it("does not return an aborted transcript or infer after a failed quota reservation", async () => {
+    const controller = new AbortController();
+    ai.transcribe.mockImplementationOnce(async () => {
+      controller.abort();
+      return "牛乳";
+    });
+    await expect(transcription({}, controller.signal)).rejects.toBeDefined();
+    budget.reserve.mockRejectedValueOnce(new Error("quota unavailable"));
+    await expect(transcription()).rejects.toThrow("quota unavailable");
+    expect(ai.transcribe).toHaveBeenCalledOnce();
+    expect(ai.interpret).not.toHaveBeenCalled();
+    expect(await items()).toHaveLength(0);
+  });
+  it("rejects empty or oversized transcription text without interpretation", async () => {
+    for (const transcript of ["  ", "あ".repeat(assistLimits.transcript + 1)]) {
+      ai.transcribe.mockResolvedValue(transcript);
+      await expect(transcription()).rejects.toMatchObject({ code: "unclear_audio" });
+    }
+    expect(ai.interpret).not.toHaveBeenCalled();
+  });
   it("adds one item, returns the saved DTO and lists real data", async () => {
     const added = await request();
     expect(added.changedTeams).toEqual([teamId]);
@@ -134,11 +224,11 @@ describe("assist with real D1 and fixture AI", () => {
       replyText: "3件追加しました。牛乳、卵、ほか1件です。",
     });
     expect(result.changedTeams).toEqual([teamId]);
-    expect(ai.transcribe).toHaveBeenCalledOnce();
+    expect(ai.transcribe).not.toHaveBeenCalled();
     expect(ai.interpret).toHaveBeenCalledOnce();
     expect(budget.reserve).toHaveBeenCalledOnce();
     expect(budget.reserve.mock.invocationCallOrder[0]).toBeLessThan(
-      ai.transcribe.mock.invocationCallOrder[0],
+      ai.interpret.mock.invocationCallOrder[0],
     );
     const rows = await items();
     const categories = await connection.repository.ListTodoCategories(teamId);
@@ -169,7 +259,7 @@ describe("assist with real D1 and fixture AI", () => {
     });
     expect(await items()).toHaveLength(0);
     if (draft.kind !== "clarify") throw new Error("Expected draft");
-    ai.transcribe.mockResolvedValue("洗濯は家事");
+
     ai.interpret.mockResolvedValue({
       intent: "add_todo",
       items: [
@@ -223,7 +313,7 @@ describe("assist with real D1 and fixture AI", () => {
     expect(result.kind).toBe("clarify");
     expect(await items()).toHaveLength(0);
     if (result.kind !== "clarify") throw new Error("Expected draft");
-    ai.transcribe.mockResolvedValue("買い物");
+
     ai.interpret.mockResolvedValue({ ...add, items: [{ name: "牛乳", categoryName: "買い物" }] });
     expect((await request({ pendingDraft: result.pendingDraft })).data.kind).toBe("added");
     expect(ai.interpret.mock.lastCall?.[1]).toEqual(result.pendingDraft);
