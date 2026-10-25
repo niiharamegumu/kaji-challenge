@@ -430,6 +430,10 @@ const writes: WriteCase[] = [
   },
   { name: "DeleteTodoItem", run: (r, f) => r.DeleteTodoItem(f.todo) },
   {
+    name: "DeleteTodoItemsByNames",
+    run: (r, f) => r.DeleteTodoItemsByNames(f.team, ["Private item"]),
+  },
+  {
     name: "UpsertPushSubscription",
     run: (r, f) =>
       r.UpsertPushSubscription({
