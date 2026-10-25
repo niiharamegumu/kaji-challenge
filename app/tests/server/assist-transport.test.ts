@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { provisionUser } from "../../src/server/application/provision-user";
 import { createTestDatabase } from "../helpers/d1";
 import { encodeWav, wavBase64 } from "../../src/features/assist/lib/audio";
+import { assistLimits } from "../../src/contracts/assist";
 import type { RuntimeBindings } from "../../src/server/transport/runtime.server";
 const mocks = vi.hoisted(() => ({
   runtime: vi.fn(),
@@ -319,3 +320,124 @@ it.each(["origin", "session", "quota", "team"] as const)(
     expect(mocks.run).not.toHaveBeenCalled();
   },
 );
+
+function audioUpload(seconds = 1) {
+  const wav = encodeWav([new Float32Array(16000 * seconds).fill(0.2)], 16000);
+  const form = new FormData();
+  form.set("audio", new Blob([wav], { type: "audio/wav" }), "recording.wav");
+  form.set("expectedTeamId", teamId);
+  return { wav, form };
+}
+function uploadRequest(form: FormData, headers: Record<string, string> = {}) {
+  return new Request("https://app.example.com/api/assist/transcribe", {
+    method: "POST",
+    headers: { origin: bindings.APP_ORIGIN, ...headers },
+    body: form,
+  });
+}
+it("transcribes a 120-second multipart WAV with exact bytes and the existing Gateway", async () => {
+  const { wav, form } = audioUpload(120);
+  const input = uploadRequest(form);
+  expect(input.headers.has("content-length")).toBe(false);
+  const count = (await connection.repository.ListTodoItemsByTeamID(teamId)).length;
+  mocks.run.mockResolvedValueOnce({ text: "粒マスタードを追加して" });
+  const response = await handleAssistTranscription(input, bindings);
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ transcript: "粒マスタードを追加して" });
+  expect(mocks.run).toHaveBeenCalledExactlyOnceWith(
+    "@cf/openai/whisper-large-v3-turbo",
+    expect.objectContaining({ audio: wavBase64(wav), language: "ja" }),
+    expect.objectContaining({ gateway: expect.objectContaining({ id: "kaji-voice" }) }),
+  );
+  expect(await connection.repository.ListTodoItemsByTeamID(teamId)).toHaveLength(count);
+  expect(mocks.notify).not.toHaveBeenCalled();
+});
+it.each([
+  "missing",
+  "duplicate_audio",
+  "duplicate_team",
+  "extra",
+  "string",
+  "mime",
+  "team",
+  "header",
+  "truncated",
+  "duration",
+  "silent",
+])("rejects %s multipart audio before invoking AI", async (reason) => {
+  const { form, wav } = audioUpload(reason === "duration" ? 121 : 1);
+  if (reason === "missing") form.delete("audio");
+  if (reason === "duplicate_audio") form.append("audio", new Blob([wav], { type: "audio/wav" }));
+  if (reason === "duplicate_team") form.append("expectedTeamId", teamId);
+  if (reason === "extra") form.set("transcript", "追加して");
+  if (reason === "string") form.set("audio", "not a file");
+  if (reason === "mime") form.set("audio", new Blob([wav], { type: "audio/mpeg" }));
+  if (reason === "team") form.set("expectedTeamId", "invalid");
+  if (reason === "header") {
+    wav[24] ^= 1;
+    form.set("audio", new Blob([wav], { type: "audio/wav" }));
+  }
+  if (reason === "truncated")
+    form.set("audio", new Blob([wav.subarray(0, 100)], { type: "audio/wav" }));
+  if (reason === "silent")
+    form.set(
+      "audio",
+      new Blob([encodeWav([new Float32Array(16000)], 16000)], { type: "audio/wav" }),
+    );
+  const response = await handleAssistTranscription(uploadRequest(form), bindings);
+  expect(response.status).toBe(reason === "silent" ? 422 : 400);
+  expect(mocks.run).not.toHaveBeenCalled();
+});
+it.each([undefined, "1"])(
+  "bounds actual multipart bytes with Content-Length %s before parsing",
+  async (length) => {
+    const input = new Request("https://app.example.com/api/assist/transcribe", {
+      method: "POST",
+      headers: {
+        origin: bindings.APP_ORIGIN,
+        "content-type": "multipart/form-data; boundary=test",
+        ...(length ? { "content-length": length } : {}),
+      },
+      body: new Uint8Array(assistLimits.audioUploadBodyBytes + 1),
+    });
+    expect((await handleAssistTranscription(input, bindings)).status).toBe(413);
+    expect(mocks.run).not.toHaveBeenCalled();
+  },
+);
+it.each(["multipart/form-data", "multipart/form-data; boundary=missing"])(
+  "rejects malformed multipart: %s",
+  async (contentType) => {
+    expect(
+      (
+        await handleAssistTranscription(
+          request({ headers: { "content-type": contentType }, body: "invalid multipart" }),
+          bindings,
+        )
+      ).status,
+    ).toBe(400);
+    expect(mocks.run).not.toHaveBeenCalled();
+  },
+);
+it.each(["origin", "session", "limiter", "quota", "team"] as const)(
+  "protects multipart transcription at the %s boundary",
+  async (boundary) => {
+    const { form } = audioUpload();
+    if (boundary === "session") mocks.auth.mockResolvedValueOnce(null);
+    if (boundary === "limiter") mocks.limit.mockResolvedValueOnce({ success: false });
+    if (boundary === "quota") await connection.query(sql`UPDATE assist_usage SET total_count=500`);
+    if (boundary === "team") form.set("expectedTeamId", crypto.randomUUID());
+    const input = uploadRequest(
+      form,
+      boundary === "origin" ? { origin: "https://evil.example" } : {},
+    );
+    expect((await handleAssistTranscription(input, bindings)).status).toBe(
+      boundary === "session" ? 401 : boundary === "quota" || boundary === "limiter" ? 429 : 403,
+    );
+    expect(mocks.run).not.toHaveBeenCalled();
+    if (["origin", "session", "limiter"].includes(boundary)) expect(input.bodyUsed).toBe(false);
+  },
+);
+it("rejects multipart execution so audio can never bypass text review", async () => {
+  expect((await handleAssistTurn(uploadRequest(audioUpload().form), bindings)).status).toBe(415);
+  expect(mocks.run).not.toHaveBeenCalled();
+});
