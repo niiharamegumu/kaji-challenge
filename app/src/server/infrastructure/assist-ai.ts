@@ -4,8 +4,8 @@ import type { AssistAi } from "../application/assist-ports";
 import { AppError } from "../domain/errors";
 
 export const assistModels = {
-  transcription: "@cf/openai/whisper",
-  intent: "@cf/ibm-granite/granite-4.0-h-micro",
+  transcription: "@cf/openai/whisper-large-v3-turbo",
+  intent: "@cf/google/gemma-4-26b-a4b-it",
 } as const;
 export const assistInferenceLimits = {
   inputBytes: 12_288,
@@ -101,11 +101,10 @@ export function createAssistAi(ai: Pick<Ai, "run">, gatewayId: string): AssistAi
   };
   return {
     async transcribe(audioBase64, signal) {
-      let audio: number[];
       try {
         if (!audioBase64 || audioBase64.length > assistAudio.maxBase64) throw new Error();
-        // The transport has already validated the WAV. Whisper accepts bytes, not Turbo's base64.
-        audio = Array.from(atob(audioBase64), (byte) => byte.charCodeAt(0));
+        // Validate encoding before inference. The transport has already validated the WAV bytes.
+        atob(audioBase64);
       } catch {
         throw new AppError(
           400,
@@ -113,9 +112,14 @@ export function createAssistAi(ai: Pick<Ai, "run">, gatewayId: string): AssistAi
           "音声を送信できませんでした。話し直してください。",
         );
       }
-      // Multilingual Whisper detects the spoken language; do not request an English translation.
+      // Turbo accepts base64 audio. Keep Japanese transcription separate from translation.
       const result = await infer(
-        () => ai.run(assistModels.transcription, { audio }, options(signal)),
+        () =>
+          ai.run(
+            assistModels.transcription,
+            { audio: audioBase64, task: "transcribe", language: "ja" },
+            options(signal),
+          ),
         signal,
       );
       const parsed = transcriptionSchema.safeParse(result);
@@ -154,8 +158,8 @@ export function createAssistAi(ai: Pick<Ai, "run">, gatewayId: string): AssistAi
         { role: "user" as const, content: JSON.stringify(input.data) },
       ];
       const response_format = {
-        type: "json_schema",
-        json_schema: z.toJSONSchema(assistIntentSchema),
+        type: "json_schema" as const,
+        json_schema: { name: "assist_intent", schema: z.toJSONSchema(assistIntentSchema) },
       };
       if (
         new TextEncoder().encode(JSON.stringify({ messages, response_format })).byteLength >
@@ -175,8 +179,9 @@ export function createAssistAi(ai: Pick<Ai, "run">, gatewayId: string): AssistAi
               stream: false,
               max_tokens: assistInferenceLimits.outputTokens,
               temperature: 0,
+              chat_template_kwargs: { enable_thinking: false },
               response_format,
-            },
+            } satisfies AiModels[typeof assistModels.intent]["inputs"],
             options(signal),
           ),
         signal,
