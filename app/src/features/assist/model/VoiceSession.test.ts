@@ -3,6 +3,7 @@ import { VoiceSession } from "./VoiceSession";
 import type { createCapture } from "../lib/capture";
 import type { AssistResult } from "../../../contracts/assist";
 const audio = { chunks: [new Float32Array([0.2, 0.2])], sampleRate: 16000 };
+const wav = new Blob([new Uint8Array(3244)], { type: "audio/wav" });
 const listed: AssistResult = {
   kind: "listed",
   transcript: "やることは？",
@@ -29,7 +30,7 @@ describe("explicit dictation and submission", () => {
     vi.useFakeTimers();
     transcribe.mockReset().mockResolvedValue({ transcript: "納豆を追加して" });
     turn.mockReset().mockResolvedValue(listed);
-    encode.mockReset().mockResolvedValue("AQI=");
+    encode.mockReset().mockResolvedValue(wav);
     capture = {
       ready: Promise.resolve(),
       listen: vi.fn(),
@@ -121,11 +122,15 @@ describe("explicit dictation and submission", () => {
       { transcript: "納豆と卵を追加して", expectedTeamId: "team" },
       expect.any(AbortSignal),
     );
+    expect(transcribe).toHaveBeenCalledExactlyOnceWith(
+      { audio: wav, expectedTeamId: "team" },
+      expect.any(AbortSignal),
+    );
     expect(phases).not.toContain("reviewing");
     expect(session.getSnapshot().phase).toBe("done");
   });
   it("starts background encoding immediately and ignores completion after closing", async () => {
-    const encoded = deferred<string>();
+    const encoded = deferred<Blob>();
     encode.mockReturnValueOnce(encoded.promise);
     await record();
     session.stopRecording(true);
@@ -136,7 +141,7 @@ describe("explicit dictation and submission", () => {
     const signal = encode.mock.lastCall![1] as AbortSignal;
     session.close();
     expect(signal.aborted).toBe(true);
-    encoded.resolve("AQI=");
+    encoded.resolve(wav);
     await tick();
     expect(transcribe).not.toHaveBeenCalled();
     expect(turn).not.toHaveBeenCalled();
