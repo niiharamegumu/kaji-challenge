@@ -10,26 +10,30 @@ describe("voice prototype", () => {
     expect(view.getUint32(24, true)).toBe(16000);
     expect(view.getInt16(44, true)).toBe(16383);
   });
-  it("keeps pre-roll and completes only after speech and trailing silence", () => {
+  it("keeps long pauses and all spoken sections until explicit finish", () => {
     const detector = new SpeechDetector(16000);
-    const silence = new Float32Array(1600),
-      voice = new Float32Array(1600).fill(0.2);
-    for (let i = 0; i < 5; i++) expect(detector.push(silence)).toBe("waiting");
+    const voice = new Float32Array(16000).fill(0.2);
+    const silence = new Float32Array(16000);
+    for (let i = 0; i < 25; i++) expect(detector.push(silence)).toBe("waiting");
     expect(detector.push(voice)).toBe("recording");
-    detector.push(voice);
-    detector.push(voice);
     for (let i = 0; i < 10; i++) expect(detector.push(silence)).toBe("recording");
-    expect(detector.push(silence)).toBe("ready");
-    expect(detector.finish()!.length).toBeGreaterThan(16000 * 1.4 * 2);
+    expect(detector.push(voice)).toBe("recording");
+    const wav = detector.finish()!;
+    expect(wav.length).toBe(44 + 37 * 16000 * 2);
+    const view = new DataView(wav.buffer);
+    expect(view.getInt16(44 + 25 * 16000 * 2, true)).toBeGreaterThan(0);
+    expect(view.getInt16(44 + 36 * 16000 * 2, true)).toBeGreaterThan(0);
   });
-  it("does not submit silence or a brief click and refuses truncated long speech", () => {
-    const detector = new SpeechDetector(16000);
-    detector.push(new Float32Array(1024).fill(0.5));
-    for (let i = 0; i < 21; i++) detector.push(new Float32Array(16000));
-    expect(detector.finish()).toBeNull();
+  it("does not transcribe silence or a click and bounds recording without discarding prior speech", () => {
+    const silence = new SpeechDetector(16000);
+    for (let i = 0; i < 10; i++) silence.push(new Float32Array(16000));
+    expect(silence.finish()).toBeNull();
+    silence.push(new Float32Array(1024).fill(0.5));
+    expect(silence.finish()).toBeNull();
     const long = new SpeechDetector(16000);
-    for (let i = 0; i < 29; i++)
+    for (let i = 0; i < 119; i++)
       expect(long.push(new Float32Array(16000).fill(0.2))).toBe("recording");
-    expect(long.push(new Float32Array(16000).fill(0.2))).toBe("too_long");
+    expect(long.push(new Float32Array(32000).fill(0.2))).toBe("too_long");
+    expect(long.finish()!.length).toBe(44 + 120 * 16000 * 2);
   });
 });

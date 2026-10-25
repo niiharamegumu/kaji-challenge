@@ -30,7 +30,11 @@ const captures: ReturnType<typeof createCapture>[] = [];
 function setup(configure?: (context: AudioContextFixture, index: number) => void) {
   const contexts: AudioContextFixture[] = [];
   const nodes: {
-    port: { onmessage: unknown; close: ReturnType<typeof vi.fn> };
+    port: {
+      onmessage: unknown;
+      close: ReturnType<typeof vi.fn>;
+      postMessage: ReturnType<typeof vi.fn>;
+    };
     disconnect: ReturnType<typeof vi.fn>;
   }[] = [];
   const track = { enabled: true, stop: vi.fn(), addEventListener: vi.fn() };
@@ -50,7 +54,18 @@ function setup(configure?: (context: AudioContextFixture, index: number) => void
   vi.stubGlobal(
     "AudioWorkletNode",
     class {
-      port = { onmessage: null, close: vi.fn() };
+      port: {
+        onmessage: ((event: { data: Float32Array | { type: "finished" } }) => void) | null;
+        close: ReturnType<typeof vi.fn>;
+        postMessage: ReturnType<typeof vi.fn>;
+      } = {
+        onmessage: null,
+        close: vi.fn(),
+        postMessage: vi.fn((message) => {
+          if (message.type === "finish")
+            queueMicrotask(() => this.port.onmessage?.({ data: { type: "finished" } }));
+        }),
+      };
       connect = vi.fn();
       disconnect = vi.fn();
       constructor() {
@@ -246,5 +261,47 @@ it("closes a pending listening recovery and ignores its late completion", async 
   expect(failed).toHaveBeenCalled();
   expect(fixture.contexts).toHaveLength(1);
   expect(fixture.track.enabled).toBe(false);
+  expect(fixture.track.stop).toHaveBeenCalledOnce();
+});
+
+it("does not finish at silence, flushes the tail on explicit stop, and releases the microphone once", async () => {
+  const fixture = setup();
+  const capture = fixture.start();
+  await capture.ready;
+  await capture.listen();
+  const receive = fixture.nodes[0].port.onmessage as (event: {
+    data: Float32Array | { type: "finished" };
+  }) => void;
+  receive({ data: new Float32Array(48000).fill(0.2) });
+  receive({ data: new Float32Array(48000 * 8) });
+  expect(fixture.callbacks.onAudio).not.toHaveBeenCalled();
+  const final = new Float32Array(9600).fill(0.3);
+  fixture.nodes[0].port.postMessage.mockImplementation((message) => {
+    if (message.type === "finish") {
+      receive({ data: final });
+      receive({ data: { type: "finished" } });
+    }
+  });
+  await capture.send();
+  await capture.send();
+  expect(fixture.callbacks.onAudio).toHaveBeenCalledOnce();
+  expect(fixture.callbacks.onAudio.mock.calls[0][0].length).toBe(44 + 16000 * 9.2 * 2);
+  expect(fixture.track.stop).toHaveBeenCalledOnce();
+  expect(fixture.nodes[0].port.postMessage).toHaveBeenCalledWith({ type: "finish" });
+});
+it("bounds a missing flush acknowledgement without sending incomplete audio", async () => {
+  const fixture = setup();
+  const capture = fixture.start();
+  await capture.ready;
+  await capture.listen();
+  fixture.nodes[0].port.postMessage.mockImplementation(() => {});
+  const stopping = capture.send();
+  await vi.advanceTimersByTimeAsync(1500);
+  await stopping;
+  expect(fixture.callbacks.onAudio).not.toHaveBeenCalled();
+  expect(fixture.callbacks.onStop).toHaveBeenCalledWith(
+    expect.stringContaining("停止できません"),
+    "error",
+  );
   expect(fixture.track.stop).toHaveBeenCalledOnce();
 });

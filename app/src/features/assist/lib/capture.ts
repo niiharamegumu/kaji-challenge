@@ -1,8 +1,9 @@
 import { SpeechDetector } from "./audio";
+import { assistAudio } from "../../../contracts/assist";
 
 type Callbacks = {
   onRecording: () => void;
-  onAudio: (wav: Uint8Array<ArrayBuffer>) => void;
+  onAudio: (wav: Uint8Array<ArrayBuffer>, limited?: boolean) => void;
   onStop: (message: string, reason: "idle" | "error") => void;
 };
 type AudioResources = {
@@ -53,6 +54,8 @@ export function createCapture(callbacks: Callbacks) {
   let stream: MediaStream | undefined;
   let detector: SpeechDetector | undefined;
   let idleTimer: ReturnType<typeof setTimeout> | undefined;
+  let finishing = false;
+  let finished: (() => void) | undefined;
   let audio: AudioResources;
   const disable = () => {
     listening = false;
@@ -118,11 +121,34 @@ export function createCapture(callbacks: Callbacks) {
     stop();
     throw error;
   }
-  const send = () => {
-    const wav = detector?.finish();
-    disable();
-    if (wav) callbacks.onAudio(wav);
-    else stopWithReason("声を確認できませんでした。もう一度話してください。");
+  const send = async (limited = false) => {
+    if (closed || !listening || finishing) return;
+    finishing = true;
+    clearTimeout(idleTimer);
+    try {
+      // Port messages are ordered: consume queued PCM and the final partial block first.
+      await bounded(
+        new Promise<void>((resolve) => {
+          finished = resolve;
+          audio.node?.port.postMessage({ type: "finish" });
+        }),
+        1500,
+        "録音を停止できませんでした。もう一度録音してください。",
+        lifetime.signal,
+      );
+      lifetime.signal.throwIfAborted();
+      const wav = detector?.finish();
+      if (!wav) {
+        stopWithReason("声を確認できませんでした。もう一度話してください。");
+        return;
+      }
+      stop();
+      callbacks.onAudio(wav, limited);
+    } catch (error) {
+      if (!closed) stopWithReason(error instanceof Error ? error.message : preparationFailed);
+    } finally {
+      finished = undefined;
+    }
   };
   const prepare = async (current: AudioResources) => {
     const context = current.context;
@@ -150,13 +176,15 @@ export function createCapture(callbacks: Callbacks) {
     current.source.connect(current.node);
     current.node.connect(current.mute);
     current.mute.connect(context.destination);
-    current.node.port.onmessage = (event: MessageEvent<Float32Array>) => {
+    current.node.port.onmessage = (event: MessageEvent<Float32Array | { type: "finished" }>) => {
       if (closed || audio !== current || !listening || !detector) return;
+      if (!(event.data instanceof Float32Array)) {
+        if (event.data.type === "finished") finished?.();
+        return;
+      }
       const state = detector.push(event.data);
-      if (state === "recording") callbacks.onRecording();
-      if (state === "ready") send();
-      if (state === "idle") stopWithReason("", "idle");
-      if (state === "too_long") stopWithReason("30秒を超えました。分けて話し直してください。");
+      if (state === "recording" && !finishing) callbacks.onRecording();
+      if (state === "too_long") void send(true);
     };
   };
   const prepareWithRecovery = async () => {
@@ -166,7 +194,7 @@ export function createCapture(callbacks: Callbacks) {
       lifetime.signal.throwIfAborted();
       disposeAudio(audio);
       audio = openAudio();
-      // The same muted MediaStream is attached to a fresh context, at most once.
+      // The same MediaStream is attached to a fresh context, at most once.
       await prepare(audio);
     }
   };
@@ -200,11 +228,15 @@ export function createCapture(callbacks: Callbacks) {
         lifetime.signal.throwIfAborted();
         detector = new SpeechDetector(audio.context.sampleRate);
         listening = true;
+        finishing = false;
         stream?.getTracks().forEach((track) => {
           track.enabled = true;
         });
         clearTimeout(idleTimer);
-        idleTimer = setTimeout(() => stopWithReason("", "idle"), 35_000);
+        audio.node?.port.postMessage({ type: "start" });
+        idleTimer = setTimeout(() => {
+          void send(true);
+        }, assistAudio.maxSeconds * 1000);
       } catch (error) {
         stop();
         throw error;

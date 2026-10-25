@@ -174,7 +174,7 @@ it("fails closed if quota storage is unavailable", async () => {
   expect(mocks.run).not.toHaveBeenCalled();
 });
 
-function audioRequest(seconds = 30, extra = {}) {
+function audioRequest(seconds = 120, extra = {}) {
   return request({
     body: JSON.stringify({
       audioBase64: wavBase64(encodeWav([new Float32Array(16000 * seconds).fill(0.2)], 16000)),
@@ -183,7 +183,7 @@ function audioRequest(seconds = 30, extra = {}) {
     }),
   });
 }
-it("transcribes 30-second audio without interpreting, saving or notifying", async () => {
+it("transcribes 120-second audio without interpreting, saving or notifying", async () => {
   const count = (await connection.repository.ListTodoItemsByTeamID(teamId)).length;
   mocks.run.mockResolvedValueOnce({ text: "買い物に納豆と卵が必要" });
   const response = await handleAssistTranscription(audioRequest(), bindings);
@@ -205,12 +205,12 @@ it("bounds actual transcription bytes and duration before inference", async () =
   expect(
     (
       await handleAssistTranscription(
-        request({ body: "x".repeat(2 * 1024 * 1024 + 1), headers: { "content-length": "1" } }),
+        request({ body: "x".repeat(6 * 1024 * 1024 + 1), headers: { "content-length": "1" } }),
         bindings,
       )
     ).status,
   ).toBe(413);
-  expect((await handleAssistTranscription(audioRequest(31), bindings)).status).toBe(400);
+  expect((await handleAssistTranscription(audioRequest(121), bindings)).status).toBe(400);
   expect(mocks.run).not.toHaveBeenCalled();
 });
 it.each(["origin", "session", "quota", "team"] as const)(

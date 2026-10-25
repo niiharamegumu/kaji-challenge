@@ -1,41 +1,44 @@
-import type {
-  AssistAudioRequest,
-  AssistDraft,
-  AssistRequest,
-  AssistResult,
+import {
+  assistLimits,
+  type AssistAudioRequest,
+  type AssistDraft,
+  type AssistRequest,
+  type AssistResult,
 } from "../../../contracts/assist";
 import { isApiRequestError } from "../../../lib/api/api-client-state";
 import { createCapture } from "../lib/capture";
 import { wavBase64 } from "../lib/audio";
-import { speakReply } from "../lib/speech";
 
 export type VoiceState = {
   open: boolean;
   phase:
     | "closed"
+    | "idle"
     | "starting"
     | "listening"
     | "recording"
     | "transcribing"
     | "reviewing"
     | "processing"
-    | "speaking"
     | "done"
     | "error";
   transcript: string;
+  submittedTranscript: string;
   result: AssistResult | null;
   message: string;
 };
-type Dependencies = { capture: typeof createCapture; speak: typeof speakReply };
+type Dependencies = { capture: typeof createCapture };
 const interrupted =
   "処理を中断しました。追加されている可能性があります。ToDo一覧を確認してください。";
+const textLimit = `${assistLimits.transcript}文字を超えています。短くしてから送信してください。`;
 
-/** Recording and transcription never execute a command. Only send() can do that. */
+/** Opening, dictating and submitting are separate user actions. */
 export class VoiceSession {
   private state: VoiceState = {
     open: false,
     phase: "closed",
     transcript: "",
+    submittedTranscript: "",
     result: null,
     message: "",
   };
@@ -44,8 +47,9 @@ export class VoiceSession {
   private controller = new AbortController();
   private capture?: ReturnType<typeof createCapture>;
   private pending?: AssistDraft;
-  private sessionTimer?: ReturnType<typeof setTimeout>;
   private startupTimer?: ReturnType<typeof setTimeout>;
+  private submitAfterTranscription = false;
+  private acceptedAudio = false;
   constructor(
     private teamId: string,
     private transcribe: (
@@ -53,7 +57,7 @@ export class VoiceSession {
       signal: AbortSignal,
     ) => Promise<{ transcript: string }>,
     private turn: (input: AssistRequest, signal: AbortSignal) => Promise<AssistResult>,
-    private dependencies: Dependencies = { capture: createCapture, speak: speakReply },
+    private dependencies: Dependencies = { capture: createCapture },
   ) {}
   getSnapshot = () => this.state;
   subscribe = (listener: () => void) => {
@@ -74,8 +78,8 @@ export class VoiceSession {
   private release() {
     this.generation++;
     this.controller.abort();
-    clearTimeout(this.sessionTimer);
     this.stopCapture();
+    this.submitAfterTranscription = false;
     this.controller = new AbortController();
   }
   close = () => {
@@ -87,6 +91,7 @@ export class VoiceSession {
       open: false,
       phase: "closed",
       transcript: "",
+      submittedTranscript: "",
       result: null,
       message: processing ? interrupted : "",
     });
@@ -97,44 +102,47 @@ export class VoiceSession {
     this.update({ phase: "error", message });
   }
   start = () => {
-    if (!this.state.open) this.beginRecording();
+    if (this.state.open) return;
+    this.release();
+    this.update({
+      open: true,
+      phase: "idle",
+      transcript: "",
+      submittedTranscript: "",
+      result: null,
+      message: "",
+    });
   };
-  recordAgain = () => {
-    if (this.state.open && ["reviewing", "done", "error"].includes(this.state.phase))
-      this.beginRecording();
-  };
-  private beginRecording() {
+  private canEdit() {
+    return this.state.open && ["idle", "reviewing", "done", "error"].includes(this.state.phase);
+  }
+  startRecording = () => {
+    if (!this.canEdit()) return;
     this.release();
     const generation = this.generation;
-    this.update({ open: true, phase: "starting", transcript: "", result: null, message: "" });
-    this.sessionTimer = setTimeout(() => {
-      if (generation !== this.generation) return;
-      const processing = this.state.phase === "processing";
-      this.close();
-      if (!processing)
-        this.update({
-          message: "音声アシストを終了しました。続けるときはもう一度開いてください。",
-        });
-    }, 180_000);
-    // Include every startup await, even a browser API that never settles.
+    const base = this.state.transcript;
+    this.acceptedAudio = false;
+    this.update({ phase: "starting", message: "" });
     this.startupTimer = setTimeout(() => {
       if (generation === this.generation)
         this.fail("マイクを準備できませんでした。もう一度録音してください。");
     }, 30_000);
     try {
-      // No greeting or playback competes with microphone initialization.
       this.capture = this.dependencies.capture({
         onRecording: () => {
           if (generation === this.generation && this.state.phase === "listening")
             this.update({ phase: "recording" });
         },
-        onAudio: (wav) => {
-          if (generation === this.generation) void this.reviewAudio(wav, generation);
+        onAudio: (wav, limited) => {
+          if (generation === this.generation)
+            void this.reviewAudio(wav, generation, base, limited ?? false);
         },
         onStop: (message, reason) => {
           if (generation !== this.generation) return;
-          if (reason === "idle") this.close();
-          else this.fail(message);
+          if (reason === "idle") {
+            this.release();
+            this.update({ phase: "idle" });
+          } else this.fail(message);
         },
       });
       const capture = this.capture;
@@ -144,13 +152,13 @@ export class VoiceSession {
           await capture.listen();
           if (generation !== this.generation) return;
           clearTimeout(this.startupTimer);
-          this.update({ phase: "listening", message: "" });
+          this.update({ phase: "listening" });
         })
         .catch((error: unknown) => {
           if (generation !== this.generation) return;
           this.fail(
             error instanceof Error && error.name === "NotAllowedError"
-              ? "マイクが許可されていません。端末・ブラウザーのマイク設定を確認してください。"
+              ? "マイクが許可されていません。端末・ブラウザーの設定を確認してください。"
               : error instanceof Error
                 ? error.message
                 : "録音を開始できませんでした。",
@@ -159,44 +167,87 @@ export class VoiceSession {
     } catch (error) {
       this.fail(error instanceof Error ? error.message : "録音を開始できませんでした。");
     }
-  }
-  private async reviewAudio(wav: Uint8Array<ArrayBuffer>, generation: number) {
-    if (!["listening", "recording"].includes(this.state.phase)) return;
-    // Release the input before ASR, review or any speech playback.
+  };
+  stopRecording = (submit = false) => {
+    if (!this.capture || !["listening", "recording"].includes(this.state.phase)) return;
+    this.submitAfterTranscription = submit;
+    this.update({ phase: "transcribing" });
+    void this.capture.send();
+  };
+  private async reviewAudio(
+    wav: Uint8Array<ArrayBuffer>,
+    generation: number,
+    base: string,
+    limited: boolean,
+  ) {
+    if (
+      this.acceptedAudio ||
+      !["listening", "recording", "transcribing"].includes(this.state.phase)
+    )
+      return;
+    this.acceptedAudio = true;
+    const submit = this.submitAfterTranscription && !limited;
+    this.submitAfterTranscription = false;
     this.stopCapture();
-    this.update({ phase: "transcribing", message: "" });
+    this.update({ phase: "transcribing" });
     try {
       const result = await this.transcribe(
         { audioBase64: wavBase64(wav), expectedTeamId: this.teamId },
         this.controller.signal,
       );
-      if (generation === this.generation)
-        this.update({ phase: "reviewing", transcript: result.transcript });
+      if (generation !== this.generation) return;
+      const transcript = [base.trimEnd(), result.transcript.trim()].filter(Boolean).join("\n");
+      if (submit && transcript.trim() && transcript.length <= assistLimits.transcript) {
+        this.submitTranscript(transcript, generation);
+        return;
+      }
+      this.update({
+        phase: "reviewing",
+        transcript,
+        message:
+          transcript.length > assistLimits.transcript
+            ? textLimit
+            : limited
+              ? "録音が2分に達したため停止しました。内容を確認して送信してください。"
+              : "",
+      });
     } catch (error) {
       if (generation === this.generation)
         this.fail(
           isApiRequestError(error)
             ? error.message
-            : "文字にできませんでした。もう一度録音してください。",
+            : "文字にできませんでした。入力内容は残っています。もう一度録音してください。",
         );
     }
   }
   editTranscript = (transcript: string) => {
-    if (this.state.phase === "reviewing") this.update({ transcript });
+    if (this.canEdit())
+      this.update({
+        transcript,
+        message: transcript.length > assistLimits.transcript ? textLimit : "",
+      });
   };
   send = () => {
-    if (this.state.phase !== "reviewing" || !this.state.transcript.trim()) return;
-    const generation = this.generation;
+    if (!this.canEdit()) return;
     const transcript = this.state.transcript.trim();
-    this.update({ phase: "processing", transcript, message: "" });
-    // Unlock local speech on the explicit send gesture, after the mic is closed.
-    // iOS can otherwise reject the first reply started after the asynchronous LLM call.
-    const acknowledged = this.dependencies
-      .speak("確認します。", this.controller.signal)
-      .catch(() => {});
-    void this.execute(transcript, generation, acknowledged);
+    if (!transcript) return;
+    if (transcript.length > assistLimits.transcript) {
+      this.update({ message: textLimit });
+      return;
+    }
+    this.submitTranscript(transcript, this.generation);
   };
-  private async execute(transcript: string, generation: number, acknowledged: Promise<void>) {
+  private submitTranscript(transcript: string, generation: number) {
+    this.update({
+      phase: "processing",
+      submittedTranscript: transcript,
+      transcript: "",
+      result: null,
+      message: "",
+    });
+    void this.execute(transcript, generation);
+  }
+  private async execute(transcript: string, generation: number) {
     try {
       const result = await this.turn(
         {
@@ -208,19 +259,10 @@ export class VoiceSession {
       );
       if (generation !== this.generation) return;
       this.pending = result.kind === "clarify" ? result.pendingDraft : undefined;
-      this.update({ result, phase: "speaking" });
-      await acknowledged;
-      if (generation !== this.generation) return;
-      await this.dependencies.speak(result.replyText, this.controller.signal);
-      if (generation === this.generation) this.update({ phase: "done" });
+      this.update({ result, phase: "done" });
     } catch (error) {
-      if (generation !== this.generation) return;
-      const message = isApiRequestError(error)
-        ? error.message
-        : this.state.phase === "speaking" && error instanceof Error
-          ? error.message
-          : interrupted;
-      this.fail(message);
+      if (generation === this.generation)
+        this.fail(isApiRequestError(error) ? error.message : interrupted);
     }
   }
 }

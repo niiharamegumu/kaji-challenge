@@ -1696,9 +1696,10 @@ test(
 );
 
 test(
-  "assist reviews edited text before sending and can reopen repeatedly without navigation",
+  "assist stops on request, reviews text and supports stop-and-send across repeated opens",
   { tag: ["@assist"] },
   async ({ page, context }, testInfo) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
     await authenticate(context, token);
     await installAssistMediaFixture(page);
     let recordings = 0,
@@ -1744,78 +1745,75 @@ test(
       });
     });
     await page.goto("/todos");
-    const launcher = page.getByRole("button", { name: "アシスト", exact: true });
-    await expect(launcher).toBeEnabled();
     await expect(page.getByRole("heading", { name: "現在のToDo" })).toBeVisible();
+    const launcher = page.getByRole("button", { name: "アシスト", exact: true });
     const more = page.getByRole("button", { name: "その他", exact: true });
     const [assistSize, moreSize] = await Promise.all([launcher.boundingBox(), more.boundingBox()]);
     expect(assistSize!.width).toBe(62);
-    expect(assistSize!.height).toBe(62);
-    expect(assistSize!.width).toBe(moreSize!.width);
     expect(assistSize!.height).toBe(moreSize!.height);
-    const glass = (element: HTMLElement) => ({
-      background: getComputedStyle(element).backgroundImage,
-      blur: getComputedStyle(element).backdropFilter,
-    });
-    expect(await launcher.evaluate(glass)).toEqual(await more.evaluate(glass));
-    await expect(page.getByTestId("floating-nav-primary").getByRole("button")).toHaveCount(3);
-    await page.screenshot({ path: testInfo.outputPath("assist-launcher.png"), fullPage: true });
     await launcher.click();
     const dialog = page.getByRole("dialog", { name: "音声アシスト" });
-    await expect(dialog.getByRole("status")).toHaveText("話しかけてください");
-    expect(await page.evaluate(() => window.assistFixture.spoken)).toEqual([]);
-    await page.evaluate(() => window.assistFixture.emit());
     const text = dialog.getByRole("textbox", { name: "送信する内容" });
+    const microphone = dialog.getByRole("button", { name: "録音を開始", exact: true });
+    await expect(dialog.getByRole("heading", { name: "何を追加しますか？" })).toBeVisible();
+    await expect(text).toHaveValue("");
+    expect(await page.evaluate(() => window.assistFixture.captureRequests)).toBe(0);
+    await page.screenshot({ path: testInfo.outputPath("assist-idle.png"), fullPage: true });
+    await microphone.click();
+    await expect(dialog.getByRole("status")).toHaveText("録音中");
+    await page.evaluate(() => window.assistFixture.emit());
+    await expect(dialog.getByRole("status")).toHaveText("録音中");
+    expect(recordings).toBe(0);
+    expect(requests).toBe(0);
+    expect(await page.evaluate(() => window.assistFixture.activeTracks)).toBe(1);
+    await page.screenshot({ path: testInfo.outputPath("assist-recording.png"), fullPage: true });
+    await dialog.getByRole("button", { name: "録音を停止", exact: true }).click();
     await expect(text).toHaveValue("買い物にナットを追加して");
     await expect(text).toBeFocused();
-    expect(requests).toBe(0);
     expect(await page.evaluate(() => window.assistFixture.activeTracks)).toBe(0);
-    await text.fill("  ");
+    expect(requests).toBe(0);
+    await text.fill(" ");
     await expect(dialog.getByRole("button", { name: "送信", exact: true })).toBeDisabled();
     await text.fill("買い物に納豆を追加して");
-    await expect(dialog.locator(".assist-conversation")).toHaveCSS("opacity", "1");
     await page.screenshot({ path: testInfo.outputPath("assist-review.png"), fullPage: true });
     expect(requests).toBe(0);
     await dialog.getByRole("button", { name: "送信", exact: true }).click();
-    await expect(dialog.getByRole("status")).toHaveText("返事を確認してください");
     await expect(dialog.getByText("買い物に納豆を追加しました。")).toBeVisible();
+    await expect(text).toHaveValue("");
     expect(requests).toBe(1);
-    await dialog.getByRole("button", { name: "もう一度録音する" }).click();
-    await expect(dialog.getByRole("status")).toHaveText("話しかけてください");
+    await microphone.click();
+    await expect(dialog.getByRole("status")).toHaveText("録音中");
     await page.evaluate(() => window.assistFixture.emit());
-    await expect(text).toHaveValue("やることを教えて");
     expect(requests).toBe(1);
-    await dialog.getByRole("button", { name: "送信", exact: true }).click();
-    await expect(dialog.getByRole("status")).toHaveText("返事を確認してください");
+    await dialog.getByRole("button", { name: "停止して送信", exact: true }).click();
     await expect(dialog.getByText("音声確認の納豆", { exact: true })).toBeVisible();
+    await expect(text).toHaveValue("");
+    expect(recordings).toBe(2);
     expect(requests).toBe(2);
-    expect(await page.evaluate(() => window.assistFixture.workletLoaded)).toBe(true);
-    expect(await page.evaluate(() => window.assistFixture.spoken)).toEqual([
-      "確認します。",
-      "買い物に納豆を追加しました。",
-      "確認します。",
-      "ToDoは1件です。納豆です。",
-    ]);
-    await page.screenshot({ path: testInfo.outputPath("assist-conversation.png"), fullPage: true });
+    expect(await page.evaluate(() => window.assistFixture.flushes)).toBe(2);
+    expect(await page.evaluate(() => window.assistFixture.spoken)).toEqual([]);
+    await page.screenshot({ path: testInfo.outputPath("assist-result.png"), fullPage: true });
     await page.keyboard.press("Escape");
     await expect(dialog).toHaveCount(0);
     await expect(launcher).toBeFocused();
-    // A fresh open after completed work must not hang behind old audio or TTS.
     await launcher.click();
-    await expect(dialog.getByRole("status")).toHaveText("話しかけてください");
+    await expect(text).toHaveValue("");
+    expect(await page.evaluate(() => window.assistFixture.captureRequests)).toBe(2);
+    await microphone.click();
+    await expect(dialog.getByRole("status")).toHaveText("録音中");
     await page.evaluate(() => window.assistFixture.emit());
+    await dialog.getByRole("button", { name: "録音を停止", exact: true }).click();
     await expect(text).toHaveValue("やることを教えて");
     for (let i = 0; i < 6; i++) {
       await page.keyboard.press(i % 2 === 0 ? "Tab" : "Shift+Tab");
-      expect(await dialog.evaluate((element) => element.contains(document.activeElement))).toBe(
-        true,
-      );
+      expect(await dialog.evaluate((el) => el.contains(document.activeElement))).toBe(true);
     }
     await page.keyboard.press("Escape");
     await expect(dialog).toHaveCount(0);
     expect(requests).toBe(2);
     await launcher.click();
-    await expect(dialog.getByRole("status")).toHaveText("話しかけてください");
+    await microphone.click();
+    await expect(dialog.getByRole("status")).toHaveText("録音中");
     expect(await page.evaluate(() => window.assistFixture.captureRequests)).toBe(4);
     await page.evaluate(() => {
       Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
@@ -1829,13 +1827,57 @@ test(
     await expect(dialog).toHaveCount(0);
     expect(await page.evaluate(() => window.assistFixture.activeTracks)).toBe(0);
     expect(new URL(page.url()).pathname).toBe("/todos");
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
-      true,
-    );
     await page.getByRole("button", { name: "追加", exact: true }).click();
     await page.getByPlaceholder("例: 牛乳", { exact: true }).fill("入力途中");
     await expect(launcher).toBeDisabled();
     await expect(page.getByPlaceholder("例: 牛乳", { exact: true })).toHaveValue("入力途中");
+  },
+);
+
+test(
+  "assist typed input needs no microphone and fits a compact viewport",
+  { tag: ["@assist"] },
+  async ({ page, context }, testInfo) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await authenticate(context, token);
+    await installAssistMediaFixture(page);
+    let requests = 0;
+    await page.route("**/api/assist/turn", async (route) => {
+      requests++;
+      expect(route.request().postDataJSON().transcript).toBe("やることを教えて");
+      await route.fulfill({
+        json: {
+          kind: "listed",
+          transcript: "やることを教えて",
+          replyText: "ToDoは今ありません。",
+          items: [],
+          total: 0,
+        },
+      });
+    });
+    await page.setViewportSize({ width: 320, height: 480 });
+    await page.goto("/todos");
+    await page.getByRole("button", { name: "アシスト", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "音声アシスト" });
+    const text = dialog.getByRole("textbox", { name: "送信する内容" });
+    await text.fill("長い入力".repeat(200));
+    for (const control of [
+      text,
+      dialog.getByRole("button", { name: "送信", exact: true }),
+      dialog.getByRole("button", { name: "アシストを閉じる" }),
+    ]) {
+      const box = await control.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.y).toBeGreaterThanOrEqual(0);
+      expect(box!.y + box!.height).toBeLessThanOrEqual(480);
+      expect(box!.x + box!.width).toBeLessThanOrEqual(320);
+    }
+    await text.fill("やることを教えて");
+    await dialog.getByRole("button", { name: "送信", exact: true }).click();
+    await expect(dialog.getByText("ToDoは今ありません。")).toBeVisible();
+    expect(requests).toBe(1);
+    expect(await page.evaluate(() => window.assistFixture.captureRequests)).toBe(0);
+    await page.screenshot({ path: testInfo.outputPath("assist-compact.png"), fullPage: false });
   },
 );
 
@@ -1855,12 +1897,14 @@ test(
     await page.goto("/");
     await page.getByRole("button", { name: "アシスト", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "音声アシスト" });
-    await expect(dialog.getByRole("status")).toHaveText("話しかけてください");
+    await dialog.getByRole("button", { name: "録音を開始", exact: true }).click();
+    await expect(dialog.getByRole("status")).toHaveText("録音中");
     await page.evaluate(() => window.assistFixture.emit());
-    await expect(dialog.getByRole("button")).toHaveCount(2);
+    await dialog.getByRole("button", { name: "録音を停止", exact: true }).click();
+    await expect(dialog.getByRole("button", { name: "録音を開始", exact: true })).toBeEnabled();
     await expect(dialog.getByRole("checkbox")).toHaveCount(0);
     await expect(dialog.getByRole("alert")).toHaveText("音声アシストはまだ有効になっていません。");
-    await expect(dialog.getByRole("status")).toHaveText("音声を終了しました");
+    await expect(dialog.getByRole("status")).toHaveText("入力を確認してください");
     expect(await page.evaluate(() => window.assistFixture.stopped)).toBeGreaterThan(0);
   },
 );

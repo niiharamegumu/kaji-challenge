@@ -60,7 +60,7 @@ it("sends base64 WAV to Whisper Turbo with Japanese transcription explicitly sel
   );
 });
 
-it.each(["not-base64!", "", "A".repeat(1_280_061)])(
+it.each(["not-base64!", "", "A".repeat(5_120_061)])(
   "rejects malformed or oversized audio before paid inference (case %#)",
   async (audio) => {
     const { ai, run, signal } = fixture();
