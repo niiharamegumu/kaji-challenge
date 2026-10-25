@@ -240,6 +240,22 @@
   gap: 20px;
   padding: 12px 8px 20px;
 }
+.assist-transcribing {
+  display: grid;
+  min-height: 80px;
+  place-items: center;
+  padding: 12px 8px 20px;
+  color: #57534e;
+}
+.assist-spinner {
+  display: inline-flex;
+  animation: assist-spin 1s linear infinite;
+}
+@keyframes assist-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 .assist-recording > span {
   font-size: 14px;
   color: #625c53;
@@ -352,7 +368,8 @@
     min-height: 72px;
     max-height: 110px;
   }
-  .assist-recording {
+  .assist-recording,
+  .assist-transcribing {
     min-height: 72px;
   }
 }
