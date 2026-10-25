@@ -179,6 +179,9 @@
   font-size: 15px;
   line-height: 1.75;
 }
+.assist-answer-part + .assist-answer-part {
+  margin-top: 12px;
+}
 .assist-results {
   margin-top: 12px;
   padding: 0 0 0 20px;

@@ -114,8 +114,13 @@ it("interprets only explicitly submitted text through the gateway, saves to D1, 
   const log = vi.spyOn(console, "info").mockImplementation(() => {});
   mocks.run.mockResolvedValueOnce({
     response: JSON.stringify({
-      intent: "add_todo",
-      items: [{ name: "秘密の牛乳", categoryName: null }],
+      intent: "batch_todos",
+      actions: [
+        {
+          intent: "add_todo",
+          items: [{ name: "秘密の牛乳", categoryName: null }],
+        },
+      ],
     }),
   });
   const response = await handleAssistTurn(request(), bindings);
@@ -146,6 +151,52 @@ it("rejects truncated or malformed completions without a write", async () => {
   expect((await handleAssistTurn(request(), bindings)).status).toBe(502);
   expect(await connection.repository.ListTodoItemsByTeamID(teamId)).toHaveLength(count);
 });
+it("returns every mixed operation through HTTP and notifies once after the atomic write", async () => {
+  const now = new Date().toISOString();
+  await connection.repository.CreateTodoItemsAtomic(
+    ["塩", "塩"].map((Name) => ({
+      ID: crypto.randomUUID(),
+      TeamID: teamId,
+      Name,
+      Notes: null,
+      CategoryID: null,
+      SortKey: 100,
+      CreatedAt: now,
+      UpdatedAt: now,
+    })),
+  );
+  mocks.run.mockResolvedValueOnce({
+    response: {
+      intent: "batch_todos",
+      actions: [
+        { intent: "complete_todos", names: ["塩"], categoryName: null },
+        { intent: "add_todo", items: [{ name: "レモン", categoryName: null }] },
+      ],
+    },
+  });
+  const response = await handleAssistTurn(
+    request({
+      body: JSON.stringify({
+        expectedTeamId: teamId,
+        transcript: "塩は購入した、レモンを追加して",
+      }),
+    }),
+    bindings,
+  );
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({
+    kind: "batch",
+    results: [
+      { kind: "removed", action: "complete", count: 2 },
+      { kind: "added", items: [{ name: "レモン" }] },
+    ],
+  });
+  expect(mocks.run).toHaveBeenCalledOnce();
+  expect(mocks.notify).toHaveBeenCalledExactlyOnceWith(bindings, [teamId], ["todos"]);
+  const saved = await connection.repository.ListTodoItemsByTeamID(teamId);
+  expect(saved.some((item) => item.Name === "塩")).toBe(false);
+  expect(saved.some((item) => item.Name === "レモン")).toBe(true);
+});
 
 it("searches and removes matching duplicates through HTTP with one change notification", async () => {
   const now = new Date().toISOString();
@@ -162,14 +213,20 @@ it("searches and removes matching duplicates through HTTP with one change notifi
     })),
   );
   mocks.run.mockResolvedValueOnce({
-    response: { intent: "list_todos", categoryName: null, nameQuery: "HTTP" },
+    response: {
+      intent: "batch_todos",
+      actions: [{ intent: "list_todos", categoryName: null, nameQuery: "HTTP" }],
+    },
   });
   const listed = await handleAssistTurn(request(), bindings);
   expect(listed.status).toBe(200);
   expect(await listed.json()).toMatchObject({ kind: "listed", total: 3 });
   expect(mocks.notify).not.toHaveBeenCalled();
   mocks.run.mockResolvedValueOnce({
-    response: { intent: "complete_todos", categoryName: null, names: ["HTTP牛乳"] },
+    response: {
+      intent: "batch_todos",
+      actions: [{ intent: "complete_todos", categoryName: null, names: ["HTTP牛乳"] }],
+    },
   });
   const removed = await handleAssistTurn(request(), bindings);
   expect(removed.status).toBe(200);

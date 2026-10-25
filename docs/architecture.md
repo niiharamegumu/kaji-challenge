@@ -2,6 +2,8 @@
 
 ## 常駐音声アシスト
 
+1回の指示に含まれる複数のToDo操作は順序付きplanとして扱う。推論は単独操作も配列で返し、`assistInferenceIntentSchema`で検証後に単独操作の既存契約へ変換するか、`batch_todos`として全件処理する。最大10操作・指定項目合計50件。全操作の不足情報とカテゴリーを確認し、必要なら完了/削除を含むplan全体をdraftに保持して何も実行せず聞き返す。`ApplyTodoAssistActionsAtomic`が全体の認証・チーム・カテゴリー条件を各SQLに適用し、追加/削除/検索を単一D1 batchで順に処理する。SQL失敗は全体を戻し、各操作の実結果を順序通り返して画面にもすべて表示する。推論・予算予約・変更通知は1送信につき1回とし、自動再送しない。
+
 `features/assist` の公開APIをRootLayoutが組み立て、shellへ起動callbackと状態だけを渡す。新しいページは追加せず、カレンダーを「その他」に残す。共通ダイアログは `shared/state/overlay` で競合を避ける。
 
 音声は `contracts/assist.ts` → `transport/assist.server.ts` → `application/assist-operations.ts` → 既存 `executeOperation` / Repositoryで扱う。Applicationの `AssistAi` portを `infrastructure/assist-ai.ts` が実装する。音声認識・意図解析は既存アプリWorkerからのみ呼び、LLMの出力をDB命令として実行しない。WAV検証・本人/所属の固定・再送抑止と運用手順は [voice-assist.md](voice-assist.md) を参照する。

@@ -536,6 +536,15 @@ export interface RecalculateMonthParams {
   closeMonth?: boolean;
 }
 
+export type TodoAssistAction =
+  | { kind: "add"; items: CreateTodoItemParams[] }
+  | { kind: "remove"; names: string[]; categoryId?: string | null }
+  | { kind: "list"; categoryId?: string | null };
+export type TodoAssistActionResult =
+  | { kind: "add"; items: TodoItem[] }
+  | { kind: "remove"; count: number }
+  | { kind: "list"; items: TodoItem[] };
+
 export interface Repository {
   forSession(userId: string, sessionId: string): Repository;
   forMember(teamId: string, userId: string): Repository;
@@ -603,6 +612,10 @@ export interface Repository {
   DeleteTodoCategory(teamId: string, categoryId: string, now: string): Promise<boolean>;
   CreateTodoItem(arg: CreateTodoItemParams): Promise<boolean>;
   CreateTodoItemsAtomic(items: CreateTodoItemParams[]): Promise<TodoItem[]>;
+  ApplyTodoAssistActionsAtomic(
+    teamId: string,
+    actions: TodoAssistAction[],
+  ): Promise<TodoAssistActionResult[]>;
   DeleteTodoItem(id: string): Promise<number>;
   DeleteTodoItemsByNames(
     teamId: string,

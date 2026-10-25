@@ -930,6 +930,106 @@ export class D1Repository implements P.Repository {
       .returning()
       .then((rows) => rows.length);
   }
+  async ApplyTodoAssistActionsAtomic(
+    teamId: string,
+    actions: P.TodoAssistAction[],
+  ): Promise<P.TodoAssistActionResult[]> {
+    const additions = actions.flatMap((action) => (action.kind === "add" ? action.items : []));
+    if (
+      !actions.length ||
+      actions.length > assistLimits.actions ||
+      additions.length > assistLimits.items ||
+      additions.some((item) => item.TeamID !== teamId) ||
+      actions.some((action) => action.kind === "add" && !action.items.length)
+    )
+      return [];
+    const categoryIds = [
+      ...new Set(
+        actions
+          .flatMap((action) =>
+            action.kind === "add"
+              ? action.items.map((item) => item.CategoryID)
+              : action.categoryId !== undefined
+                ? [action.categoryId]
+                : [],
+          )
+          .filter((id) => id !== null),
+      ),
+    ];
+    // Every statement uses the same preconditions. Neither categories nor access are
+    // changed by this batch, so an invalid later category cannot leave an earlier write.
+    const allowed = and(
+      this.teamAccess(teamId),
+      sql`NOT EXISTS (
+      SELECT 1 FROM json_each(${JSON.stringify(categoryIds)}) AS requested
+      WHERE NOT EXISTS (SELECT 1 FROM ${teams}, json_each(${teams.todo_categories}) AS category
+        WHERE ${teams.id}=${teamId} AND json_extract(category.value, '$.id')=requested.value)
+    )`,
+    );
+    const queries = actions
+      .map((action) => {
+        if (action.kind === "add")
+          return [
+            this.db
+              .update(todoItems)
+              .set({ sort_key: sql`${todoItems.sort_key}+${action.items.length * 100}` })
+              .where(and(eq(todoItems.team_id, teamId), allowed)),
+            this.db
+              .insert(todoItems)
+              .select(sql`SELECT
+          json_extract(value,'$.ID'), ${teamId}, json_extract(value,'$.Name'),
+          json_extract(value,'$.Notes'), json_extract(value,'$.CategoryID'),
+          (CAST(key AS INTEGER)+1)*100, json_extract(value,'$.CreatedAt'), json_extract(value,'$.UpdatedAt')
+          FROM json_each(${JSON.stringify(action.items)}) WHERE ${allowed}`)
+              .returning(todoFields),
+          ];
+        if (action.kind === "remove")
+          return [
+            this.db
+              .delete(todoItems)
+              .where(
+                and(
+                  eq(todoItems.team_id, teamId),
+                  allowed,
+                  sql`${todoItems.name} IN (SELECT value FROM json_each(${JSON.stringify(action.names)}))`,
+                  action.categoryId === undefined
+                    ? undefined
+                    : action.categoryId === null
+                      ? isNull(todoItems.category_id)
+                      : eq(todoItems.category_id, action.categoryId),
+                ),
+              )
+              .returning(todoFields),
+          ];
+        return [
+          this.db
+            .select(todoFields)
+            .from(todoItems)
+            .where(and(eq(todoItems.team_id, teamId), allowed))
+            .orderBy(todoItems.sort_key, todoItems.created_at, todoItems.id),
+        ];
+      })
+      .flat();
+    const [first, ...rest] = queries;
+    if (!first) return [];
+    const results = await this.db.batch([first, ...rest]);
+    let index = 0;
+    return actions.map((action): P.TodoAssistActionResult => {
+      if (action.kind === "add") index++; // The sort shift has no returned rows.
+      const rows = results[index++];
+      if (!Array.isArray(rows))
+        throw new AppError(
+          503,
+          "invalid_batch_result",
+          "結果を確認できません。ToDo一覧を確認してください。",
+        );
+      if (action.kind === "remove") return { kind: "remove", count: rows.length };
+      return {
+        kind: action.kind,
+        items: action.kind === "add" ? rows.sort((a, b) => a.SortKey - b.SortKey) : rows,
+      };
+    });
+  }
   async GetTodoItemByID(id: string): Promise<P.TodoItem> {
     const rows = await this.db
       .select(todoFields)
