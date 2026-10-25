@@ -6,6 +6,7 @@ export interface AssistAi {
     transcript: string,
     pendingDraft: AssistDraft | undefined,
     signal: AbortSignal,
+    categoryNames: readonly string[],
   ): Promise<unknown>;
 }
 
