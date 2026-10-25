@@ -2,20 +2,35 @@ import {
   assistErrorSchema,
   assistRequestSchema,
   assistResultSchema,
+  assistAudioRequestSchema,
+  assistTranscriptionSchema,
+  type AssistAudioRequest,
   type AssistRequest,
 } from "../../../contracts/assist";
 import { teamRequestSignal } from "../../../lib/api/serverClient";
 import type { ApiRequestError } from "../../../lib/api/api-client-state";
 
 export async function sendAssistTurn(input: AssistRequest, signal: AbortSignal) {
+  return assistResultSchema.parse(
+    await postAssist("turn", assistRequestSchema.parse(input), signal),
+  );
+}
+
+export async function transcribeAssistAudio(input: AssistAudioRequest, signal: AbortSignal) {
+  return assistTranscriptionSchema.parse(
+    await postAssist("transcribe", assistAudioRequestSchema.parse(input), signal),
+  );
+}
+
+async function postAssist(stage: "turn" | "transcribe", input: unknown, signal: AbortSignal) {
   const combined = AbortSignal.any([signal, teamRequestSignal(), AbortSignal.timeout(35_000)]);
   combined.throwIfAborted();
-  const response = await fetch("/api/assist/turn", {
+  const response = await fetch(`/api/assist/${stage}`, {
     method: "POST",
     credentials: "same-origin",
     signal: combined,
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(assistRequestSchema.parse(input)),
+    body: JSON.stringify(input),
   });
   const body: unknown = await response.json();
   combined.throwIfAborted();
@@ -30,5 +45,5 @@ export async function sendAssistTurn(input: AssistRequest, signal: AbortSignal) 
         : "結果を確認できません。ToDo一覧を確認してください。",
     } satisfies ApiRequestError;
   }
-  return assistResultSchema.parse(body);
+  return body;
 }
