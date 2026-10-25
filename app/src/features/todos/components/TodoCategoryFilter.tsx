@@ -2,11 +2,7 @@ import { useEffect, useRef } from "react";
 
 import type { TodoCategoriesQuery } from "../hooks/useTodoCategories";
 import { TodoCategoryQueryStatus } from "./TodoCategoryQueryStatus";
-
-export type TodoCategorySelection =
-  | { kind: "all" }
-  | { kind: "unclassified" }
-  | { kind: "category"; id: string };
+import type { TodoCategorySelection } from "../model/defaultTodoCategory";
 
 export function TodoCategoryFilter({
   categoriesQuery,
