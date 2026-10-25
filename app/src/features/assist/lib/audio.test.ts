@@ -28,7 +28,7 @@ describe("voice prototype", () => {
     for (let i = 0; i < 21; i++) detector.push(new Float32Array(16000));
     expect(detector.finish()).toBeNull();
     const long = new SpeechDetector(16000);
-    for (let i = 0; i < 14; i++)
+    for (let i = 0; i < 29; i++)
       expect(long.push(new Float32Array(16000).fill(0.2))).toBe("recording");
     expect(long.push(new Float32Array(16000).fill(0.2))).toBe("too_long");
   });
