@@ -24,6 +24,7 @@
 - 境界: `make architecture-check`
 - server/DB: `cd app && bun run test:server --run`（fixtureがD1を自動作成・破棄）
 - 全体: `cd app && bun run test:local`
+- PRの変更範囲に応じた検証: `cd app && bun run test:ci`（`KAJI_CI_BASE` にPR baseのcommit SHAを指定。未指定・取得失敗は全体検証）
 
 ## ローカル一括検証
 
@@ -33,7 +34,13 @@
 
 Alchemyのbootstrap/plan/deployは `--help` でCLI起動を確認し、アプリのbuildだけでは検出できない実行時peer依存の欠落・バージョンの不整合を検出する。`ALCHEMY_HOME` は一時ディレクトリへ向け、実資格情報の読み込みやクラウドへの配備を行わない。Effectとplatform-bun/platform-node、およびoverrideしたplatform-node-sharedはAlchemyのpeer要件を満たす同じバージョンで更新する。依存更新時も監査の除外を追加せず `bun audit --audit-level moderate` を実行し、配備ツール更新の本番確認は [Issue #153](https://github.com/niiharamegumu/kaji-challenge/issues/153) で追跡する。
 
-PRのCIは `test:local` で、Cloudflare公式pluginによる `vp build` と `vp preview` を検証する。build時は実資格情報だけでなくテスト用 `.dev.vars` も用意せず、CD同様に秘密値なしでSPA shellを生成する。build後に入口・assetsディレクトリ・PWAのshell登録を確認し、テスト用認証設定を追加してD1/E2Eを行う。Alchemyの内部APIや別プラグインによる代替buildは使用しない。本番はAlchemyの公開 `Worker` APIでこの形式の生成物を再bundleせず配備する。本番binding・権限・公開ドメイン・リソース更新はCDで別途確認する。
+PRのCIは `test:ci` で、format・build・型・lint・境界・UI全件・server/DB/認証全件を毎回検証する。ブラウザーはdesktop/mobileのログイン入口・主要画面遷移・ToDo保存を `@smoke` として毎回実行し、変更した機能のタグを追加する。認証・共通UI・共有処理・DB・E2E本体の変更はブラウザー全件、依存関係・build/CI設定・インフラ・検証スクリプトの変更はAlchemy CLIと開発サーバーを含む全件を実行する。開発テストの変更でも開発サーバー検証を実行する。それ以外の通常の機能変更ではAlchemy CLIと開発サーバー検証を省略する。
+
+選択の正本は `app/scripts/verification-plan.mjs` とE2Eのタグ。PR baseからHEADまでの差分を使い、renameは移動前後のパスを判定する。未分類のパスや新機能、差分取得失敗は全件に戻す。選択ロジックのNodeテストも毎回実行し、選択理由・対象タグ・省略項目を `app/test-results/local-verification.json` に残す。省略は `not_selected` と記録し、成功と区別する。`test:local` とActionsの `workflow_dispatch` は常に全件を実行する。
+
+必須ジョブ名 `cloudflare-quality` は維持し、workflowのパスフィルターは使わない。同じPRの古いCIは新しい実行でキャンセルし、ジョブ上限は20分とする。`setup-bun` はCI/CDとも `no-cache: true` としてBun実行ファイルのキャッシュ保存を行わない。依存インストールは従来どおりlockfile固定で行い、本番配備の実行中キャンセルは無効のままとする。
+
+Cloudflare公式pluginによる `vp build` と `vp preview` を使用する。build時は実資格情報だけでなくテスト用 `.dev.vars` も用意せず、CD同様に秘密値なしでSPA shellを生成する。build後に入口・assetsディレクトリ・PWAのshell登録を確認し、テスト用認証設定を追加してD1/E2Eを行う。Alchemyの内部APIや別プラグインによる代替buildは使用しない。本番はAlchemyの公開 `Worker` APIでこの形式の生成物を再bundleせず配備する。本番binding・権限・公開ドメイン・リソース更新はCDで別途確認する。
 
 DB統合テストのfixtureはWranglerの `getPlatformProxy` で実際のD1 bindingを起動し、初期SQLを適用する。DB制約によるbatch全体のrollback、同時完了の回数上下限、同時初期登録、チーム移動、締めの冪等性を確認する。D1に未対応の対話的transactionや、DBをmockしたテストで代替しない。
 

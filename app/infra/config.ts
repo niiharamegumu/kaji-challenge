@@ -53,6 +53,7 @@ export function deploymentResources(input: unknown) {
     assist: {
       gateway: {
         id: "kaji-voice",
+        authentication: true,
         collectLogs: false,
         cacheTtl: null,
         rateLimitingInterval: 60,
@@ -60,9 +61,10 @@ export function deploymentResources(input: unknown) {
         rateLimitingTechnique: "sliding" as const,
         spendLimits: {
           enabled: true,
+          // Per-gateway cost limits use USD; Alchemy forwards limit without conversion.
           rules: [
-            { limit: 100, limitType: "cost" as const, window: "1 day" as const },
-            { limit: 500, limitType: "cost" as const, window: "30 days" as const },
+            { limit: 1, limitType: "cost" as const, window: "1 day" as const },
+            { limit: 5, limitType: "cost" as const, window: "30 days" as const },
           ],
         },
       },

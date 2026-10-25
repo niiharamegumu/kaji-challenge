@@ -25,6 +25,7 @@
     "test:dev": "playwright test --config playwright.dev.config.ts",
     "diagnose:react": "react-doctor .",
     "test:local": "bun run security:runtime && node scripts/verify-local.mjs",
+    "test:ci": "bun run security:runtime && node scripts/verify-local.mjs --ci",
     "infra:plan": "bun run security:runtime && alchemy plan",
     "infra:bootstrap": "bun run security:runtime && alchemy provider cloudflare bootstrap",
     "db:migrate": "wrangler d1 migrations apply DB --local",

@@ -1,4 +1,4 @@
-// `test:local` とPRのCIから実行し、使い捨て環境でアプリ全体を検証する。
+// Full local verification; --ci narrows optional checks using the PR diff.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import {
@@ -14,8 +14,23 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
+import {
+  browserArguments,
+  changedPaths,
+  fullVerificationPlan,
+  verificationPlan,
+} from "./verification-plan.mjs";
 
 const source = new URL("../", import.meta.url).pathname;
+const args = process.argv.slice(2);
+if (args.some((arg) => arg !== "--ci") || args.length > 1)
+  throw new Error("Usage: verify-local.mjs [--ci]");
+const mode = args.includes("--ci") ? "ci" : "full";
+const plan =
+  mode === "ci"
+    ? verificationPlan(changedPaths(process.env.KAJI_CI_BASE, source))
+    : fullVerificationPlan();
+console.info("Verification selection:", JSON.stringify({ mode, ...plan }));
 const temp = await mkdtemp(join(tmpdir(), "kaji-local-check-"));
 const appDirectory = join(temp, "app");
 const results = [];
@@ -62,6 +77,10 @@ async function run(name, command, args) {
     results.push({ name, status, durationMs: Date.now() - start });
   }
 }
+function notSelected(name, reason) {
+  console.info(`Not selected: ${name} (${reason})`);
+  results.push({ name, status: "not_selected", reason, durationMs: 0 });
+}
 try {
   await cp(source, appDirectory, {
     recursive: true,
@@ -81,10 +100,16 @@ try {
     "scripts/check-oauth-provider-patch.mjs",
   ]);
   await run("Formatting", "node_modules/.bin/vp", ["fmt", "--check"]);
+  await run("Verification selection tests", process.execPath, [
+    "--test",
+    "scripts/verification-plan.test.mjs",
+  ]);
   // Exercise CLI-only peer dependencies without credentials or cloud mutations.
-  for (const args of [["provider", "cloudflare", "bootstrap"], ["plan"], ["deploy"]]) {
-    await run(`Alchemy ${args.at(-1)} CLI`, "node_modules/.bin/alchemy", [...args, "--help"]);
-  }
+  if (plan.alchemy) {
+    for (const args of [["provider", "cloudflare", "bootstrap"], ["plan"], ["deploy"]]) {
+      await run(`Alchemy ${args.at(-1)} CLI`, "node_modules/.bin/alchemy", [...args, "--help"]);
+    }
+  } else notSelected("Alchemy CLI", "No runtime, dependency or infrastructure tooling changes");
   for (const name of ["Initial D1 migration", "D1 migration replay"]) {
     await run(name, "node_modules/.bin/wrangler", [
       "d1",
@@ -161,13 +186,23 @@ try {
     "vitest.server.config.ts",
     "--run",
   ]);
-  await run("Browser, PWA and interaction tests", "node_modules/.bin/playwright", ["test"]);
-  await run("Development startup and reload stability", "node_modules/.bin/playwright", [
-    "test",
-    "--config",
-    "playwright.dev.config.ts",
-  ]);
-  console.info("Local verification passed.");
+  await run(
+    "Browser, PWA and interaction tests",
+    "node_modules/.bin/playwright",
+    browserArguments(plan),
+  );
+  if (plan.development) {
+    await run("Development startup and reload stability", "node_modules/.bin/playwright", [
+      "test",
+      "--config",
+      "playwright.dev.config.ts",
+    ]);
+  } else
+    notSelected(
+      "Development startup and reload stability",
+      "No development runtime or tooling changes",
+    );
+  console.info("Selected verification passed.");
 } finally {
   const output = join(source, "test-results");
   await mkdir(output, { recursive: true });
@@ -176,7 +211,7 @@ try {
   });
   await writeFile(
     join(output, "local-verification.json"),
-    JSON.stringify({ finishedAt: new Date().toISOString(), results }, null, 2) + "\n",
+    JSON.stringify({ finishedAt: new Date().toISOString(), mode, plan, results }, null, 2) + "\n",
   );
   await rm(temp, { recursive: true, force: true });
 }

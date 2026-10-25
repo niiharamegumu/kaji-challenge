@@ -22,9 +22,11 @@
 - `features/assist` がマイク・VAD・読み上げ・直近の会話・ダイアログを管理する。RootLayoutは本人/所属をkeyにして状態を破棄する。native dialogで背面操作とフォーカス移動を制限する。
 - AudioWorkletで取得した実sampleRateのPCMをmono/16kHz/16bit WAVに変換する。最大15秒、約1秒の末尾無音、発話前20秒の無音で停止する。短いクリック音とデジタル無音は送らず、15秒で切れた発話は操作に使わない。生活音向けの閾値調整は実機評価が必要。
 - 処理/読み上げ中はtrackを無効化して音声を捨て、返事の350ms後に聞き取りを再開する。停止時はtracks、AudioContext、タイマー、HTTP、読み上げを破棄する。遅いマイク許可や応答も世代番号で無効化する。
+- 起動時のマイク許可待ちは20秒、AudioContext再開とAudioWorklet準備は1回5秒で打ち切る。音声処理の準備に失敗した場合は、取得済みの無効化したマイクを使い、AudioContextを1回だけ作り直す。許可拒否・許可待ちの期限超過ではマイクを再要求しない。復旧できなければ録音を解放し、閉じてもう一度開く案内を表示する。終了後に許可・module読み込みが完了しても録音を再開しない。
+- 読み上げ中のAudioContext中断は次の聞き取り前に再開・復旧を試み、完了後にだけ「話しかけてください」と表示する。聞き取り中の中断、画面非表示・ページ離脱では停止する。iOSのホーム画面PWAがマイク許可を保持するかどうかはOS/ブラウザー側の挙動であり、この復旧で永続許可を保証しない。
 - `SpeechSynthesis` は `localService` がtrueの日本語音声だけを選ぶ。`voiceschanged` で候補の遅延読み込みに対応する。音声がない/再生に失敗した場合は録音を停止し、短い理由を表示する。保存済みの結果は画面に残す。再開・手動送信・再生・ミュートの操作欄は設けない。遠隔音声に黙って切り替えない。
 - `POST /api/assist/turn` はstrict Zod契約、same-origin、Better Auth、DB上のセッション・所属、1 MiB本文上限、実WAV検証、本人ごとの頻度制限を通す。AI待機前に所属を固定し、各待機後と業務操作前後にも再検査する。
-- `AssistAi` portの実装だけがWorkers AIに依存する。Whisperで日本語文字起こし、Granite 4.0 H Microで限定intentのJSONを取得（公開料金の最安モデル）。未知キー・任意ID・対象外操作・途切れたJSONは拒否する。ToDo一覧をLLMへ送らない。
+- `AssistAi` portの実装だけがWorkers AIに依存する。Whisper large v3 turboへbase64 WAVと`language:"ja"`・`task:"transcribe"`を渡して日本語文字起こし、Gemma 4 26B A4Bで限定intentのJSONを取得する。Gemmaはthinkingを無効化し、名前付きJSON schemaで出力を指定する。未知キー・任意ID・対象外操作・途切れたJSONは拒否する。ToDo一覧をLLMへ送らない。
 - 追加は認可済みRepositoryのatomic複数保存、一覧は既存 `executeOperation` を使う。全項目を検証してから保存し、一部だけ追加しない。JSON出力の安全上限は10項目。返事は保存/取得結果から定型生成する。migration `0010_assist_usage.sql` は利用量カウンターのみを追加する。
 - 未確定draftは最大2分、名前/カテゴリー/不足情報/期限のみ。本人や権限の根拠にせず、毎回再検証する。会話はパネル内メモリーのみで、閉じると破棄する。
 - 更新は自動再送しない。中断や応答不明では既に保存されている可能性を表示して一覧を再取得する。処理中に閉じた場合は通常画面の通知で保存済みの可能性を伝える。成功時は既存ToDo queryとRealtimeで反映する。
@@ -40,12 +42,15 @@
 | `AI` | 既存アプリWorkerのみ。Viteのdev/build/previewではbindingを除去し、remoteBindingsもfalse |
 | `ASSIST_LIMITER` | 本人ごと12ターン/60秒。聞き返しも数える。分散環境での厳密な全世界カウンターではない |
 | Gateway | ログなし、キャッシュなし、24推論/60秒。1ターン最大2推論 |
-| Spend limits | 100 cents/1日・500 cents/30日。厳密な請求上限ではない |
+| Gateway認証 | Alchemyで `authentication:true` を明示。未認証HTTPを拒否し、同一アカウントのWorker bindingは自動認証する。特定Workerだけのallowlistではなく、有効なAPI token経由も許可される |
+| Spend limits | $1/1日・$5/30日。`limit` は米ドル単位で `1` / `5` を指定する。厳密な請求上限ではない |
 | D1利用上限 | アプリ全体12発話/60秒、50発話/UTC日、試用累計500発話。AIより前に条件付きUPDATEで予約。失敗・中断も消費、日付変更や再配備で累計を戻さない |
-| 推論上限 | 音声15秒、解釈入力JSON 12,288 UTF-8 bytes、出力2,048 tokens。高額モデルへの切替なし |
+| 推論上限 | 音声15秒、解釈入力JSON 12,288 UTF-8 bytes、出力2,048 tokens。別モデルへの自動切替なし |
 | 会話時間 | 起動から3分で終了。再開には本人のタップが必要 |
 
 本番はGitHub Environmentの `ASSIST_ENABLED` をCDが読む。Alchemyは有効時に専用Gatewayを宣言し、無効化時はretainして既存資源を削除しない。モデル名・Gateway・RateLimitはMCP Workerに追加しない。配備はこの実装だけでは行わない。
+
+Gateway認証の設定変更は次の有効状態でのAlchemy配備で反映する。手動でスイッチだけ変更しても、IaCが未変更なら次回配備で戻るため、`authentication:true` を正本とする。AI Binding経由では追加のGateway tokenやブラウザー側の秘密情報は不要（[Cloudflare公式](https://developers.cloudflare.com/ai-gateway/configuration/authentication/)）。本番の反映確認と実推論の疎通は別の検証であり、ローカルテスト成功だけで完了扱いにしない。
 
 ローカルのWrangler宣言は生成型のためにAIを含むが、通常の起動は `bun run dev` / `bun run preview` を使い、ViteでAIを除去する。`wrangler dev` の直接実行はリモートAIへ接続し得るので通常検証に使わない。ローカル実AI評価も先に費用を連絡し、Viteの除去設定とフラグを明示的に変更する必要がある。その設定をCIへ持ち込まない。
 
@@ -57,17 +62,18 @@ Gateway資源作成・本番権限・ASR/LLM実応答shape・認識精度・速�
 
 `bun run test:local` は使い捨てD1でbuild/型/lint/境界/UI/HTTP/認証/DB/ブラウザーを検証する。音声テストは以下の分担とし、fixture成功を実AI・実機成功とは扱わない。
 
-- `audio.test.ts` / `capture.test.ts`: 16kHz変換、語頭保持、無音・上限、閉じた後のマイク許可。
+- `audio.test.ts` / `capture.test.ts`: 16kHz変換、語頭保持、無音・上限、許可/音声準備のタイムアウトと1回の復旧、閉じた後のマイク許可・module完了の破棄、読み上げ後の録音再開。
 - `VoiceSession.test.ts`: 一度の送信、返事中の入力抑止、連続会話、保留応答・取消・再生失敗、draft。
 - `assist.test.ts`: 実D1の追加/一覧/聞き返し/無変更、strict契約、所属固定・失効・中断。
 - `assist-budget.test.ts`: 同時予約・60秒窓・UTC日替わり・累計上限・欠損時停止。
-- `assist-ai.test.ts`: 最安モデル・入力/出力形式・再試行なし・異常応答の拒否。
+- `assist-ai.test.ts`: 指定モデル・Turboのbase64/日本語指定・GemmaのJSON schema/thinking無効化・入力/出力形式・再試行なし・異常応答の拒否。
 - `assist-transport.test.ts`: HTTP境界・頻度制限・Gatewayオプション・実D1保存・通知・内容を含まないログ。
 - Playwright: 明示的な端末API/HTTP fixtureで連続会話、パネルとナビ、focus、フォーム競合、無効時の実HTTP入口を確認。ChromiumのiPhone画面サイズであり、Safari実機ではない。
 
 最初の対象端末は **iPhone Safari／ホーム画面アプリ**。HTTPSと有効化済みの検証環境で、ユーザー本人がマイクを許可して行う。
 
 1. 初回許可・拒否・許可し直し、日本語ローカル音声の有無、遅延読み込みを確認。
+   許可ダイアログを20秒以上保留し、遅れて許可しても録音し続けないこと、閉じて再度開くと起動できることを確認する。初期化や読み上げによる中断後も、準備のまま放置されず復旧または終了案内へ進むことを確認する。
 2. 「買い物に牛乳を追加して」→短い返事→「買い物リストを教えて」をSafari/PWAそれぞれで複数往復。件数とDBの実結果を照合。
 3. カテゴリーの聞き返し、複数品の全件追加、完了依頼・無音・15秒超で意図しない追加がないことを確認。
 4. 返事の回り込み、換気扇など生活音、画面ロック/別アプリ/タブ移動・電話等の中断から勝手に再開しないことを確認。
@@ -76,11 +82,11 @@ Gateway資源作成・本番権限・ASR/LLM実応答shape・認識精度・速�
 
 実機で非同期の自動読み上げが成立しなければ、文字表示だけで完了とせず、音声方式・起動動作を再調整する。
 
-## 料金調査（2026-10-23）
+## 料金調査（2026-10-25）
 
 - [Workers AI料金](https://developers.cloudflare.com/workers-ai/platform/pricing/): 10,000 neurons/日が無料。Paidは超過分$0.011/1,000 neurons。既存アカウントの他用途と共有する。
-- [Whisper](https://developers.cloudflare.com/workers-ai/models/whisper/): $0.000453/音声分。
-- [Granite 4.0 H Micro](https://developers.cloudflare.com/workers-ai/models/granite-4.0-h-micro/): 入力$0.017、出力$0.112/各100万tokens。パラメータ数最小ではなく費用最安を優先。
-- 音声15秒・入力12,288 tokens・出力2,048 tokensと仮定して、約$0.00055/発話、試用500発話で約$0.28。無料枠控除前の推論費の概算であり、入力byte上限はtoken計測ではない。内部chat template・課金丸め・Workers/D1等は別。
+- [Whisper large v3 turbo](https://developers.cloudflare.com/workers-ai/models/whisper-large-v3-turbo/): $0.000513/音声分。
+- [Gemma 4 26B A4B](https://developers.cloudflare.com/workers-ai/models/gemma-4-26b-a4b-it/): 入力$0.10、出力$0.30/各100万tokens。ユーザー指定により採用。
+- 音声15秒・入力12,288 tokens・出力2,048 tokensと仮定して、約$0.0020/発話、試用500発話で約$0.99。無料枠控除前の推論費の概算であり、入力byte上限はtoken計測ではない。内部chat template・課金丸め・Workers/D1等は別。
 - [Gateway金額上限](https://developers.cloudflare.com/ai-gateway/features/spend-limits/)は事後集計・結果整合。[費用集計](https://developers.cloudflare.com/ai-gateway/observability/costs/)はtoken情報を返すendpointが対象。アカウント全体の請求を保証する上限ではない。
 - 上限に達したらToDo画面を案内し、自動再試行しない。試用累計を増やす場合は料金・利用実績を確認して明示的に変更する。

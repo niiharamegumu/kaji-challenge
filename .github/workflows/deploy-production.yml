@@ -48,6 +48,7 @@ jobs:
         if: steps.current.outputs.deploy == 'true'
         with:
           bun-version: 1.4.4
+          no-cache: true
       - name: Verify runtime security
         if: steps.current.outputs.deploy == 'true'
         run: bun run security:runtime
