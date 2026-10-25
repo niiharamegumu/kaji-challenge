@@ -80,7 +80,18 @@ export async function executeAssistTurn(
     input.pendingDraft.expiresAt <= now + 120_000
       ? input.pendingDraft
       : undefined;
-  const parsed = assistIntentSchema.safeParse(await ai.interpret(transcript, draft, signal));
+  const categories = (await scoped.ListTodoCategories(member.TeamID)).filter(
+    (category) => category !== null,
+  );
+  await check();
+  const parsed = assistIntentSchema.safeParse(
+    await ai.interpret(
+      transcript,
+      draft,
+      signal,
+      categories.map((category) => category.name),
+    ),
+  );
   await check();
   if (!parsed.success)
     throw new AppError(
@@ -101,16 +112,12 @@ export async function executeAssistTurn(
       transcript,
       replyText:
         intent.reason === "too_many"
-          ? `一度に追加できるのは${assistLimits.items}件までです。まだ追加していません。`
+          ? `一度に指定できるToDoは${assistLimits.items}件までです。まだ操作していません。`
           : intent.reason === "operation"
-            ? "音声ではToDoの追加と確認ができます。その他の操作はToDo画面でお願いします。"
-            : "ToDoの追加か確認を、短く話してください。",
+            ? "ToDoの追加・検索・完了・削除ができます。編集などはToDo画面でお願いします。"
+            : "ToDoの追加・検索・完了・削除を、名前と一緒に話してください。",
     });
 
-  const categories = (await scoped.ListTodoCategories(member.TeamID)).filter(
-    (category) => category !== null,
-  );
-  await check();
   const clarify = (items: AssistDraft["items"], missing: "name" | "category") =>
     finish({
       kind: "clarify",
@@ -135,7 +142,8 @@ export async function executeAssistTurn(
     return finish({
       kind: "unsupported",
       transcript,
-      replyText: "たとえば「買い物に牛乳を追加して」と話してください。",
+      replyText:
+        "たとえば「牛乳を追加して」「買い物の牛乳を探して」「牛乳を買った」と話してください。",
     });
   }
   const resolveCategory = (requested: string | null) => {
@@ -149,7 +157,7 @@ export async function executeAssistTurn(
       unknown: requested !== null && !unclassified && matches.length !== 1,
     };
   };
-  if (intent.intent === "list_todos") {
+  if (intent.intent !== "add_todo") {
     const requested = intent.categoryName;
     const { category, unknown } = resolveCategory(requested);
     if (unknown)
@@ -165,12 +173,50 @@ export async function executeAssistTurn(
       { userId, now: new Date(), vapidPublicKey: "" },
     );
     const all = responseSchemas.listTodoItems.parse(result.data).items;
-    const items =
+    const categoryItems =
       requested === null ? all : all.filter((item) => item.categoryId === (category?.id ?? null));
+    if (intent.intent !== "list_todos") {
+      const requestedNames = new Set(intent.names.map(normalize));
+      // Destructive actions use full names only. Partial matches are search-only.
+      const matchingNames = [
+        ...new Set(
+          categoryItems
+            .filter((item) => requestedNames.has(normalize(item.name)))
+            .map((item) => item.name),
+        ),
+      ];
+      await check();
+      const count = await scoped.DeleteTodoItemsByNames(
+        member.TeamID,
+        matchingNames,
+        requested === null ? undefined : (category?.id ?? null),
+      );
+      const action = intent.intent === "complete_todos" ? "complete" : "delete";
+      return finish(
+        {
+          kind: "removed",
+          transcript,
+          action,
+          count,
+          replyText:
+            count === 0
+              ? "一致するToDoはありませんでした。"
+              : `${count}件${action === "complete" ? "完了" : "削除"}しました。同じ名前のToDoをすべて対象にしました。`,
+        },
+        count > 0 ? [member.TeamID] : [],
+      );
+    }
+    const nameQuery = intent.nameQuery ? normalize(intent.nameQuery) : null;
+    const items =
+      nameQuery === null
+        ? categoryItems
+        : categoryItems.filter((item) => normalize(item.name).includes(nameQuery));
     const prefix = requested ? short(category?.name ?? "未分類", 18) : "ToDo";
     const replyText =
       items.length === 0
-        ? `${prefix}は今ありません。`
+        ? nameQuery
+          ? "一致するToDoはありませんでした。"
+          : `${prefix}は今ありません。`
         : `${prefix}は${items.length}件です。${items
             .slice(0, 2)
             .map((item) => short(item.name, 22))
