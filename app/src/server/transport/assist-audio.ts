@@ -34,9 +34,18 @@ export function validateAssistAudio(base64: string) {
     (bytes.length - 44) % 2 !== 0
   )
     throw invalid();
-  // Digital silence is never sent for inference, including a crafted client request.
-  let energy = 0;
-  for (let i = 44; i < bytes.length; i += 2) energy += (view.getInt16(i, true) / 32768) ** 2;
-  if (Math.sqrt(energy / ((bytes.length - 44) / 2)) < 0.002)
-    throw new AppError(422, "silent_audio", "声を確認できませんでした。もう一度話してください。");
+  // Evaluate 20 ms frames: long pauses must not dilute a short, quiet utterance.
+  // Require 180 ms of signal so silence and isolated clicks cannot trigger inference.
+  let signalSamples = 0;
+  const frameBytes = (assistAudio.sampleRate / 50) * 2;
+  const threshold = (0.002 * 32768) ** 2;
+  for (let offset = 44; offset < bytes.length; offset += frameBytes) {
+    const end = Math.min(offset + frameBytes, bytes.length);
+    let energy = 0;
+    for (let i = offset; i < end; i += 2) energy += view.getInt16(i, true) ** 2;
+    const count = (end - offset) / 2;
+    if (energy >= threshold * count) signalSamples += count;
+    if (signalSamples >= assistAudio.sampleRate * 0.18) return;
+  }
+  throw new AppError(422, "silent_audio", "声を確認できませんでした。もう一度話してください。");
 }
