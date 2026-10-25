@@ -1,12 +1,18 @@
 import { z } from "zod";
 import { responseSchemas } from "./operations";
 
-export const assistAudio = { sampleRate: 16_000, maxSeconds: 120, maxBase64: 5_120_060 } as const;
+export const assistAudio = {
+  sampleRate: 16_000,
+  maxSeconds: 120,
+  maxBytes: 3_840_044,
+  maxBase64: 5_120_060,
+} as const;
 export const assistLimits = {
   items: 50,
   actions: 10,
   transcript: 2000,
   audioBodyBytes: 6 * 1024 * 1024,
+  audioUploadBodyBytes: 4 * 1024 * 1024,
 } as const;
 const name = z.string().trim().min(1).max(100);
 const categoryName = z.string().trim().min(1).max(50);
@@ -65,6 +71,14 @@ export const assistDraftSchema = z.strictObject({
   expiresAt: z.number().int().positive(),
   actions: mixedActions.optional(),
 });
+export const assistAudioUploadSchema = z.strictObject({
+  audio: z
+    .instanceof(Blob)
+    .refine((audio) => audio.type === "audio/wav")
+    .refine((audio) => audio.size >= 44 + 3200 && audio.size <= assistAudio.maxBytes),
+  expectedTeamId: z.uuid(),
+});
+// Retain the JSON contract for PWA clients that have not loaded the new bundle yet.
 export const assistAudioRequestSchema = z.strictObject({
   audioBase64: z
     .string()
@@ -132,4 +146,5 @@ export type AssistOperationResult = z.infer<typeof assistOperationResultSchema>;
 export type AssistIntent = z.infer<typeof assistIntentSchema>;
 export type AssistRequest = z.infer<typeof assistRequestSchema>;
 export type AssistAudioRequest = z.infer<typeof assistAudioRequestSchema>;
+export type AssistAudioUpload = z.infer<typeof assistAudioUploadSchema>;
 export type AssistResult = z.infer<typeof assistResultSchema>;
