@@ -47,6 +47,8 @@
 
 本番はGitHub Environmentの `ASSIST_ENABLED` をCDが読む。Alchemyは有効時に専用Gatewayを宣言し、無効化時はretainして既存資源を削除しない。モデル名・Gateway・RateLimitはMCP Workerに追加しない。配備はこの実装だけでは行わない。
 
+音声機能の初回配備前に、配備用Cloudflare tokenへ **Account → AI Gateway → Edit**（API名は **AI Gateway Write**）を追加する。plan時の読み取りとdeploy時の作成・更新に必要で、Workers AdminやSecrets Store Editだけでは足りない。Writeは読み取りも許可するためReadの重複追加は不要。この権限はアカウント内の全Gatewayが対象となる。tokenの権限変更と本番のGateway作成はローカルfixtureでは検証できないため、更新後に最新mainのCDで確認する。手順は [README](../README.md#cloudflareへの配備) を参照する。
+
 ローカルのWrangler宣言は生成型のためにAIを含むが、通常の起動は `bun run dev` / `bun run preview` を使い、ViteでAIを除去する。`wrangler dev` の直接実行はリモートAIへ接続し得るので通常検証に使わない。ローカル実AI評価も先に費用を連絡し、Viteの除去設定とフラグを明示的に変更する必要がある。その設定をCIへ持ち込まない。
 
 AI Gatewayは `skipCache:true` / `collectLog:false` / `retries:{maxAttempts:1}` を毎回指定する。アプリログには音声・文字起こし・ToDo名・draft・Cookieを出さない。GatewayのSpend Limitsは結果整合性で、音声時間課金の集計も保証されない。D1カウンターは同時実行も直列に予約し、欠損やDB障害時はAIを呼ばない。

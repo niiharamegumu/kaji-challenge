@@ -146,6 +146,7 @@ Alchemyはビルド済みの `dist/server/index.js` と `dist/client` を、公�
 
 1. **Cloudflareを準備。** 対象アカウント、Activeなドメインのzone、API tokenを用意します。まずWorkers Freeで開始できます。
    - **アカウントの管理 → アカウント API トークン → トークンを作成 → 最初から作成**で、配備専用tokenを作ります。権限ポリシーは2つに分けます。アカウント全体にはWorkers Admin（初回Worker作成用）・D1 Edit・Secrets Store Edit、指定ドメインには公開先zoneのZone Read・Workers Routes Editを設定します。`Account Settings Read` はこの構成の必須権限として指定しません。対象ドメインを含むアカウントだけを使い、実アカウントの権限はbootstrapと初回deployで確認してください（[Workers権限](https://developers.cloudflare.com/workers/authorization/workers/)・[Secrets Store権限](https://developers.cloudflare.com/secrets-store/access-control/)）。
+   - `ASSIST_ENABLED=true` の配備では、同じアカウントポリシーに **AI Gateway Edit**（確認画面・APIでは **AI Gateway Write**）も追加します。Alchemyはplan中にGatewayを読み取り、deployで作成・更新します。Writeは[読み取りAPI](https://developers.cloudflare.com/api/resources/ai_gateway/methods/get/)にも使えるため、Readの重複追加は不要です。この権限は[アカウント全体が対象](https://developers.cloudflare.com/fundamentals/api/reference/permissions/#account-permissions)で、Gateway単体には限定できません。既存tokenでも音声機能の初回配備前に確認してください。
    - Alchemyの状態保存先はSQLite型Durable Objectを使用し、Freeで利用できます。FreeではWorkerのHTTP・CronともCPU時間10ms、D1クエリは1回の呼び出しにつき50件、Cronはアカウント全体で5本までです。このアプリは有効化時に5本使うため、他のCronがある場合やCPU・D1上限に達した場合はPaidへの変更を検討してください（[Workers制限](https://developers.cloudflare.com/workers/platform/limits/)・[D1制限](https://developers.cloudflare.com/d1/platform/limits/)）。
 2. **Google OAuthを準備。** 本番用のウェブアプリケーションクライアントを作成し、生成元 `https://<本番ホスト>`、redirect URI `https://<本番ホスト>/api/auth/callback/google` を登録します。同意画面の公開範囲も確認します。
 3. **本番の鍵を作成。** `BETTER_AUTH_SECRET` は `openssl rand -hex 32`、VAPID鍵は `app/` で `mise exec -- bun x --no-install web-push generate-vapid-keys` で生成します。安全に保管し、毎回生成し直しません。
@@ -171,6 +172,8 @@ Alchemyはビルド済みの `dist/server/index.js` と `dist/client` を、公�
 | Variable | `MCP_ENABLED` | 未設定は `false`。`true` のときだけMCP Workerを配備し、MCP/OAuthの受付を有効にする |
 
 `APP_RELEASE` の登録は不要です。Cloudflare tokenには、CDが状態保存先の資格情報を取得するためのSecrets Store Editも必要です。権限不足を解消するために全権限tokenへ置き換えるのではなく、失敗したAPIとscopeを確認します。
+
+bootstrapとbuildが成功しても、Gatewayの権限確認にはなりません。音声有効化後に `infra:plan` が `Unauthorized: Authentication error`（Cloudflare code 10000）で失敗した場合は、配備用tokenのAI Gateway Editを確認します。権限を更新した後は、同じtokenを保持したまま最新mainのCDを再実行できます。
 
 MCP追加配備前に、公開originのドメイン、新WorkerとOAuth用KVを作成できる配備権限、接続先ChatGPTのプラン・管理者設定、OAuth同意と検証用ToDoを確認します。`MCP_ORIGIN` の設定でKVを追加して既存Applicationに接続し、`MCP_ENABLED=true` でMCP Workerも追加します。MCP Workerは既存Applicationへの専用Service Bindingを使い、D1やGoogleの秘密値は持ちません。ToDoの完了は物理削除なので、書き込み確認には削除できる検証データを使います。
 
