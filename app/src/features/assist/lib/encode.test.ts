@@ -27,11 +27,12 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
-it("transfers each PCM buffer once and terminates after receiving base64", async () => {
+it("transfers each PCM buffer once and terminates after receiving a WAV Blob", async () => {
   const result = encodeAudio(audio, new AbortController().signal);
   expect(workers[0].postMessage).toHaveBeenCalledWith(audio, [chunk.buffer]);
-  workers[0].onmessage?.({ data: "UklGRg==" });
-  await expect(result).resolves.toBe("UklGRg==");
+  const blob = new Blob([new Uint8Array(3244)], { type: "audio/wav" });
+  workers[0].onmessage?.({ data: blob });
+  await expect(result).resolves.toBe(blob);
   expect(workers[0].terminate).toHaveBeenCalledOnce();
   expect(workers[0].onmessage).toBeNull();
   expect(vi.getTimerCount()).toBe(0);
@@ -45,7 +46,7 @@ it("does not start work after cancellation and terminates an active encoder on c
   await expect(encodeAudio(audio, controller.signal)).rejects.toMatchObject({ name: "AbortError" });
   expect(workers).toHaveLength(1);
 });
-it.each(["error", "messageerror", "invalid", "timeout", "transfer"])(
+it.each(["error", "messageerror", "invalid", "empty", "timeout", "transfer"])(
   "releases the worker on %s without a blocking fallback",
   async (reason) => {
     failTransfer = reason === "transfer";
@@ -54,6 +55,7 @@ it.each(["error", "messageerror", "invalid", "timeout", "transfer"])(
     if (reason === "error") workers[0].onerror?.();
     if (reason === "messageerror") workers[0].onmessageerror?.();
     if (reason === "invalid") workers[0].onmessage?.({ data: { text: "wrong type" } });
+    if (reason === "empty") workers[0].onmessage?.({ data: new Blob() });
     if (reason === "timeout") await vi.advanceTimersByTimeAsync(10_000);
     await rejected;
     expect(workers[0].terminate).toHaveBeenCalledOnce();
