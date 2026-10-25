@@ -42,7 +42,7 @@
 ## 実装と境界
 
 - `features/assist` がマイク・手動録音・直近の会話・ダイアログを管理する。RootLayoutは本人/所属をkeyにして状態を破棄する。native dialogで背面操作とフォーカス移動を制限する。
-- AudioWorkletで実sampleRateのPCMを取得し、専用の`audio-encode.worker.ts`でmono/16kHz/16bit WAVとbase64へ変換する。PCMのArrayBufferを転送してコピーを避け、Workerから音声を外部送信・保存しない。変換成功・エラー・10秒期限・画面終了ではterminateする。同期変換のfallbackは使わない。無音や間を含めて手動停止まで保持し、最大2分に制限する。短いクリック音とデジタル無音だけではASRを呼ばない。録音開始中は「準備中」と表示し、workletが最初の入力を処理したstarted応答を受けてから「録音中」に進む。開始応答は5秒で打ち切る。開始要求の重複では録音済みPCMをリセットしない。
+- AudioWorkletで実sampleRateのPCMを取得し、専用の`audio-encode.worker.ts`でmono/16kHz/16bit WAVのBlobへ変換する。PCMのArrayBufferを転送してコピーを避け、Workerから音声を外部送信・保存しない。変換成功・エラー・10秒期限・画面終了ではterminateする。同期変換のfallbackは使わない。無音や間を含めて手動停止まで保持し、最大2分に制限する。短いクリック音とデジタル無音だけではASRを呼ばない。録音開始中は「準備中」と表示し、workletが最初の入力を処理したstarted応答を受けてから「録音中」に進む。開始応答は5秒で打ち切る。開始要求の重複では録音済みPCMをリセットしない。
 - 停止時はworkletへfinishを送り、最後の1024sample未満のPCMとfinished応答を順に受け取ってからWAV化する。workletが取り込んだ総sample数と受信した総sample数を照合する。2分上限でWAV化の対象から外れるPCMも受信数には含める。不一致や1.5秒以内に応答しない場合はエラーとし、不完全な録音をASRや自動送信に渡さない。この照合はマイクの準備前の発話や端末側の入力欠落を検出するものではない。
 - マイク初期化中はlive trackを維持し、聞き取り開始前のPCMはworkletから送らない。停止時にtracks/AudioContextを解放し、文字起こし・文字確認・LLM実行中は保持しない。遅い許可・ASR応答・停止して送信の意図は世代番号で無効化する。ASR失敗時も元の入力は残す。
 - 起動時のマイク許可待ちは20秒、AudioContext再開とAudioWorklet準備は1回5秒で打ち切る。明示的な録音操作内でWorkletの静的module読み込みとマイク許可待ちを並行して開始し、許可後に同じmoduleの完了を待って接続する。読み込みが先に失敗しても未処理のPromise拒否にせず、取得済みのマイクを使ってAudioContextを1回だけ作り直す。許可拒否・許可待ちの期限超過ではマイクを再要求しない。復旧できなければ録音を解放し、閉じてもう一度開く案内を表示する。終了後に許可・module読み込みが完了しても録音を再開しない。
@@ -50,8 +50,9 @@
 - 録音開始はボタン操作に限定する。起動全体の30秒期限を設け、待ち続けず再録音または終了に進める。聞き取り中の中断、画面非表示・ページ離脱では停止する。マイク要求は明示的な録音開始につき1回で、復旧時は再要求しない。
 - マイク許可の保持はOS/ブラウザー管理であり、PWAの終了後も許可を保存することをアプリから強制できない。許可されたように見せるlocalStorageフラグや、閉じた後のマイク保持は使わない。毎回確認される場合は端末・ブラウザーのマイク設定を確認する。Safariとホーム画面PWAの権限状態はそれぞれ実機で確かめる（[getUserMediaの許可仕様](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia)）。
 - 返事は画面へ表示し、SpeechSynthesisや端末内の日本語音声の有無を入力・実行の条件にしない。VisualViewportの高さとoffsetに合わせ、キーボード表示時も入力欄と送信操作が隠れにくいレイアウトにする。実機のキーボード挙動は別途確認する。
-- `POST /api/assist/transcribe` は音声とexpectedTeamIdだけを受け、Whisperの文字起こしだけを返す。本文は6 MiB以下、実WAVの長さ・形式・無音を検証する。`POST /api/assist/turn` はユーザーが送信した文字とexpectedTeamId・任意のdraftだけを受け、Gemmaの解釈と認可済みToDo操作を実行する。こちらの本文上限は1 MiB。実行入口は音声だけの旧入力を拒否する。
+- `POST /api/assist/transcribe` は音声とexpectedTeamIdだけを受け、Whisperの文字起こしだけを返す。通常はFormDataの`audio`（audio/wavのBlob）と`expectedTeamId`を送り、本文の実バイト上限4 MiBを解析前に適用する。重複/未知field・不正MIMEを拒否し、実WAVの長さ・形式・無音を検証してからサーバーでbase64化する。未更新PWAのJSON/base64入力は既存の6 MiB上限と検証を維持する。`POST /api/assist/turn` はユーザーが送信した文字とexpectedTeamId・任意のdraftだけを受け、Gemmaの解釈と認可済みToDo操作を実行する。こちらの本文上限は1 MiB。実行入口は音声だけの旧入力を拒否する。
 - 両入口はstrict Zod契約、same-origin、Better Auth、DB上のセッション・所属、本人ごとの頻度制限を通す。AI待機前に所属を固定し、各待機後と業務操作前後にも再検査する。ASRも送信もそれぞれ予算を予約する。通常の停止・上限停止からはLLMやDB更新を呼ばず、「停止して送信」が明示された場合だけASR後に続けて実行する。
+- 端末→アプリAPIはBlobのバイナリ送信とし、端末でのbase64処理と約4/3の音声サイズ膨張を避ける。現行Turbo/Gateway経路へのbase64はサーバー側に集約する。[Cloudflare公式SDK](https://github.com/cloudflare/ai/blob/main/packages/workers-ai-provider/src/workersai-transcription-model.ts)も、Whisper TurboではUint8Array入力を内部でbase64へ変換してAI bindingへ渡している。
 - `AssistAi` portの実装だけがWorkers AIに依存する。Whisper large v3 turboへbase64 WAVと`language:"ja"`・`task:"transcribe"`を渡して日本語文字起こし、Gemma 4 26B A4Bで限定intentのJSONを取得する。Gemmaはthinkingを無効化し、名前付きJSON schemaで出力を指定する。成功する指示は単独操作でも必ず操作配列として返し、購入済みの句は追加対象から外すと同時に完了操作として保持する。未知キー・任意ID・対象外操作・途切れたJSONは拒否する。登録済みカテゴリー名は意味から追加先を選ぶために渡すが、ToDo一覧の内容はLLMへ送らない。
 - 追加は認可済みRepositoryのatomic複数保存、一覧/検索は既存 `executeOperation` を使う。完了・削除は名前集合に対する単一の認可付きSQLで行い、同名の全件を処理する。全項目を検証してから保存し、一部だけ追加しない。JSON出力とdraftの上限は50項目。50の異なるカテゴリーでもD1のbind数上限を越えないよう、カテゴリー参照をJSON配列でまとめてSQL検査する。返事は保存/取得結果と実際の削除件数から定型生成する。migration `0010_assist_usage.sql` は利用量カウンターのみを追加する。
 - 未確定draftは最大2分、名前/カテゴリー/不足情報/期限と、複合指示の場合は保留中の操作配列を保持する。本人や権限の根拠にせず、毎回再検証する。会話はパネル内メモリーのみで、閉じると破棄する。
@@ -91,10 +92,11 @@ Gateway資源作成・本番権限・ASR/LLM実応答shape・認識精度・速�
 - `audio.test.ts` / `capture.test.ts` / `worklet.test.ts`: 16kHz変換、無音で継続・2分上限・停止時の末尾PCM flushと応答期限、開始応答前の準備維持と期限・重複開始時のPCM保持・sample数不一致の送信抑止、35秒の録音の先頭/途中/末尾保持、許可/音声準備のタイムアウトと1回の復旧、閉じた後のマイク許可・module完了の破棄、live trackでの初期化と終了時の解放。
 - `VoiceSession.test.ts`: 開くだけでは録音しない、文字のみの送信、停止/停止して送信の違いと二重送信防止、停止応答前の送信準備状態と前の結果の解除、追記・上限超過保持、二度目起動/初期化の期限、未送信破棄、遅い応答・取消・draft。
 - `encode.test.ts`: PCMの所有権転送、変換の期限・エラー・終了時のWorker破棄。Sessionでは描画待ちを挟まずに変換や文字の送信を開始し、閉じた後の変換結果を破棄することを確認する。実ブラウザーでは変換へ1秒のCPU負荷を入れ、ASR要求前に送信ボタンの待機表示が複数frameで観測されることを確認する。ASR/LLM応答の遅延を使った代用検証にはしない。
+- `assistApi.test.ts`: Blob/FormDataの送信、boundaryの自動設定、same-origin認証、取消、出力検証。
 - `assist.test.ts`: 実D1の追加/一覧/聞き返し/無変更、strict契約、所属固定・失効・中断。
 - `assist-budget.test.ts`: 同時予約・60秒窓・UTC日替わり・累計上限・欠損時停止。
 - `assist-ai.test.ts`: 指定モデル・Turboのbase64/日本語指定・GemmaのJSON schema/thinking無効化・入力/出力形式・再試行なし・異常応答の拒否。
-- `assist-transport.test.ts`: HTTP境界・頻度制限・Gatewayオプション・実D1保存・通知・内容を含まないログ。
+- `assist-transport.test.ts`: HTTP境界・頻度制限・Gatewayオプション・実D1保存・通知・内容を含まないログ。multipartの120秒WAVと旧JSONの互換、実バイト上限、重複field/不正MIME/壊れたWAV、認証/所属/予算の拒否。
 - Playwright: 明示的な端末API/HTTP fixtureで手動録音・無音で継続・停止/停止して送信・文字だけの入力、反復録音/閉じる/再起動、320px幅/480px高の入力欄と操作、focus、フォーム競合、無効時の実HTTP入口を確認。加えて合成トーンを実AudioContext/AudioWorkletへ通し、送信WAVに先頭/途中/末尾の信号が順に残り、返された日本語全文が入力欄と送信要求まで保持されることを確認する。ASR応答はfixtureで、認識精度の証明ではない。ChromiumのiPhone画面サイズであり、Safari実機ではない。
 
 最初の対象端末は **iPhone Safari／ホーム画面アプリ**。HTTPSと有効化済みの検証環境で、ユーザー本人がマイクを許可して行う。
