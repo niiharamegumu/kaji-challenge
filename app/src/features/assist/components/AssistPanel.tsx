@@ -223,7 +223,7 @@ export function AssistPanel({ session, state }: { session: VoiceSession; state: 
                   <i key={index} style={{ height, animationDelay: `${index * -95}ms` }} />
                 ))}
               </div>
-              {recording ? <RecordingTime /> : <span>接続中</span>}
+              {recording ? <RecordingTime /> : <span>準備中</span>}
             </div>
           ) : null}
           <div className="assist-toolbar">
