@@ -1,6 +1,6 @@
 import {
   assistLimits,
-  type AssistAudioRequest,
+  type AssistAudioUpload,
   type AssistDraft,
   type AssistRequest,
   type AssistResult,
@@ -58,7 +58,7 @@ export class VoiceSession {
   constructor(
     private teamId: string,
     private transcribe: (
-      input: AssistAudioRequest,
+      input: AssistAudioUpload,
       signal: AbortSignal,
     ) => Promise<{ transcript: string }>,
     private turn: (input: AssistRequest, signal: AbortSignal) => Promise<AssistResult>,
@@ -204,9 +204,9 @@ export class VoiceSession {
     this.update({ phase: submit ? "submitting" : "transcribing" });
     const signal = this.controller.signal;
     try {
-      const audioBase64 = await this.dependencies.encode(audio, signal);
+      const blob = await this.dependencies.encode(audio, signal);
       if (generation !== this.generation) return;
-      const result = await this.transcribe({ audioBase64, expectedTeamId: this.teamId }, signal);
+      const result = await this.transcribe({ audio: blob, expectedTeamId: this.teamId }, signal);
       if (generation !== this.generation) return;
       const transcript = [base.trimEnd(), result.transcript.trim()].filter(Boolean).join("\n");
       if (submit && transcript.trim() && transcript.length <= assistLimits.transcript) {
