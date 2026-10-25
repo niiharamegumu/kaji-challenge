@@ -7,6 +7,7 @@ import {
   installAssistEncodingLoad,
   installAssistMediaFixture,
   installNativeAssistAudioFixture,
+  readAssistAudioUpload,
 } from "./assist-fixture";
 const secret = "kaji-e2e-only-secret-do-not-use-in-production";
 const userId = crypto.randomUUID(),
@@ -1784,6 +1785,7 @@ test(
       turns = 0;
     await page.route("**/api/assist/transcribe", async (route) => {
       transcriptions++;
+      expect((await readAssistAudioUpload(route.request())).wav.length).toBeGreaterThan(1000);
       await route.fulfill({ json: { transcript: "粒マスタードを追加して" } });
     });
     await page.route("**/api/assist/turn", async (route) => {
@@ -1826,7 +1828,7 @@ test(
     let transcribed = 0,
       submitted = 0;
     await page.route("**/api/assist/transcribe", async (route) => {
-      const wav = Buffer.from(route.request().postDataJSON().audioBase64, "base64");
+      const { wav } = await readAssistAudioUpload(route.request());
       expect(wav.toString("ascii", 0, 4)).toBe("RIFF");
       expect(wav.readUInt16LE(22)).toBe(1);
       expect(wav.readUInt32LE(24)).toBe(16000);
@@ -1901,7 +1903,7 @@ test(
     let failTranscription = false;
     await page.route("**/api/assist/transcribe", async (route) => {
       recordings++;
-      expect(route.request().postDataJSON().audioBase64.length).toBeGreaterThan(1000);
+      expect((await readAssistAudioUpload(route.request())).wav.length).toBeGreaterThan(1000);
       await transcriptionGate;
       if (failTranscription) {
         await route.abort("failed");
