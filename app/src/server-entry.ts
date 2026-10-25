@@ -5,7 +5,7 @@ import { AppError } from "./server/domain/errors";
 import { connectRealtime } from "./server/transport/realtime.server";
 import { handleMcpHttp, isMcpHttpPath } from "./server/transport/mcp-oauth";
 import { boundRequestBody } from "./server/transport/request-body";
-import { handleAssistTurn } from "./server/transport/assist.server";
+import { handleAssistTurn, handleAssistTranscription } from "./server/transport/assist.server";
 
 export { TeamRealtime } from "./server/infrastructure/team-realtime";
 export { McpApplication } from "./server/transport/mcp-entrypoint";
@@ -37,6 +37,7 @@ function withResponseHeaders(response: Response, path: string): Response {
 async function handleRequest(request: Request, bindings: RuntimeBindings, ctx: ExecutionContext) {
   const path = new URL(request.url).pathname;
   if (path === "/api/assist/turn") return handleAssistTurn(request, bindings);
+  if (path === "/api/assist/transcribe") return handleAssistTranscription(request, bindings);
   if (isMcpHttpPath(path)) return handleMcpHttp(request, bindings, ctx);
   if (path === "/api/realtime") {
     try {
