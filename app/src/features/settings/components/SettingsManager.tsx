@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import type { TeamMember } from "../../../lib/api/operations";
 import { PAGE_SECTION_CHROMELESS_CLASS_NAME } from "../../../shared/styles/pageSection";
 import { PushNotificationsSection } from "../../push";
+import { TodoDefaultCategorySettings } from "../../todos";
 import { COPY_FEEDBACK_TIMEOUT_MS } from "../constants/invite";
 import type { InviteState } from "../model/invite";
 import {
@@ -131,7 +132,9 @@ export function SettingsManager({
         </p>
       </header>
 
-      <TodoCompletionSettings />
+      <TodoCompletionSettings>
+        <TodoDefaultCategorySettings key={identityKey} identityKey={identityKey} />
+      </TodoCompletionSettings>
 
       <article
         className={`rounded-xl px-0 py-2.5 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
