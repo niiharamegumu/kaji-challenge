@@ -81,6 +81,7 @@ export function AssistPanel({ session, state }: { session: VoiceSession; state: 
   }, [state.open]);
   if (!state.open || typeof document === "undefined") return null;
   const result = state.result;
+  const replies = result?.kind === "batch" ? result.results : result ? [result] : [];
   return createPortal(
     <dialog
       ref={dialog}
@@ -141,26 +142,30 @@ export function AssistPanel({ session, state }: { session: VoiceSession; state: 
             <p className="assist-user-message">{state.submittedTranscript}</p>
             {result ? (
               <div className="assist-answer" aria-live="polite">
-                <p>{result.replyText}</p>
-                {result.kind === "listed" && result.items.length > 0 ? (
-                  <div
-                    className="assist-results"
-                    aria-label={`ToDo ${result.total}件`}
-                    tabIndex={0}
-                  >
-                    {result.total > result.items.length ? (
-                      <p className="assist-more">
-                        全{result.total}件のうち先頭{result.items.length}
-                        件を表示しています。続きはToDo画面で確認してください。
-                      </p>
+                {replies.map((reply, index) => (
+                  <div className="assist-answer-part" key={index}>
+                    <p>{reply.replyText}</p>
+                    {reply.kind === "listed" && reply.items.length > 0 ? (
+                      <div
+                        className="assist-results"
+                        aria-label={`ToDo ${reply.total}件`}
+                        tabIndex={0}
+                      >
+                        {reply.total > reply.items.length ? (
+                          <p className="assist-more">
+                            全{reply.total}件のうち先頭{reply.items.length}
+                            件を表示しています。続きはToDo画面で確認してください。
+                          </p>
+                        ) : null}
+                        <ul>
+                          {reply.items.map((item) => (
+                            <li key={item.id}>{item.name}</li>
+                          ))}
+                        </ul>
+                      </div>
                     ) : null}
-                    <ul>
-                      {result.items.map((item) => (
-                        <li key={item.id}>{item.name}</li>
-                      ))}
-                    </ul>
                   </div>
-                ) : null}
+                ))}
               </div>
             ) : state.phase === "processing" ? (
               <div className="assist-thinking" aria-hidden="true">
