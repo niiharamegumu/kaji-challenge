@@ -7,8 +7,8 @@
   height: var(--assist-height, 100dvh);
   max-height: none;
   margin: 0;
-  padding: max(16px, env(safe-area-inset-top)) clamp(16px, 4vw, 32px)
-    max(14px, env(safe-area-inset-bottom));
+  padding: max(12px, env(safe-area-inset-top)) clamp(12px, 3vw, 24px)
+    max(12px, env(safe-area-inset-bottom));
   border: 0;
   overflow: hidden;
   color: #292524;
@@ -32,10 +32,63 @@
 .assist-brand {
   display: flex;
   align-items: center;
-  gap: 9px;
-  font-size: 15px;
+  gap: 7px;
+  font-size: 14px;
   font-weight: 600;
   letter-spacing: -0.02em;
+}
+.assist-header-actions {
+  position: relative;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.assist-help summary {
+  list-style: none;
+}
+.assist-help summary::-webkit-details-marker {
+  display: none;
+}
+.assist-help-content {
+  position: absolute;
+  top: 54px;
+  right: 0;
+  z-index: 2;
+  width: min(360px, calc(100vw - 32px));
+  max-height: min(440px, calc(var(--assist-height, 100dvh) - 100px));
+  padding: 16px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid rgb(71 65 57 / 13%);
+  border-radius: 20px;
+  background: #fffefa;
+  box-shadow: 0 12px 36px -12px rgb(52 45 34 / 20%);
+  color: #57534e;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.assist-help-content h2 {
+  margin: 0;
+  color: #292524;
+  font-size: 15px;
+  font-weight: 600;
+}
+.assist-help-content h3 {
+  margin-top: 14px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.assist-help-content dt {
+  margin-top: 12px;
+  color: #292524;
+  font-weight: 600;
+}
+.assist-help-content dd {
+  margin: 2px 0 0;
+}
+.assist-help-content p {
+  margin: 14px 0 0;
+  font-size: 12px;
 }
 .assist-icon-button,
 .assist-send {
@@ -67,7 +120,7 @@
   display: flex;
   flex: 1;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
   min-height: 0;
   width: min(100%, 640px);
   margin: 0 auto;
@@ -76,60 +129,61 @@
   scrollbar-width: thin;
 }
 .assist-welcome {
-  padding: 28px 0 48px;
+  margin: auto 0;
+  padding: 16px 0 24px;
   text-align: center;
   animation: assist-appear 180ms ease-out;
 }
 .assist-mark {
   display: grid;
   place-items: center;
-  width: 54px;
-  height: 54px;
-  margin: 0 auto 22px;
+  width: 44px;
+  height: 44px;
+  margin: 0 auto 14px;
   border: 1px solid rgb(41 37 36 / 8%);
-  border-radius: 18px;
+  border-radius: 14px;
   color: #393530;
   background: rgb(255 255 255 / 60%);
   box-shadow: 0 4px 12px -8px rgb(41 37 36 / 15%);
 }
 .assist-welcome h1 {
   margin: 0;
-  font-size: clamp(25px, 4.5vw, 32px);
+  font-size: clamp(20px, 3vw, 24px);
   line-height: 1.5;
   font-weight: 550;
   letter-spacing: -0.04em;
 }
 .assist-welcome p {
-  margin-top: 10px;
-  font-size: 14px;
+  margin-top: 6px;
+  font-size: 13px;
   color: #6f6861;
 }
 .assist-messages {
   width: 100%;
-  padding: 28px 2px;
+  padding: 16px 2px;
   margin-bottom: auto;
   overflow-wrap: anywhere;
 }
 .assist-user-message {
   width: fit-content;
   max-width: 88%;
-  margin: 0 0 28px auto;
-  padding: 12px 18px;
-  border-radius: 24px 24px 6px 24px;
+  margin: 0 0 18px auto;
+  padding: 10px 14px;
+  border-radius: 20px 20px 6px 20px;
   background: #eae6df;
-  font-size: 16px;
-  line-height: 1.8;
+  font-size: 15px;
+  line-height: 1.7;
   white-space: pre-wrap;
 }
 .assist-answer {
-  font-size: 17px;
-  line-height: 1.9;
+  font-size: 15px;
+  line-height: 1.75;
 }
 .assist-results {
-  margin-top: 18px;
+  margin-top: 12px;
   padding: 0 0 0 20px;
-  font-size: 15px;
-  line-height: 2;
+  font-size: 14px;
+  line-height: 1.8;
 }
 .assist-results ul {
   list-style: disc;
@@ -142,12 +196,12 @@
 .assist-input-area {
   flex-shrink: 0;
   width: min(100%, 640px);
-  margin: 12px auto 0;
+  margin: 8px auto 0;
 }
 .assist-composer {
-  padding: 12px;
+  padding: 8px;
   border: 1px solid rgb(71 65 57 / 13%);
-  border-radius: 28px;
+  border-radius: 24px;
   background: #fffefa;
   box-shadow:
     0 5px 24px -14px rgb(52 45 34 / 16%),
@@ -159,18 +213,18 @@
 .assist-composer textarea {
   display: block;
   width: 100%;
-  min-height: 80px;
-  max-height: 180px;
+  min-height: 64px;
+  max-height: 148px;
   resize: none;
   margin: 0;
-  padding: 8px 8px 16px;
+  padding: 6px 6px 10px;
   border: 0;
   outline: none;
   background: transparent;
   color: #292524;
   font: inherit;
   font-size: 16px;
-  line-height: 1.7;
+  line-height: 1.6;
 }
 .assist-composer textarea[hidden] {
   display: none;
@@ -228,23 +282,24 @@
 }
 .assist-icon-button:focus-visible,
 .assist-send:focus-visible,
-.assist-results:focus-visible {
+.assist-results:focus-visible,
+.assist-help-content:focus-visible {
   outline: 2px solid #625c53;
   outline-offset: 4px;
 }
 .assist-recording {
   display: flex;
-  min-height: 80px;
+  min-height: 64px;
   align-items: center;
   justify-content: center;
-  gap: 20px;
-  padding: 12px 8px 20px;
+  gap: 14px;
+  padding: 8px 6px 12px;
 }
 .assist-transcribing {
   display: grid;
-  min-height: 80px;
+  min-height: 64px;
   place-items: center;
-  padding: 12px 8px 20px;
+  padding: 8px 6px 12px;
   color: #57534e;
 }
 .assist-spinner {
@@ -264,7 +319,7 @@
 }
 .assist-wave {
   display: flex;
-  height: 46px;
+  height: 36px;
   align-items: center;
   gap: 4px;
 }
@@ -351,7 +406,7 @@
 }
 @media (min-width: 768px) {
   .assist-input-area {
-    margin-bottom: clamp(12px, 4vh, 44px);
+    margin-bottom: clamp(8px, 2vh, 24px);
   }
 }
 @media (max-height: 520px) {
@@ -362,15 +417,15 @@
     display: none;
   }
   .assist-welcome h1 {
-    font-size: 22px;
+    font-size: 20px;
   }
   .assist-composer textarea {
-    min-height: 72px;
+    min-height: 56px;
     max-height: 110px;
   }
   .assist-recording,
   .assist-transcribing {
-    min-height: 72px;
+    min-height: 56px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
