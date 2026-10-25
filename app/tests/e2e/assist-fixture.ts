@@ -54,7 +54,7 @@ export async function installAssistMediaFixture(page: Page) {
         return { connect() {}, disconnect() {} };
       }
       createGain() {
-        return { gain: { value: 0 }, connect() {} };
+        return { gain: { value: 0 }, connect() {}, disconnect() {} };
       }
     }
     class FixtureNode {
