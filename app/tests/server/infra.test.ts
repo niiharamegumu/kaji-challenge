@@ -19,6 +19,7 @@ describe("Alchemy deployment configuration", () => {
     expect(local.ai).toMatchObject({ binding: "AI", remote: true });
     expect(result.assist.gateway).toMatchObject({
       id: "kaji-voice",
+      authentication: true,
       collectLogs: false,
       cacheTtl: null,
       spendLimits: { enabled: true },
@@ -30,6 +31,15 @@ describe("Alchemy deployment configuration", () => {
     expect(deploymentResources({ ...config, assistEnabled: "true" }).settings.assistEnabled).toBe(
       "true",
     );
+  });
+  it("uses USD limits of one dollar per day and five dollars per thirty days", () => {
+    expect(deploymentResources(config).assist.gateway.spendLimits).toEqual({
+      enabled: true,
+      rules: [
+        { limit: 1, limitType: "cost", window: "1 day" },
+        { limit: 5, limitType: "cost", window: "30 days" },
+      ],
+    });
   });
   it("keeps the local and deployment Worker compatibility settings aligned", () => {
     const local = unstable_readConfig({
