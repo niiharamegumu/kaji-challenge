@@ -1,14 +1,14 @@
 import type { CapturedAudio } from "./audio";
 
 /** Transfer PCM ownership; terminate on success, failure or cancellation. No main-thread fallback. */
-export function encodeAudio(audio: CapturedAudio, signal: AbortSignal): Promise<string> {
+export function encodeAudio(audio: CapturedAudio, signal: AbortSignal): Promise<Blob> {
   return new Promise((resolve, reject) => {
     signal.throwIfAborted();
     const worker = new Worker(new URL("./audio-encode.worker.ts", import.meta.url), {
       type: "module",
     });
     let settled = false;
-    const finish = (error?: unknown, value?: string) => {
+    const finish = (error?: unknown, value?: Blob) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
@@ -25,7 +25,7 @@ export function encodeAudio(audio: CapturedAudio, signal: AbortSignal): Promise<
       finish(new Error("音声を変換できませんでした。もう一度録音してください。"));
     const timer = setTimeout(failure, 10_000);
     worker.onmessage = (event: MessageEvent<unknown>) => {
-      if (typeof event.data !== "string" || !event.data) failure();
+      if (!(event.data instanceof Blob) || !event.data.size) failure();
       else finish(undefined, event.data);
     };
     worker.onerror = failure;
