@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { VoiceSession } from "./VoiceSession";
 import type { createCapture } from "../lib/capture";
 import type { AssistResult } from "../../../contracts/assist";
-
 const listed: AssistResult = {
   kind: "listed",
   transcript: "やることは？",
@@ -17,14 +16,16 @@ function deferred<T>() {
   });
   return { promise, resolve };
 }
-describe("voice conversation lifecycle", () => {
+describe("review before executing a voice command", () => {
   let callbacks: Parameters<typeof createCapture>[0];
   let capture: ReturnType<typeof createCapture>;
-  const turn = vi.fn(),
+  const transcribe = vi.fn(),
+    turn = vi.fn(),
     speak = vi.fn();
   let session: VoiceSession;
   beforeEach(() => {
     vi.useFakeTimers();
+    transcribe.mockReset().mockResolvedValue({ transcript: "買い物にナットを追加して" });
     turn.mockReset().mockResolvedValue(listed);
     speak.mockReset().mockResolvedValue(undefined);
     capture = {
@@ -34,7 +35,7 @@ describe("voice conversation lifecycle", () => {
       stop: vi.fn(),
       send: vi.fn(),
     };
-    session = new VoiceSession("team", turn, {
+    session = new VoiceSession("team", transcribe, turn, {
       capture: (cb) => {
         callbacks = cb;
         return capture;
@@ -48,80 +49,135 @@ describe("voice conversation lifecycle", () => {
   });
   async function start() {
     session.start();
-    await vi.advanceTimersByTimeAsync(350);
+    await vi.advanceTimersByTimeAsync(0);
   }
-  it("starts on the gesture, submits once, speaks once, then listens again", async () => {
+  async function record() {
+    callbacks.onAudio(new Uint8Array([1, 2]));
+    await vi.advanceTimersByTimeAsync(0);
+  }
+  it("releases the microphone and transcribes once, without interpretation or a write until send", async () => {
     await start();
-    expect(capture.listen).toHaveBeenCalledTimes(1);
+    expect(speak).not.toHaveBeenCalled();
     callbacks.onRecording();
     expect(session.getSnapshot().phase).toBe("recording");
-    callbacks.onAudio(new Uint8Array([1, 2]));
-    callbacks.onAudio(new Uint8Array([3]));
-    await vi.advanceTimersByTimeAsync(350);
-    expect(turn).toHaveBeenCalledTimes(1);
-    expect(capture.disable).toHaveBeenCalled();
-    expect(speak).toHaveBeenLastCalledWith(listed.replyText, expect.any(AbortSignal));
-    expect(capture.listen).toHaveBeenCalledTimes(2);
-    expect(session.getSnapshot().phase).toBe("listening");
-  });
-  it("does not listen or send during a reply", async () => {
-    await start();
-    const reply = deferred<void>();
-    speak.mockReturnValueOnce(reply.promise);
     callbacks.onAudio(new Uint8Array([1]));
-    await vi.advanceTimersByTimeAsync(0);
-    expect(session.getSnapshot().phase).toBe("speaking");
     callbacks.onAudio(new Uint8Array([2]));
-    await vi.advanceTimersByTimeAsync(1000);
-    expect(turn).toHaveBeenCalledTimes(1);
-    expect(capture.listen).toHaveBeenCalledTimes(1);
-    reply.resolve();
-    await vi.advanceTimersByTimeAsync(350);
-    expect(capture.listen).toHaveBeenCalledTimes(2);
-  });
-  it("waits for microphone recovery before showing listening and ignores completion after close", async () => {
-    const listening = deferred<void>();
-    vi.mocked(capture.listen).mockReturnValue(listening.promise);
-    await start();
-    expect(session.getSnapshot().phase).toBe("starting");
-    callbacks.onAudio(new Uint8Array([1]));
-    expect(turn).not.toHaveBeenCalled();
-    session.close();
-    listening.resolve();
     await vi.advanceTimersByTimeAsync(0);
-    expect(session.getSnapshot()).toMatchObject({ open: false, phase: "closed" });
-  });
-  it("shows a recovery failure and stops the microphone without sending a turn", async () => {
-    vi.mocked(capture.listen).mockRejectedValue(
-      new Error("音声の準備ができません。もう一度開いてください。"),
+    expect(capture.stop).toHaveBeenCalled();
+    expect(transcribe).toHaveBeenCalledOnce();
+    expect(session.getSnapshot()).toMatchObject({
+      phase: "reviewing",
+      transcript: "買い物にナットを追加して",
+    });
+    expect(turn).not.toHaveBeenCalled();
+    expect(speak).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(turn).not.toHaveBeenCalled();
+    session.editTranscript("買い物に納豆を追加して");
+    session.send();
+    session.send();
+    expect(turn).toHaveBeenCalledExactlyOnceWith(
+      { transcript: "買い物に納豆を追加して", expectedTeamId: "team" },
+      expect.any(AbortSignal),
     );
+    await vi.advanceTimersByTimeAsync(0);
+    expect(session.getSnapshot().phase).toBe("done");
+    expect(speak).toHaveBeenNthCalledWith(1, "確認します。", expect.any(AbortSignal));
+    expect(speak).toHaveBeenLastCalledWith(listed.replyText, expect.any(AbortSignal));
+    expect(capture.listen).toHaveBeenCalledOnce();
+    session.send();
+    expect(turn).toHaveBeenCalledOnce();
+  });
+  it("does not send an empty edit or send before transcription finishes", async () => {
     await start();
+    session.send();
+    expect(turn).not.toHaveBeenCalled();
+    await record();
+    session.editTranscript("   ");
+    session.send();
+    expect(turn).not.toHaveBeenCalled();
+    expect(session.getSnapshot().phase).toBe("reviewing");
+  });
+  it("can close and reopen repeatedly without waiting for a greeting or old callbacks", async () => {
+    for (let i = 0; i < 3; i++) {
+      await start();
+      expect(session.getSnapshot().phase).toBe("listening");
+      const old = callbacks;
+      await record();
+      session.close();
+      old.onAudio(new Uint8Array([9]));
+      old.onStop("old interruption", "error");
+      expect(session.getSnapshot().phase).toBe("closed");
+    }
+    expect(transcribe).toHaveBeenCalledTimes(3);
+    expect(turn).not.toHaveBeenCalled();
+    expect(speak).not.toHaveBeenCalled();
+  });
+  it("rerecords explicitly and discards the old unsubmitted transcript", async () => {
+    await start();
+    await record();
+    const old = callbacks;
+    session.recordAgain();
+    await vi.advanceTimersByTimeAsync(0);
+    old.onStop("old", "error");
+    expect(session.getSnapshot()).toMatchObject({ phase: "listening", transcript: "" });
+    expect(turn).not.toHaveBeenCalled();
+    transcribe.mockResolvedValueOnce({ transcript: "卵と納豆が必要" });
+    await record();
+    session.send();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(turn.mock.lastCall![0].transcript).toBe("卵と納豆が必要");
+  });
+  it("bounds a stalled second startup and can record again after the failure", async () => {
+    await start();
+    session.close();
+    const ready = deferred<void>();
+    capture.ready = ready.promise;
+    session.start();
+    await vi.advanceTimersByTimeAsync(30_000);
     expect(session.getSnapshot()).toMatchObject({
       phase: "error",
       message: expect.stringContaining("もう一度"),
     });
-    expect(capture.stop).toHaveBeenCalled();
-    expect(turn).not.toHaveBeenCalled();
-  });
-  it("stops pending permission preparation and ignores late callbacks after close", async () => {
-    const ready = deferred<void>();
-    capture.ready = ready.promise;
-    session.start();
-    session.close();
     ready.resolve();
-    await vi.advanceTimersByTimeAsync(1000);
-    callbacks.onRecording();
-    callbacks.onAudio(new Uint8Array([1]));
-    expect(capture.stop).toHaveBeenCalled();
-    expect(capture.listen).not.toHaveBeenCalled();
-    expect(turn).not.toHaveBeenCalled();
-    expect(session.getSnapshot().phase).toBe("closed");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(capture.listen).toHaveBeenCalledOnce();
+    capture.ready = Promise.resolve();
+    session.recordAgain();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(session.getSnapshot().phase).toBe("listening");
   });
-  it("aborts in-flight turns, ignores late success, and never automatically resends", async () => {
+  it("waits for audio readiness and ignores late preparation after close", async () => {
+    const listening = deferred<void>();
+    vi.mocked(capture.listen).mockReturnValue(listening.promise);
     await start();
-    const response = deferred<AssistResult>();
-    turn.mockReturnValue(response.promise);
+    expect(session.getSnapshot().phase).toBe("starting");
+    session.close();
+    listening.resolve();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(session.getSnapshot().phase).toBe("closed");
+    expect(transcribe).not.toHaveBeenCalled();
+  });
+  it("aborts transcription on close and never shows a late transcript in the new recording", async () => {
+    const response = deferred<{ transcript: string }>();
+    transcribe.mockReturnValueOnce(response.promise);
+    await start();
     callbacks.onAudio(new Uint8Array([1]));
+    const signal = transcribe.mock.lastCall![1] as AbortSignal;
+    session.close();
+    await start();
+    response.resolve({ transcript: "古い文字" });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(signal.aborted).toBe(true);
+    expect(session.getSnapshot()).toMatchObject({ phase: "listening", transcript: "" });
+    expect(turn).not.toHaveBeenCalled();
+  });
+  it("aborts submitted work, warns of a possible write, ignores late success and never retries", async () => {
+    await start();
+    await record();
+    const response = deferred<AssistResult>();
+    turn.mockReturnValueOnce(response.promise);
+    session.send();
     const signal = turn.mock.lastCall![1] as AbortSignal;
     session.close();
     expect(signal.aborted).toBe(true);
@@ -129,37 +185,25 @@ describe("voice conversation lifecycle", () => {
     response.resolve(listed);
     await vi.advanceTimersByTimeAsync(1000);
     expect(session.getSnapshot().result).toBeNull();
-    expect(session.getSnapshot().phase).toBe("closed");
-    expect(turn).toHaveBeenCalledTimes(1);
+    expect(turn).toHaveBeenCalledOnce();
   });
-  it("shows an explicit disabled response and keeps the microphone stopped", async () => {
+  it("keeps the saved result on playback failure without resending or reopening input", async () => {
     await start();
-    turn.mockRejectedValue({
-      name: "ApiRequestError",
-      status: 503,
-      code: "assist_disabled",
-      message: "音声アシストはまだ有効になっていません。",
-    });
-    callbacks.onAudio(new Uint8Array([1]));
-    await vi.advanceTimersByTimeAsync(0);
-    expect(session.getSnapshot().message).toContain("有効になっていません");
-    expect(capture.stop).toHaveBeenCalled();
-  });
-  it("keeps successful results on playback failure without retrying the write", async () => {
-    await start();
-    speak.mockRejectedValueOnce(new Error("再生できません"));
-    callbacks.onAudio(new Uint8Array([1]));
+    await record();
+    speak.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("再生できません"));
+    session.send();
     await vi.advanceTimersByTimeAsync(0);
     expect(session.getSnapshot()).toMatchObject({
       phase: "error",
       result: listed,
       message: "再生できません",
     });
-    await vi.advanceTimersByTimeAsync(5000);
-    expect(capture.stop).toHaveBeenCalled();
-    expect(turn).toHaveBeenCalledTimes(1);
+    session.send();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(turn).toHaveBeenCalledOnce();
+    expect(capture.listen).toHaveBeenCalledOnce();
   });
-  it("carries only the pending draft and clears it on close", async () => {
+  it("carries a clarification across explicit recordings and clears it on close", async () => {
     const draft = {
       items: [{ name: "牛乳", categoryName: null }],
       missing: "category" as const,
@@ -167,77 +211,40 @@ describe("voice conversation lifecycle", () => {
     };
     turn.mockResolvedValueOnce({
       kind: "clarify",
-      transcript: "牛乳を追加して",
+      transcript: "牛乳を追加",
       replyText: "どのカテゴリーですか？",
       pendingDraft: draft,
       categories: ["買い物"],
     });
     await start();
-    callbacks.onAudio(new Uint8Array([1]));
-    await vi.advanceTimersByTimeAsync(350);
-    callbacks.onAudio(new Uint8Array([2]));
-    await vi.advanceTimersByTimeAsync(350);
+    await record();
+    session.send();
+    await vi.advanceTimersByTimeAsync(0);
+    session.recordAgain();
+    await vi.advanceTimersByTimeAsync(0);
+    await record();
+    session.send();
+    await vi.advanceTimersByTimeAsync(0);
     expect(turn.mock.calls[1][0].pendingDraft).toEqual(draft);
     session.close();
     await start();
-    callbacks.onAudio(new Uint8Array([3]));
+    await record();
+    session.send();
     await vi.advanceTimersByTimeAsync(0);
     expect(turn.mock.lastCall![0].pendingDraft).toBeUndefined();
   });
-  it("ends the mode on idle and ignores callbacks from the ended capture", async () => {
-    await start();
-    const oldCallbacks = callbacks;
-    oldCallbacks.onStop("", "idle");
-    expect(session.getSnapshot()).toMatchObject({ open: false, phase: "closed" });
-    expect(capture.stop).toHaveBeenCalled();
-    await start();
-    oldCallbacks.onAudio(new Uint8Array([1]));
-    oldCallbacks.onStop("", "idle");
-    expect(session.getSnapshot().phase).toBe("listening");
-    expect(turn).not.toHaveBeenCalled();
-  });
-  it("releases the microphone on interruption and requires closing before a new session", async () => {
+  it("reports microphone failures and ends on idle or the session deadline", async () => {
     await start();
     callbacks.onStop("マイクとの接続が切れました。", "error");
-    expect(session.getSnapshot()).toMatchObject({
-      phase: "error",
-      message: "マイクとの接続が切れました。",
-    });
-    expect(capture.stop).toHaveBeenCalled();
-    session.start();
     expect(session.getSnapshot().phase).toBe("error");
-    session.close();
+    session.recordAgain();
+    await vi.advanceTimersByTimeAsync(0);
+    callbacks.onStop("", "idle");
+    expect(session.getSnapshot().phase).toBe("closed");
     await start();
-    expect(session.getSnapshot()).toMatchObject({ phase: "listening", message: "" });
-  });
-  it("ends after three minutes even when continuous speech keeps the idle timer active", async () => {
-    await start();
-    for (let index = 0; index < 5; index++) {
-      callbacks.onAudio(new Uint8Array([1]));
-      await vi.advanceTimersByTimeAsync(30_000);
-    }
-    expect(session.getSnapshot().open).toBe(true);
-    await vi.advanceTimersByTimeAsync(30_000);
-    expect(session.getSnapshot()).toMatchObject({ open: false, phase: "closed" });
-    expect(capture.stop).toHaveBeenCalled();
-    callbacks.onAudio(new Uint8Array([2]));
-    expect(turn).toHaveBeenCalledTimes(5);
-    await start();
-    expect(session.getSnapshot().phase).toBe("listening");
-  });
-  it("aborts an outstanding request at the session deadline and ignores its late result", async () => {
-    await start();
-    await vi.advanceTimersByTimeAsync(179_000);
-    const response = deferred<AssistResult>();
-    turn.mockReturnValueOnce(response.promise);
-    callbacks.onAudio(new Uint8Array([1]));
-    const signal = turn.mock.lastCall![1] as AbortSignal;
-    await vi.advanceTimersByTimeAsync(1000);
-    expect(signal.aborted).toBe(true);
-    expect(session.getSnapshot().message).toContain("追加されている可能性");
-    response.resolve(listed);
-    await vi.advanceTimersByTimeAsync(1000);
-    expect(session.getSnapshot().result).toBeNull();
-    expect(turn).toHaveBeenCalledTimes(1);
+    await record();
+    await vi.advanceTimersByTimeAsync(180_000);
+    expect(session.getSnapshot()).toMatchObject({ phase: "closed", transcript: "" });
+    expect(turn).not.toHaveBeenCalled();
   });
 });
