@@ -2,7 +2,14 @@ import type { Page } from "@playwright/test";
 
 declare global {
   interface Window {
-    assistFixture: { emit: () => void; stopped: number; spoken: string[]; workletLoaded: boolean };
+    assistFixture: {
+      emit: () => void;
+      stopped: number;
+      spoken: string[];
+      workletLoaded: boolean;
+      captureRequests: number;
+      activeTracks: number;
+    };
   }
 }
 /** Browser media only. HTTP fixtures are explicit in the test, never a production mode. */
@@ -13,6 +20,8 @@ export async function installAssistMediaFixture(page: Page) {
       stopped: 0,
       spoken: [] as string[],
       workletLoaded: false,
+      captureRequests: 0,
+      activeTracks: 0,
       emit() {
         for (let i = 0; i < 5; i++) receive?.({ data: new Float32Array(1024).fill(0.2) });
         for (let i = 0; i < 17; i++) receive?.({ data: new Float32Array(1024) });
@@ -21,10 +30,13 @@ export async function installAssistMediaFixture(page: Page) {
     window.assistFixture = fixture;
     Object.defineProperty(navigator.mediaDevices, "getUserMedia", {
       value: async () => {
+        fixture.captureRequests++;
+        fixture.activeTracks++;
         const track = {
           enabled: true,
           stop() {
             fixture.stopped++;
+            fixture.activeTracks--;
           },
           addEventListener() {},
         };
@@ -89,6 +101,8 @@ export async function installAssistMediaFixture(page: Page) {
         cancel() {},
         resume() {},
         speak(utterance: Utterance) {
+          if (fixture.activeTracks !== 0)
+            throw new Error("Do not start playback with a live microphone");
           fixture.spoken.push(utterance.text);
           setTimeout(() => utterance.onend?.(), 20);
         },
