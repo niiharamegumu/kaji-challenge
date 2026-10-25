@@ -1,11 +1,11 @@
 import { z } from "zod";
 import { responseSchemas } from "./operations";
 
-export const assistAudio = { sampleRate: 16_000, maxSeconds: 30, maxBase64: 1_280_060 } as const;
+export const assistAudio = { sampleRate: 16_000, maxSeconds: 120, maxBase64: 5_120_060 } as const;
 export const assistLimits = {
   items: 50,
   transcript: 2000,
-  audioBodyBytes: 2 * 1024 * 1024,
+  audioBodyBytes: 6 * 1024 * 1024,
 } as const;
 const name = z.string().trim().min(1).max(100);
 const categoryName = z.string().trim().min(1).max(50);
