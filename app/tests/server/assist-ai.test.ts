@@ -60,7 +60,7 @@ it("sends base64 WAV to Whisper Turbo with Japanese transcription explicitly sel
   );
 });
 
-it.each(["not-base64!", "", "A".repeat(640_061)])(
+it.each(["not-base64!", "", "A".repeat(1_280_061)])(
   "rejects malformed or oversized audio before paid inference (case %#)",
   async (audio) => {
     const { ai, run, signal } = fixture();
@@ -69,7 +69,7 @@ it.each(["not-base64!", "", "A".repeat(640_061)])(
   },
 );
 
-it.each([{ text: "あ".repeat(501) }, { text: 1 }, {}])(
+it.each([{ text: "あ".repeat(2001) }, { text: 1 }, {}])(
   "rejects invalid transcriptions without retry (case %#)",
   async (result) => {
     const { ai, run, signal } = fixture();
@@ -99,7 +99,7 @@ it.each([additions, JSON.stringify(additions)])(
     expect(run).toHaveBeenCalledWith(
       "@cf/google/gemma-4-26b-a4b-it",
       expect.objectContaining({
-        max_tokens: 2048,
+        max_tokens: 8192,
         stream: false,
         temperature: 0,
         chat_template_kwargs: { enable_thinking: false },
@@ -174,7 +174,7 @@ it.each([
   { choices: [{ ...chatCompletion.choices[0], finish_reason: "length" }] },
   { choices: [{ ...chatCompletion.choices[0], finish_reason: "tool_calls" }] },
   { choices: [{ message: chatCompletion.choices[0].message }] },
-  { ...chatCompletion, usage: { completion_tokens: 2048 } },
+  { ...chatCompletion, usage: { completion_tokens: 8192 } },
   { ...chatCompletion, response: additions },
   ...[
     { content: null },
@@ -211,11 +211,11 @@ it.each([
   { response: "```json\n" + JSON.stringify(additions) + "\n```" },
   { response: { ...additions, execute: "delete_todos" } },
   { response: { intent: "add_todo", items: [] } },
-  { response: { intent: "add_todo", items: Array.from({ length: 11 }, () => additions.items[0]) } },
+  { response: { intent: "add_todo", items: Array.from({ length: 51 }, () => additions.items[0]) } },
   { response: { intent: "add_todo", items: [additions.items[0], { name: "卵" }] } },
   { response: additions, finish_reason: "length" },
-  { response: additions, usage: { completion_tokens: 2048 } },
-  { response: JSON.stringify(additions) + " ".repeat(16_384) },
+  { response: additions, usage: { completion_tokens: 8192 } },
+  { response: JSON.stringify(additions) + " ".repeat(65_536) },
   { response: null },
   {},
 ])(
@@ -233,14 +233,14 @@ it.each([
 it("bounds the serialized prompt and schema before invoking Gemma, including JSON escapes", async () => {
   const { ai, run, signal } = fixture();
   const pendingDraft: AssistDraft = {
-    items: Array.from({ length: 10 }, () => ({
+    items: Array.from({ length: 50 }, () => ({
       name: "\u0000".repeat(100),
       categoryName: "\u0000".repeat(50),
     })),
     missing: "category",
     expiresAt: Date.now() + 60_000,
   };
-  await expect(ai.interpret("\u0000".repeat(500), pendingDraft, signal)).rejects.toMatchObject({
+  await expect(ai.interpret("\u0000".repeat(2000), pendingDraft, signal)).rejects.toMatchObject({
     status: 413,
     code: "assist_input_too_long",
   });
