@@ -1,9 +1,10 @@
 import { useAtom } from "jotai";
 import { useId, useState } from "react";
+import type { ReactNode } from "react";
 import { todoCompletionDelayAtom } from "../../../shared/state/todoCompletionDelay";
 import { PAGE_SECTION_CHROMELESS_CLASS_NAME } from "../../../shared/styles/pageSection";
 
-export function TodoCompletionSettings() {
+export function TodoCompletionSettings({ children }: { children?: ReactNode }) {
   const [delayMs, setDelayMs] = useAtom(todoCompletionDelayAtom);
   const [saveFailed, setSaveFailed] = useState(false);
   const inputId = useId();
@@ -42,6 +43,7 @@ export function TodoCompletionSettings() {
           </p>
         ) : null}
       </div>
+      {children}
     </article>
   );
 }
