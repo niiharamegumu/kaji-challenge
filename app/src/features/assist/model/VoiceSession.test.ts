@@ -109,7 +109,7 @@ describe("explicit dictation and submission", () => {
     session.stopRecording();
     session.send();
     expect(turn).not.toHaveBeenCalled();
-    expect(session.getSnapshot().phase).toBe("transcribing");
+    expect(session.getSnapshot().phase).toBe("submitting");
     response.resolve({ transcript: "納豆と卵を追加して" });
     await tick();
     expect(turn).toHaveBeenCalledExactlyOnceWith(
@@ -118,6 +118,32 @@ describe("explicit dictation and submission", () => {
     );
     expect(phases).not.toContain("reviewing");
     expect(session.getSnapshot().phase).toBe("done");
+  });
+  it("acknowledges stop-and-send before audio flush and discards the previous answer", async () => {
+    session.start();
+    session.editTranscript("前の指示");
+    session.send();
+    await tick();
+    session.editTranscript("続きの下書き");
+    session.startRecording();
+    await tick();
+    vi.mocked(capture.send).mockResolvedValue(undefined);
+    session.stopRecording(true);
+    session.stopRecording(true);
+    expect(session.getSnapshot()).toMatchObject({
+      phase: "submitting",
+      transcript: "続きの下書き",
+      submittedTranscript: "",
+      result: null,
+    });
+    expect(capture.send).toHaveBeenCalledOnce();
+    expect(transcribe).not.toHaveBeenCalled();
+    expect(turn).toHaveBeenCalledOnce();
+    session.close();
+    callbacks.onAudio(new Uint8Array([1, 2]));
+    await tick();
+    expect(transcribe).not.toHaveBeenCalled();
+    expect(turn).toHaveBeenCalledOnce();
   });
   it("does not auto-submit a duration-limited recording, even if it races with stop-and-send", async () => {
     vi.mocked(capture.send).mockResolvedValue(undefined);
