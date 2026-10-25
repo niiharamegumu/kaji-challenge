@@ -1,13 +1,33 @@
-import { useState } from "react";
+import { useContext, useState } from "react";
 
 import type { TodoItem } from "../../../lib/api/operations";
-import type { TodoCategorySelection } from "../components/TodoCategoryFilter";
+import { RootLayoutContext } from "../../../shared/router/rootLayoutContext";
+import { ALL_TODO_CATEGORIES, type TodoCategorySelection } from "../model/defaultTodoCategory";
 import type { TodoCategorySwipeDirection } from "../components/TodoCategorySwipeArea";
 import { useTodoCategoriesQuery } from "./useTodoCategories";
+import { useTodoDefaultCategory } from "./useTodoDefaultCategory";
 
 export function useTodoCategoryFilter() {
   const query = useTodoCategoriesQuery();
-  const [selection, setSelection] = useState<TodoCategorySelection>({ kind: "all" });
+  const context = useContext(RootLayoutContext);
+  const identityKey =
+    context?.currentUserId && context.currentTeamId
+      ? `${context.currentUserId}:${context.currentTeamId}`
+      : null;
+  const [defaultCategory] = useTodoDefaultCategory(identityKey);
+  const [current, setCurrent] = useState<{
+    identityKey: string | null;
+    selection: TodoCategorySelection | null;
+  }>({ identityKey, selection: null });
+  const chosen = current.identityKey === identityKey ? current.selection : null;
+  const selection = chosen ?? defaultCategory ?? ALL_TODO_CATEGORIES;
+  const setSelection = (value: TodoCategorySelection) =>
+    setCurrent({ identityKey, selection: value });
+  // Adopt the preference once per page/identity. Refetches and other tabs must not
+  // override a category the user has already chosen on this page.
+  if (current.identityKey !== identityKey || (chosen === null && defaultCategory !== undefined)) {
+    setCurrent({ identityKey, selection: defaultCategory ?? null });
+  }
   if (
     selection.kind === "category" &&
     query.data !== undefined &&
