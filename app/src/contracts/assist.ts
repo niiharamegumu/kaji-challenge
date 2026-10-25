@@ -4,6 +4,7 @@ import { responseSchemas } from "./operations";
 export const assistAudio = { sampleRate: 16_000, maxSeconds: 120, maxBase64: 5_120_060 } as const;
 export const assistLimits = {
   items: 50,
+  actions: 10,
   transcript: 2000,
   audioBodyBytes: 6 * 1024 * 1024,
 } as const;
@@ -13,10 +14,56 @@ const draftItems = z
   .array(z.strictObject({ name: name.nullable(), categoryName: categoryName.nullable() }))
   .min(1)
   .max(assistLimits.items);
+const addTodoIntentSchema = z.strictObject({ intent: z.literal("add_todo"), items: draftItems });
+export const assistTodoActionSchema = z.discriminatedUnion("intent", [
+  addTodoIntentSchema,
+  z.strictObject({
+    intent: z.literal("list_todos"),
+    categoryName: categoryName.nullable(),
+    nameQuery: name.nullable().optional(),
+  }),
+  z.strictObject({
+    intent: z.enum(["complete_todos", "delete_todos"]),
+    names: z.array(name).min(1).max(assistLimits.items),
+    categoryName: categoryName.nullable(),
+  }),
+]);
+const actionPlan = z
+  .array(assistTodoActionSchema)
+  .min(1)
+  .max(assistLimits.actions)
+  .refine(
+    (actions) =>
+      actions.reduce(
+        (count, action) =>
+          count +
+          (action.intent === "add_todo"
+            ? action.items.length
+            : action.intent === "list_todos"
+              ? 0
+              : action.names.length),
+        0,
+      ) <= assistLimits.items,
+  );
+const mixedActions = actionPlan.min(2);
+const controlIntents = [
+  z.strictObject({ intent: z.literal("clarify") }),
+  z.strictObject({ intent: z.literal("cancel_draft") }),
+  z.strictObject({
+    intent: z.literal("unsupported"),
+    reason: z.enum(["too_many", "operation", "unclear"]),
+  }),
+] as const;
+// Inference always enumerates successful actions, including single-action requests.
+export const assistInferenceIntentSchema = z.discriminatedUnion("intent", [
+  z.strictObject({ intent: z.literal("batch_todos"), actions: actionPlan }),
+  ...controlIntents,
+]);
 export const assistDraftSchema = z.strictObject({
   items: draftItems,
   missing: z.enum(["name", "category"]),
   expiresAt: z.number().int().positive(),
+  actions: mixedActions.optional(),
 });
 export const assistAudioRequestSchema = z.strictObject({
   audioBase64: z
@@ -36,32 +83,15 @@ export const assistRequestSchema = z.strictObject({
 });
 // Only an interpretation, never a database command. IDs and arbitrary tools are forbidden.
 export const assistIntentSchema = z.discriminatedUnion("intent", [
-  z.strictObject({
-    intent: z.literal("add_todo"),
-    items: draftItems,
-  }),
-  z.strictObject({
-    intent: z.literal("list_todos"),
-    categoryName: categoryName.nullable(),
-    nameQuery: name.nullable().optional(),
-  }),
-  z.strictObject({
-    intent: z.enum(["complete_todos", "delete_todos"]),
-    names: z.array(name).min(1).max(assistLimits.items),
-    categoryName: categoryName.nullable(),
-  }),
-  z.strictObject({ intent: z.literal("clarify") }),
-  z.strictObject({ intent: z.literal("cancel_draft") }),
-  z.strictObject({
-    intent: z.literal("unsupported"),
-    reason: z.enum(["too_many", "operation", "unclear"]),
-  }),
+  ...assistTodoActionSchema.options,
+  z.strictObject({ intent: z.literal("batch_todos"), actions: mixedActions }),
+  ...controlIntents,
 ]);
 const common = {
   transcript: z.string().max(assistLimits.transcript),
   replyText: z.string().min(1).max(100),
 };
-export const assistResultSchema = z.discriminatedUnion("kind", [
+export const assistOperationResultSchema = z.discriminatedUnion("kind", [
   z.strictObject({
     ...common,
     kind: z.literal("added"),
@@ -79,6 +109,14 @@ export const assistResultSchema = z.discriminatedUnion("kind", [
     action: z.enum(["complete", "delete"]),
     count: z.number().int().nonnegative(),
   }),
+]);
+export const assistResultSchema = z.discriminatedUnion("kind", [
+  ...assistOperationResultSchema.options,
+  z.strictObject({
+    ...common,
+    kind: z.literal("batch"),
+    results: z.array(assistOperationResultSchema).min(2).max(assistLimits.actions),
+  }),
   z.strictObject({
     ...common,
     kind: z.literal("clarify"),
@@ -89,6 +127,8 @@ export const assistResultSchema = z.discriminatedUnion("kind", [
 ]);
 export const assistErrorSchema = z.strictObject({ code: z.string(), message: z.string().max(200) });
 export type AssistDraft = z.infer<typeof assistDraftSchema>;
+export type AssistTodoAction = z.infer<typeof assistTodoActionSchema>;
+export type AssistOperationResult = z.infer<typeof assistOperationResultSchema>;
 export type AssistIntent = z.infer<typeof assistIntentSchema>;
 export type AssistRequest = z.infer<typeof assistRequestSchema>;
 export type AssistAudioRequest = z.infer<typeof assistAudioRequestSchema>;
