@@ -84,6 +84,11 @@ const primaryItems: PrimaryNavItem[] = [
 ];
 
 const dragThresholdPx = 10;
+const navGlassStyle = {
+  background: "linear-gradient(180deg, rgba(244,242,238,0.52), rgba(225,221,214,0.22))",
+  backdropFilter: "blur(30px) saturate(220%) brightness(0.94) contrast(1.08)",
+  WebkitBackdropFilter: "blur(30px) saturate(220%) brightness(0.94) contrast(1.08)",
+};
 
 function getPrimaryIndex(pathname: string) {
   if (pathname === "/") {
@@ -718,17 +723,19 @@ export function FloatingNav({
               aria-haspopup="dialog"
               aria-expanded={assistOpen}
               title="アシストに話しかける"
-              className="group relative z-[55] grid size-[54px] shrink-0 cursor-pointer place-items-center self-center rounded-full border border-white/90 bg-white/80 text-[#635c72] shadow-[0_3px_16px_-6px_rgba(110,94,135,0.25)] transition-colors duration-200 hover:bg-white hover:text-stone-800 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-stone-600 disabled:cursor-default disabled:opacity-40 motion-reduce:transition-none"
+              style={navGlassStyle}
+              className="relative z-[55] flex size-[62px] shrink-0 cursor-pointer flex-col items-center justify-center gap-1 overflow-hidden rounded-full border border-white/34 text-stone-700 shadow-[0_18px_34px_-24px_rgba(68,56,36,0.42),0_8px_22px_-18px_rgba(34,29,21,0.2),inset_0_1px_0_rgba(255,255,255,0.62),inset_0_0_0_1px_rgba(158,150,138,0.12)] transition-colors duration-200 hover:text-stone-950 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-stone-600 disabled:cursor-default disabled:opacity-40 motion-reduce:transition-none"
             >
               <span
                 aria-hidden="true"
-                className="pointer-events-none absolute inset-1 rounded-full bg-[conic-gradient(from_30deg,#ebd6ef,#dcd8f5,#cde9e2,#f4e5d1,#ebd6ef)] opacity-70 blur-[5px] transition-opacity group-hover:opacity-100 motion-reduce:transition-none"
+                className="pointer-events-none absolute inset-0 opacity-90"
+                style={{
+                  background:
+                    "radial-gradient(120% 90% at 50% -20%, rgba(255,255,255,0.34), rgba(255,255,255,0) 48%), radial-gradient(120% 100% at 50% 120%, rgba(176,184,204,0.14), rgba(255,255,255,0) 52%)",
+                }}
               />
-              <span
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-[7px] rounded-full bg-white/55"
-              />
-              <AudioLines size={23} strokeWidth={1.7} aria-hidden="true" className="relative" />
+              <AudioLines size={20} strokeWidth={2.1} aria-hidden="true" className="relative" />
+              <span className="relative text-[10.5px] leading-none">アシスト</span>
             </button>
           ) : null}
           <button
@@ -738,11 +745,7 @@ export function FloatingNav({
                 ? "border-white/34 text-stone-950 shadow-[0_18px_34px_-24px_rgba(68,56,36,0.42),0_8px_22px_-18px_rgba(34,29,21,0.2),inset_0_1px_0_rgba(255,255,255,0.62),inset_0_0_0_1px_rgba(158,150,138,0.12)]"
                 : "border-white/34 text-stone-700 shadow-[0_18px_34px_-24px_rgba(68,56,36,0.42),0_8px_22px_-18px_rgba(34,29,21,0.2),inset_0_1px_0_rgba(255,255,255,0.62),inset_0_0_0_1px_rgba(158,150,138,0.12)]"
             }`}
-            style={{
-              background: "linear-gradient(180deg, rgba(244,242,238,0.52), rgba(225,221,214,0.22))",
-              backdropFilter: "blur(30px) saturate(220%) brightness(0.94) contrast(1.08)",
-              WebkitBackdropFilter: "blur(30px) saturate(220%) brightness(0.94) contrast(1.08)",
-            }}
+            style={navGlassStyle}
             onClick={handleMoreClick}
             aria-expanded={menuOpen}
             aria-haspopup="menu"
