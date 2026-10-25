@@ -18,6 +18,7 @@ export type VoiceState = {
     | "listening"
     | "recording"
     | "transcribing"
+    | "submitting"
     | "reviewing"
     | "processing"
     | "done"
@@ -171,7 +172,11 @@ export class VoiceSession {
   stopRecording = (submit = false) => {
     if (!this.capture || !["listening", "recording"].includes(this.state.phase)) return;
     this.submitAfterTranscription = submit;
-    this.update({ phase: "transcribing" });
+    this.update(
+      submit
+        ? { phase: "submitting", submittedTranscript: "", result: null }
+        : { phase: "transcribing" },
+    );
     void this.capture.send();
   };
   private async reviewAudio(
@@ -182,14 +187,14 @@ export class VoiceSession {
   ) {
     if (
       this.acceptedAudio ||
-      !["listening", "recording", "transcribing"].includes(this.state.phase)
+      !["listening", "recording", "transcribing", "submitting"].includes(this.state.phase)
     )
       return;
     this.acceptedAudio = true;
     const submit = this.submitAfterTranscription && !limited;
     this.submitAfterTranscription = false;
     this.stopCapture();
-    this.update({ phase: "transcribing" });
+    this.update({ phase: submit ? "submitting" : "transcribing" });
     try {
       const result = await this.transcribe(
         { audioBase64: wavBase64(wav), expectedTeamId: this.teamId },
