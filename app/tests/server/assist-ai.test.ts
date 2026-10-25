@@ -9,6 +9,7 @@ const additions = {
     { name: "卵", categoryName: "買い物" },
   ],
 };
+const plan = (action: unknown) => ({ intent: "batch_todos", actions: [action] });
 // Synthetic fixture for Gemma's documented OpenAI-compatible completion shape; not a live inference.
 const chatCompletion = {
   object: "chat.completion",
@@ -18,7 +19,7 @@ const chatCompletion = {
       index: 0,
       message: {
         role: "assistant",
-        content: JSON.stringify(additions),
+        content: JSON.stringify(plan(additions)),
         refusal: null,
         annotations: null,
         audio: null,
@@ -81,7 +82,7 @@ it.each([{ text: "あ".repeat(2001) }, { text: 1 }, {}])(
   },
 );
 
-it.each([additions, JSON.stringify(additions)])(
+it.each([plan(additions), JSON.stringify(plan(additions))])(
   "accepts complete multi-item interpretations from JSON object/string envelopes (case %#)",
   async (response) => {
     const { ai, run, signal } = fixture();
@@ -132,7 +133,7 @@ it.each([additions, JSON.stringify(additions)])(
 
 it("provides separate category-specific and all-category dialogue examples before the actual request", async () => {
   const { ai, run, signal } = fixture();
-  run.mockResolvedValue({ response: { intent: "list_todos", categoryName: "買い物" } });
+  run.mockResolvedValue({ response: plan({ intent: "list_todos", categoryName: "買い物" }) });
   await ai.interpret("買い物リストを教えて", undefined, signal, []);
   const messages = run.mock.calls[0][1].messages;
   expect(messages[0]).toMatchObject({ role: "system" });
@@ -152,7 +153,7 @@ it("provides separate category-specific and all-category dialogue examples befor
     expect(position).toBeGreaterThanOrEqual(0);
     expect(examples[position + 1]).toEqual({
       role: "assistant",
-      content: JSON.stringify({ intent: "list_todos", categoryName }),
+      content: JSON.stringify(plan({ intent: "list_todos", categoryName })),
     });
   }
   expect(messages.at(-1)).toEqual({
@@ -173,11 +174,39 @@ it("accepts Gemma's documented OpenAI completion shape without another inference
   );
   expect(run).toHaveBeenCalledTimes(1);
 });
+it("accepts a complete mixed-command plan and keeps pending completion and addition together", async () => {
+  const { ai, run, signal } = fixture();
+  const pendingItems = [{ name: "レモン", categoryName: null }];
+  const actions = [
+    { intent: "complete_todos" as const, names: ["塩"], categoryName: null },
+    { intent: "add_todo" as const, items: pendingItems },
+  ];
+  const pendingDraft: AssistDraft = {
+    items: pendingItems,
+    missing: "category",
+    expiresAt: Date.now() + 60000,
+    actions,
+  };
+  const response = {
+    intent: "batch_todos",
+    actions: [
+      actions[0],
+      { intent: "add_todo", items: [{ name: "レモン", categoryName: "買い物" }] },
+    ],
+  };
+  run.mockResolvedValue({ response: JSON.stringify(response) });
+  expect(await ai.interpret("買い物", pendingDraft, signal, ["買い物"])).toEqual(response);
+  expect(JSON.parse(run.mock.calls[0][1].messages.at(-1).content)).toMatchObject({
+    pendingDraft: { actions },
+    categoryNames: ["買い物"],
+  });
+  expect(run).toHaveBeenCalledOnce();
+});
 
 it("provides registered category names and routes explicit ToDo commands, inference, search and removal", async () => {
   const { ai, run, signal } = fixture();
   run.mockResolvedValue({
-    response: { intent: "complete_todos", names: ["牛乳"], categoryName: null },
+    response: plan({ intent: "complete_todos", names: ["牛乳"], categoryName: null }),
   });
   expect(await ai.interpret("ToDoの牛乳を完了して", undefined, signal, ["買い物", "仕事"])).toEqual(
     {
@@ -202,7 +231,7 @@ it.each([
   { choices: [{ ...chatCompletion.choices[0], finish_reason: "tool_calls" }] },
   { choices: [{ message: chatCompletion.choices[0].message }] },
   { ...chatCompletion, usage: { completion_tokens: 8192 } },
-  { ...chatCompletion, response: additions },
+  { ...chatCompletion, response: plan(additions) },
   ...[
     { content: null },
     { content: '{"intent":"add_todo","items":[' },
@@ -217,8 +246,8 @@ it.each([
       },
     ],
   })),
-  { response: additions, refusal: "This request cannot be completed" },
-  { response: additions, tool_calls: [{ name: "delete_todos", arguments: {} }] },
+  { response: plan(additions), refusal: "This request cannot be completed" },
+  { response: plan(additions), tool_calls: [{ name: "delete_todos", arguments: {} }] },
 ])(
   "rejects refusal, tool calls, ambiguous envelopes and incomplete choices (case %#)",
   async (result) => {
@@ -234,15 +263,21 @@ it.each([
 );
 
 it.each([
+  { response: additions },
   { response: '{"intent":"add_todo","items":[' },
-  { response: "```json\n" + JSON.stringify(additions) + "\n```" },
-  { response: { ...additions, execute: "delete_todos" } },
-  { response: { intent: "add_todo", items: [] } },
-  { response: { intent: "add_todo", items: Array.from({ length: 51 }, () => additions.items[0]) } },
-  { response: { intent: "add_todo", items: [additions.items[0], { name: "卵" }] } },
-  { response: additions, finish_reason: "length" },
-  { response: additions, usage: { completion_tokens: 8192 } },
-  { response: JSON.stringify(additions) + " ".repeat(65_536) },
+  { response: "```json\n" + JSON.stringify(plan(additions)) + "\n```" },
+  { response: plan({ ...additions, execute: "delete_todos" }) },
+  { response: plan({ intent: "add_todo", items: [] }) },
+  {
+    response: plan({
+      intent: "add_todo",
+      items: Array.from({ length: 51 }, () => additions.items[0]),
+    }),
+  },
+  { response: plan({ intent: "add_todo", items: [additions.items[0], { name: "卵" }] }) },
+  { response: plan(additions), finish_reason: "length" },
+  { response: plan(additions), usage: { completion_tokens: 8192 } },
+  { response: JSON.stringify(plan(additions)) + " ".repeat(65_536) },
   { response: null },
   {},
 ])(
@@ -305,7 +340,7 @@ it("discards a completed inference after cancellation without trying again", asy
   const { ai, run, signal, controller } = fixture();
   run.mockImplementation(async () => {
     controller.abort();
-    return { response: additions };
+    return { response: plan(additions) };
   });
   await expect(ai.interpret("牛乳と卵を追加して", undefined, signal, [])).rejects.toMatchObject({
     name: "AbortError",
