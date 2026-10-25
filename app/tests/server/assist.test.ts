@@ -82,6 +82,19 @@ describe("assist contract and audio boundary", () => {
       validateAssistAudio(wavBase64(encodeWav([new Float32Array(16000)], 16000))),
     ).toThrow();
   });
+  it("accepts quiet speech after a long pause and rejects a brief click in silence", () => {
+    const quiet = encodeWav(
+      [
+        new Float32Array(16000 * 60),
+        new Float32Array(4000).fill(0.01),
+        new Float32Array(16000 * 10),
+      ],
+      16000,
+    );
+    expect(() => validateAssistAudio(wavBase64(quiet))).not.toThrow();
+    const click = encodeWav([new Float32Array(160).fill(0.5), new Float32Array(16000)], 16000);
+    expect(() => validateAssistAudio(wavBase64(click))).toThrow();
+  });
 });
 
 describe("assist with real D1 and fixture AI", () => {
