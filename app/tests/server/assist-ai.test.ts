@@ -9,10 +9,10 @@ const additions = {
     { name: "卵", categoryName: "買い物" },
   ],
 };
-// Granite's observed REST response uses OpenAI choices despite the binding's response field type.
+// Synthetic fixture for Gemma's documented OpenAI-compatible completion shape; not a live inference.
 const chatCompletion = {
   object: "chat.completion",
-  model: "@cf/ibm-granite/granite-4.0-h-micro",
+  model: "@cf/google/gemma-4-26b-a4b-it",
   choices: [
     {
       index: 0,
@@ -38,16 +38,15 @@ function fixture() {
   return { run, controller, signal: controller.signal, ai: createAssistAi({ run }, "kaji-voice") };
 }
 
-it("sends decoded audio bytes to multilingual Whisper without an English translation request", async () => {
+it("sends base64 WAV to Whisper Turbo with Japanese transcription explicitly selected", async () => {
   const { ai, run, signal } = fixture();
   const bytes = [82, 73, 70, 70, 0, 127, 128, 255];
+  const audioBase64 = btoa(String.fromCharCode(...bytes));
   run.mockResolvedValue({ text: "買い物に牛乳と卵を追加して", word_count: 5 });
-  expect(await ai.transcribe(btoa(String.fromCharCode(...bytes)), signal)).toBe(
-    "買い物に牛乳と卵を追加して",
-  );
+  expect(await ai.transcribe(audioBase64, signal)).toBe("買い物に牛乳と卵を追加して");
   expect(run).toHaveBeenCalledExactlyOnceWith(
-    "@cf/openai/whisper",
-    { audio: bytes },
+    "@cf/openai/whisper-large-v3-turbo",
+    { audio: audioBase64, task: "transcribe", language: "ja" },
     {
       signal,
       gateway: {
@@ -83,7 +82,7 @@ it.each([{ text: "あ".repeat(501) }, { text: 1 }, {}])(
 );
 
 it.each([additions, JSON.stringify(additions)])(
-  "accepts complete multi-item interpretations from Granite object/string responses (case %#)",
+  "accepts complete multi-item interpretations from JSON object/string envelopes (case %#)",
   async (response) => {
     const { ai, run, signal } = fixture();
     const pendingDraft: AssistDraft = {
@@ -98,13 +97,20 @@ it.each([additions, JSON.stringify(additions)])(
     expect(await ai.interpret("どちらも買い物", pendingDraft, signal)).toEqual(additions);
     expect(run).toHaveBeenCalledTimes(1);
     expect(run).toHaveBeenCalledWith(
-      "@cf/ibm-granite/granite-4.0-h-micro",
+      "@cf/google/gemma-4-26b-a4b-it",
       expect.objectContaining({
         max_tokens: 2048,
         stream: false,
         temperature: 0,
+        chat_template_kwargs: { enable_thinking: false },
         messages: expect.any(Array),
-        response_format: expect.objectContaining({ type: "json_schema" }),
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "assist_intent",
+            schema: expect.objectContaining({ oneOf: expect.any(Array) }),
+          },
+        },
       }),
       expect.objectContaining({
         signal,
@@ -155,7 +161,7 @@ it("provides separate category-specific and all-category dialogue examples befor
   });
 });
 
-it("accepts Granite's observed OpenAI completion shape without another inference", async () => {
+it("accepts Gemma's documented OpenAI completion shape without another inference", async () => {
   const { ai, run, signal } = fixture();
   run.mockResolvedValue(chatCompletion);
   expect(await ai.interpret("買い物に牛乳と卵を追加して", undefined, signal)).toEqual(additions);
@@ -224,7 +230,7 @@ it.each([
   },
 );
 
-it("bounds the serialized prompt and schema before invoking Granite, including JSON escapes", async () => {
+it("bounds the serialized prompt and schema before invoking Gemma, including JSON escapes", async () => {
   const { ai, run, signal } = fixture();
   const pendingDraft: AssistDraft = {
     items: Array.from({ length: 10 }, () => ({
