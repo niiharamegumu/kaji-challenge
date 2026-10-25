@@ -8,6 +8,8 @@
 
 `AssistBudget` portを `infrastructure/assist-budget.ts` が実装し、AIの前に永続カウンターを条件付きUPDATEで予約する。複数ToDoは全件を検証後、Repositoryの単一D1 batchで保存する。どちらも並行リクエストで上限超過や部分保存が起きないことを実D1で検証する。
 
+アシストのintentはToDoの追加・一覧/検索・完了・削除を区別し、編集や他機能はunsupportedとする。「ToDoに〜」の明示的な指示と自然な買い物表現を同じ契約に解釈する。登録済みカテゴリー名だけをAIへ渡し、追加先を意味から推測させる。不明/存在しないカテゴリーは聞き返す。表示初期カテゴリーは追加先として固定しない。検索はカテゴリーと正規化した名前の部分一致を組み合わせ、保存順の先頭20件と総数を返す。完了・削除は名前の完全一致で全同名を対象にし、カテゴリーの明示指定時はその中に限定する。`DeleteTodoItemsByNames` がJSONでbindした名前集合と現在の認証・チーム・カテゴリー条件を単一DELETE内で検証する。完了は既存の物理削除と同じで、履歴を新設しない。結果は削除件数から生成し、変更時だけ既存のToDo通知を送る。
+
 ## 既存アプリの構成
 
 現在の実装は `app/` 内のTanStack Start SPAと、同じWorkerのServer Functions・認証HTTP入口・scheduled入口で構成する。画面は既存のFeature-Based Architectureを維持する。
