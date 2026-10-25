@@ -3,6 +3,7 @@ import type { Page } from "@playwright/test";
 declare global {
   interface Window {
     assistNativeFixture: { play: () => Promise<void>; stopped: number };
+    assistPaintFixture: { framesBeforeTranscribe: number; frames: number; workers: number };
     assistFixture: {
       emit: () => void;
       stopped: number;
@@ -15,6 +16,64 @@ declare global {
       allowMicrophone: () => void;
     };
   }
+}
+
+/** Inject equal CPU work into main-thread and Worker base64 paths, then count rendered frames. */
+export async function installAssistEncodingLoad(page: Page) {
+  await page.addInitScript(() => {
+    const fixture = { frames: 0, framesBeforeTranscribe: -1, workers: 0 };
+    window.assistPaintFixture = fixture;
+    const observe = () => {
+      if (
+        document.querySelector(
+          'dialog[data-phase="submitting"] .assist-send[aria-busy="true"] .assist-spinner',
+        )
+      )
+        fixture.frames++;
+      requestAnimationFrame(observe);
+    };
+    requestAnimationFrame(observe);
+    const nativeBtoa = window.btoa.bind(window);
+    window.btoa = (value) => {
+      const until = performance.now() + 1000;
+      while (performance.now() < until) {
+        /* Deliberate fixture CPU load. */
+      }
+      return nativeBtoa(value);
+    };
+    const nativeFetch = window.fetch.bind(window);
+    window.fetch = (input, init) => {
+      if (String(input).includes("/api/assist/transcribe"))
+        fixture.framesBeforeTranscribe = fixture.frames;
+      return nativeFetch(input, init);
+    };
+    const NativeWorker = window.Worker;
+    window.Worker = class extends NativeWorker {
+      constructor(url: string | URL, options?: WorkerOptions) {
+        if (!String(url).includes("audio-encode")) {
+          super(url, options);
+          return;
+        }
+        fixture.workers++;
+        const source = `
+          const nativeBtoa = self.btoa.bind(self);
+          self.btoa = value => {
+            const until = performance.now() + 1000;
+            while (performance.now() < until) {}
+            return nativeBtoa(value);
+          };
+          self.onmessage = async event => {
+            await import(${JSON.stringify(String(url))});
+            self.onmessage(event);
+          };
+        `;
+        const bootstrap = URL.createObjectURL(new Blob([source], { type: "text/javascript" }));
+        super(bootstrap, options);
+        this.addEventListener("message", () => URL.revokeObjectURL(bootstrap), { once: true });
+        this.addEventListener("error", () => URL.revokeObjectURL(bootstrap), { once: true });
+      }
+    };
+  });
 }
 
 /** Real AudioContext/AudioWorklet; only the microphone is replaced by generated tones. */
