@@ -1,280 +1,320 @@
-/* A listening mode on the current screen, with no card or settings chrome. */
 .assist-mode {
   position: fixed;
-  inset: 0;
+  inset: auto 0;
+  top: var(--assist-top, 0px);
   width: 100%;
   max-width: none;
-  height: 100dvh;
+  height: var(--assist-height, 100dvh);
   max-height: none;
   margin: 0;
-  padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom));
-  overflow-y: auto;
+  padding: max(16px, env(safe-area-inset-top)) clamp(16px, 4vw, 32px)
+    max(14px, env(safe-area-inset-bottom));
   border: 0;
+  overflow: hidden;
   color: #292524;
-  background: transparent;
+  background: #f6f4ef;
 }
-
 .assist-mode[open] {
   display: flex;
   flex-direction: column;
-  align-items: center;
 }
-
 .assist-mode::backdrop {
-  background: linear-gradient(180deg, rgb(246 244 239 / 84%), rgb(246 244 239 / 97%) 70%);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: #f6f4ef;
 }
-
-.assist-conversation {
-  width: min(100%, 32rem);
-  margin: auto 0;
-  padding: 32px 0;
-  text-align: center;
-  animation: assist-appear 240ms ease-out;
-}
-
-.assist-orb {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: 148px;
-  height: 148px;
-  margin: 0 auto 34px;
-  isolation: isolate;
-}
-
-.assist-orb-light {
-  position: absolute;
-  inset: -22px;
-  border-radius: 50%;
-  background: conic-gradient(from 30deg, #e4c6ed, #d5d1f4, #bce5df, #f2e1c9, #e4c6ed);
-  filter: blur(25px);
-  opacity: 0.65;
-  animation: assist-breathe 4s ease-in-out infinite;
-}
-
-.assist-orb-core {
-  position: absolute;
-  inset: 4px;
-  border-radius: 50%;
-  background: radial-gradient(
-    circle at 35% 24%,
-    #fff 0%,
-    rgb(255 255 255 / 84%) 30%,
-    rgb(243 240 247 / 75%) 66%,
-    rgb(218 232 228 / 70%)
-  );
-  box-shadow:
-    inset 0 1px 3px rgb(255 255 255 / 95%),
-    inset 0 -5px 14px rgb(197 192 212 / 15%),
-    0 12px 38px -22px rgb(86 78 112 / 28%);
-}
-
-.assist-wave {
-  position: relative;
+.assist-header {
   display: flex;
   align-items: center;
-  gap: 5px;
-  height: 36px;
-  color: #635c72;
+  justify-content: space-between;
+  width: min(100%, 960px);
+  flex-shrink: 0;
+  margin: 0 auto;
 }
-
-.assist-wave i {
-  display: block;
-  width: 4px;
-  height: 12px;
-  border-radius: 8px;
-  background: currentColor;
+.assist-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
 }
-
-.assist-wave i:nth-child(2),
-.assist-wave i:nth-child(4) {
-  height: 23px;
+.assist-icon-button,
+.assist-send {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  transition:
+    background 160ms,
+    color 160ms;
 }
-.assist-wave i:nth-child(3) {
-  height: 34px;
+.assist-icon-button {
+  color: #57534e;
+  background: transparent;
 }
-.assist-mode[data-phase="recording"] .assist-wave i,
-.assist-mode[data-phase="speaking"] .assist-wave i {
-  animation: assist-wave 800ms ease-in-out infinite alternate;
+.assist-icon-button:hover {
+  color: #292524;
+  background: rgb(41 37 36 / 6%);
 }
-.assist-wave i:nth-child(2) {
-  animation-delay: -320ms;
+.assist-close {
+  background: rgb(41 37 36 / 4%);
 }
-.assist-wave i:nth-child(3) {
-  animation-delay: -160ms;
+.assist-thread {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 0;
+  width: min(100%, 640px);
+  margin: 0 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
 }
-.assist-wave i:nth-child(4) {
-  animation-delay: -480ms;
+.assist-welcome {
+  padding: 28px 0 48px;
+  text-align: center;
+  animation: assist-appear 180ms ease-out;
 }
-.assist-wave i:nth-child(5) {
-  animation-delay: -240ms;
+.assist-mark {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  margin: 0 auto 22px;
+  border: 1px solid rgb(41 37 36 / 8%);
+  border-radius: 18px;
+  color: #393530;
+  background: rgb(255 255 255 / 60%);
+  box-shadow: 0 4px 12px -8px rgb(41 37 36 / 15%);
 }
-.assist-mode[data-phase="processing"] .assist-orb-light {
-  animation: assist-think 5s linear infinite;
+.assist-welcome h1 {
+  margin: 0;
+  font-size: clamp(25px, 4.5vw, 32px);
+  line-height: 1.5;
+  font-weight: 550;
+  letter-spacing: -0.04em;
 }
-.assist-mode[data-phase="error"] .assist-orb {
-  opacity: 0.45;
-}
-.assist-mode[data-phase="error"] .assist-orb-light {
-  animation: none;
-}
-
-.assist-state {
+.assist-welcome p {
+  margin-top: 10px;
   font-size: 14px;
-  color: #635d59;
-  letter-spacing: 0.06em;
+  color: #6f6861;
 }
-.assist-words {
-  margin-top: 24px;
+.assist-messages {
+  width: 100%;
+  padding: 28px 2px;
+  margin-bottom: auto;
   overflow-wrap: anywhere;
 }
-.assist-example {
+.assist-user-message {
+  width: fit-content;
+  max-width: 88%;
+  margin: 0 0 28px auto;
+  padding: 12px 18px;
+  border-radius: 24px 24px 6px 24px;
+  background: #eae6df;
   font-size: 16px;
-  color: #6d6762;
   line-height: 1.8;
+  white-space: pre-wrap;
 }
-.assist-transcript {
-  margin-bottom: 14px;
-  color: #6d6762;
-  font-size: 14px;
-  line-height: 1.8;
-}
-.assist-reply {
-  font-size: clamp(20px, 4.8vw, 26px);
-  line-height: 1.8;
-  letter-spacing: 0.025em;
-}
-.assist-results {
-  max-height: min(24dvh, 14rem);
-  overflow-y: auto;
-  margin: 22px auto 0;
-  padding: 0 16px;
-  font-size: 15px;
-  color: #57534e;
-  line-height: 2;
-}
-.assist-results:focus-visible {
-  outline: 2px solid #857a98;
-  outline-offset: 4px;
-  border-radius: 8px;
-}
-.assist-error {
-  margin-top: 16px;
-  font-size: 15px;
-  color: #67544c;
+.assist-answer {
+  font-size: 17px;
   line-height: 1.9;
 }
-.assist-review {
-  text-align: left;
+.assist-results {
+  margin-top: 18px;
+  padding: 0 0 0 20px;
+  font-size: 15px;
+  line-height: 2;
 }
-.assist-review label {
+.assist-results ul {
+  list-style: disc;
+}
+.assist-more {
+  margin-top: 12px;
+  font-size: 12px;
+  color: #6f6861;
+}
+.assist-input-area {
+  flex-shrink: 0;
+  width: min(100%, 640px);
+  margin: 12px auto 0;
+}
+.assist-composer {
+  padding: 12px;
+  border: 1px solid rgb(71 65 57 / 13%);
+  border-radius: 28px;
+  background: #fffefa;
+  box-shadow:
+    0 5px 24px -14px rgb(52 45 34 / 16%),
+    0 1px 2px rgb(52 45 34 / 3%);
+}
+.assist-composer:focus-within {
+  border-color: rgb(71 65 57 / 26%);
+}
+.assist-composer textarea {
   display: block;
-  margin-bottom: 8px;
-  font-size: 14px;
-}
-.assist-review textarea {
   width: 100%;
-  resize: vertical;
-  padding: 12px 14px;
-  border: 1px solid rgb(120 113 108 / 25%);
-  border-radius: 16px;
-  background: rgb(255 255 255 / 45%);
+  min-height: 80px;
+  max-height: 180px;
+  resize: none;
+  margin: 0;
+  padding: 8px 8px 16px;
+  border: 0;
+  outline: none;
+  background: transparent;
   color: #292524;
   font: inherit;
   font-size: 16px;
-  line-height: 1.8;
+  line-height: 1.7;
 }
-.assist-review textarea:focus-visible {
-  outline: 2px solid #857a98;
-  outline-offset: 3px;
+.assist-composer textarea[hidden] {
+  display: none;
 }
-.assist-review p {
-  margin-top: 8px;
-  font-size: 12px;
-  line-height: 1.8;
-  color: #6d6762;
+.assist-composer textarea::placeholder {
+  color: #746c64;
 }
-.assist-actions {
+.assist-composer textarea[aria-invalid="true"] {
+  color: #9b3f32;
+}
+.assist-toolbar {
   display: flex;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 18px;
+  align-items: center;
+  gap: 8px;
 }
-.assist-actions button {
-  min-height: 44px;
-  padding: 10px 20px;
+.assist-state {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding-left: 3px;
+  color: #6f6861;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.assist-send {
+  background: #292524;
+  color: #fffefa;
+}
+.assist-send:hover {
+  background: #44403c;
+}
+.assist-send-recording {
+  display: flex;
+  width: auto;
+  gap: 7px;
+  padding: 0 14px;
   border-radius: 24px;
-  border: 1px solid rgb(120 113 108 / 20%);
-  background: rgb(255 255 255 / 40%);
-  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
 }
-.assist-actions button[type="submit"] {
-  background: #635c72;
-  color: white;
-  border-color: transparent;
+.assist-stop {
+  color: #9b3f32;
+  background: #f7eae6;
 }
-.assist-actions button:disabled {
-  opacity: 0.45;
+.assist-stop:hover {
+  color: #863327;
+  background: #f0dcd6;
+}
+.assist-icon-button:disabled,
+.assist-send:disabled {
   cursor: default;
+  color: #8b847a;
+  background: #ece8e0;
 }
-.assist-actions button:focus-visible {
-  outline: 2px solid #857a98;
+.assist-icon-button:focus-visible,
+.assist-send:focus-visible,
+.assist-results:focus-visible {
+  outline: 2px solid #625c53;
   outline-offset: 4px;
 }
-.assist-exit {
-  flex-shrink: 0;
-  padding-top: 16px;
+.assist-recording {
+  display: flex;
+  min-height: 80px;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 12px 8px 20px;
+}
+.assist-recording > span {
+  font-size: 14px;
+  color: #625c53;
+  font-variant-numeric: tabular-nums;
+  min-width: 38px;
+}
+.assist-wave {
+  display: flex;
+  height: 46px;
+  align-items: center;
+  gap: 4px;
+}
+.assist-wave i {
+  display: block;
+  width: 3px;
+  border-radius: 4px;
+  background: #57534e;
+  animation: assist-wave 900ms ease-in-out infinite alternate;
+  transform-origin: center;
+}
+.assist-mode[data-phase="starting"] .assist-wave i {
+  animation-play-state: paused;
+  opacity: 0.4;
+}
+.assist-privacy {
+  margin-top: 12px;
   text-align: center;
-}
-.assist-close {
-  display: grid;
-  place-items: center;
-  width: 56px;
-  height: 56px;
-  margin: 0 auto;
-  border-radius: 50%;
-  background: rgb(255 255 255 / 80%);
-  color: #57534e;
-  box-shadow: 0 2px 14px rgb(80 70 60 / 5%);
-  cursor: pointer;
-  transition:
-    background 180ms,
-    color 180ms;
-}
-.assist-close:hover {
-  background: white;
-  color: #292524;
-}
-.assist-close:focus-visible {
-  outline: 2px solid #857a98;
-  outline-offset: 5px;
-}
-.assist-exit p {
-  margin-top: 18px;
+  color: #6f6861;
   font-size: 11px;
-  color: #78716c;
+  line-height: 1.6;
 }
-
+.assist-error {
+  margin: 0 6px 12px;
+  color: #914336;
+  font-size: 14px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.assist-thinking {
+  display: flex;
+  gap: 5px;
+  padding: 4px;
+}
+.assist-thinking i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #78716c;
+  animation: assist-think 900ms ease-in-out infinite alternate;
+}
+.assist-thinking i:nth-child(2) {
+  animation-delay: 150ms;
+}
+.assist-thinking i:nth-child(3) {
+  animation-delay: 300ms;
+}
+.assist-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
 @keyframes assist-appear {
   from {
     opacity: 0;
+    transform: translateY(4px);
   }
   to {
     opacity: 1;
-  }
-}
-@keyframes assist-breathe {
-  0%,
-  100% {
-    transform: scale(0.94);
-    opacity: 0.5;
-  }
-  50% {
-    transform: scale(1.08);
-    opacity: 0.75;
+    transform: translateY(0);
   }
 }
 @keyframes assist-wave {
@@ -286,31 +326,41 @@
   }
 }
 @keyframes assist-think {
+  from {
+    opacity: 0.3;
+  }
   to {
-    transform: rotate(360deg);
+    opacity: 1;
   }
 }
-
-@media (max-height: 600px) {
-  .assist-conversation {
-    padding: 8px 0;
+@media (min-width: 768px) {
+  .assist-input-area {
+    margin-bottom: clamp(12px, 4vh, 44px);
   }
-  .assist-orb {
-    width: 88px;
-    height: 88px;
-    margin-bottom: 18px;
+}
+@media (max-height: 520px) {
+  .assist-welcome {
+    padding: 8px 0 16px;
   }
-  .assist-words {
-    margin-top: 14px;
+  .assist-mark {
+    display: none;
+  }
+  .assist-welcome h1 {
+    font-size: 22px;
+  }
+  .assist-composer textarea {
+    min-height: 72px;
+    max-height: 110px;
+  }
+  .assist-recording {
+    min-height: 72px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .assist-mode .assist-conversation,
-  .assist-mode .assist-orb-light,
-  .assist-mode .assist-wave i {
-    animation: none;
-  }
-  .assist-close {
-    transition: none;
+  .assist-mode *,
+  .assist-mode *::before,
+  .assist-mode *::after {
+    animation: none !important;
+    transition: none !important;
   }
 }
