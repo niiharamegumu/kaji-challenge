@@ -34,6 +34,17 @@ describe("assist contract and audio boundary", () => {
     { intent: "delete_todos", names: Array(51).fill("牛乳"), categoryName: null },
     { intent: "list_todos", categoryName: null, nameQuery: "" },
     { intent: "update_todo", name: "牛乳" },
+    { intent: "batch_todos", actions: [add] },
+    { intent: "batch_todos", actions: Array(11).fill(add) },
+    { intent: "batch_todos", actions: [{ intent: "batch_todos", actions: [add, add] }, add] },
+    { intent: "batch_todos", actions: [add, { intent: "unsupported", reason: "operation" }] },
+    {
+      intent: "batch_todos",
+      actions: [
+        { ...add, items: Array(50).fill(add.items[0]) },
+        { intent: "complete_todos", names: ["塩"], categoryName: null },
+      ],
+    },
     { ...add, dueDate: "2026-10-24" },
     { ...add, names: ["牛乳", "卵"] },
     { ...add, notes: "ignored?" },
@@ -392,6 +403,109 @@ describe("assist with real D1 and fixture AI", () => {
     });
     const categories = await connection.repository.ListTodoCategories(teamId);
     expect((await items())[0].CategoryID).toBe(categories.find((c) => c?.name === "買い物")?.id);
+  });
+  it("completes salt and adds lemon from one interpretation without dropping either command", async () => {
+    ai.interpret.mockResolvedValue({
+      intent: "add_todo",
+      items: [
+        { name: "塩", categoryName: null },
+        { name: "塩", categoryName: null },
+      ],
+    });
+    await request();
+    ai.interpret.mockClear().mockResolvedValue({
+      intent: "batch_todos",
+      actions: [
+        { intent: "complete_todos", names: ["塩"], categoryName: null },
+        { intent: "add_todo", items: [{ name: "レモン", categoryName: null }] },
+      ],
+    });
+    const result = await request({ transcript: "塩は購入した、レモンを追加して" });
+    expect(result).toMatchObject({
+      data: {
+        kind: "batch",
+        results: [
+          { kind: "removed", action: "complete", count: 2 },
+          { kind: "added", items: [{ name: "レモン" }] },
+        ],
+      },
+      changedTeams: [teamId],
+    });
+    expect(ai.interpret).toHaveBeenCalledOnce();
+    expect((await items()).map((item) => item.Name)).toEqual(["レモン"]);
+  });
+  it("preserves every pending command and performs no writes before missing category clarification", async () => {
+    await category("買い物");
+    ai.interpret.mockResolvedValue({
+      intent: "add_todo",
+      items: [{ name: "塩", categoryName: "買い物" }],
+    });
+    await request();
+    const actions = [
+      { intent: "complete_todos", names: ["塩"], categoryName: null },
+      { intent: "add_todo", items: [{ name: "レモン", categoryName: null }] },
+    ];
+    ai.interpret.mockResolvedValue({ intent: "batch_todos", actions });
+    const result = (await request()).data;
+    expect(result).toMatchObject({
+      kind: "clarify",
+      pendingDraft: { actions },
+      replyText: expect.stringContaining("まだ操作していません"),
+    });
+    expect((await items()).map((item) => item.Name)).toEqual(["塩"]);
+    if (result.kind !== "clarify") throw new Error("Expected clarification");
+    ai.interpret.mockResolvedValue({ intent: "clarify" });
+    const repeated = (await request({ transcript: "どこ？", pendingDraft: result.pendingDraft }))
+      .data;
+    expect(repeated).toMatchObject({ kind: "clarify", pendingDraft: { actions } });
+    expect((await items()).map((item) => item.Name)).toEqual(["塩"]);
+    ai.interpret.mockResolvedValue({
+      intent: "batch_todos",
+      actions: [
+        actions[0],
+        { intent: "add_todo", items: [{ name: "レモン", categoryName: "買い物" }] },
+      ],
+    });
+    const saved = (await request({ transcript: "買い物", pendingDraft: result.pendingDraft })).data;
+    expect(ai.interpret.mock.lastCall?.[1]?.actions).toEqual(actions);
+    expect(saved).toMatchObject({
+      kind: "batch",
+      results: [{ count: 1 }, { items: [{ name: "レモン" }] }],
+    });
+    expect((await items()).map((item) => item.Name)).toEqual(["レモン"]);
+  });
+  it("executes mixed additions, removals and searches in spoken order", async () => {
+    ai.interpret.mockResolvedValue({
+      intent: "batch_todos",
+      actions: [
+        { intent: "add_todo", items: [{ name: "レモン", categoryName: null }] },
+        { intent: "list_todos", categoryName: null, nameQuery: "レモン" },
+        { intent: "delete_todos", names: ["レモン"], categoryName: null },
+        { intent: "list_todos", categoryName: null },
+      ],
+    });
+    expect((await request()).data).toMatchObject({
+      kind: "batch",
+      results: [
+        { kind: "added" },
+        { kind: "listed", total: 1 },
+        { kind: "removed", count: 1 },
+        { kind: "listed", total: 0 },
+      ],
+    });
+    expect(await items()).toEqual([]);
+  });
+  it("rejects an unknown category in any mixed command before an earlier completion can write", async () => {
+    await request();
+    ai.interpret.mockResolvedValue({
+      intent: "batch_todos",
+      actions: [
+        { intent: "complete_todos", names: ["牛乳"], categoryName: null },
+        { intent: "list_todos", categoryName: "存在しない" },
+      ],
+    });
+    expect((await request()).data.kind).toBe("unsupported");
+    expect((await items()).map((item) => item.Name)).toEqual(["牛乳"]);
   });
   it("combines category and normalized name substring searches without changing data", async () => {
     await category("買い物");
