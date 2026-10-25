@@ -128,6 +128,40 @@ it("stops tracks from a permission grant that arrives after closing the panel", 
   expect(fixture.nodes).toHaveLength(0);
 });
 
+it("loads the worklet while microphone permission is still pending", async () => {
+  const module = deferred<void>();
+  const fixture = setup((context) =>
+    context.audioWorklet.addModule.mockReturnValue(module.promise),
+  );
+  const permission = deferred<MediaStream>();
+  fixture.getUserMedia.mockReturnValue(permission.promise);
+  const capture = fixture.start();
+  expect(fixture.getUserMedia).toHaveBeenCalledOnce();
+  expect(fixture.contexts[0].audioWorklet.addModule).toHaveBeenCalledOnce();
+  expect(fixture.contexts[0].createMediaStreamSource).not.toHaveBeenCalled();
+  module.resolve();
+  permission.resolve(fixture.stream);
+  await capture.ready;
+  await capture.listen();
+  expect(fixture.contexts[0].audioWorklet.addModule).toHaveBeenCalledOnce();
+  expect(fixture.contexts).toHaveLength(1);
+});
+
+it("handles an early module failure and recovers after permission without another prompt", async () => {
+  const fixture = setup((context, index) => {
+    if (index === 0) context.audioWorklet.addModule.mockRejectedValue(new Error("module failed"));
+  });
+  const permission = deferred<MediaStream>();
+  fixture.getUserMedia.mockReturnValue(permission.promise);
+  const capture = fixture.start();
+  await vi.advanceTimersByTimeAsync(0);
+  permission.resolve(fixture.stream);
+  await capture.ready;
+  await capture.listen();
+  expect(fixture.contexts).toHaveLength(2);
+  expect(fixture.getUserMedia).toHaveBeenCalledOnce();
+});
+
 it("bounds pending permission, releases late tracks, and can start a fresh session", async () => {
   const fixture = setup();
   const permission = deferred<MediaStream>();
