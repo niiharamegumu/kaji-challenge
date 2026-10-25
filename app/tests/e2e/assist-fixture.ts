@@ -1,4 +1,25 @@
-import type { Page } from "@playwright/test";
+import { expect, type Page, type Request as BrowserRequest } from "@playwright/test";
+
+/** Inspect the actual browser multipart payload; never assume a JSON/base64 body. */
+export async function readAssistAudioUpload(request: BrowserRequest) {
+  expect(request.headers()["content-type"]).toContain("multipart/form-data; boundary=");
+  const body = request.postDataBuffer();
+  if (!body) throw new Error("Missing audio body");
+  const form = await new globalThis.Request(request.url(), {
+    method: "POST",
+    headers: request.headers(),
+    body: new Uint8Array(body),
+  }).formData();
+  expect([...form.keys()].sort()).toEqual(["audio", "expectedTeamId"]);
+  const audio = form.get("audio");
+  if (!(audio instanceof Blob)) throw new Error("Missing WAV Blob");
+  expect(audio.type).toBe("audio/wav");
+  expect(form.get("expectedTeamId")).toMatch(/^[0-9a-f-]{36}$/);
+  return {
+    wav: Buffer.from(await audio.arrayBuffer()),
+    expectedTeamId: form.get("expectedTeamId"),
+  };
+}
 
 declare global {
   interface Window {
@@ -18,7 +39,7 @@ declare global {
   }
 }
 
-/** Inject equal CPU work into main-thread and Worker base64 paths, then count rendered frames. */
+/** Inject equal CPU work into main-thread and Worker WAV paths, then count rendered frames. */
 export async function installAssistEncodingLoad(page: Page) {
   await page.addInitScript(() => {
     const fixture = { frames: 0, framesBeforeTranscribe: -1, workers: 0 };
@@ -33,13 +54,17 @@ export async function installAssistEncodingLoad(page: Page) {
       requestAnimationFrame(observe);
     };
     requestAnimationFrame(observe);
-    const nativeBtoa = window.btoa.bind(window);
-    window.btoa = (value) => {
-      const until = performance.now() + 1000;
-      while (performance.now() < until) {
-        /* Deliberate fixture CPU load. */
+    const nativeSetInt16 = DataView.prototype.setInt16;
+    let delayed = false;
+    DataView.prototype.setInt16 = function (offset, value, littleEndian) {
+      if (!delayed) {
+        delayed = true;
+        const until = performance.now() + 1000;
+        while (performance.now() < until) {
+          /* Deliberate fixture CPU load, once per encoding. */
+        }
       }
-      return nativeBtoa(value);
+      return nativeSetInt16.call(this, offset, value, littleEndian);
     };
     const nativeFetch = window.fetch.bind(window);
     window.fetch = (input, init) => {
@@ -56,11 +81,15 @@ export async function installAssistEncodingLoad(page: Page) {
         }
         fixture.workers++;
         const source = `
-          const nativeBtoa = self.btoa.bind(self);
-          self.btoa = value => {
-            const until = performance.now() + 1000;
-            while (performance.now() < until) {}
-            return nativeBtoa(value);
+          const nativeSetInt16 = DataView.prototype.setInt16;
+          let delayed = false;
+          DataView.prototype.setInt16 = function(offset, value, littleEndian) {
+            if (!delayed) {
+              delayed = true;
+              const until = performance.now() + 1000;
+              while (performance.now() < until) {}
+            }
+            return nativeSetInt16.call(this, offset, value, littleEndian);
           };
           self.onmessage = async event => {
             await import(${JSON.stringify(String(url))});
