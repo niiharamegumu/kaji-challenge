@@ -55,20 +55,41 @@ function setup(configure?: (context: AudioContextFixture, index: number) => void
     "AudioWorkletNode",
     class {
       port: {
-        onmessage: ((event: { data: Float32Array | { type: "finished" } }) => void) | null;
+        onmessage:
+          | ((event: {
+              data: Float32Array | { type: "started" } | { type: "finished"; sampleCount: number };
+            }) => void)
+          | null;
         close: ReturnType<typeof vi.fn>;
         postMessage: ReturnType<typeof vi.fn>;
-      } = {
-        onmessage: null,
-        close: vi.fn(),
-        postMessage: vi.fn((message) => {
-          if (message.type === "finish")
-            queueMicrotask(() => this.port.onmessage?.({ data: { type: "finished" } }));
-        }),
       };
       connect = vi.fn();
       disconnect = vi.fn();
       constructor() {
+        let samples = 0;
+        let receive: typeof this.port.onmessage = null;
+        this.port = {
+          get onmessage() {
+            return receive;
+          },
+          set onmessage(callback) {
+            receive = callback
+              ? (event) => {
+                  if (event.data instanceof Float32Array) samples += event.data.length;
+                  callback(event);
+                }
+              : null;
+          },
+          close: vi.fn(),
+          postMessage: vi.fn((message) => {
+            if (message.type === "start") {
+              samples = 0;
+              queueMicrotask(() => receive?.({ data: { type: "started" } }));
+            }
+            if (message.type === "finish")
+              queueMicrotask(() => receive?.({ data: { type: "finished", sampleCount: samples } }));
+          }),
+        };
         nodes.push(this);
       }
     },
@@ -270,7 +291,7 @@ it("does not finish at silence, flushes the tail on explicit stop, and releases 
   await capture.ready;
   await capture.listen();
   const receive = fixture.nodes[0].port.onmessage as (event: {
-    data: Float32Array | { type: "finished" };
+    data: Float32Array | { type: "finished"; sampleCount: number };
   }) => void;
   receive({ data: new Float32Array(48000).fill(0.2) });
   receive({ data: new Float32Array(48000 * 8) });
@@ -279,7 +300,7 @@ it("does not finish at silence, flushes the tail on explicit stop, and releases 
   fixture.nodes[0].port.postMessage.mockImplementation((message) => {
     if (message.type === "finish") {
       receive({ data: final });
-      receive({ data: { type: "finished" } });
+      receive({ data: { type: "finished", sampleCount: 48000 * 9 + 9600 } });
     }
   });
   await capture.send();
@@ -288,6 +309,82 @@ it("does not finish at silence, flushes the tail on explicit stop, and releases 
   expect(fixture.callbacks.onAudio.mock.calls[0][0].length).toBe(44 + 16000 * 9.2 * 2);
   expect(fixture.track.stop).toHaveBeenCalledOnce();
   expect(fixture.nodes[0].port.postMessage).toHaveBeenCalledWith({ type: "finish" });
+});
+it("does not announce readiness before the worklet processes its first input", async () => {
+  const fixture = setup();
+  const capture = fixture.start();
+  await capture.ready;
+  fixture.nodes[0].port.postMessage.mockImplementation(() => {});
+  const ready = vi.fn();
+  const listening = capture.listen().then(ready);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(ready).not.toHaveBeenCalled();
+  const receive = fixture.nodes[0].port.onmessage as (event: { data: { type: string } }) => void;
+  receive({ data: { type: "started" } });
+  await listening;
+  expect(ready).toHaveBeenCalledOnce();
+});
+it("keeps the complete beginning, middle and end even if listen is called again", async () => {
+  const fixture = setup();
+  const capture = fixture.start();
+  await capture.ready;
+  const listening = capture.listen();
+  expect(capture.listen()).toBe(listening);
+  await listening;
+  const receive = fixture.nodes[0].port.onmessage as (event: { data: Float32Array }) => void;
+  receive({ data: new Float32Array(48000).fill(0.12) });
+  await capture.listen();
+  receive({ data: new Float32Array(48000 * 32) });
+  receive({ data: new Float32Array(48000).fill(0.24) });
+  receive({ data: new Float32Array(48000).fill(0.36) });
+  await capture.send();
+  expect(
+    fixture.nodes[0].port.postMessage.mock.calls.filter(([message]) => message.type === "start"),
+  ).toHaveLength(1);
+  const wav = fixture.callbacks.onAudio.mock.calls[0][0] as Uint8Array;
+  expect(wav.length).toBe(44 + 35 * 16000 * 2);
+  const view = new DataView(wav.buffer);
+  expect(view.getInt16(44, true)).toBeCloseTo(0.12 * 32767, 0);
+  expect(view.getInt16(44 + 33 * 16000 * 2, true)).toBeCloseTo(0.24 * 32767, 0);
+  expect(view.getInt16(44 + 34 * 16000 * 2, true)).toBeCloseTo(0.36 * 32767, 0);
+});
+it.each([1, 120])(
+  "rejects a missing PCM block after %s seconds instead of sending partial audio",
+  async (seconds) => {
+    const fixture = setup();
+    const capture = fixture.start();
+    await capture.ready;
+    await capture.listen();
+    const receive = fixture.nodes[0].port.onmessage as (event: {
+      data: Float32Array | { type: "finished"; sampleCount: number };
+    }) => void;
+    fixture.nodes[0].port.postMessage.mockImplementation((message) => {
+      if (message.type === "finish")
+        receive({ data: { type: "finished", sampleCount: 48000 * seconds + 1024 } });
+    });
+    receive({ data: new Float32Array(48000 * seconds).fill(0.2) });
+    await capture.send();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fixture.callbacks.onAudio).not.toHaveBeenCalled();
+    expect(fixture.callbacks.onStop).toHaveBeenCalledWith(
+      expect.stringContaining("録音の一部"),
+      "error",
+    );
+    expect(fixture.track.stop).toHaveBeenCalledOnce();
+  },
+);
+it("times out a worklet that never starts processing without claiming to be recording", async () => {
+  const fixture = setup();
+  const capture = fixture.start();
+  await capture.ready;
+  fixture.nodes[0].port.postMessage.mockImplementation(() => {});
+  const rejected = vi.fn();
+  const listening = capture.listen().catch(rejected);
+  await vi.advanceTimersByTimeAsync(5000);
+  await listening;
+  expect(rejected).toHaveBeenCalledOnce();
+  expect(fixture.callbacks.onAudio).not.toHaveBeenCalled();
+  expect(fixture.track.stop).toHaveBeenCalledOnce();
 });
 it("bounds a missing flush acknowledgement without sending incomplete audio", async () => {
   const fixture = setup();
