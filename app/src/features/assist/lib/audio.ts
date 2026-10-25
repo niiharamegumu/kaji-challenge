@@ -48,51 +48,25 @@ export function wavBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
+/** Explicit dictation keeps pauses and stops only on request or the duration limit. */
 export class SpeechDetector {
   private chunks: Float32Array[] = [];
-  private preRoll: Float32Array[] = [];
-  private elapsed = 0;
-  private duration = 0;
-  private silence = 0;
+  private samples = 0;
   private voiced = 0;
-  private noise = 0.001;
-  recording = false;
   constructor(private sampleRate: number) {}
-  push(samples: Float32Array): "waiting" | "recording" | "ready" | "idle" | "too_long" {
-    const seconds = samples.length / this.sampleRate;
-    this.elapsed += seconds;
-    const rms = Math.sqrt(samples.reduce((sum, x) => sum + x * x, 0) / samples.length);
-    const speech = rms > Math.max(0.008, this.noise * 3);
-    if (!this.recording) {
-      this.preRoll.push(samples);
-      while (
-        this.preRoll.length > 1 &&
-        this.preRoll.reduce((sum, x) => sum + x.length, 0) > this.sampleRate * 0.2
-      )
-        this.preRoll.shift();
-      if (!speech) {
-        this.noise = Math.min(0.015, this.noise * 0.95 + rms * 0.05);
-        return this.elapsed >= 20 ? "idle" : "waiting";
-      }
-      this.recording = true;
-      this.chunks = this.preRoll;
-      this.preRoll = [];
-      this.duration = this.chunks.reduce((sum, x) => sum + x.length, 0) / this.sampleRate;
-    } else {
+  push(input: Float32Array): "waiting" | "recording" | "too_long" {
+    const remaining = Math.max(0, this.sampleRate * assistAudio.maxSeconds - this.samples);
+    const samples = input.subarray(0, remaining);
+    if (samples.length) {
       this.chunks.push(samples);
-      this.duration += seconds;
+      this.samples += samples.length;
+      const rms = Math.sqrt(
+        samples.reduce((sum, value) => sum + value * value, 0) / samples.length,
+      );
+      if (rms >= 0.008) this.voiced += samples.length / this.sampleRate;
     }
-    this.silence = speech ? 0 : this.silence + seconds;
-    if (speech) this.voiced += seconds;
-    if (this.duration >= assistAudio.maxSeconds) return "too_long";
-    if (this.silence >= 1) {
-      if (this.voiced >= 0.18) return "ready";
-      this.recording = false;
-      this.chunks = [];
-      this.duration = 0;
-      this.voiced = 0;
-    }
-    return this.recording ? "recording" : "waiting";
+    if (this.samples >= this.sampleRate * assistAudio.maxSeconds) return "too_long";
+    return this.voiced > 0 ? "recording" : "waiting";
   }
   finish() {
     return this.voiced >= 0.18 ? encodeWav(this.chunks, this.sampleRate) : null;
