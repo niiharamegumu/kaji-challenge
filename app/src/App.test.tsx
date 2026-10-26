@@ -334,6 +334,36 @@ describe("App", () => {
     expect(mockGetMe).not.toHaveBeenCalled();
   });
 
+  it("starts the current route data after authentication without waiting for page code", async () => {
+    window.history.pushState({}, "", "/tasks");
+    let finishAuthentication!: (value: unknown) => void;
+    mockGetMe.mockReturnValue(
+      new Promise((resolve) => {
+        finishAuthentication = resolve;
+      }),
+    );
+    render(<App />);
+    expect(mockListTasks).not.toHaveBeenCalled();
+    finishAuthentication({ data: { user: { id: "u1", displayName: "Owner" }, memberships: [] } });
+    await waitFor(() => expect(mockListTasks).toHaveBeenCalledTimes(1));
+    expect(mockPreloadTasksPageChunk).not.toHaveBeenCalled();
+    expect(mockListTodoItems).not.toHaveBeenCalled();
+    expect(mockPrefetchHomeData).not.toHaveBeenCalled();
+  });
+
+  it("uses the requested summary month for direct-route data prefetch", async () => {
+    window.history.pushState({}, "", "/summary?month=2025-02");
+    mockGetMe.mockResolvedValue({
+      data: { user: { id: "u1", displayName: "Owner" }, memberships: [] },
+    });
+    render(<App />);
+    await waitFor(() =>
+      expect(mockSummary).toHaveBeenCalledWith({ month: "2025-02" }, expect.anything()),
+    );
+    expect(mockListTasks).not.toHaveBeenCalled();
+    expect(mockPrefetchHomeData).not.toHaveBeenCalled();
+  });
+
   it("renders task notes on home", async () => {
     mockGetMe.mockResolvedValue({
       data: { user: { id: "u1", displayName: "Owner" }, memberships: [] },
