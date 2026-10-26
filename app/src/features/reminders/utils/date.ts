@@ -1,5 +1,5 @@
 import { dateStringInJST } from "../../../shared/utils/dates";
-export { formatDateLabel } from "../../../shared/utils/dates";
+export { formatDateLabel, monthStartDateKey, monthEndDateKey } from "../../../shared/utils/dates";
 
 export function todayDateKey(date: Date = new Date()) {
   return dateStringInJST(date);
@@ -7,18 +7,6 @@ export function todayDateKey(date: Date = new Date()) {
 
 export function monthKeyFromDateKey(dateKey: string) {
   return dateKey.slice(0, 7);
-}
-
-export function monthStartDateKey(monthKey: string) {
-  return `${monthKey}-01`;
-}
-
-export function monthEndDateKey(monthKey: string) {
-  const [yearPart, monthPart] = monthKey.split("-");
-  const year = Number(yearPart);
-  const month = Number(monthPart);
-  const lastDay = new Date(Date.UTC(year, month, 0));
-  return `${yearPart}-${String(month).padStart(2, "0")}-${String(lastDay.getUTCDate()).padStart(2, "0")}`;
 }
 
 export function endOfWeekDateKey(dateKey: string) {
