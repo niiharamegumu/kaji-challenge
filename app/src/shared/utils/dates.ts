@@ -16,6 +16,18 @@ export function formatDateLabel(dateKey: string) {
   return dateLabelFormatter.format(new Date(`${dateKey}T00:00:00Z`));
 }
 
+export function monthStartDateKey(monthKey: string) {
+  return `${monthKey}-01`;
+}
+
+export function monthEndDateKey(monthKey: string) {
+  const [yearPart, monthPart] = monthKey.split("-");
+  const year = Number(yearPart);
+  const month = Number(monthPart);
+  const lastDay = new Date(Date.UTC(year, month, 0));
+  return `${yearPart}-${String(month).padStart(2, "0")}-${String(lastDay.getUTCDate()).padStart(2, "0")}`;
+}
+
 export const dateStringInJST = (date: Date = new Date()) => {
   const parts = jstDateFormatter.formatToParts(date);
   const getPart = (type: "year" | "month" | "day") =>
