@@ -6,6 +6,7 @@ import {
   uniqueIndex,
   customType,
 } from "drizzle-orm/sqlite-core";
+import { relations } from "drizzle-orm";
 
 // Persist canonical UTC ISO strings while preserving Better Auth's runtime types.
 const isoDate = customType<{ data: Date; driverData: string }>({
@@ -97,3 +98,14 @@ export const rateLimit = sqliteTable("auth_rate_limit", {
   count: integer("count").notNull(),
   lastRequest: isoEpoch("last_request").notNull(),
 });
+
+export const userRelations = relations(user, ({ many }) => ({
+  sessions: many(session),
+  accounts: many(account),
+}));
+export const sessionRelations = relations(session, ({ one }) => ({
+  user: one(user, { fields: [session.userId], references: [user.id] }),
+}));
+export const accountRelations = relations(account, ({ one }) => ({
+  user: one(user, { fields: [account.userId], references: [user.id] }),
+}));

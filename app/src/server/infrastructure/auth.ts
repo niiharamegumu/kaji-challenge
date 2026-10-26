@@ -40,7 +40,7 @@ export function createAuth(db: Database, settings: AuthSettings) {
       disableOriginCheck: false,
       disableCSRFCheck: false,
       ipAddress: { ipAddressHeaders: ["cf-connecting-ip"] },
-      database: { generateId: () => crypto.randomUUID() },
+      database: { generateId: () => crypto.randomUUID(), joins: true },
       useSecureCookies: new URL(settings.baseURL).protocol === "https:",
       defaultCookieAttributes: { httpOnly: true, sameSite: "lax", path: "/" },
     },

@@ -2,18 +2,24 @@ import type { QueryClient } from "@tanstack/react-query";
 import { prefetchHomeData } from "../features/home/preload";
 import { todoCategoriesQueryOptions, todoItemsQueryOptions } from "../shared/query/todoQueries";
 import { teamMembersQueryOptions } from "../shared/query/teamMembersQuery";
-import { queryKeys } from "../shared/query/queryKeys";
+import { tasksQueryOptions } from "../shared/query/taskQueries";
+import { currentInviteQueryOptions } from "../shared/query/currentInviteQuery";
+import {
+  reminderCalendarQueryOptions,
+  reminderDefinitionsQueryOptions,
+} from "../shared/query/reminderQueries";
 import {
   monthlyPenaltySummaryQueryOptions,
+  penaltyRulesQueryOptions,
   penaltyRulesWithDeletedQueryOptions,
 } from "../shared/query/monthlyPenaltyQueries";
 import { dateStringInJST } from "../shared/utils/dates";
 
 /** ナビゲーション意図の時点で取得する。queryの鮮度・実行中リクエストを共有し、失敗は遷移を妨げない。 */
-export async function prefetchRouteData(client: QueryClient, path: string) {
-  // コードの取得待ちにログアウト・所属変更が起きたら、新しい通信を開始しない。
-  const me = client.getQueryData(queryKeys.me);
-  switch (path) {
+export async function prefetchRouteData(client: QueryClient, destination: string) {
+  const url = new URL(destination, "https://kaji.invalid");
+  const today = dateStringInJST();
+  switch (url.pathname) {
     case "/":
       await prefetchHomeData(client);
       break;
@@ -27,40 +33,38 @@ export async function prefetchRouteData(client: QueryClient, path: string) {
       await client.prefetchQuery(todoCategoriesQueryOptions);
       break;
     case "/tasks": {
-      const { tasksQueryOptions } = await import("../features/tasks/hooks/useTasks");
-      if (client.getQueryData(queryKeys.me) !== me) return;
       await client.prefetchQuery(tasksQueryOptions);
       break;
     }
     case "/penalties": {
-      const { penaltyRulesQueryOptions } =
-        await import("../features/penalties/hooks/usePenaltyRules");
-      if (client.getQueryData(queryKeys.me) !== me) return;
       await client.prefetchQuery(penaltyRulesQueryOptions);
       break;
     }
     case "/settings": {
-      const { currentInviteQueryOptions } = await import("../features/settings/hooks/useSettings");
-      if (client.getQueryData(queryKeys.me) !== me) return;
       await Promise.all([
         client.prefetchQuery(teamMembersQueryOptions),
         client.prefetchQuery(currentInviteQueryOptions()),
       ]);
       break;
     }
-    case "/summary":
+    case "/summary": {
+      const requestedMonth = url.searchParams.get("month");
+      const month =
+        requestedMonth && /^\d{4}-\d{2}$/.test(requestedMonth) ? requestedMonth : today.slice(0, 7);
       await Promise.all([
-        client.prefetchQuery(monthlyPenaltySummaryQueryOptions(dateStringInJST().slice(0, 7))),
+        client.prefetchQuery(monthlyPenaltySummaryQueryOptions(month)),
         client.prefetchQuery(penaltyRulesWithDeletedQueryOptions),
       ]);
       break;
+    }
     case "/calendar": {
-      const { reminderDefinitionsQueryOptions, reminderCalendarQueryOptions } =
-        await import("../features/reminders/hooks/useReminders");
-      if (client.getQueryData(queryKeys.me) !== me) return;
+      const date = url.searchParams.get("date");
+      const requestedMonth =
+        date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date.slice(0, 7) : today.slice(0, 7);
+      const month = requestedMonth < today.slice(0, 7) ? today.slice(0, 7) : requestedMonth;
       await Promise.all([
         client.prefetchQuery(reminderDefinitionsQueryOptions),
-        client.prefetchQuery(reminderCalendarQueryOptions(dateStringInJST().slice(0, 7))),
+        client.prefetchQuery(reminderCalendarQueryOptions(month)),
       ]);
       break;
     }

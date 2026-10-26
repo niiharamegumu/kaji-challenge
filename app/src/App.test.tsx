@@ -1,10 +1,11 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import AppShell from "./App";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";
-import { useState } from "react";
+import { lazy, useState } from "react";
 import { getRouter } from "./router";
 function App() {
   const [router] = useState(getRouter);
@@ -20,6 +21,7 @@ vi.mock("./features/auth/api/authClient", () => ({
 }));
 import { appQueryClient } from "./shared/query/queryClient";
 import { queryKeys } from "./shared/query/queryKeys";
+import { tasksQueryOptions } from "./shared/query/taskQueries";
 import { withExpectedConsoleError } from "./test/console";
 
 const mockGetAuthStart = vi.fn();
@@ -39,6 +41,7 @@ const mockPreloadSettingsPageChunk = vi.fn();
 const mockPreloadSummaryPageChunk = vi.fn();
 const mockPreloadReminderCalendarPageChunk = vi.fn();
 const mockPreloadTodoPageChunk = vi.fn();
+const mockTasksPage = vi.fn();
 
 vi.mock("./lib/api/operations", () => ({
   TaskType: { daily: "daily", weekly: "weekly" },
@@ -83,7 +86,7 @@ vi.mock("./features/home/preload", () => ({
 }));
 
 vi.mock("./app/route-chunks", () => ({
-  TasksPage: () => <div>tasks page</div>,
+  TasksPage: () => mockTasksPage(),
   PenaltiesPage: () => <div>penalties page</div>,
   SettingsPage: () => <div>settings page</div>,
   SummaryPage: () => <div>summary page</div>,
@@ -127,6 +130,8 @@ describe("App", () => {
     mockPreloadSummaryPageChunk.mockReset();
     mockPreloadReminderCalendarPageChunk.mockReset();
     mockPreloadTodoPageChunk.mockReset();
+    mockTasksPage.mockReset();
+    mockTasksPage.mockImplementation(() => <div>tasks page</div>);
 
     mockGetTaskOverview.mockResolvedValue({
       data: {
@@ -332,6 +337,57 @@ describe("App", () => {
       expect(screen.getByRole("button", { name: "ホーム" })).toBeInTheDocument();
     });
     expect(mockGetMe).not.toHaveBeenCalled();
+  });
+
+  it("starts the current route data after authentication without waiting for page code", async () => {
+    window.history.pushState({}, "", "/tasks");
+    function LoadedTasksPage() {
+      const tasks = useSuspenseQuery(tasksQueryOptions);
+      return <div>loaded tasks: {tasks.data.length}</div>;
+    }
+    let finishPageLoad!: (module: { default: typeof LoadedTasksPage }) => void;
+    const loadPage = vi.fn(
+      () =>
+        new Promise<{ default: typeof LoadedTasksPage }>((resolve) => {
+          finishPageLoad = resolve;
+        }),
+    );
+    const DeferredTasksPage = lazy(loadPage);
+    mockTasksPage.mockImplementation(() => <DeferredTasksPage />);
+    let finishAuthentication!: (value: unknown) => void;
+    mockGetMe.mockReturnValue(
+      new Promise((resolve) => {
+        finishAuthentication = resolve;
+      }),
+    );
+    render(<App />);
+    expect(mockListTasks).not.toHaveBeenCalled();
+    expect(loadPage).not.toHaveBeenCalled();
+    await act(async () => {
+      finishAuthentication({ data: { user: { id: "u1", displayName: "Owner" }, memberships: [] } });
+    });
+    await waitFor(() => expect(mockListTasks).toHaveBeenCalledTimes(1));
+    expect(loadPage).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("loaded tasks: 0")).not.toBeInTheDocument();
+    expect(mockPreloadTasksPageChunk).not.toHaveBeenCalled();
+    expect(mockListTodoItems).not.toHaveBeenCalled();
+    expect(mockPrefetchHomeData).not.toHaveBeenCalled();
+    await act(async () => finishPageLoad({ default: LoadedTasksPage }));
+    expect(await screen.findByText("loaded tasks: 0")).toBeInTheDocument();
+    expect(mockListTasks).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses the requested summary month for direct-route data prefetch", async () => {
+    window.history.pushState({}, "", "/summary?month=2025-02");
+    mockGetMe.mockResolvedValue({
+      data: { user: { id: "u1", displayName: "Owner" }, memberships: [] },
+    });
+    render(<App />);
+    await waitFor(() =>
+      expect(mockSummary).toHaveBeenCalledWith({ month: "2025-02" }, expect.anything()),
+    );
+    expect(mockListTasks).not.toHaveBeenCalled();
+    expect(mockPrefetchHomeData).not.toHaveBeenCalled();
   });
 
   it("renders task notes on home", async () => {

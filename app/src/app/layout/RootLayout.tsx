@@ -164,10 +164,17 @@ export function RootLayout() {
   }, [isAuthenticated]);
 
   useEffect(() => {
-    if (location.pathname === "/" && meQuery.isSuccess) {
-      prefetchHomeDataOnce();
-    }
-  }, [location.pathname, meQuery.isSuccess, prefetchHomeDataOnce]);
+    if (!meQuery.isSuccess) return;
+    if (location.pathname === "/") prefetchHomeDataOnce();
+    else void prefetchRouteData(queryClient, `${location.pathname}${location.searchStr}`);
+  }, [
+    location.pathname,
+    location.searchStr,
+    meQuery.data,
+    meQuery.isSuccess,
+    prefetchHomeDataOnce,
+    queryClient,
+  ]);
 
   const handleRouteIntent = useCallback(
     (path: string) => {

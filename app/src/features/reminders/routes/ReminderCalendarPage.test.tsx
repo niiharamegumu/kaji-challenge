@@ -15,6 +15,10 @@ const mockFullCalendar = vi.fn((props: Record<string, unknown>): ReactElement =>
 ));
 
 vi.mock("../hooks/useReminders", () => ({
+  useReminderPageQueries: (monthKey: string) => ({
+    definitionsQuery: mockUseReminderDefinitionsQuery(),
+    calendarQuery: mockUseReminderCalendarQuery(monthKey),
+  }),
   useReminderDefinitionsQuery: () => mockUseReminderDefinitionsQuery(),
   useReminderCalendarQuery: (monthKey: string) => mockUseReminderCalendarQuery(monthKey),
   useReminderMutations: (setStatus: (message: string) => void) =>

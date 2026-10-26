@@ -1,5 +1,4 @@
 import {
-  queryOptions,
   useSuspenseQuery,
   useMutation,
   useMutationState,
@@ -7,7 +6,6 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import {
-  listTasks,
   type CreateTaskRequest,
   deleteTask,
   patchTask,
@@ -19,11 +17,8 @@ import {
 } from "../../../lib/api/operations";
 import { queryKeys } from "../../../shared/query/queryKeys";
 import { formatError } from "../../../shared/utils/errors";
-
-export const tasksQueryOptions = queryOptions({
-  queryKey: queryKeys.tasks,
-  queryFn: async ({ signal }) => (await listTasks(undefined, { signal })).data.items,
-});
+import { tasksQueryOptions } from "../../../shared/query/taskQueries";
+export { tasksQueryOptions } from "../../../shared/query/taskQueries";
 const reorderMutationKey = ["task-reorder"];
 
 export function useTasksQuery() {

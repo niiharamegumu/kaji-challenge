@@ -1,17 +1,15 @@
 import {
-  queryOptions,
   keepPreviousData,
   useMutation,
   useQuery,
   useQueryClient,
   useSuspenseQuery,
+  usePrefetchQuery,
 } from "@tanstack/react-query";
 
 import {
   type CreateReminderRequest,
   deleteReminder,
-  listReminderDefinitions,
-  listReminders,
   patchReminder,
   postReminder,
   type Reminder,
@@ -19,29 +17,16 @@ import {
 } from "../../../lib/api/operations";
 import { queryKeys } from "../../../shared/query/queryKeys";
 import { formatError } from "../../../shared/utils/errors";
-import { monthEndDateKey, monthStartDateKey } from "../utils/date";
+import {
+  reminderDefinitionsQueryOptions,
+  reminderCalendarQueryOptions,
+} from "../../../shared/query/reminderQueries";
+export {
+  reminderDefinitionsQueryOptions,
+  reminderCalendarQueryOptions,
+} from "../../../shared/query/reminderQueries";
 
 type StatusSetter = (message: string) => void;
-
-export const reminderDefinitionsQueryOptions = queryOptions({
-  queryKey: queryKeys.reminderDefinitions,
-  queryFn: async ({ signal }) => (await listReminderDefinitions({ signal })).data.items,
-});
-
-export const reminderCalendarQueryOptions = (monthKey: string) =>
-  queryOptions({
-    queryKey: [...queryKeys.reminders, monthKey],
-    queryFn: async ({ signal }) =>
-      (
-        await listReminders(
-          {
-            from: monthStartDateKey(monthKey),
-            to: monthEndDateKey(monthKey),
-          },
-          { signal },
-        )
-      ).data.days,
-  });
 
 export function useReminderDefinitionsQuery() {
   return useSuspenseQuery(reminderDefinitionsQueryOptions);
@@ -52,6 +37,15 @@ export function useReminderCalendarQuery(monthKey: string) {
     ...reminderCalendarQueryOptions(monthKey),
     placeholderData: keepPreviousData,
   });
+}
+
+export function useReminderPageQueries(monthKey: string) {
+  // Start occurrences even when definitions suspend this render. Month changes still
+  // use the observer below to retain the previous data and its error/loading state.
+  usePrefetchQuery(reminderCalendarQueryOptions(monthKey));
+  const definitionsQuery = useReminderDefinitionsQuery();
+  const calendarQuery = useReminderCalendarQuery(monthKey);
+  return { definitionsQuery, calendarQuery };
 }
 
 export function useReminderMutations(setStatus: StatusSetter) {

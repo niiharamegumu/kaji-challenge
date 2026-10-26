@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { getTableName, sql } from "drizzle-orm";
-import { getTableConfig } from "drizzle-orm/sqlite-core";
+import { getTableName, is, sql } from "drizzle-orm";
+import { getTableConfig, SQLiteTable } from "drizzle-orm/sqlite-core";
 import * as business from "../../src/server/infrastructure/schema";
 import * as auth from "../../src/server/infrastructure/auth-schema";
 import { createTestDatabase } from "../helpers/d1";
@@ -14,7 +14,7 @@ afterAll(async () => {
 });
 
 it("maps every migrated table, column, primary key and foreign key to Drizzle", async () => {
-  const tables = Object.values({ ...business, ...auth });
+  const tables = Object.values({ ...business, ...auth }).filter((value) => is(value, SQLiteTable));
   // D1 owns this metadata table; it is not an application migration.
   const actual = await connection.db.all<{ name: string }>(
     sql`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name <> '_cf_METADATA'`,
