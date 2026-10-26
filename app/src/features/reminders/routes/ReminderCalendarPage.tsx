@@ -30,11 +30,7 @@ import { FooterQuickAction } from "../../../shared/components/FooterQuickAction"
 import { FormSheet } from "../../../shared/components/FormSheet";
 import { statusMessageAtom } from "../../../shared/state/status";
 import { PAGE_SECTION_CHROMELESS_CLASS_NAME } from "../../../shared/styles/pageSection";
-import {
-  useReminderCalendarQuery,
-  useReminderDefinitionsQuery,
-  useReminderMutations,
-} from "../hooks/useReminders";
+import { useReminderPageQueries, useReminderMutations } from "../hooks/useReminders";
 import {
   buildCreateReminderRequest,
   buildInitialFormState,
@@ -356,8 +352,7 @@ export function ReminderCalendarPage() {
   const [form, setForm] = useState(() => buildInitialFormState(initialSelectedDate));
   const setStatus = useSetAtom(statusMessageAtom);
   const calendarRef = useRef<CalendarRef | null>(null);
-  const definitionsQuery = useReminderDefinitionsQuery();
-  const calendarQuery = useReminderCalendarQuery(visibleMonth);
+  const { definitionsQuery, calendarQuery } = useReminderPageQueries(visibleMonth);
   const { createReminder, updateReminder, removeReminder } = useReminderMutations(setStatus);
   const isSavingReminder = createReminder.isPending || updateReminder.isPending;
 
