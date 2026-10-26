@@ -28,6 +28,8 @@
 - browserからserver実装を直接importしない。例外は `serverClient.ts` から変換対象Server Functionへの入口と、契約schemaが利用する純粋な日付検証だけ。型importは許可する。
 - `make architecture-check` はUIとTS serverの依存境界を検査する。
 
+境界検査はTypeScriptの構文木からimport・再export・動的importを読み取り、`.ts`と`.tsx`を区別する。他featureの`api`・`model`・`utils`を含む内部ファイルへの参照も禁止し、feature直下の`index.ts`だけを公開入口とする。複数featureが利用する日付表示は`shared/utils/dates.ts`に置き、`Intl.DateTimeFormat`を行ごとに作らず共有する。
+
 ## MCP連携
 
 `src/server/transport/mcp-worker.ts` は独立したCloudflare Workerで、Agents SDKのstateless `createMcpHandler` とStreamable HTTPを使う。公開操作は `contracts/mcp.ts` の `list_todos`・`add_todo`・`update_todo`・`complete_todo` のみ。userId/teamIdをツール引数として受け取らず、ToDoの返却DTOにもteamIdを含めない。更新は既存の `patchTodoItem` を再利用し、itemIdとname・notes・categoryIdだけを受け付ける。省略は保持、notes/categoryIdのnullは解除、未知キー・空更新は拒否する。更新は上書き、完了は既存の物理削除を再利用する操作として、破壊的操作のannotationを付ける。
@@ -70,6 +72,8 @@ feature adapter → 共通client → Server Function → Application → Reposit
 
 各週の回数は「対象週以前の最新設定、なければ初期回数」で決定する。ホーム・月次の各週・過去の完了操作・SQLの完了上限・締め/再計算・Pushで同じ規則を使う。タスクID、完了記録、並び順は維持する。DTOは今週の回数と任意の `scheduledWeeklyRequirement` を返し、管理画面には適用日を表示する。変更前に既に上書きされた設定の復元や、名前・減点の履歴化は行わない。
 
+通常の読み取りではApplicationが処理対象の週をRepositoryへ渡す。現在の表示は対象週以前の最新1件と次の予定1件、過去の完了操作とPushは対象週以前の最新1件、月次表示は月初の週の基準設定と対象月内の変更だけを取得する。履歴は削除せず、既存のタスクID・適用週の主キーで範囲を絞る。SQLの実時計を表示対象週の決定に使わない。
+
 - 他featureのcomponents/hooks/state/libを直接importせず、`features/<feature>/index.ts` の公開APIを使います。
 - 共通UIは `shared/components`、共通query/stateは `shared/query` と `shared/state` に配置します。
 - ヘッダーと設定画面のチームメンバー一覧は `shared/query/teamMembersQuery.ts` のquery定義とキャッシュを共有する。設定の保存状態はmutationから取得し、編集中の値はユーザーID・チームIDで区別する。
@@ -88,6 +92,8 @@ ToDo追加とサマリー更新は、送信直前にもQueryキャッシュのpe
 
 家事の完了・ToDo完了/編集/並べ替えは、TanStack Queryの未完了mutationの入力を取得結果に重ねて即時表示する。ToDoはホームと専用画面で同じhookから楽観表示を導出し、コンポーネント内に順序stateを複製しない。並べ替え保存中は画面を移動しても重複操作を抑止する。保存済みキャッシュは成功応答で更新し、失敗時はそのmutationの表示だけが消える。他の操作やメンバーの完了を一括rollbackしない。日間・週1回の保存中の連打は抑止する。週複数回は連続タップを受け付け、increment/decrementを送り、D1内の件数条件で上限・下限を守る。追加・編集フォームはPromiseを返し、共通FormSheetとインライン編集は呼出元mutationの `isPending` / `isError` を表示に使う。別のref/stateへ保存状態を複製せず、保存中の入力・閉じる操作・重複送信を抑止する。失敗時は入力を保持し、再表示時にmutationをresetする。全体の保存中表示は `shared/components/MutationFeedback.tsx` が担当する。
 
+家事の並べ替えもpending mutationから順序を導出し、保存失敗後や新しい取得結果に過去のローカル順序を残さない。完了操作は日付・タスクごとにまとめて一覧を1回走査し、同じ項目への増減は元の順序で適用する。無関係な項目・日付グループの参照を保持する。
+
 API応答の実行時検証は共通clientの出力schemaで行う。feature hookで再検証したり、不正なDTOを一覧再取得で隠したりしない。保存応答のDTOを一覧に反映し、派生データの再取得はバックグラウンドで行う。家事完了の一覧同期は最後のpending mutationが終了するときにまとめる。楽観表示をDB保存済みの証拠として扱わず、再読込の検証では保存応答も待つ。
 
 `lib/api/serverClient.ts` は待ち行列を持たずServer Functionsへ送信する。日間・週1回はcomplete/incomplete、週複数回はincrement/decrementという意図を送る。mutationは `networkMode: "always"` / `retry: false` とし、オフラインでも一度試みて失敗を返す。更新を自動再送しない。ログアウト・所属変更ではAbortControllerで古い通信を打ち切り、Queryキャッシュと接続を破棄する。
@@ -103,6 +109,10 @@ API応答の実行時検証は共通clientの出力schemaで行う。feature hoo
 認証・業務・Pushは `infrastructure/database.ts` で作るDrizzle D1 handleを使用する。業務テーブルは `schema.ts`、認証は `auth-schema.ts`。通常のCRUDはquery builder、集計・条件付きINSERTにはパラメーター化した `sql` を使用する。
 
 D1は対話的transactionを提供しない。複合操作は `repository.ts` の用途別コマンドが `db.batch()` で原子的に実行する。チーム移動・初期登録・担当解除・owner引継ぎは1つのbatch。完了回数はDBのCOUNTを条件に更新し、締め・過去の修正は `summary-statements.ts` の集計queryを同じbatchへ含める。batch内のSQL失敗は全体をrollbackする。認可や回数など変化する条件もSQLで検査し、外部通信はbatchへ含めない。read-modify-writeをJavaScriptで疑似transactionにしない。
+
+家事・ToDoの並べ替えは要求IDをMATERIALIZED CTEで一度展開し、索引付きの結合で順序を更新する。各行からJSON配列全体を検索しない。保存時点の対象件数・ID集合・所属の検査は同じUPDATE内で行う。
+
+定期締めの追いつき処理は期間順に保存し、保存済みの変更があるチームへ最後に1回通知する。後続期間の失敗時も、それ以前に保存した変更を通知する。Pushは購読ごとのclaim・送信・完了記録を最大4件で並行実行し、失敗は購読単位で集計する。
 
 同じ項目の更新はDBが後に適用したものを採用する。主キー・外部キー・日次完了の一意制約・close_runsは保持するが、team/global revision、操作ID、通知連番、再試行用の台帳はない。WebSocket通知は保存の原子性や必達性を保証しない。応答が失われた更新は再取得して結果を確認し、必要なら手動で直す。
 
