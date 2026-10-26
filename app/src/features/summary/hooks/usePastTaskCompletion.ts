@@ -36,32 +36,54 @@ function applyItemChange(item: MonthlyTaskStatusItem, change: CompletionChange) 
         0,
         Math.min(required, completedCount(item) + (change.action === "increment" ? 1 : -1)),
       );
-  return {
-    ...item,
-    completed: count >= required,
-    completionSlots: item.completionSlots.map((slot) => ({
-      ...slot,
-      actor: slot.slot <= count ? (slot.actor ?? change.actor) : null,
-    })),
-  };
+  let slotsChanged = false;
+  const completionSlots = item.completionSlots.map((slot) => {
+    const actor = slot.slot <= count ? (slot.actor ?? change.actor) : null;
+    if (actor === slot.actor) return slot;
+    slotsChanged = true;
+    return { ...slot, actor };
+  });
+  const completed = count >= required;
+  return completed === item.completed && !slotsChanged
+    ? item
+    : {
+        ...item,
+        completed,
+        completionSlots: slotsChanged ? completionSlots : item.completionSlots,
+      };
 }
 
-function applyChange(summary: MonthlyPenaltySummary, change: CompletionChange) {
-  return {
-    ...summary,
-    taskStatusByDate: summary.taskStatusByDate.map((group) =>
-      group.date !== change.targetDate
-        ? group
-        : {
-            ...group,
-            items: group.items.map((item) =>
-              item.taskId === change.taskId && item.type === change.type
-                ? applyItemChange(item, change)
-                : item,
-            ),
-          },
-    ),
-  };
+function applyChanges(summary: MonthlyPenaltySummary, changes: CompletionChange[]) {
+  const byDate = new Map<string, Map<string, CompletionChange[]>>();
+  for (const change of changes) {
+    let byTask = byDate.get(change.targetDate);
+    if (!byTask) {
+      byTask = new Map();
+      byDate.set(change.targetDate, byTask);
+    }
+    const key = `${change.type}:${change.taskId}`;
+    const taskChanges = byTask.get(key);
+    if (taskChanges) taskChanges.push(change);
+    else byTask.set(key, [change]);
+  }
+  if (byDate.size === 0) return summary;
+
+  let changed = false;
+  const taskStatusByDate = summary.taskStatusByDate.map((group) => {
+    const byTask = byDate.get(group.date);
+    if (!byTask) return group;
+    let itemsChanged = false;
+    const items = group.items.map((item) => {
+      const taskChanges = byTask.get(`${item.type}:${item.taskId}`);
+      const updated = taskChanges ? taskChanges.reduce(applyItemChange, item) : item;
+      if (updated !== item) itemsChanged = true;
+      return updated;
+    });
+    if (!itemsChanged) return group;
+    changed = true;
+    return { ...group, items };
+  });
+  return changed ? { ...summary, taskStatusByDate } : summary;
 }
 
 export function usePastTaskCompletion(
@@ -88,7 +110,7 @@ export function usePastTaskCompletion(
         : change;
       queryClient.setQueryData<MonthlyPenaltySummary>(
         [...queryKeys.monthlySummary, change.month],
-        (current) => current && applyChange(current, saved),
+        (current) => current && applyChanges(current, [saved]),
       );
     },
     onError: (error) => setStatus(`更新失敗: ${formatError(error)}`),
@@ -103,7 +125,7 @@ export function usePastTaskCompletion(
   const monthPending = pending.filter((change) => change.month === month);
   const savingTargets = new Set(monthPending.filter(isStateChange).map(actionId));
   return {
-    data: monthPending.reduce(applyChange, summary),
+    data: applyChanges(summary, monthPending),
     isSaving: (target: Omit<PastTaskUpdate, "action">) => savingTargets.has(actionId(target)),
     update: (target: PastTaskUpdate) => {
       const saved = queryClient.getQueryData<MonthlyPenaltySummary>([
