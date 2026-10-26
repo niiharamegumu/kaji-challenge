@@ -1,6 +1,5 @@
-import { queryOptions, useSuspenseQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSuspenseQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  listPenaltyRules,
   type CreatePenaltyRuleRequest,
   deletePenaltyRule,
   patchPenaltyRule,
@@ -10,11 +9,8 @@ import {
 } from "../../../lib/api/operations";
 import { queryKeys } from "../../../shared/query/queryKeys";
 import { formatError } from "../../../shared/utils/errors";
-
-export const penaltyRulesQueryOptions = queryOptions({
-  queryKey: queryKeys.rules,
-  queryFn: async ({ signal }) => (await listPenaltyRules(undefined, { signal })).data.items,
-});
+import { penaltyRulesQueryOptions } from "../../../shared/query/monthlyPenaltyQueries";
+export { penaltyRulesQueryOptions } from "../../../shared/query/monthlyPenaltyQueries";
 
 export function usePenaltyRulesQuery() {
   return useSuspenseQuery(penaltyRulesQueryOptions);
