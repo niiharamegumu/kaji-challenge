@@ -38,7 +38,7 @@ afterAll(async () => {
   await c?.close();
 });
 
-it("authenticates and returns getMe using five D1 statements without caching authentication", async () => {
+it("authenticates and returns getMe using four D1 statements without caching authentication", async () => {
   let queryCount = 0;
   // Count real statements without storing SQL or values; every call still reaches D1.
   const counted = createDatabase(
@@ -67,7 +67,10 @@ it("authenticates and returns getMe using five D1 statements without caching aut
     cookie: `__Secure-better-auth.session_token=${encodeURIComponent(sessionId + "." + signature)}`,
   });
   const session = await auth.api.getSession({ headers });
+  expect(queryCount).toBe(1);
   expect(session?.user.id).toBe(own.user);
+  expect(session?.session.expiresAt).toBeInstanceOf(Date);
+  expect(session?.user.createdAt).toBeInstanceOf(Date);
   if (!session) throw new Error("No session");
   const result = await executeOperation(
     counted.repository.forSession(session.user.id, session.session.id),
@@ -79,10 +82,11 @@ it("authenticates and returns getMe using five D1 statements without caching aut
     memberships: [{ teamId: own.team, role: "owner", teamName: "Current team" }],
   });
   expect(result.changedTeams).toEqual([]);
-  expect(queryCount).toBe(5);
+  expect(queryCount).toBe(4);
 
   await c.query(sql`DELETE FROM auth_session WHERE id=${sessionId}`);
   expect(await auth.api.getSession({ headers })).toBeNull();
+  expect(queryCount).toBe(5);
 });
 
 it("resolves the current role again and keeps the team fixed after it is selected", async () => {
