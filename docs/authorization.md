@@ -57,6 +57,7 @@ Applicationは応答前にも認証と期待する所属を再確認し、所属
 - `ListTeamIDsForClose`、`ListTeamIDsForPush`、`ListActivePushSubscriptionsByTeamID`、`DeactivatePushSubscriptionByEndpoint`、`ClosePeriod` はtrusted Cron専用、`ProvisionUser` は認証hook専用、`DeleteTeam` はfixture cleanup用。これらは認証済み/所属付きRepositoryからの呼出を403で拒否する。`DeleteExpiredOneTimeRemindersByTeam` は対象teamの条件を保持する。
 - Push配送のclaimは、購読ID・team/user・endpoint/鍵・有効性・現在所属をSQLで照合する。finishはそのclaimを照合する。これらはCron専用の配信台帳で、ユーザーの業務更新APIではない。
 - Better Authのuser/account/session/rate limit、MCP connection/consent/grantは本人・認証主体のデータでありteamIdを後付けしない。既存の本人/所有者/セッション/nonce検証を保持する。MCPの管理操作がチーム業務SQLを迂回する経路は作らない。
+- MCP管理画面の失効フォームは、認証済みセッションから本人・セッション・接続IDに結び付いたclaimを生成し、一括保存する。同じD1 batchでDBの実時計を過ぎたclaimだけを削除する。期限内の未使用/使用済みclaimや他セッションの画面は保持し、KV失効の再実行に必要な接続履歴も削除しない。
 - MCPの `update_todo` は `todos:write` を要求し、name・notes・categoryIdだけを部分更新する。itemIdで取得したToDoと変更先カテゴリーのチームを既存UPDATEでも照合する。userId/teamId等の未知キーや更新項目なしは拒否し、省略値をnullに置き換えない。入口の所属確認と共有Applicationの所属再解決の間に移動した場合も、固定済みRepositoryで更新を拒否する。
 
 ## 検証の範囲
