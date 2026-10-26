@@ -152,7 +152,9 @@ export async function executeOperation(
     }
     case "listTasks":
       data = {
-        items: (await repo.ListTasksByTeamID(teamId))
+        items: (
+          await repo.ListTasksByTeamID(teamId, { fromWeek: weekStart(today), includeNext: true })
+        )
           .filter((task) => !input.params.type || task.Type === input.params.type)
           .map((task) => map.task(task, today)),
       };
@@ -180,11 +182,17 @@ export async function executeOperation(
         CreatedAt: now,
         UpdatedAt: now,
       });
-      data = map.task(await repo.GetTaskByID(id), today);
+      data = map.task(
+        await repo.GetTaskByID(id, { fromWeek: weekStart(today), includeNext: true }),
+        today,
+      );
       break;
     }
     case "patchTask": {
-      const task = await repo.GetTaskByID(input.params.taskId);
+      const task = await repo.GetTaskByID(input.params.taskId, {
+        fromWeek: weekStart(today),
+        includeNext: true,
+      });
       const body = input.body;
       invariant(task.TeamID === teamId && !task.DeletedAt, "task not found", 404);
       const assignee = body.assigneeUserId;
@@ -203,18 +211,27 @@ export async function executeOperation(
           task.Type === "daily" ? undefined : body.requiredCompletionsPerWeek,
         UpdatedAt: now,
       });
-      data = map.task(await repo.GetTaskByID(task.ID), today);
+      data = map.task(
+        await repo.GetTaskByID(task.ID, { fromWeek: weekStart(today), includeNext: true }),
+        today,
+      );
       break;
     }
     case "deleteTask": {
-      const task = await repo.GetTaskByID(input.params.taskId);
+      const task = await repo.GetTaskByID(input.params.taskId, {
+        fromWeek: weekStart(today),
+        includeNext: true,
+      });
       invariant(task.TeamID === teamId && !task.DeletedAt, "task not found", 404);
       await repo.DeleteTask(task.ID);
       data = {};
       break;
     }
     case "postTasksReorder": {
-      const rows = await repo.ListTasksByTeamID(teamId);
+      const rows = await repo.ListTasksByTeamID(teamId, {
+        fromWeek: weekStart(today),
+        includeNext: true,
+      });
       const ids = input.body.taskIds;
       invariant(ids.length, "taskIds is required");
       const firstTask = rows.find((task) => task.ID === ids[0]);
@@ -232,15 +249,17 @@ export async function executeOperation(
         now,
       });
       data = {
-        items: (await repo.ListTasksByTeamID(teamId))
+        items: (
+          await repo.ListTasksByTeamID(teamId, { fromWeek: weekStart(today), includeNext: true })
+        )
           .filter((task) => task.Type === firstTask.Type)
           .map((task) => map.task(task, today)),
       };
       break;
     }
     case "postTaskCompletion": {
-      const task = await repo.GetTaskByID(input.params.taskId);
       const targetDate = input.body.targetDate;
+      const task = await repo.GetTaskByID(input.params.taskId, { fromWeek: weekStart(targetDate) });
       const action = input.body.action;
       invariant(task.TeamID === teamId, "task not found", 404);
       invariant(task.Type === "daily" || task.Type === "weekly", "invalid task type");
