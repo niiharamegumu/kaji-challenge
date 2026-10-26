@@ -1,8 +1,10 @@
 // `architecture:check` から実行し、src/ の層・feature間のimport規約違反を検出する。
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
+import { fileURLToPath } from "node:url";
+import ts from "typescript";
 
-const root = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
+const root = fileURLToPath(new URL("..", import.meta.url));
 
 function walk(dir) {
   const entries = [];
@@ -27,18 +29,47 @@ function rel(path) {
   return relative(root, path).split(sep).join("/");
 }
 
-function extractImports(content) {
+export function extractImports(content, fileName = "source.ts") {
   const imports = [];
-  for (const match of content.matchAll(
-    /^\s*import\s+(type\s+)?[\s\S]*?\s+from\s+["']([^"']+)["'];?/gm,
-  )) {
-    imports.push({ value: match[2], typeOnly: Boolean(match[1]) });
-  }
-  for (const match of content.matchAll(/^\s*import\s*["']([^"']+)["'];?/gm)) {
-    imports.push({ value: match[1], typeOnly: false });
-  }
-  for (const match of content.matchAll(/import\(\s*["']([^"']+)["']\s*\)/g))
-    imports.push({ value: match[1], typeOnly: false });
+  const source = ts.createSourceFile(
+    fileName,
+    content,
+    ts.ScriptTarget.Latest,
+    false,
+    fileName.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
+  const add = (specifier, typeOnly) => {
+    if (specifier && ts.isStringLiteralLike(specifier))
+      imports.push({ value: specifier.text, typeOnly });
+  };
+  const onlyTypes = (bindings) =>
+    bindings?.elements?.length > 0 && bindings.elements.every((item) => item.isTypeOnly);
+  const visit = (node) => {
+    if (ts.isImportDeclaration(node)) {
+      const clause = node.importClause;
+      add(
+        node.moduleSpecifier,
+        Boolean(clause?.isTypeOnly || (!clause?.name && onlyTypes(clause?.namedBindings))),
+      );
+    } else if (ts.isExportDeclaration(node)) {
+      add(node.moduleSpecifier, Boolean(node.isTypeOnly || onlyTypes(node.exportClause)));
+    } else if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)) {
+      add(node.argument.literal, true);
+    } else if (
+      ts.isImportEqualsDeclaration(node) &&
+      ts.isExternalModuleReference(node.moduleReference)
+    ) {
+      add(node.moduleReference.expression, node.isTypeOnly);
+    } else if (
+      ts.isCallExpression(node) &&
+      (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
+        (ts.isIdentifier(node.expression) && node.expression.text === "require"))
+    ) {
+      add(node.arguments[0], false);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
   return imports;
 }
 
@@ -69,7 +100,7 @@ function feature(path) {
   return parts[2] ?? "";
 }
 
-function violationsFor(path, imports) {
+export function violationsFor(path, imports) {
   const file = rel(path);
   const violations = [];
   const sourceFeature = feature(path);
@@ -105,11 +136,10 @@ function violationsFor(path, imports) {
     if (sourceFeature !== "" && resolved.startsWith("src/features/")) {
       const parts = resolved.split("/");
       const targetFeature = parts[2] ?? "";
-      const targetLayer = parts[3] ?? "";
       if (
         targetFeature !== "" &&
         targetFeature !== sourceFeature &&
-        ["components", "hooks", "state", "lib"].includes(targetLayer)
+        !/^src\/features\/[^/]+(?:\/index(?:\.tsx?)?)?$/.test(resolved)
       ) {
         violations.push(`${file} imports ${item.value}`);
       }
@@ -118,13 +148,14 @@ function violationsFor(path, imports) {
   return violations;
 }
 
-const violations = [];
-for (const path of walk(join(root, "src"))) {
-  violations.push(...violationsFor(path, extractImports(readFileSync(path, "utf8"))));
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const violations = [];
+  for (const path of walk(join(root, "src"))) {
+    violations.push(...violationsFor(path, extractImports(readFileSync(path, "utf8"), path)));
+  }
+  if (violations.length) {
+    console.error("Application dependency boundary violations:");
+    for (const violation of new Set(violations)) console.error(`  ${violation}`);
+    process.exitCode = 1;
+  } else console.log("Application architecture boundary check passed.");
 }
-if (violations.length) {
-  console.error("Application dependency boundary violations:");
-  for (const violation of new Set(violations)) console.error(`  ${violation}`);
-  process.exit(1);
-}
-console.log("Application architecture boundary check passed.");
