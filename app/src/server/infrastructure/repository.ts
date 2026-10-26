@@ -63,12 +63,43 @@ const inviteFields = {
   ExpiresAt: iso(inviteCodes.expires_at),
   CreatedAt: iso(inviteCodes.created_at),
 };
-const monthlyTaskFields = {
-  WeeklyRequirements: sql<string>`(
+function weeklyRequirements(window?: P.WeeklyRequirementWindow) {
+  // Separate indexed lookups keep older settings out of the JSON projection. An OR
+  // over the full history would still visit all historical rows for each task.
+  const rows = window
+    ? sql`SELECT effective_week, required_completions_per_week
+        FROM task_weekly_requirements WHERE task_id=${tasks.id}
+          AND effective_week=(SELECT effective_week FROM task_weekly_requirements
+            WHERE task_id=${tasks.id} AND effective_week<=${window.fromWeek}
+            ORDER BY effective_week DESC LIMIT 1)
+        ${
+          window.beforeWeek
+            ? sql`UNION ALL
+          SELECT effective_week, required_completions_per_week FROM task_weekly_requirements
+          WHERE task_id=${tasks.id} AND effective_week>${window.fromWeek}
+            AND effective_week<${window.beforeWeek}`
+            : sql``
+        }
+        ${
+          window.includeNext
+            ? sql`UNION ALL
+          SELECT effective_week, required_completions_per_week FROM task_weekly_requirements
+          WHERE task_id=${tasks.id} AND effective_week=(
+            SELECT effective_week FROM task_weekly_requirements
+            WHERE task_id=${tasks.id} AND effective_week>=${window.beforeWeek ?? window.fromWeek}
+              AND effective_week>${window.fromWeek}
+            ORDER BY effective_week LIMIT 1)`
+            : sql``
+        }`
+    : sql`SELECT effective_week, required_completions_per_week
+        FROM task_weekly_requirements WHERE task_id=${tasks.id}`;
+  return sql<string>`(
     SELECT json_group_array(json_object('effectiveWeek', r.effective_week,
       'requiredCompletionsPerWeek', r.required_completions_per_week))
-    FROM task_weekly_requirements r WHERE r.task_id = ${tasks.id}
-  )`.mapWith((value: string): WeeklyRequirement[] => JSON.parse(value)),
+    FROM (${rows}) r
+  )`.mapWith((value: string): WeeklyRequirement[] => JSON.parse(value));
+}
+const monthlyTaskFields = {
   ID: tasks.id,
   Title: tasks.title,
   Notes: tasks.notes,
@@ -511,16 +542,19 @@ export class D1Repository implements P.Repository {
       .where(and(eq(tasks.team_id, teamID), this.teamAccess(tasks.team_id)));
     return required(rows, "GetEarliestTaskCreatedAtByTeam").createdAt;
   }
-  async GetTaskByID(id: string): Promise<P.GetTaskByIDRow> {
+  async GetTaskByID(id: string, window?: P.WeeklyRequirementWindow): Promise<P.GetTaskByIDRow> {
     const rows = await this.db
-      .select(taskFields)
+      .select({ ...taskFields, WeeklyRequirements: weeklyRequirements(window) })
       .from(tasks)
       .where(and(eq(tasks.id, id), this.teamAccess(tasks.team_id)));
     return required(rows, "GetTaskByID");
   }
-  async ListTasksByTeamID(teamID: string): Promise<P.ListTasksByTeamIDRow[]> {
+  async ListTasksByTeamID(
+    teamID: string,
+    window?: P.WeeklyRequirementWindow,
+  ): Promise<P.ListTasksByTeamIDRow[]> {
     return this.db
-      .select(taskFields)
+      .select({ ...taskFields, WeeklyRequirements: weeklyRequirements(window) })
       .from(tasks)
       .where(
         and(eq(tasks.team_id, teamID), isNull(tasks.deleted_at), this.teamAccess(tasks.team_id)),
@@ -531,7 +565,7 @@ export class D1Repository implements P.Repository {
     arg: P.ListTasksEffectiveForCloseByTeamAndTypeParams,
   ): Promise<P.ListTasksEffectiveForCloseByTeamAndTypeRow[]> {
     return this.db
-      .select(taskFields)
+      .select({ ...taskFields, WeeklyRequirements: weeklyRequirements(arg.RequirementWindow) })
       .from(tasks)
       .where(
         and(
@@ -548,7 +582,10 @@ export class D1Repository implements P.Repository {
     arg: P.ListTasksForMonthlyStatusByTeamParams,
   ): Promise<P.ListTasksForMonthlyStatusByTeamRow[]> {
     return this.db
-      .select(monthlyTaskFields)
+      .select({
+        ...monthlyTaskFields,
+        WeeklyRequirements: weeklyRequirements(arg.RequirementWindow),
+      })
       .from(tasks)
       .where(
         and(
@@ -1461,15 +1498,18 @@ export class D1Repository implements P.Repository {
     );
     // 件数・対象IDが保存時点でも一致するときだけ全行を更新する。
     const valid = sql`(SELECT COUNT(*) FROM ${table} WHERE ${scope})=${arg.ids.length}
-      AND (SELECT COUNT(*) FROM ${table} WHERE ${scope} AND ${table.id} IN (SELECT value FROM json_each(${ids})))=${arg.ids.length}`;
-    const rows = await this.db
-      .update(table)
-      .set({
-        sort_key: sql`(SELECT (CAST(key AS INTEGER)+1)*100 FROM json_each(${ids}) WHERE value=${table.id})`,
-        updated_at: arg.now,
-      })
-      .where(and(scope, this.teamAccess(table.team_id), valid))
-      .returning({ id: table.id });
+      AND (SELECT COUNT(*) FROM ${table} WHERE ${scope} AND ${table.id} IN (SELECT id FROM requested))=${arg.ids.length}`;
+    // Materialize once so SQLite can index the requested IDs. A correlated JSON
+    // lookup (or a direct json_each join) rescans the full list for every row.
+    const rows = await this.db.all<{ id: string }>(sql`
+      WITH requested AS MATERIALIZED (
+        SELECT value AS id, (CAST(key AS INTEGER)+1)*100 AS rank FROM json_each(${ids})
+      )
+      UPDATE ${table} SET sort_key=requested.rank, updated_at=${arg.now}
+      FROM requested
+      WHERE ${table.id}=requested.id AND ${scope} AND ${this.teamAccess(table.team_id)} AND ${valid}
+      RETURNING id
+    `);
     if (rows.length !== arg.ids.length)
       throw new AppError(409, "items_changed", "一覧が変わりました。再取得してお試しください。");
   }
