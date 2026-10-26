@@ -387,3 +387,66 @@ it("accepts three weekly taps before any response and tolerates out-of-order res
     client.getQueryData<TaskOverviewResponse>(queryKeys.home)?.weeklyTasks[0].weekCompletedCount,
   ).toBe(3);
 });
+
+it("applies many pending completions with one traversal of the saved task list", () => {
+  const home = fixture();
+  let taskReads = 0;
+  const taskCount = 40;
+  home.dailyTasks = Array.from({ length: taskCount }, (_, index) => ({
+    ...home.dailyTasks[0],
+    task: {
+      ...home.dailyTasks[0].task,
+      get id() {
+        taskReads++;
+        return `daily-${index}`;
+      },
+    },
+  }));
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+  });
+  client.setQueryData(queryKeys.home, home);
+  client.setQueryData(queryKeys.todoItems, []);
+  client.setQueryData([...queryKeys.rules, "withDeleted"], []);
+  client.setQueryData([...queryKeys.monthlySummary, previousMonthKey(home.month)], {
+    totalPenalty: 0,
+  });
+  for (let index = 0; index < taskCount; index++) {
+    const mutation = client.getMutationCache().build(client, {
+      mutationKey: ["task-completion"],
+      mutationFn: () => new Promise(() => {}),
+    });
+    void mutation.execute({
+      taskId: `daily-${index}`,
+      targetDate: home.today,
+      action: "complete",
+      completed: true,
+      count: 0,
+      actor,
+    });
+  }
+  taskReads = 0;
+  const { result } = renderHook(() => useHomePageQueries().homeQuery.data, {
+    wrapper: ({ children }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    ),
+  });
+  expect(result.current.dailyTasks.every((item) => item.completedToday)).toBe(true);
+  expect(result.current.dailyTasks.every((item) => item.completedBy === actor)).toBe(true);
+  expect(result.current.weeklyTasks).toBe(home.weeklyTasks);
+  expect(taskReads).toBeLessThanOrEqual(taskCount * 4);
+});
+
+it("preserves weekly actor order through alternating pending additions and removals", async () => {
+  const saved = deferred<never>();
+  api.save.mockReturnValue(saved.promise);
+  const { user } = setup();
+  for (const button of ["増やす", "減らす", "増やす"]) {
+    await user.click(screen.getByRole("button", { name: button }));
+  }
+  expect(await screen.findByText("2/3")).toBeVisible();
+  expect(screen.getByText("別の人,自分,空")).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "減らす" }));
+  expect(await screen.findByText("1/3")).toBeVisible();
+  expect(screen.getByText("別の人,空,空")).toBeVisible();
+});

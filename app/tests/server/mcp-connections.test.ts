@@ -111,6 +111,98 @@ it("consumes a consent claim exactly once under simultaneous submissions", async
   ).toBe(false);
 });
 
+it("creates more than D1's bind limit of claims in one batch and prunes only expired claims", async () => {
+  const owner = await createIdentity();
+  const other = await createIdentity();
+  const expired = crypto.randomUUID();
+  await database.db.insert(mcpConsentClaims).values({
+    handle_hash: expired,
+    user_id: other.userId,
+    session_id: other.sessionId,
+    expires_at: "2000-01-01T00:00:00.000Z",
+    consumed_at: null,
+  });
+  const consumed = await createClaim(other);
+  await repository.consumeConsentClaim(consumed, other.userId, other.sessionId, now);
+  const pending = await createClaim(other);
+  expect(
+    await database.db
+      .select()
+      .from(mcpConsentClaims)
+      .where(eq(mcpConsentClaims.handle_hash, expired)),
+  ).toEqual([]);
+  // Seed another expired row after the single-claim path has cleaned up.
+  await database.db
+    .insert(mcpConsentClaims)
+    .values({
+      handle_hash: expired,
+      user_id: other.userId,
+      session_id: other.sessionId,
+      expires_at: "2000-01-01T00:00:00.000Z",
+      consumed_at: null,
+    })
+    .onConflictDoNothing();
+  const claims = Array.from({ length: 125 }, () => ({
+    ...owner,
+    handleHash: crypto.randomUUID(),
+    expiresAt: later,
+  }));
+  const batch = vi.spyOn(database.db, "batch");
+  try {
+    await repository.createConsentClaims(claims);
+    expect(batch).toHaveBeenCalledOnce();
+    expect(batch.mock.calls[0][0].length).toBeLessThanOrEqual(4);
+  } finally {
+    batch.mockRestore();
+  }
+  const saved = await database.db.select().from(mcpConsentClaims);
+  const byHash = new Map(saved.map((claim) => [claim.handle_hash, claim]));
+  expect(byHash.has(expired)).toBe(false);
+  expect(byHash.get(consumed)?.consumed_at).toBe(now);
+  expect(byHash.get(pending)?.consumed_at).toBeNull();
+  for (const claim of claims)
+    expect(byHash.get(claim.handleHash)).toEqual({
+      handle_hash: claim.handleHash,
+      user_id: owner.userId,
+      session_id: owner.sessionId,
+      expires_at: later,
+      consumed_at: null,
+    });
+});
+
+it.each(["duplicate", "foreign-key"])(
+  "rolls back claim cleanup and all insert chunks on %s failure",
+  async (failure) => {
+    const identity = await createIdentity();
+    const expired = crypto.randomUUID();
+    await database.db.insert(mcpConsentClaims).values({
+      handle_hash: expired,
+      user_id: identity.userId,
+      session_id: identity.sessionId,
+      expires_at: "2000-01-01T00:00:00.000Z",
+    });
+    const claims = Array.from({ length: 101 }, () => ({
+      ...identity,
+      handleHash: crypto.randomUUID(),
+      expiresAt: later,
+    }));
+    if (failure === "duplicate") claims.at(-1)!.handleHash = claims[0].handleHash;
+    else claims.at(-1)!.sessionId = crypto.randomUUID();
+    await expect(repository.createConsentClaims(claims)).rejects.toThrow();
+    expect(
+      await database.db
+        .select()
+        .from(mcpConsentClaims)
+        .where(eq(mcpConsentClaims.handle_hash, expired)),
+    ).toHaveLength(1);
+    const saved = await database.db
+      .select()
+      .from(mcpConsentClaims)
+      .where(eq(mcpConsentClaims.user_id, identity.userId));
+    expect(saved.map((claim) => claim.handle_hash)).toEqual([expired]);
+  },
+);
+
 it("does not consume another user's or another session's claim", async () => {
   const owner = await createIdentity();
   const other = await createIdentity();

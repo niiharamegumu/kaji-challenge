@@ -1136,6 +1136,80 @@ it("lists only the current user's connections and requires a one-use session-bou
   expect((await post("/api/mcp/connections/revoke", form, auth.person.cookie)).status).toBe(400);
 });
 
+it("persists management claims together while keeping each form bound to its connection and session", async () => {
+  const owner = await identity();
+  const other = await identity();
+  const now = new Date().toISOString();
+  const connections = Array.from({ length: 5 }, (_, index) => ({
+    id: crypto.randomUUID(),
+    userId: owner.userId,
+    clientId: crypto.randomUUID(),
+    clientName: `Management fixture ${index}`,
+    resource,
+    scopes: ["todos:read"],
+    createdAt: now,
+    expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+  }));
+  for (const connection of connections) await repository.createConnection(connection);
+  await repository.revokeConnection(connections[0].id, owner.userId, now);
+  const bulk = vi.spyOn(D1McpRepository.prototype, "createConsentClaims");
+  const single = vi.spyOn(D1McpRepository.prototype, "createConsentClaim");
+  let html: string;
+  try {
+    const response = await handleMcpHttp(
+      new Request(`${origin}/api/mcp/connections`, { headers: { Cookie: owner.cookie } }),
+      bindings,
+      ctx,
+    );
+    expect(response.status).toBe(200);
+    html = await response.text();
+    expect(bulk).toHaveBeenCalledOnce();
+    expect(bulk.mock.calls[0][0]).toHaveLength(connections.length);
+    expect(single).not.toHaveBeenCalled();
+  } finally {
+    bulk.mockRestore();
+    single.mockRestore();
+  }
+  const forms = Array.from(
+    html.matchAll(
+      /<form method="post" action="\/api\/mcp\/connections\/revoke">([\s\S]*?)<\/form>/g,
+    ),
+    ([, form]) => ({
+      connectionId: hidden(form, "connectionId"),
+      handle: hidden(form, "handle"),
+    }),
+  );
+  expect(forms).toHaveLength(connections.length);
+  expect(new Set(forms.map((form) => form.handle)).size).toBe(connections.length);
+  const saved = await database.db
+    .select()
+    .from(mcpConsentClaims)
+    .where(eq(mcpConsentClaims.user_id, owner.userId));
+  for (const form of forms) {
+    const digest = await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(`revoke:${form.connectionId}:${form.handle}`),
+    );
+    const hash = Buffer.from(digest).toString("hex");
+    expect(saved.find((claim) => claim.handle_hash === hash)).toMatchObject({
+      user_id: owner.userId,
+      session_id: owner.sessionId,
+      consumed_at: null,
+    });
+  }
+  const form = forms[0];
+  const mismatched = new URLSearchParams({
+    connectionId: forms[1].connectionId,
+    handle: form.handle,
+  });
+  expect((await post("/api/mcp/connections/revoke", mismatched, owner.cookie)).status).toBe(400);
+  const correct = new URLSearchParams(form);
+  expect((await post("/api/mcp/connections/revoke", correct, other.cookie)).status).toBe(400);
+  expect((await post("/api/mcp/connections/revoke", correct, owner.cookie)).status).toBe(303);
+  expect((await post("/api/mcp/connections/revoke", correct, owner.cookie)).status).toBe(400);
+  expect(await repository.listConnections(owner.userId)).toHaveLength(connections.length);
+});
+
 it("keeps D1 revocation effective when KV revocation fails and permits an explicit retry", async () => {
   const { auth } = await grant();
   const response = await handleMcpHttp(

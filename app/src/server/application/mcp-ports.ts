@@ -22,6 +22,7 @@ export interface McpConsentClaimInput {
 
 export interface McpRepository {
   createConsentClaim(claim: McpConsentClaimInput): Promise<void>;
+  createConsentClaims(claims: McpConsentClaimInput[]): Promise<void>;
   consumeConsentClaim(
     handleHash: string,
     userId: string,

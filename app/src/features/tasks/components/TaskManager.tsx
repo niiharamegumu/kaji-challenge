@@ -18,7 +18,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { Check, ChevronDown, GripVertical, Pencil, Plus, Trash2, X } from "lucide-react";
 import type { ChangeEvent } from "react";
-import { startTransition, useState } from "react";
+import { useState } from "react";
 
 import type { ReorderTasksRequest, Task, UpdateTaskRequest } from "../../../lib/api/operations";
 import { FormSheet } from "../../../shared/components/FormSheet";
@@ -374,25 +374,6 @@ function TaskItemsSection({
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editState, setEditState] = useState(emptyEditTaskState);
   const [pendingDeleteTask, setPendingDeleteTask] = useState<PendingDeleteTask | null>(null);
-  const [optimisticTaskIds, setOptimisticTaskIds] = useState<string[] | null>(null);
-
-  const serverTaskIds = tasks.map((task) => task.id);
-  const shouldUseOptimisticOrder =
-    optimisticTaskIds != null &&
-    optimisticTaskIds.length === serverTaskIds.length &&
-    optimisticTaskIds.some((taskId, index) => taskId !== serverTaskIds[index]);
-  const optimisticTaskIndex =
-    shouldUseOptimisticOrder && optimisticTaskIds != null
-      ? new Map(optimisticTaskIds.map((taskId, index) => [taskId, index]))
-      : null;
-  const optimisticTasks =
-    optimisticTaskIndex == null
-      ? tasks
-      : [...tasks].sort(
-          (left, right) =>
-            (optimisticTaskIndex.get(left.id) ?? Number.MAX_SAFE_INTEGER) -
-            (optimisticTaskIndex.get(right.id) ?? Number.MAX_SAFE_INTEGER),
-        );
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -409,24 +390,21 @@ function TaskItemsSection({
     }),
   );
 
-  const taskIds = optimisticTasks.map((task) => task.id);
+  const taskIds = tasks.map((task) => task.id);
   const sectionTitle = taskType === "daily" ? "毎日" : "週間";
   const emptyMessage =
     taskType === "daily" ? "日間タスクはまだありません。" : "週間タスクはまだありません。";
 
   const applyReorder = (activeId: string, overId: string) => {
-    if (activeId === overId) {
+    if (isReordering || activeId === overId) {
       return;
     }
-    const oldIndex = optimisticTasks.findIndex((task) => task.id === activeId);
-    const newIndex = optimisticTasks.findIndex((task) => task.id === overId);
+    const oldIndex = tasks.findIndex((task) => task.id === activeId);
+    const newIndex = tasks.findIndex((task) => task.id === overId);
     if (oldIndex < 0 || newIndex < 0) {
       return;
     }
     const nextTaskIds = arrayMove(taskIds, oldIndex, newIndex);
-    startTransition(() => {
-      setOptimisticTaskIds(nextTaskIds);
-    });
     onReorder({ taskIds: nextTaskIds });
   };
 
@@ -509,7 +487,7 @@ function TaskItemsSection({
           </div>
         </div>
 
-        {optimisticTasks.length === 0 ? (
+        {tasks.length === 0 ? (
           <div className="mx-2 mt-4 rounded-xl border border-dashed border-stone-300 bg-stone-50/80 px-4 py-8 text-center text-sm text-stone-600 md:mx-0">
             {emptyMessage}
           </div>
@@ -522,7 +500,7 @@ function TaskItemsSection({
           >
             <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
               <ul className="mt-4 grid gap-2">
-                {optimisticTasks.map((task) => (
+                {tasks.map((task) => (
                   <SortableTaskItem
                     key={task.id}
                     task={task}

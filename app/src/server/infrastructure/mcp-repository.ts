@@ -26,13 +26,26 @@ export class D1McpRepository implements McpRepository {
   constructor(private readonly db: Database) {}
 
   async createConsentClaim(claim: McpConsentClaimInput): Promise<void> {
-    await this.db.insert(mcpConsentClaims).values({
-      handle_hash: claim.handleHash,
-      user_id: claim.userId,
-      session_id: claim.sessionId,
-      expires_at: claim.expiresAt,
-      consumed_at: null,
-    });
+    await this.createConsentClaims([claim]);
+  }
+
+  async createConsentClaims(claims: McpConsentClaimInput[]): Promise<void> {
+    // JSON keeps large connection histories below D1's bind limit. Small chunks also
+    // bound each parameter's size; every insert and expiry cleanup share one rollback.
+    const inserts = [];
+    for (let index = 0; index < claims.length; index += 100)
+      inserts.push(
+        this.db.insert(mcpConsentClaims).select(sql`SELECT
+          json_extract(value, '$.handleHash'), json_extract(value, '$.userId'),
+          json_extract(value, '$.sessionId'), json_extract(value, '$.expiresAt'), NULL
+          FROM json_each(${JSON.stringify(claims.slice(index, index + 100))})`),
+      );
+    await this.db.batch([
+      this.db
+        .delete(mcpConsentClaims)
+        .where(sql`${mcpConsentClaims.expires_at} <= strftime('%Y-%m-%dT%H:%M:%fZ','now')`),
+      ...inserts,
+    ]);
   }
 
   async consumeConsentClaim(

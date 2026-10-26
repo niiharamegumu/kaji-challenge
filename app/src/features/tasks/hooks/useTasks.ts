@@ -1,4 +1,11 @@
-import { queryOptions, useSuspenseQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  queryOptions,
+  useSuspenseQuery,
+  useMutation,
+  useMutationState,
+  useIsMutating,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   listTasks,
   type CreateTaskRequest,
@@ -17,15 +24,32 @@ export const tasksQueryOptions = queryOptions({
   queryKey: queryKeys.tasks,
   queryFn: async ({ signal }) => (await listTasks(undefined, { signal })).data.items,
 });
+const reorderMutationKey = ["task-reorder"];
 
 export function useTasksQuery() {
-  return useSuspenseQuery(tasksQueryOptions);
+  const query = useSuspenseQuery(tasksQueryOptions);
+  const orders = useMutationState({
+    filters: { mutationKey: reorderMutationKey, status: "pending" },
+    select: (mutation) => mutation.state.variables as ReorderTasksRequest,
+  });
+  const order = orders.at(-1);
+  if (!order) return { data: query.data };
+  const byId = new Map(query.data.map((task) => [task.id, task]));
+  const ordered = order.taskIds.flatMap((id) => {
+    const task = byId.get(id);
+    return task ? [task] : [];
+  });
+  const ids = new Set(order.taskIds);
+  let index = 0;
+  // Keep new tasks in place and never restore tasks deleted during the request.
+  return { data: query.data.map((task) => (ids.has(task.id) ? ordered[index++] : task)) };
 }
 
 type StatusSetter = (message: string) => void;
 
 export function useTaskMutations(setStatus: StatusSetter) {
   const queryClient = useQueryClient();
+  const isReordering = useIsMutating({ mutationKey: reorderMutationKey }) > 0;
 
   const invalidate = async () => {
     await Promise.all([
@@ -95,29 +119,38 @@ export function useTaskMutations(setStatus: StatusSetter) {
   });
 
   const reorderTasks = useMutation({
+    mutationKey: reorderMutationKey,
+    onMutate: () => queryClient.cancelQueries({ queryKey: queryKeys.tasks }),
     mutationFn: async (payload: ReorderTasksRequest) => {
       const response = await postTasksReorder(payload);
       return response.data.items;
     },
-    onSuccess: (items) => {
+    onSuccess: async (items, payload) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.tasks });
       queryClient.setQueryData<Task[]>(queryKeys.tasks, (current) => {
         if (current == null) {
           return items;
         }
-        const reorderedIds = new Set(items.map((item) => item.id));
-        const untouchedItems = current.filter((item) => !reorderedIds.has(item.id));
-        return [...untouchedItems, ...items].sort((left, right) => {
-          if (left.type !== right.type) {
-            return left.type.localeCompare(right.type);
-          }
-          if (left.sortKey !== right.sortKey) {
-            return left.sortKey - right.sortKey;
-          }
-          if (left.createdAt !== right.createdAt) {
-            return left.createdAt.localeCompare(right.createdAt);
-          }
-          return left.id.localeCompare(right.id);
+        const byId = new Map(current.map((item) => [item.id, item]));
+        const ids = new Set(items.map((item) => item.id));
+        const requested = new Set(payload.taskIds);
+        const reordered = items.flatMap((item) => {
+          const saved = byId.get(item.id);
+          return saved
+            ? [{ ...saved, sortKey: item.sortKey }]
+            : requested.has(item.id)
+              ? []
+              : [item];
         });
+        const daily: Task[] = [];
+        const weekly: Task[] = [];
+        // The response already has saved order. Preserve concurrent additions/edits/deletions
+        // and group the two task types without sorting the whole list again.
+        for (const item of current) {
+          if (!ids.has(item.id)) (item.type === "daily" ? daily : weekly).push(item);
+        }
+        for (const item of reordered) (item.type === "daily" ? daily : weekly).push(item);
+        return [...daily, ...weekly];
       });
       setStatus("並び順を更新しました");
     },
@@ -127,5 +160,16 @@ export function useTaskMutations(setStatus: StatusSetter) {
     },
   });
 
-  return { createTask, removeTask, updateTask, reorderTasks };
+  const reorder: typeof reorderTasks.mutate = (payload, options) => {
+    // Mutation state changes synchronously, before a second drag can reuse the old render.
+    if (queryClient.isMutating({ mutationKey: reorderMutationKey }) > 0) return;
+    reorderTasks.mutate(payload, options);
+  };
+
+  return {
+    createTask,
+    removeTask,
+    updateTask,
+    reorderTasks: { ...reorderTasks, isPending: isReordering, mutate: reorder },
+  };
 }

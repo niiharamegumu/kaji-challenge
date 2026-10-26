@@ -2,7 +2,7 @@ import { CalendarDays } from "lucide-react";
 import { Link } from "../../../shared/router/navigation";
 
 import type { ReminderOccurrence } from "../../../lib/api/operations";
-import { formatDateLabel } from "../../reminders/utils/date";
+import { formatDateLabel } from "../../../shared/utils/dates";
 import { HOME_PANEL_CLASS_NAME } from "./panelStyles";
 
 type Props = {

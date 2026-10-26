@@ -45,14 +45,15 @@ export async function closeOutstanding(
   const daysPerPeriod = scope === "day" ? 1 : 7;
   const last = scope === "day" ? addDays(today, -1) : addDays(weekStart(today), -7);
   let periods = 0;
-  const failures: string[] = [];
+  const failures = new Set<string>();
   for (const teamId of await repository.ListTeamIDsForClose()) {
+    let changed = false;
     try {
       if (
         scope === "day" &&
         (await repository.DeleteExpiredOneTimeRemindersByTeam({ TeamID: teamId, StartDate: today }))
       )
-        await notify(teamId);
+        changed = true;
       const latest = await repository.GetLatestCloseRunTargetDate({
         TeamID: teamId,
         Scope: scope === "day" ? "close_day" : "close_week",
@@ -65,15 +66,23 @@ export async function closeOutstanding(
         const closed = await repository.ClosePeriod(teamId, scope, date);
         if (closed) {
           periods++;
-          await notify(teamId);
+          changed = true;
         }
       }
     } catch {
-      failures.push(teamId);
+      failures.add(teamId);
+    } finally {
+      // Earlier batches remain committed if a later period fails. Sync those changes once.
+      if (changed)
+        try {
+          await notify(teamId);
+        } catch {
+          failures.add(teamId);
+        }
     }
   }
-  console.info(JSON.stringify({ event: "close_run", scope, periods, failedTeams: failures }));
-  if (failures.length) throw new Error(`Closing failed for ${failures.length} teams`);
+  console.info(JSON.stringify({ event: "close_run", scope, periods, failedTeams: [...failures] }));
+  if (failures.size) throw new Error(`Closing failed for ${failures.size} teams`);
 }
 export function pushMessage(slot: PushSlot, tasks: { title: string; remaining: number }[]) {
   const daily = slot === "daily_2100";
@@ -98,6 +107,7 @@ async function loadOutstandingTasks(
     TeamID: teamId,
     Type: daily ? "daily" : "weekly",
     CreatedAt: now.toISOString(),
+    RequirementWindow: { fromWeek: weekStart(today) },
   });
   const counts = new Map<string, number>();
   if (daily)
@@ -149,25 +159,32 @@ export async function notifyOutstanding(
         teamId,
         slotKind: slot,
       };
-      for (const subscription of snapshot.subscriptions) {
-        try {
-          const claim = await delivery.claim(subscription, slot, date);
-          if (!claim) {
-            skipped++;
-            continue;
+      // Workers share the iterator so a slow endpoint does not hold up the next batch.
+      // Bound the whole claim/send/finish sequence, including its database requests.
+      const subscriptions = snapshot.subscriptions.values();
+      await Promise.all(
+        Array.from({ length: Math.min(4, snapshot.subscriptions.length) }, async () => {
+          for (const subscription of subscriptions) {
+            try {
+              const claim = await delivery.claim(subscription, slot, date);
+              if (!claim) {
+                skipped++;
+                continue;
+              }
+              const result = await delivery.send(subscription, payload);
+              if (result === "expired")
+                await repository.DeactivatePushSubscriptionByEndpoint({
+                  Endpoint: subscription.Endpoint,
+                  UpdatedAt: now.toISOString(),
+                });
+              await delivery.finish(subscription, slot, date, claim);
+              sent++;
+            } catch {
+              failed++;
+            }
           }
-          const result = await delivery.send(subscription, payload);
-          if (result === "expired")
-            await repository.DeactivatePushSubscriptionByEndpoint({
-              Endpoint: subscription.Endpoint,
-              UpdatedAt: now.toISOString(),
-            });
-          await delivery.finish(subscription, slot, date, claim);
-          sent++;
-        } catch {
-          failed++;
-        }
-      }
+        }),
+      );
     } catch {
       failed++;
     }

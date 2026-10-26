@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppProviders } from "../../../app/providers";
 import { SuspenseQueryBoundary } from "../../../shared/components/SuspenseQueryBoundary";
 import { appQueryClient } from "../../../shared/query/queryClient";
+import { queryKeys } from "../../../shared/query/queryKeys";
 import { sessionAtom } from "../../../state/session";
 import { TasksPage } from "./TasksPage";
 
@@ -638,6 +639,40 @@ describe("TasksPage", () => {
         ],
       },
     });
+  });
+
+  it("restores the saved order after a failed drag and accepts later server order changes", async () => {
+    const items = ["A", "B"].map((id, index) => ({
+      id,
+      teamId: "team-1",
+      title: id,
+      type: "daily" as const,
+      penaltyPoints: 1,
+      requiredCompletionsPerWeek: 1,
+      sortKey: (index + 1) * 100,
+      createdAt: "2026-02-01T00:00:00Z",
+      updatedAt: "2026-02-01T00:00:00Z",
+    }));
+    mockListTasks.mockResolvedValue({ data: { items } });
+    let reject!: (error: Error) => void;
+    mockPostTasksReorder.mockImplementation(() => new Promise((_, fail) => (reject = fail)));
+    renderPage();
+    await screen.findByText("A");
+    const order = () => {
+      const section = screen.getByRole("heading", { name: "毎日" }).closest("section")!;
+      return within(section)
+        .getAllByRole("listitem")
+        .map((item) => within(item).getByText(/^[AB]$/).textContent);
+    };
+    act(() => latestOnDragEnd?.({ active: { id: "B" }, over: { id: "A" } }));
+    await waitFor(() => expect(order()).toEqual(["B", "A"]));
+    await act(async () => reject(new Error("offline")));
+    await waitFor(() => expect(appQueryClient.isMutating()).toBe(0));
+    await waitFor(() => expect(order()).toEqual(["A", "B"]));
+    act(() => appQueryClient.setQueryData(queryKeys.tasks, [items[1], items[0]]));
+    await waitFor(() => expect(order()).toEqual(["B", "A"]));
+    act(() => appQueryClient.setQueryData(queryKeys.tasks, items));
+    await waitFor(() => expect(order()).toEqual(["A", "B"]));
   });
 
   it("cancels editing and restores display state", async () => {

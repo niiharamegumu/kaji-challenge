@@ -113,7 +113,7 @@ export async function overview(
   const month = today.slice(0, 7);
   const [summary, tasks, dailyEntries, weekly, weeklyReminders] = await Promise.all([
     readSummary(repo, teamId, month),
-    repo.ListTasksByTeamID(teamId),
+    repo.ListTasksByTeamID(teamId, { fromWeek: start, includeNext: true }),
     repo.ListTaskCompletionDailyByTeamAndDate({ TeamID: teamId, TargetDate: today }),
     repo.ListTaskCompletionWeeklySlotsByTeamAndWeek({ TeamID: teamId, WeekStart: start }),
     reminderOccurrences(repo, teamId, today, addDays(start, 6)),
@@ -162,6 +162,7 @@ export async function monthlySummary(
       TeamID: teamId,
       DeletedAt: midnightJST(start),
       CreatedAt: midnightJST(end),
+      RequirementWindow: { fromWeek: weekStart(start), beforeWeek: end },
     }),
     repo.ListTaskCompletionDailyByMonthAndTeam({
       TeamID: teamId,

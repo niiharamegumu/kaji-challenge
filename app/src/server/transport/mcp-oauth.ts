@@ -386,17 +386,21 @@ async function manageConnections(request: Request, bindings: RuntimeBindings, oa
   const connections = new D1McpRepository(runtime.db);
   const now = new Date().toISOString();
   if (request.method === "GET") {
-    const rows = [];
-    for (const connection of await connections.listConnections(session.user.id)) {
-      const handle = crypto.randomUUID();
-      await connections.createConsentClaim({
-        handleHash: await hashClaim(`revoke:${connection.id}:${handle}`),
-        userId: session.user.id,
-        sessionId: session.session.id,
-        expiresAt: new Date(Date.now() + consentTTL * 1000).toISOString(),
-      });
-      rows.push({ connection, handle });
-    }
+    const rows = (await connections.listConnections(session.user.id)).map((connection) => ({
+      connection,
+      handle: crypto.randomUUID(),
+    }));
+    const expiresAt = new Date(Date.now() + consentTTL * 1000).toISOString();
+    await connections.createConsentClaims(
+      await Promise.all(
+        rows.map(async ({ connection, handle }) => ({
+          handleHash: await hashClaim(`revoke:${connection.id}:${handle}`),
+          userId: session.user.id,
+          sessionId: session.session.id,
+          expiresAt,
+        })),
+      ),
+    );
     return mcpHtml(mcpConnectionsPage(rows, now));
   }
   const form = await formData(request);
