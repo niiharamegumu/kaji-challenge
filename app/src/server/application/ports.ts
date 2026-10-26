@@ -135,6 +135,13 @@ export interface GetTaskByIDRow {
   DeletedAt: string | null;
 }
 
+/** Settings needed to evaluate a week or a bounded span of weeks. */
+export interface WeeklyRequirementWindow {
+  fromWeek: string;
+  beforeWeek?: string;
+  includeNext?: boolean;
+}
+
 export interface ListTasksByTeamIDRow {
   WeeklyRequirements?: WeeklyRequirement[];
   ID: string;
@@ -155,6 +162,7 @@ export interface ListTasksEffectiveForCloseByTeamAndTypeParams {
   TeamID: string;
   Type: string;
   CreatedAt: string;
+  RequirementWindow?: WeeklyRequirementWindow;
 }
 
 export interface ListTasksEffectiveForCloseByTeamAndTypeRow {
@@ -177,6 +185,7 @@ export interface ListTasksForMonthlyStatusByTeamParams {
   TeamID: string;
   DeletedAt: string | null;
   CreatedAt: string;
+  RequirementWindow?: WeeklyRequirementWindow;
 }
 
 export interface ListTasksForMonthlyStatusByTeamRow {
@@ -584,8 +593,11 @@ export interface Repository {
   CreateTask(arg: CreateTaskParams): Promise<void>;
   DeleteTask(id: string): Promise<void>;
   GetEarliestTaskCreatedAtByTeam(teamID: string): Promise<string>;
-  GetTaskByID(id: string): Promise<GetTaskByIDRow>;
-  ListTasksByTeamID(teamID: string): Promise<ListTasksByTeamIDRow[]>;
+  GetTaskByID(id: string, window?: WeeklyRequirementWindow): Promise<GetTaskByIDRow>;
+  ListTasksByTeamID(
+    teamID: string,
+    window?: WeeklyRequirementWindow,
+  ): Promise<ListTasksByTeamIDRow[]>;
   ListTasksEffectiveForCloseByTeamAndType(
     arg: ListTasksEffectiveForCloseByTeamAndTypeParams,
   ): Promise<ListTasksEffectiveForCloseByTeamAndTypeRow[]>;
