@@ -1,4 +1,5 @@
 import { dateStringInJST } from "../../../shared/utils/dates";
+export { formatDateLabel } from "../../../shared/utils/dates";
 
 export function todayDateKey(date: Date = new Date()) {
   return dateStringInJST(date);
@@ -45,15 +46,6 @@ export function formatDateKey(date: Date) {
 export function formatMonthLabel(monthKey: string) {
   const [yearPart, monthPart] = monthKey.split("-");
   return `${yearPart}年${monthPart}月`;
-}
-
-export function formatDateLabel(dateKey: string) {
-  return new Intl.DateTimeFormat("ja-JP", {
-    timeZone: "UTC",
-    month: "long",
-    day: "numeric",
-    weekday: "short",
-  }).format(parseDateKey(dateKey));
 }
 
 export function normalizeDateKey(value: string | null | undefined) {
