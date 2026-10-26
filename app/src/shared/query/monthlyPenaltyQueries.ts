@@ -9,6 +9,11 @@ export const monthlyPenaltySummaryQueryOptions = (month: string) =>
     queryFn: async ({ signal }) => (await getPenaltySummaryMonthly({ month }, { signal })).data,
   });
 
+export const penaltyRulesQueryOptions = queryOptions({
+  queryKey: queryKeys.rules,
+  queryFn: async ({ signal }) => (await listPenaltyRules(undefined, { signal })).data.items,
+});
+
 export const penaltyRulesWithDeletedQueryOptions = queryOptions({
   queryKey: [...queryKeys.rules, "withDeleted"],
   queryFn: async ({ signal }) =>
