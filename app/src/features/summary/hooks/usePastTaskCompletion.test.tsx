@@ -1,5 +1,14 @@
 import { QueryClient, QueryClientProvider, useSuspenseQuery } from "@tanstack/react-query";
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { MonthlyPenaltySummary, TaskCompletionResponse } from "../../../lib/api/operations";
@@ -285,4 +294,85 @@ it("retains pending display across months and writes the response to its origina
     client.getQueryData<MonthlyPenaltySummary>([...queryKeys.monthlySummary, "2026-04"])
       ?.taskStatusByDate,
   ).toEqual([]);
+});
+
+it("applies many pending changes in one pass and retains untouched dates and items", () => {
+  const summary = fixture();
+  let taskReads = 0;
+  const taskCount = 40;
+  const untouched = summary.taskStatusByDate[0].items[1];
+  summary.taskStatusByDate[0].items = [
+    ...Array.from({ length: taskCount }, (_, index) => ({
+      ...summary.taskStatusByDate[0].items[0],
+      get taskId() {
+        taskReads++;
+        return `daily-${index}`;
+      },
+    })),
+    untouched,
+  ];
+  const client = new QueryClient();
+  for (let index = 0; index < taskCount; index++) {
+    const mutation = client.getMutationCache().build(client, {
+      mutationKey: ["summary-task-completion"],
+      mutationFn: () => new Promise(() => {}),
+    });
+    void mutation.execute({
+      month,
+      taskId: `daily-${index}`,
+      targetDate: summary.taskStatusByDate[0].date,
+      type: "daily",
+      action: "complete",
+      actor,
+    });
+  }
+  taskReads = 0;
+  const { result } = renderHook(() => usePastTaskCompletion(month, summary, actor, vi.fn()).data, {
+    wrapper: ({ children }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    ),
+  });
+  expect(
+    result.current.taskStatusByDate[0].items.slice(0, taskCount).every((item) => item.completed),
+  ).toBe(true);
+  expect(result.current.taskStatusByDate[0].items.at(-1)).toBe(untouched);
+  expect(result.current.taskStatusByDate[1]).toBe(summary.taskStatusByDate[1]);
+  expect(taskReads).toBeLessThanOrEqual(taskCount * 4);
+});
+
+it("retains saved summary references when pending targets no longer exist", () => {
+  const summary = fixture();
+  const client = new QueryClient();
+  const mutation = client.getMutationCache().build(client, {
+    mutationKey: ["summary-task-completion"],
+    mutationFn: () => new Promise(() => {}),
+  });
+  void mutation.execute({
+    month,
+    taskId: "deleted-task",
+    targetDate: summary.taskStatusByDate[0].date,
+    type: "daily",
+    action: "complete",
+    actor,
+  });
+  const { result } = renderHook(() => usePastTaskCompletion(month, summary, actor, vi.fn()).data, {
+    wrapper: ({ children }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    ),
+  });
+  expect(result.current).toBe(summary);
+  expect(result.current.taskStatusByDate).toBe(summary.taskStatusByDate);
+});
+
+it("preserves weekly actor slots through alternating pending increments and decrements", async () => {
+  const summary = fixture();
+  summary.taskStatusByDate[0].items[1].completionSlots[0].actor = other;
+  api.save.mockReturnValue(new Promise(() => {}));
+  const { user } = setup(summary);
+  await user.click(row("weekly").getByRole("button", { name: "2回目: 未完了: 1回追加" }));
+  await user.click(row("weekly").getByRole("button", { name: "2回目: 自分: 1回取り消す" }));
+  await user.click(row("weekly").getByRole("button", { name: "2回目: 未完了: 1回追加" }));
+  expect(row("weekly").getByRole("button", { name: "1回目: 別の人: 1回取り消す" })).toBeVisible();
+  expect(row("weekly").getByRole("button", { name: "2回目: 自分: 1回取り消す" })).toBeVisible();
+  expect(row("weekly").getByRole("button", { name: "3回目: 未完了: 1回追加" })).toBeVisible();
 });
