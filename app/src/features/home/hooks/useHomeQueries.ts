@@ -36,51 +36,73 @@ type CompletionChange = {
   count: number;
 };
 
-function showCompletion(
-  home: TaskOverviewResponse,
-  change: CompletionChange,
-): TaskOverviewResponse {
-  if (home.today !== change.targetDate) return home;
-  const dailyIndex = home.dailyTasks.findIndex((item) => item.task.id === change.taskId);
-  if (dailyIndex !== -1) {
-    const item = home.dailyTasks[dailyIndex];
-    const dailyTasks = home.dailyTasks.slice();
-    dailyTasks[dailyIndex] = {
-      ...item,
-      completedToday: change.completed,
-      completedBy: change.completed ? (item.completedBy ?? change.actor) : null,
-    };
-    return { ...home, dailyTasks };
-  }
-  const weeklyIndex = home.weeklyTasks.findIndex((item) => item.task.id === change.taskId);
-  if (weeklyIndex === -1) return home;
-  const item = home.weeklyTasks[weeklyIndex];
-  const weeklyTasks = home.weeklyTasks.slice();
-  weeklyTasks[weeklyIndex] = {
-    ...item,
-    weekCompletedCount: change.count,
-    completionSlots: item.completionSlots.map((slot) => {
-      const actor = slot.slot <= change.count ? (slot.actor ?? change.actor) : null;
-      return actor === slot.actor ? slot : { ...slot, actor };
-    }),
-  };
-  return {
-    ...home,
-    weeklyTasks,
-  };
-}
-
 /** 確定済みデータへ未完了mutationを重ねる。共有キャッシュの全体rollbackはしない。 */
-function applyChange(home: TaskOverviewResponse, change: CompletionChange): TaskOverviewResponse {
-  let count = change.count;
-  if (change.action === "increment" || change.action === "decrement") {
-    const weekly = home.weeklyTasks.find((item) => item.task.id === change.taskId);
-    const delta = change.action === "increment" ? 1 : -1;
-    const required = weekly?.requiredCompletionsPerWeek ?? 1;
-    const current = weekly?.weekCompletedCount ?? 0;
-    count = Math.max(0, Math.min(required, current + delta));
+function applyChanges(
+  home: TaskOverviewResponse,
+  changes: CompletionChange[],
+): TaskOverviewResponse {
+  const byTask = new Map<string, CompletionChange[]>();
+  for (const change of changes) {
+    if (home.today !== change.targetDate) continue;
+    const taskChanges = byTask.get(change.taskId);
+    if (taskChanges) taskChanges.push(change);
+    else byTask.set(change.taskId, [change]);
   }
-  return showCompletion(home, { ...change, count });
+  if (byTask.size === 0) return home;
+
+  let dailyChanged = false;
+  const dailyTasks = home.dailyTasks.map((item) => {
+    const taskChanges = byTask.get(item.task.id);
+    if (!taskChanges) return item;
+    let completedToday = item.completedToday;
+    let completedBy = item.completedBy;
+    for (const change of taskChanges) {
+      completedToday = change.completed;
+      completedBy = completedToday ? (completedBy ?? change.actor) : null;
+    }
+    if (completedToday === item.completedToday && completedBy === item.completedBy) return item;
+    dailyChanged = true;
+    return { ...item, completedToday, completedBy };
+  });
+
+  let weeklyChanged = false;
+  const weeklyTasks = home.weeklyTasks.map((item) => {
+    const taskChanges = byTask.get(item.task.id);
+    if (!taskChanges) return item;
+    let weekCompletedCount = item.weekCompletedCount;
+    let completionSlots = item.completionSlots;
+    for (const change of taskChanges) {
+      weekCompletedCount =
+        change.action === "increment" || change.action === "decrement"
+          ? Math.max(
+              0,
+              Math.min(
+                item.requiredCompletionsPerWeek,
+                weekCompletedCount + (change.action === "increment" ? 1 : -1),
+              ),
+            )
+          : change.count;
+      let slotsChanged = false;
+      const nextSlots = completionSlots.map((slot) => {
+        const actor = slot.slot <= weekCompletedCount ? (slot.actor ?? change.actor) : null;
+        if (actor === slot.actor) return slot;
+        slotsChanged = true;
+        return { ...slot, actor };
+      });
+      if (slotsChanged) completionSlots = nextSlots;
+    }
+    if (weekCompletedCount === item.weekCompletedCount && completionSlots === item.completionSlots)
+      return item;
+    weeklyChanged = true;
+    return { ...item, weekCompletedCount, completionSlots };
+  });
+  return dailyChanged || weeklyChanged
+    ? {
+        ...home,
+        dailyTasks: dailyChanged ? dailyTasks : home.dailyTasks,
+        weeklyTasks: weeklyChanged ? weeklyTasks : home.weeklyTasks,
+      }
+    : home;
 }
 
 /** UIのタップをAPIの希望状態に変換する。複数回の週間タスクだけは加減算を送る。 */
@@ -149,7 +171,7 @@ export function useHomePageQueries() {
 
   return {
     homeQuery: {
-      data: pendingCompletions.reduce(applyChange, homeQuery.data),
+      data: applyChanges(homeQuery.data, pendingCompletions),
       isSuccess: homeQuery.isSuccess,
     },
     todoItemsQuery: {
@@ -179,7 +201,7 @@ export function useToggleCompletionMutation(
       // 応答順が逆転しても、他のpending mutationを二重に数えない。最後にDBと同期する。
       queryClient.setQueryData<TaskOverviewResponse>(
         queryKeys.home,
-        (home) => home && applyChange(home, { ...change, completed: data.completed }),
+        (home) => home && applyChanges(home, [{ ...change, completed: data.completed }]),
       );
     },
     onError: async (error) => {
