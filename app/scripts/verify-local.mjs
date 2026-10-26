@@ -103,6 +103,7 @@ try {
   await run("Verification selection tests", process.execPath, [
     "--test",
     "scripts/verification-plan.test.mjs",
+    "scripts/check-architecture.test.mjs",
   ]);
   // Exercise CLI-only peer dependencies without credentials or cloud mutations.
   if (plan.alchemy) {
