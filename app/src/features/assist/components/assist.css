@@ -218,6 +218,12 @@
 .assist-results ul {
   list-style: disc;
 }
+.assist-result-notes {
+  color: #6f6861;
+  font-size: 13px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .assist-more {
   margin-top: 12px;
   font-size: 12px;

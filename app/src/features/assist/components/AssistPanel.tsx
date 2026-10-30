@@ -171,13 +171,14 @@ export function AssistPanel({ session, state }: { session: VoiceSession; state: 
                 {replies.map((reply, index) => (
                   <div className="assist-answer-part" key={index}>
                     <p>{reply.replyText}</p>
-                    {reply.kind === "listed" && reply.items.length > 0 ? (
+                    {(reply.kind === "listed" || reply.kind === "added") &&
+                    reply.items.length > 0 ? (
                       <div
                         className="assist-results"
-                        aria-label={`ToDo ${reply.total}件`}
+                        aria-label={`ToDo ${reply.kind === "listed" ? reply.total : reply.items.length}件`}
                         tabIndex={0}
                       >
-                        {reply.total > reply.items.length ? (
+                        {reply.kind === "listed" && reply.total > reply.items.length ? (
                           <p className="assist-more">
                             全{reply.total}件のうち先頭{reply.items.length}
                             件を表示しています。続きはToDo画面で確認してください。
@@ -185,7 +186,12 @@ export function AssistPanel({ session, state }: { session: VoiceSession; state: 
                         ) : null}
                         <ul>
                           {reply.items.map((item) => (
-                            <li key={item.id}>{item.name}</li>
+                            <li key={item.id}>
+                              <span>{item.name}</span>
+                              {item.notes ? (
+                                <p className="assist-result-notes">{item.notes}</p>
+                              ) : null}
+                            </li>
                           ))}
                         </ul>
                       </div>
