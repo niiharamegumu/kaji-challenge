@@ -5,7 +5,7 @@ import { createAssistAi } from "../../src/server/infrastructure/assist-ai";
 const additions = {
   intent: "add_todo",
   items: [
-    { name: "牛乳", categoryName: "買い物" },
+    { name: "牛乳", categoryName: "買い物", notes: "低脂肪の1Lを2本" },
     { name: "卵", categoryName: "買い物" },
   ],
 };
@@ -88,7 +88,7 @@ it.each([plan(additions), JSON.stringify(plan(additions))])(
     const { ai, run, signal } = fixture();
     const pendingDraft: AssistDraft = {
       items: [
-        { name: "牛乳", categoryName: null },
+        { name: "牛乳", categoryName: null, notes: "低脂肪の1Lを2本" },
         { name: "卵", categoryName: null },
       ],
       missing: "category",
@@ -176,7 +176,7 @@ it("accepts Gemma's documented OpenAI completion shape without another inference
 });
 it("accepts a complete mixed-command plan and keeps pending completion and addition together", async () => {
   const { ai, run, signal } = fixture();
-  const pendingItems = [{ name: "レモン", categoryName: null }];
+  const pendingItems = [{ name: "レモン", categoryName: null, notes: "国産を2個" }];
   const actions = [
     { intent: "complete_todos" as const, names: ["塩"], categoryName: null },
     { intent: "add_todo" as const, items: pendingItems },
@@ -191,7 +191,10 @@ it("accepts a complete mixed-command plan and keeps pending completion and addit
     intent: "batch_todos",
     actions: [
       actions[0],
-      { intent: "add_todo", items: [{ name: "レモン", categoryName: "買い物" }] },
+      {
+        intent: "add_todo",
+        items: [{ name: "レモン", categoryName: "買い物", notes: "国産を2個" }],
+      },
     ],
   };
   run.mockResolvedValue({ response: JSON.stringify(response) });
@@ -275,6 +278,18 @@ it.each([
     }),
   },
   { response: plan({ intent: "add_todo", items: [additions.items[0], { name: "卵" }] }) },
+  {
+    response: plan({
+      intent: "add_todo",
+      items: [{ ...additions.items[0], notes: "あ".repeat(501) }],
+    }),
+  },
+  {
+    response: plan({
+      intent: "add_todo",
+      items: [{ ...additions.items[0], notes: { text: "低脂肪" } }],
+    }),
+  },
   { response: plan(additions), finish_reason: "length" },
   { response: plan(additions), usage: { completion_tokens: 8192 } },
   { response: JSON.stringify(plan(additions)) + " ".repeat(65_536) },

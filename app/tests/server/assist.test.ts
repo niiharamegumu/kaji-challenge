@@ -7,6 +7,7 @@ import {
   assistLimits,
   assistAudio,
   assistIntentSchema,
+  assistInferenceIntentSchema,
   assistResultSchema,
   type AssistRequest,
 } from "../../src/contracts/assist";
@@ -23,6 +24,43 @@ import { validateAssistAudio } from "../../src/server/transport/assist-audio";
 const add = { intent: "add_todo", items: [{ name: "牛乳", categoryName: null }] };
 const validWav = () => encodeWav([new Float32Array(16000).fill(0.2)], 16000);
 describe("assist contract and audio boundary", () => {
+  it.each([undefined, null, "", "  低脂肪の1Lを2本  ", "あ".repeat(500)])(
+    "accepts optional bounded item notes in inference and pending drafts (case %#)",
+    (notes) => {
+      const item = { name: "牛乳", categoryName: null, ...(notes === undefined ? {} : { notes }) };
+      const action = { intent: "add_todo", items: [item] };
+      const parsed = assistInferenceIntentSchema.parse({
+        intent: "batch_todos",
+        actions: [action],
+      });
+      expect(parsed).toMatchObject({
+        actions: [
+          { items: [{ ...item, ...(typeof notes === "string" ? { notes: notes.trim() } : {}) }] },
+        ],
+      });
+      expect(
+        assistRequestSchema.safeParse({
+          transcript: "買い物",
+          expectedTeamId: crypto.randomUUID(),
+          pendingDraft: { items: [item], missing: "category", expiresAt: Date.now() + 60_000 },
+        }).success,
+      ).toBe(true);
+    },
+  );
+  it.each(["あ".repeat(501), 1, { text: "メモ" }])(
+    "rejects invalid notes in both interpretation and draft (case %#)",
+    (notes) => {
+      const items = [{ ...add.items[0], notes }];
+      expect(assistIntentSchema.safeParse({ ...add, items }).success).toBe(false);
+      expect(
+        assistRequestSchema.safeParse({
+          transcript: "買い物",
+          expectedTeamId: crypto.randomUUID(),
+          pendingDraft: { items, missing: "category", expiresAt: Date.now() + 60_000 },
+        }).success,
+      ).toBe(false);
+    },
+  );
   it("accepts bounded WAV Blobs and rejects extra fields, wrong types and invalid teams", () => {
     const input = {
       audio: new Blob([validWav()], { type: "audio/wav" }),
@@ -293,6 +331,93 @@ describe("assist with real D1 and fixture AI", () => {
       requested.map((item) => categories.find((value) => value?.name === item.categoryName)?.id),
     );
   });
+  it("saves separate notes per title, preserves plain titles and normalizes empty notes", async () => {
+    const requested = [
+      { name: "牛乳", categoryName: null, notes: "  低脂肪の1Lを2本  " },
+      { name: "卵", categoryName: null, notes: "10個入り" },
+      { name: "洗剤", categoryName: null },
+      { name: "パン", categoryName: null, notes: "  " },
+      { name: "納豆", categoryName: null, notes: null },
+    ];
+    ai.interpret.mockResolvedValue({ intent: "add_todo", items: requested });
+    const result = await request({
+      transcript: "牛乳は低脂肪の1Lを2本、卵も追加、メモは10個入り。洗剤とパンと納豆も追加",
+    });
+    const expected = requested.map(({ name, notes }) => ({ name, notes: notes?.trim() || null }));
+    expect(result.data).toMatchObject({ kind: "added", items: expected });
+    expect((await items()).map(({ Name, Notes }) => ({ name: Name, notes: Notes }))).toEqual(
+      expected,
+    );
+    expect(result.changedTeams).toEqual([teamId]);
+  });
+  it("rejects an invalid note before any operation in a mixed plan is saved", async () => {
+    await request();
+    ai.interpret.mockResolvedValue({
+      intent: "batch_todos",
+      actions: [
+        { intent: "complete_todos", names: ["牛乳"], categoryName: null },
+        {
+          intent: "add_todo",
+          items: [{ name: "卵", categoryName: null, notes: "あ".repeat(501) }],
+        },
+      ],
+    });
+    await expect(request()).rejects.toMatchObject({ code: "invalid_intent" });
+    expect((await items()).map(({ Name }) => Name)).toEqual(["牛乳"]);
+  });
+  it.each([false, true])(
+    "preserves per-item notes through repeated clarification and saving (mixed: %s)",
+    async (mixed) => {
+      await category("買い物");
+      const pendingItems = [
+        { name: "牛乳", categoryName: null, notes: "低脂肪の1Lを2本" },
+        { name: "卵", categoryName: null, notes: "10個入り" },
+      ];
+      const action = { intent: "add_todo", items: pendingItems };
+      const listing = { intent: "list_todos", categoryName: null };
+      ai.interpret.mockResolvedValue(
+        mixed ? { intent: "batch_todos", actions: [action, listing] } : action,
+      );
+      const first = (await request()).data;
+      expect(first).toMatchObject({ kind: "clarify", pendingDraft: { items: pendingItems } });
+      if (first.kind !== "clarify") throw new Error("Expected draft");
+      ai.interpret.mockResolvedValue({ intent: "clarify" });
+      const repeated = (await request({ transcript: "どこ？", pendingDraft: first.pendingDraft }))
+        .data;
+      expect(repeated).toMatchObject({ kind: "clarify", pendingDraft: { items: pendingItems } });
+      if (repeated.kind !== "clarify") throw new Error("Expected draft");
+      if (mixed) expect(repeated.pendingDraft.actions).toEqual([action, listing]);
+      expect(await items()).toHaveLength(0);
+      const resolved = {
+        ...action,
+        items: pendingItems.map((item) => ({ ...item, categoryName: "買い物" })),
+      };
+      ai.interpret.mockResolvedValue(
+        mixed ? { intent: "batch_todos", actions: [resolved, listing] } : resolved,
+      );
+      const saved = await request({
+        transcript: "どちらも買い物",
+        pendingDraft: repeated.pendingDraft,
+      });
+      const expected = pendingItems.map(({ name, notes }) => ({ name, notes }));
+      expect(saved.data).toMatchObject(
+        mixed
+          ? {
+              kind: "batch",
+              results: [
+                { kind: "added", items: expected },
+                { kind: "listed", items: expected },
+              ],
+            }
+          : { kind: "added", items: expected },
+      );
+      expect((await items()).map(({ Name, Notes }) => ({ name: Name, notes: Notes }))).toEqual(
+        expected,
+      );
+      expect(ai.interpret.mock.lastCall?.[1]).toEqual(repeated.pendingDraft);
+      expect(saved.changedTeams).toEqual([teamId]);
+    },
+  );
   it("keeps all names while asking for one missing category and only writes the completed batch", async () => {
     await category("買い物");
     await category("家事");
