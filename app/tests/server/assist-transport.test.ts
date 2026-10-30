@@ -119,7 +119,7 @@ it("interprets only explicitly submitted text through the gateway, saves to D1, 
       actions: [
         {
           intent: "add_todo",
-          items: [{ name: "秘密の牛乳", categoryName: null }],
+          items: [{ name: "秘密の牛乳", categoryName: null, notes: "秘密のメモ：低脂肪の1Lを2本" }],
         },
       ],
     }),
@@ -128,8 +128,13 @@ it("interprets only explicitly submitted text through the gateway, saves to D1, 
   expect(response.status).toBe(200);
   expect(await response.json()).toMatchObject({
     kind: "added",
-    items: [{ name: "秘密の牛乳", teamId }],
+    items: [{ name: "秘密の牛乳", teamId, notes: "秘密のメモ：低脂肪の1Lを2本" }],
   });
+  expect(await connection.repository.ListTodoItemsByTeamID(teamId)).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ Name: "秘密の牛乳", Notes: "秘密のメモ：低脂肪の1Lを2本" }),
+    ]),
+  );
   expect(mocks.run).toHaveBeenCalledTimes(1);
   for (const call of mocks.run.mock.calls)
     expect(call[2]).toMatchObject({

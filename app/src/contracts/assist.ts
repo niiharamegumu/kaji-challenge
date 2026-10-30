@@ -17,7 +17,14 @@ export const assistLimits = {
 const name = z.string().trim().min(1).max(100);
 const categoryName = z.string().trim().min(1).max(50);
 const draftItems = z
-  .array(z.strictObject({ name: name.nullable(), categoryName: categoryName.nullable() }))
+  .array(
+    z.strictObject({
+      name: name.nullable(),
+      categoryName: categoryName.nullable(),
+      // Optional for drafts from clients that have not loaded the new bundle yet.
+      notes: z.string().trim().max(500).nullable().optional(),
+    }),
+  )
   .min(1)
   .max(assistLimits.items);
 const addTodoIntentSchema = z.strictObject({ intent: z.literal("add_todo"), items: draftItems });

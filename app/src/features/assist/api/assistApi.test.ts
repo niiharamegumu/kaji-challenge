@@ -52,6 +52,31 @@ it("keeps text execution as JSON", async () => {
     body: JSON.stringify({ transcript: "一覧", expectedTeamId: teamId }),
   });
 });
+it("retains notes in a clarification response and the follow-up request", async () => {
+  const result = {
+    kind: "clarify",
+    transcript: "牛乳を追加、低脂肪の1Lを2本",
+    replyText: "どのカテゴリーですか？",
+    pendingDraft: {
+      items: [{ name: "牛乳", categoryName: null, notes: "低脂肪の1Lを2本" }],
+      missing: "category",
+      expiresAt: Date.now() + 60_000,
+    },
+    categories: ["買い物"],
+  };
+  fetchMock.mockImplementation(async () => Response.json(result));
+  const response = await sendAssistTurn(
+    { transcript: result.transcript, expectedTeamId: teamId },
+    new AbortController().signal,
+  );
+  expect(response).toEqual(result);
+  if (response.kind !== "clarify") throw new Error("Expected draft");
+  await sendAssistTurn(
+    { transcript: "買い物", expectedTeamId: teamId, pendingDraft: response.pendingDraft },
+    new AbortController().signal,
+  );
+  expect(JSON.parse(fetchMock.mock.lastCall![1].body).pendingDraft).toEqual(result.pendingDraft);
+});
 it.each([
   new Blob(),
   new Blob([new Uint8Array(3244)], { type: "application/octet-stream" }),
