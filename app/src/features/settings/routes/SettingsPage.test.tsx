@@ -118,7 +118,11 @@ describe("SettingsPage", () => {
     vi.stubGlobal("Notification", createNotificationMock("default"));
     Object.defineProperty(window, "matchMedia", {
       writable: true,
-      value: vi.fn().mockReturnValue({ matches: false }),
+      value: vi.fn().mockReturnValue({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }),
     });
     Object.defineProperty(window, "PushManager", {
       writable: true,
