@@ -61,7 +61,7 @@ export function TodoCategoryFilter({
               type="button"
               aria-pressed={selected}
               onClick={() => onChange(option.value)}
-              className={`min-h-8 shrink-0 whitespace-nowrap rounded-full border px-3 py-1 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-500 ${selected ? "border-stone-900 bg-stone-900 text-white" : "border-stone-300 bg-white text-stone-600 hover:bg-stone-100"}`}
+              className={`min-h-8 shrink-0 whitespace-nowrap rounded-full border px-3 py-1 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus ${selected ? "border-action bg-action text-on-action" : "border-line-strong bg-surface text-secondary hover:bg-surface-muted"}`}
             >
               {option.label}
             </button>
