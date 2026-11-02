@@ -295,7 +295,13 @@ test(
       await page.keyboard.press("Shift+Tab");
       await expect(initialCategory).toBeFocused();
       await page.keyboard.press("Shift+Tab");
+      const themePreference = page.getByRole("radio", { name: "システム", exact: true });
+      await expect(themePreference).toBeChecked();
+      await expect(themePreference).toBeFocused();
+      await page.keyboard.press("Shift+Tab");
       await expect(select).toBeFocused();
+      await page.keyboard.press("Tab");
+      await expect(themePreference).toBeFocused();
       await page.keyboard.press("Tab");
       await expect(initialCategory).toBeFocused();
       await page.keyboard.press("Tab");
