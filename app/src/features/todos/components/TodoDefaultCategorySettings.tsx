@@ -28,7 +28,7 @@ export function TodoDefaultCategorySettings({ identityKey }: { identityKey: stri
   const available = options.some((option) => optionValue(option.selection) === value);
   return (
     <div className="mt-5 grid min-w-0 gap-2">
-      <label htmlFor={inputId} className="text-sm font-medium text-stone-700">
+      <label htmlFor={inputId} className="text-sm font-medium text-body">
         最初に表示するToDoカテゴリー
       </label>
       <select
@@ -42,7 +42,7 @@ export function TodoDefaultCategorySettings({ identityKey }: { identityKey: stri
           );
           if (selected) setSaveFailed(!setSaved(selected.selection));
         }}
-        className="h-10 min-w-0 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm disabled:opacity-60 sm:h-11"
+        className="h-10 min-w-0 rounded-lg border border-line-strong bg-surface px-3 py-2 text-sm disabled:opacity-60 sm:h-11"
       >
         {options.map((option) => (
           <option key={optionValue(option.selection)} value={optionValue(option.selection)}>
@@ -50,14 +50,14 @@ export function TodoDefaultCategorySettings({ identityKey }: { identityKey: stri
           </option>
         ))}
       </select>
-      <div id={descriptionId} className="space-y-1 text-xs text-stone-500">
+      <div id={descriptionId} className="space-y-1 text-xs text-muted">
         <p>ホームとToDo画面を開いたときに選択されます。タブの並び順は変わりません。</p>
         <p>このブラウザーの、現在のユーザーとチームに自動保存されます。</p>
         <p>削除されたカテゴリーは「すべて」で開きます。</p>
       </div>
       <TodoCategoryQueryStatus query={query} />
       {saveFailed ? (
-        <p role="alert" className="text-xs text-red-700">
+        <p role="alert" className="text-xs text-danger">
           このブラウザーに保存できませんでした。もう一度選択してください。
         </p>
       ) : null}
