@@ -4,8 +4,7 @@ type BootScreenProps = {
   mode?: "overlay" | "page";
 };
 
-const baseClassName =
-  "flex items-center justify-center bg-[color:var(--color-washi-50)] text-stone-700";
+const baseClassName = "flex items-center justify-center bg-canvas text-body";
 
 export function BootScreen({ mode = "page" }: BootScreenProps) {
   return (
@@ -26,7 +25,7 @@ export function BootScreen({ mode = "page" }: BootScreenProps) {
           width={96}
           height={96}
           fetchPriority="high"
-          className="h-16 w-16 animate-pulse motion-reduce:animate-none md:h-20 md:w-20"
+          className="app-logo h-16 w-16 animate-pulse motion-reduce:animate-none md:h-20 md:w-20"
         />
         <span className="sr-only">読み込み中</span>
       </span>

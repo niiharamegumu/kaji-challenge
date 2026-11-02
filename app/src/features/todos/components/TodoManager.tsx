@@ -116,7 +116,7 @@ function renderNotesWithLinks(value: string): ReactNode {
           href={urlText}
           target="_blank"
           rel="noreferrer"
-          className="rounded-sm text-stone-800 underline decoration-stone-400 underline-offset-2 transition-colors hover:text-stone-950 hover:decoration-stone-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-400"
+          className="rounded-sm text-ink underline decoration-focus underline-offset-2 transition-colors hover:text-heading hover:decoration-focus focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
         >
           {urlText}
         </a>,
@@ -194,7 +194,7 @@ function SortableTodoItem({
     <li
       ref={setNodeRef}
       style={style}
-      className={`relative rounded-xl border border-stone-200 bg-white p-2.5 shadow-sm sm:p-3 ${isDragging ? "opacity-70 select-none" : ""}`}
+      className={`relative rounded-xl border border-line bg-surface p-2.5 shadow-sm sm:p-3 ${isDragging ? "opacity-70 select-none" : ""}`}
     >
       {isEditing ? (
         <fieldset disabled={isSaving} className="grid gap-2">
@@ -206,7 +206,7 @@ function SortableTodoItem({
           <div className="mt-1 flex flex-wrap gap-2">
             <button
               type="button"
-              className="flex h-9 items-center gap-1 rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-xs text-emerald-700 transition-colors hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50 sm:h-10"
+              className="flex h-9 items-center gap-1 rounded-lg border border-success-line bg-surface px-3 py-1.5 text-xs text-success transition-colors hover:bg-success-soft disabled:cursor-not-allowed disabled:opacity-50 sm:h-10"
               onClick={() => onSaveEdit(item.id)}
               disabled={!canSave || isSaving}
               aria-busy={isSaving}
@@ -216,7 +216,7 @@ function SortableTodoItem({
             </button>
             <button
               type="button"
-              className="flex h-9 items-center gap-1 rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs text-stone-700 transition-colors hover:bg-stone-100 sm:h-10"
+              className="flex h-9 items-center gap-1 rounded-lg border border-line-strong bg-surface px-3 py-1.5 text-xs text-body transition-colors hover:bg-surface-muted sm:h-10"
               onClick={onCancelEdit}
             >
               <X size={14} aria-hidden="true" />
@@ -227,15 +227,15 @@ function SortableTodoItem({
       ) : (
         <div className="flex items-start gap-2 pr-8 sm:pr-10">
           <div className="min-w-0 flex-1">
-            <div className="break-words font-medium text-stone-900">{item.name}</div>
+            <div className="break-words font-medium text-heading">{item.name}</div>
             {item.notes != null && item.notes !== "" ? (
-              <div className="mt-1 whitespace-pre-wrap break-words text-xs text-stone-600">
+              <div className="mt-1 whitespace-pre-wrap break-words text-xs text-secondary">
                 {renderNotesWithLinks(item.notes)}
               </div>
             ) : null}
             <div className="mt-0.5 flex min-w-0">
               <span
-                className="max-w-full truncate rounded bg-stone-100 px-1.5 py-0.5 text-[10px] leading-tight text-stone-600 sm:text-[11px]"
+                className="max-w-full truncate rounded bg-surface-muted px-1.5 py-0.5 text-[10px] leading-tight text-secondary sm:text-[11px]"
                 title={categoryLabel}
               >
                 {categoryLabel}
@@ -244,7 +244,7 @@ function SortableTodoItem({
             <div className="mt-1 flex items-center gap-1.5">
               <button
                 type="button"
-                className="flex h-7 cursor-pointer items-center gap-1 rounded-md border border-stone-300 bg-white px-2 py-1 text-[11px] text-stone-700 transition-colors hover:bg-stone-100 sm:h-8 sm:text-xs"
+                className="flex h-7 cursor-pointer items-center gap-1 rounded-md border border-line-strong bg-surface px-2 py-1 text-[11px] text-body transition-colors hover:bg-surface-muted sm:h-8 sm:text-xs"
                 onClick={() => onStartEdit(item)}
                 disabled={isCompleting}
                 aria-label="編集"
@@ -270,7 +270,7 @@ function SortableTodoItem({
                 )}
                 <span>{isCompleting ? "取り消す" : "完了にする"}</span>
               </button>
-              {isCompleting ? <span className="text-xs text-stone-600">完了待ち</span> : null}
+              {isCompleting ? <span className="text-xs text-secondary">完了待ち</span> : null}
             </div>
           </div>
         </div>
@@ -278,7 +278,7 @@ function SortableTodoItem({
       {!isEditing ? (
         <button
           type="button"
-          className="absolute top-1/2 right-2 flex h-8 w-8 -translate-y-1/2 cursor-grab touch-none select-none items-center justify-center rounded-md text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700 active:cursor-grabbing focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-400 sm:right-3"
+          className="absolute top-1/2 right-2 flex h-8 w-8 -translate-y-1/2 cursor-grab touch-none select-none items-center justify-center rounded-md text-faint transition-colors hover:bg-surface-muted hover:text-body active:cursor-grabbing focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus sm:right-3"
           onPointerDown={(event) => event.stopPropagation()}
           {...dragProps}
           disabled={isReordering || isCompleting}
@@ -310,24 +310,24 @@ export function TodoItemForm({
 
   return (
     <div className="grid gap-2">
-      <label className="text-xs text-stone-700 sm:text-sm" htmlFor={`${formId}-name`}>
+      <label className="text-xs text-body sm:text-sm" htmlFor={`${formId}-name`}>
         名前
       </label>
       <input
         id={`${formId}-name`}
         ref={nameInputRef}
-        className="h-10 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
+        className="h-10 rounded-lg border border-line-strong bg-surface px-3 py-2 text-sm sm:h-11"
         value={form.name}
         onChange={handleChange("name")}
         onKeyDown={onInputKeyDown}
         placeholder="例: 牛乳"
       />
-      <label className="text-xs text-stone-700 sm:text-sm" htmlFor={`${formId}-notes`}>
+      <label className="text-xs text-body sm:text-sm" htmlFor={`${formId}-notes`}>
         メモ
       </label>
       <input
         id={`${formId}-notes`}
-        className="h-10 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
+        className="h-10 rounded-lg border border-line-strong bg-surface px-3 py-2 text-sm sm:h-11"
         value={form.notes}
         onChange={handleChange("notes")}
         onKeyDown={onInputKeyDown}
@@ -358,7 +358,7 @@ export function TodoItemsSection({
   showSectionChrome = true,
   articleClassName = `mt-3 rounded-xl px-0 py-3 md:mt-4 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`,
   listClassName = "mt-4",
-  emptyClassName = "mx-2 mt-4 rounded-xl border border-dashed border-stone-300 bg-stone-50/80 px-4 py-8 text-center text-sm text-stone-600 md:mx-0",
+  emptyClassName = "mx-2 mt-4 rounded-xl border border-dashed border-line-strong bg-surface-subtle/80 px-4 py-8 text-center text-sm text-secondary md:mx-0",
   emptyMessage = "ToDoはまだありません。やることを追加してください。",
 }: TodoItemsSectionProps) {
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
@@ -445,20 +445,18 @@ export function TodoItemsSection({
         {showSectionChrome ? (
           <div className="flex items-center justify-between gap-3 px-2 md:px-0">
             <div>
-              <h3 className="text-base font-semibold text-stone-900">{title}</h3>
+              <h3 className="text-base font-semibold text-heading">{title}</h3>
               {description != null ? (
-                <p className="mt-1 text-sm text-stone-600">{description}</p>
+                <p className="mt-1 text-sm text-secondary">{description}</p>
               ) : null}
             </div>
             <div className="flex items-center gap-2">
               {headerContent}
-              {isReordering ? (
-                <span className="text-xs text-stone-500">並び順を保存中...</span>
-              ) : null}
+              {isReordering ? <span className="text-xs text-muted">並び順を保存中...</span> : null}
             </div>
           </div>
         ) : isReordering ? (
-          <div className="px-2 text-right text-xs text-stone-500 md:px-0">並び順を保存中...</div>
+          <div className="px-2 text-right text-xs text-muted md:px-0">並び順を保存中...</div>
         ) : null}
 
         {filters}
@@ -530,9 +528,9 @@ export function TodoManager({
       className={`animate-enter flex flex-1 flex-col rounded-xl px-0 py-3 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
     >
       <div className="flex items-center justify-between gap-3 px-2 md:px-0">
-        <h2 className="text-lg font-semibold text-stone-900">ToDo</h2>
+        <h2 className="text-lg font-semibold text-heading">ToDo</h2>
       </div>
-      <div className="mt-4 flex flex-1 flex-col border-t border-stone-200 pt-4">
+      <div className="mt-4 flex flex-1 flex-col border-t border-line pt-4">
         <TodoItemsSection
           filters={filters}
           onCategorySwipe={onCategorySwipe}
@@ -546,13 +544,13 @@ export function TodoManager({
           onUpdate={onUpdate}
           articleClassName="flex flex-1 flex-col"
           headerContent={
-            <span className="rounded-full border border-stone-200 bg-stone-50 px-3 py-1 text-xs text-stone-700">
+            <span className="rounded-full border border-line bg-surface-subtle px-3 py-1 text-xs text-body">
               <span className="whitespace-nowrap">{items.length}件</span>
             </span>
           }
         />
       </div>
-      <p className="mt-4 px-2 text-xs text-stone-500 md:px-0">
+      <p className="mt-4 px-2 text-xs text-muted md:px-0">
         ToDoをチームで共有します。完了すると削除されます。
       </p>
     </article>

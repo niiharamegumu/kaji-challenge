@@ -98,21 +98,21 @@ export function TaskCreateForm({
 
   return (
     <div className="grid gap-1.5">
-      <label className="text-xs text-stone-700 sm:text-sm" htmlFor="task-title">
+      <label className="text-xs text-body sm:text-sm" htmlFor="task-title">
         タスク名
       </label>
       <input
         id="task-title"
-        className="h-10 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
+        className="h-10 rounded-lg border border-line-strong bg-surface px-3 py-2 text-sm sm:h-11"
         value={form.title}
         onChange={handleChange("title")}
       />
-      <label className="text-xs text-stone-700 sm:text-sm" htmlFor="task-notes">
+      <label className="text-xs text-body sm:text-sm" htmlFor="task-notes">
         メモ
       </label>
       <input
         id="task-notes"
-        className="h-10 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
+        className="h-10 rounded-lg border border-line-strong bg-surface px-3 py-2 text-sm sm:h-11"
         value={form.notes}
         onChange={handleChange("notes")}
       />
@@ -120,13 +120,13 @@ export function TaskCreateForm({
         className={`grid gap-1.5 ${form.type === TaskTypeConst.weekly ? "grid-cols-1 sm:grid-cols-2 md:grid-cols-3" : "grid-cols-1 sm:grid-cols-2"}`}
       >
         <div className="grid min-w-0 gap-1">
-          <label className="text-xs text-stone-700 sm:text-sm" htmlFor="task-type">
+          <label className="text-xs text-body sm:text-sm" htmlFor="task-type">
             種別
           </label>
           <div className="relative">
             <select
               id="task-type"
-              className="h-10 w-full appearance-none rounded-lg border border-stone-300 bg-white py-2 pl-3 pr-10 text-sm sm:h-11 sm:pr-12"
+              className="h-10 w-full appearance-none rounded-lg border border-line-strong bg-surface py-2 pl-3 pr-10 text-sm sm:h-11 sm:pr-12"
               value={form.type}
               onChange={handleChange("type")}
             >
@@ -135,18 +135,18 @@ export function TaskCreateForm({
             </select>
             <ChevronDown
               size={18}
-              className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-stone-500 sm:right-4"
+              className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted sm:right-4"
               aria-hidden="true"
             />
           </div>
         </div>
         <div className="grid min-w-0 gap-1">
-          <label className="text-xs text-stone-700 sm:text-sm" htmlFor="task-penalty-points">
+          <label className="text-xs text-body sm:text-sm" htmlFor="task-penalty-points">
             未達減点
           </label>
           <input
             id="task-penalty-points"
-            className="h-10 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
+            className="h-10 w-full rounded-lg border border-line-strong bg-surface px-3 py-2 text-sm sm:h-11"
             type="number"
             min={0}
             value={form.penaltyPoints}
@@ -155,12 +155,12 @@ export function TaskCreateForm({
         </div>
         {form.type === TaskTypeConst.weekly ? (
           <div className="grid min-w-0 gap-1">
-            <label className="text-xs text-stone-700 sm:text-sm" htmlFor="task-weekly-required">
+            <label className="text-xs text-body sm:text-sm" htmlFor="task-weekly-required">
               週間必要回数
             </label>
             <input
               id="task-weekly-required"
-              className="h-10 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
+              className="h-10 w-full rounded-lg border border-line-strong bg-surface px-3 py-2 text-sm sm:h-11"
               type="number"
               min={WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MIN}
               max={WEEKLY_REQUIRED_COMPLETIONS_PER_WEEK_MAX}
@@ -221,36 +221,36 @@ function SortableTaskItem({
     <li
       ref={setNodeRef}
       style={style}
-      className={`relative rounded-xl border border-stone-200 bg-white p-3 shadow-sm ${isDragging ? "opacity-70 select-none" : ""}`}
+      className={`relative rounded-xl border border-line bg-surface p-3 shadow-sm ${isDragging ? "opacity-70 select-none" : ""}`}
     >
       {isEditing ? (
         <fieldset disabled={isSaving} className="grid gap-2">
-          <label className="text-xs text-stone-700" htmlFor={`task-edit-title-${task.id}`}>
+          <label className="text-xs text-body" htmlFor={`task-edit-title-${task.id}`}>
             タイトル
           </label>
           <input
             id={`task-edit-title-${task.id}`}
-            className="h-10 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
+            className="h-10 rounded-lg border border-line-strong bg-surface px-3 py-2 text-sm sm:h-11"
             value={editState.title}
             onChange={(event) => onChangeEditState({ ...editState, title: event.target.value })}
           />
-          <label className="text-xs text-stone-700" htmlFor={`task-edit-notes-${task.id}`}>
+          <label className="text-xs text-body" htmlFor={`task-edit-notes-${task.id}`}>
             メモ
           </label>
           <input
             id={`task-edit-notes-${task.id}`}
-            className="h-10 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
+            className="h-10 rounded-lg border border-line-strong bg-surface px-3 py-2 text-sm sm:h-11"
             value={editState.notes}
             onChange={(event) => onChangeEditState({ ...editState, notes: event.target.value })}
           />
           {isWeekly ? (
             <>
-              <label className="text-xs text-stone-700" htmlFor={`task-edit-weekly-${task.id}`}>
+              <label className="text-xs text-body" htmlFor={`task-edit-weekly-${task.id}`}>
                 週の必要回数
               </label>
               <select
                 id={`task-edit-weekly-${task.id}`}
-                className="h-10 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
+                className="h-10 rounded-lg border border-line-strong bg-surface px-3 py-2 text-sm sm:h-11"
                 value={editState.requiredCompletionsPerWeek}
                 onChange={(event) =>
                   onChangeEditState({
@@ -266,7 +266,7 @@ function SortableTaskItem({
                   </option>
                 ))}
               </select>
-              <p id={`task-edit-weekly-help-${task.id}`} className="text-xs text-stone-600">
+              <p id={`task-edit-weekly-help-${task.id}`} className="text-xs text-secondary">
                 回数の変更は翌週月曜から適用されます。今週と過去の完了記録・集計は変わりません。
                 {task.scheduledWeeklyRequirement
                   ? ` 現在は${task.scheduledWeeklyRequirement.effectiveWeek}から週${task.scheduledWeeklyRequirement.requiredCompletionsPerWeek}回に変更予定です。今週と同じ回数を選ぶと変更を取り消せます。`
@@ -277,7 +277,7 @@ function SortableTaskItem({
           <div className="mt-1 flex flex-wrap gap-2">
             <button
               type="button"
-              className="flex h-9 items-center gap-1 rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-xs text-emerald-700 transition-colors hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50 sm:h-10"
+              className="flex h-9 items-center gap-1 rounded-lg border border-success-line bg-surface px-3 py-1.5 text-xs text-success transition-colors hover:bg-success-soft disabled:cursor-not-allowed disabled:opacity-50 sm:h-10"
               onClick={() => onSaveEdit(task.id)}
               disabled={!canSave || isSaving}
               aria-busy={isSaving}
@@ -287,7 +287,7 @@ function SortableTaskItem({
             </button>
             <button
               type="button"
-              className="flex h-9 items-center gap-1 rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs text-stone-700 transition-colors hover:bg-stone-100 sm:h-10"
+              className="flex h-9 items-center gap-1 rounded-lg border border-line-strong bg-surface px-3 py-1.5 text-xs text-body transition-colors hover:bg-surface-muted sm:h-10"
               onClick={onCancelEdit}
             >
               <X size={14} aria-hidden="true" />
@@ -299,18 +299,18 @@ function SortableTaskItem({
         <>
           <div className="flex items-start gap-3 pr-10">
             <div className="min-w-0 flex-1">
-              <div className="font-medium text-stone-900">{task.title}</div>
+              <div className="font-medium text-heading">{task.title}</div>
               {task.notes != null && task.notes !== "" ? (
-                <div className="mt-1 whitespace-pre-wrap break-words text-xs text-stone-600">
+                <div className="mt-1 whitespace-pre-wrap break-words text-xs text-secondary">
                   {task.notes}
                 </div>
               ) : null}
-              <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-stone-600">
+              <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-secondary">
                 <span
                   className={`inline-flex items-center rounded-full px-2 py-0.5 font-semibold leading-4 ${
                     isWeekly
-                      ? "bg-stone-900 text-white"
-                      : "border border-stone-300 bg-white text-stone-900"
+                      ? "bg-action text-on-action"
+                      : "border border-line-strong bg-surface text-heading"
                   }`}
                 >
                   {isWeekly ? "週間" : "日間"}
@@ -318,7 +318,7 @@ function SortableTaskItem({
                 <span>減点 {task.penaltyPoints}</span>
                 {isWeekly ? <span>必要 {task.requiredCompletionsPerWeek}回/週</span> : null}
                 {task.scheduledWeeklyRequirement ? (
-                  <span className="text-emerald-700">
+                  <span className="text-success">
                     {task.scheduledWeeklyRequirement.effectiveWeek}から週
                     {task.scheduledWeeklyRequirement.requiredCompletionsPerWeek}回
                   </span>
@@ -329,7 +329,7 @@ function SortableTaskItem({
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <button
               type="button"
-              className="flex h-9 items-center gap-1 rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 text-xs text-stone-700 transition-colors hover:bg-stone-100"
+              className="flex h-9 items-center gap-1 rounded-lg border border-line-strong bg-surface px-2.5 py-1.5 text-xs text-body transition-colors hover:bg-surface-muted"
               onClick={() => onStartEdit(task)}
               aria-label="編集"
               onPointerDown={(event) => event.stopPropagation()}
@@ -338,7 +338,7 @@ function SortableTaskItem({
             </button>
             <button
               type="button"
-              className="flex h-9 items-center gap-1 rounded-lg border border-rose-300 bg-white px-2.5 py-1.5 text-xs text-rose-700 transition-colors hover:bg-rose-50"
+              className="flex h-9 items-center gap-1 rounded-lg border border-danger-line bg-surface px-2.5 py-1.5 text-xs text-danger transition-colors hover:bg-danger-soft"
               onClick={onDelete}
               aria-label="削除"
               onPointerDown={(event) => event.stopPropagation()}
@@ -351,7 +351,7 @@ function SortableTaskItem({
       {!isEditing ? (
         <button
           type="button"
-          className="absolute top-1/2 right-3 flex h-8 w-8 -translate-y-1/2 cursor-grab touch-none select-none items-center justify-center rounded-md text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700 active:cursor-grabbing focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-400"
+          className="absolute top-1/2 right-3 flex h-8 w-8 -translate-y-1/2 cursor-grab touch-none select-none items-center justify-center rounded-md text-faint transition-colors hover:bg-surface-muted hover:text-body active:cursor-grabbing focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
           onPointerDown={(event) => event.stopPropagation()}
           {...dragProps}
         >
@@ -470,25 +470,23 @@ function TaskItemsSection({
       >
         <div className="flex items-center justify-between gap-3 px-2 md:px-0">
           <div>
-            <h3 className="text-base font-semibold text-stone-900">{sectionTitle}</h3>
-            <p className="mt-1 text-sm text-stone-600">
+            <h3 className="text-base font-semibold text-heading">{sectionTitle}</h3>
+            <p className="mt-1 text-sm text-secondary">
               {taskType === "daily"
                 ? "チームで共有する日間タスクです。ここで並び順を調整できます。"
                 : "チームで共有する週間タスクです。ここで並び順を調整できます。"}
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <span className="rounded-full border border-stone-200 bg-stone-50 px-3 py-1 text-xs text-stone-700">
+            <span className="rounded-full border border-line bg-surface-subtle px-3 py-1 text-xs text-body">
               <span className="whitespace-nowrap">{tasks.length}件</span>
             </span>
-            {isReordering ? (
-              <span className="text-xs text-stone-500">並び順を保存中...</span>
-            ) : null}
+            {isReordering ? <span className="text-xs text-muted">並び順を保存中...</span> : null}
           </div>
         </div>
 
         {tasks.length === 0 ? (
-          <div className="mx-2 mt-4 rounded-xl border border-dashed border-stone-300 bg-stone-50/80 px-4 py-8 text-center text-sm text-stone-600 md:mx-0">
+          <div className="mx-2 mt-4 rounded-xl border border-dashed border-line-strong bg-surface-subtle/80 px-4 py-8 text-center text-sm text-secondary md:mx-0">
             {emptyMessage}
           </div>
         ) : (
@@ -570,11 +568,11 @@ export function TaskManager({
         className={`animate-enter rounded-xl px-0 py-3 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
       >
         <div className="flex items-center justify-between gap-3 px-2 md:px-0">
-          <h2 className="text-lg font-semibold text-stone-900">タスク管理</h2>
+          <h2 className="text-lg font-semibold text-heading">タスク管理</h2>
           {showCreateButton ? (
             <button
               type="button"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-stone-900 text-white transition-colors hover:bg-stone-800"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-action text-on-action transition-colors hover:bg-action-hover"
               onClick={onOpenCreate}
               aria-label="追加"
             >
@@ -582,7 +580,7 @@ export function TaskManager({
             </button>
           ) : null}
         </div>
-        <p className="mt-4 border-t border-stone-200 px-2 pt-4 text-xs text-stone-500 md:px-0">
+        <p className="mt-4 border-t border-line px-2 pt-4 text-xs text-muted md:px-0">
           タスク設定はチーム共通です。並び替えは管理画面でのみ変更できます。
         </p>
       </article>

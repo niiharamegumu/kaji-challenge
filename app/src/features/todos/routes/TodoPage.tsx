@@ -120,7 +120,7 @@ export function TodoPage() {
         footerStart={
           <button
             type="button"
-            className="inline-flex h-11 cursor-pointer items-center rounded-xl border border-stone-300 bg-white/70 px-4 text-sm font-medium text-stone-800 transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-600"
+            className="inline-flex h-11 cursor-pointer items-center rounded-xl border border-line-strong bg-surface/70 px-4 text-sm font-medium text-ink transition-colors hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
             disabled={submitDisabled || createItem.isPending}
             onClick={() => {
               void handleContinue();
@@ -147,10 +147,10 @@ export function TodoPage() {
           nameInputRef={nameInputRef}
           onInputKeyDown={handleInputKeyDown}
         />
-        <p className="mt-3 text-xs leading-relaxed text-stone-600">
+        <p className="mt-3 text-xs leading-relaxed text-secondary">
           「続けて追加」またはEnterで、同じカテゴリーに次のToDoを入力できます。
         </p>
-        <p role="status" className="mt-2 min-h-5 break-words text-sm text-emerald-800">
+        <p role="status" className="mt-2 min-h-5 break-words text-sm text-success">
           {createItem.isSuccess ? `「${createItem.data.data.name}」を追加しました` : ""}
         </p>
       </FooterQuickAction>

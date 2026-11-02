@@ -44,7 +44,7 @@ export function TriggeredPenaltiesList({
   }, [rules, triggeredPenaltyRuleIds]);
 
   if (triggeredPenalties.length === 0) {
-    return <p className="mt-3 px-2 text-sm text-stone-500 md:px-0">{emptyMessage}</p>;
+    return <p className="mt-3 px-2 text-sm text-muted md:px-0">{emptyMessage}</p>;
   }
 
   return (
@@ -52,17 +52,17 @@ export function TriggeredPenaltiesList({
       {triggeredPenalties.map((penalty) => (
         <li
           key={penalty.id}
-          className={`rounded-xl border p-2.5 ${penalty.isUnknown ? "border-amber-300 bg-amber-100/70" : "border-amber-300 bg-amber-50"}`}
+          className={`rounded-xl border p-2.5 ${penalty.isUnknown ? "border-warning-line bg-warning-hover/70" : "border-warning-line bg-warning-soft"}`}
         >
-          <div className="flex items-center gap-2 text-amber-800">
+          <div className="flex items-center gap-2 text-warning-strong">
             {penalty.isUnknown ? (
-              <TriangleAlert size={16} className="text-amber-700" aria-hidden="true" />
+              <TriangleAlert size={16} className="text-warning" aria-hidden="true" />
             ) : (
-              <AlertTriangle size={16} className="text-amber-700" aria-hidden="true" />
+              <AlertTriangle size={16} className="text-warning" aria-hidden="true" />
             )}
-            <p className="font-medium text-amber-900">{penalty.name}</p>
+            <p className="font-medium text-warning-strong">{penalty.name}</p>
           </div>
-          <p className="mt-2 text-xs text-amber-800">
+          <p className="mt-2 text-xs text-warning-strong">
             {penalty.isUnknown
               ? "ルール詳細を確認できません"
               : `発動しきい値: ${penalty.threshold}`}

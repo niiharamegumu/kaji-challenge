@@ -15,6 +15,7 @@ import {
 } from "./SettingsSections";
 import { getColorHexError, getNicknameError, getTeamNameError } from "./settingsUtils";
 import { TodoCompletionSettings } from "./TodoCompletionSettings";
+import { ThemeSettings } from "./ThemeSettings";
 
 type Props = {
   identityKey: string;
@@ -126,20 +127,21 @@ export function SettingsManager({
   return (
     <section className="space-y-2 pb-1 md:space-y-4">
       <header className="py-0.5 md:px-6">
-        <h2 className="text-lg font-semibold text-stone-900">設定</h2>
-        <p className="mt-2 text-xs text-stone-500">
+        <h2 className="text-lg font-semibold text-heading">設定</h2>
+        <p className="mt-2 text-xs text-muted">
           チーム・アカウント・ブラウザーの設定を管理できます。
         </p>
       </header>
 
       <TodoCompletionSettings>
+        <ThemeSettings />
         <TodoDefaultCategorySettings key={identityKey} identityKey={identityKey} />
       </TodoCompletionSettings>
 
       <article
         className={`rounded-xl px-0 py-2.5 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
       >
-        <h2 className="text-base font-semibold text-stone-900">チーム設定</h2>
+        <h2 className="text-base font-semibold text-heading">チーム設定</h2>
         <div className="mt-3 space-y-6">
           <TeamNameSection
             teamName={teamName}
@@ -184,7 +186,7 @@ export function SettingsManager({
       <article
         className={`rounded-xl px-0 py-2.5 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
       >
-        <h2 className="text-base font-semibold text-stone-900">アカウント設定</h2>
+        <h2 className="text-base font-semibold text-heading">アカウント設定</h2>
         <div className="mt-3 space-y-6">
           <AccountSettingsSection
             nickname={nickname}

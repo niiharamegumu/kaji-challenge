@@ -110,10 +110,10 @@ describe("WeeklyTasksPanel", () => {
 
     expect(screen.getByRole("button", { name: "下限タスク を1減らす" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "上限タスク を1増やす" })).toBeDisabled();
-    expect(screen.getByTestId("weekly-decrement-icon-lower")).toHaveClass("bg-stone-300");
-    expect(screen.getByTestId("weekly-increment-icon-upper")).toHaveClass("bg-stone-300");
-    expect(screen.getByTestId("weekly-decrement-icon-upper")).toHaveClass("bg-stone-900");
-    expect(screen.getByTestId("weekly-increment-icon-lower")).toHaveClass("bg-stone-900");
+    expect(screen.getByTestId("weekly-decrement-icon-lower")).toHaveClass("bg-surface-disabled");
+    expect(screen.getByTestId("weekly-increment-icon-upper")).toHaveClass("bg-surface-disabled");
+    expect(screen.getByTestId("weekly-decrement-icon-upper")).toHaveClass("bg-action");
+    expect(screen.getByTestId("weekly-increment-icon-lower")).toHaveClass("bg-action");
   });
 
   it("keeps single-completion task behavior unchanged", async () => {

@@ -116,7 +116,11 @@ describe("PushSettings", () => {
     vi.stubGlobal("Notification", createNotificationMock("default"));
     Object.defineProperty(window, "matchMedia", {
       writable: true,
-      value: vi.fn().mockReturnValue({ matches: false }),
+      value: vi.fn().mockReturnValue({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }),
     });
     Object.defineProperty(window, "PushManager", {
       writable: true,
@@ -156,7 +160,11 @@ describe("PushSettings", () => {
     vi.stubGlobal("Notification", createNotificationMock("granted"));
     Object.defineProperty(window, "matchMedia", {
       writable: true,
-      value: vi.fn().mockReturnValue({ matches: true }),
+      value: vi.fn().mockReturnValue({
+        matches: true,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }),
     });
     mockWaitForPWARegistration.mockResolvedValue({
       pushManager: {
@@ -194,7 +202,11 @@ describe("PushSettings", () => {
     vi.stubGlobal("Notification", createNotificationMock("granted"));
     Object.defineProperty(window, "matchMedia", {
       writable: true,
-      value: vi.fn().mockReturnValue({ matches: false }),
+      value: vi.fn().mockReturnValue({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }),
     });
     mockWaitForPWARegistration.mockResolvedValue({
       pushManager: {
@@ -234,7 +246,11 @@ describe("PushSettings", () => {
     vi.stubGlobal("Notification", createNotificationMock("granted"));
     Object.defineProperty(window, "matchMedia", {
       writable: true,
-      value: vi.fn().mockReturnValue({ matches: true }),
+      value: vi.fn().mockReturnValue({
+        matches: true,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }),
     });
     mockWaitForPWARegistration.mockResolvedValue({
       active: null,

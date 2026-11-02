@@ -40,11 +40,11 @@ export function SortableTodoCategory({
     <li
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`relative flex min-w-0 items-center gap-2 rounded-lg bg-stone-50 py-1 pl-3 pr-1 ${isDragging ? "z-10 opacity-70" : ""}`}
+      className={`relative flex min-w-0 items-center gap-2 rounded-lg bg-surface-subtle py-1 pl-3 pr-1 ${isDragging ? "z-10 opacity-70" : ""}`}
     >
       <span className="min-w-0 flex-1 break-words text-sm">{label}</span>
       {category === null ? (
-        <span className="shrink-0 px-3 text-xs text-stone-500">標準</span>
+        <span className="shrink-0 px-3 text-xs text-muted">標準</span>
       ) : (
         <>
           <button
@@ -52,7 +52,7 @@ export function SortableTodoCategory({
             disabled={disabled}
             onClick={() => onEdit(category)}
             aria-label={`${label} を編集`}
-            className="min-h-9 shrink-0 rounded-lg border border-stone-300 px-3 text-xs text-stone-700 disabled:opacity-50"
+            className="min-h-9 shrink-0 rounded-lg border border-line-strong px-3 text-xs text-body disabled:opacity-50"
           >
             編集
           </button>
@@ -61,7 +61,7 @@ export function SortableTodoCategory({
             disabled={disabled}
             onClick={() => onRemove(category.id)}
             aria-label={`${label} を削除`}
-            className="min-h-9 shrink-0 rounded-lg border border-stone-300 px-3 text-xs text-stone-700 disabled:opacity-50"
+            className="min-h-9 shrink-0 rounded-lg border border-line-strong px-3 text-xs text-body disabled:opacity-50"
           >
             削除
           </button>
@@ -74,7 +74,7 @@ export function SortableTodoCategory({
         {...listeners}
         disabled={disabled}
         aria-label={`${label} をドラッグして並び替え`}
-        className="flex size-11 shrink-0 touch-none items-center justify-center rounded-lg text-stone-500 hover:bg-stone-200 focus-visible:outline-2 focus-visible:outline-stone-500 disabled:opacity-50"
+        className="flex size-11 shrink-0 touch-none items-center justify-center rounded-lg text-muted hover:bg-surface-active focus-visible:outline-2 focus-visible:outline-focus disabled:opacity-50"
       >
         <GripVertical size={18} aria-hidden="true" />
       </button>

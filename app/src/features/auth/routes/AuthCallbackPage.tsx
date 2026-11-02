@@ -36,19 +36,19 @@ export function AuthCallbackPage() {
   }, [error, navigate]);
   if (error)
     return (
-      <main className="ios-safe-main flex min-h-screen items-center justify-center bg-[color:var(--color-washi-50)] px-4 py-8 text-stone-800">
-        <section className="w-full max-w-lg rounded-2xl border border-stone-200 bg-white p-6 shadow-sm sm:p-8">
+      <main className="ios-safe-main flex min-h-screen items-center justify-center bg-canvas px-4 py-8 text-ink">
+        <section className="w-full max-w-lg rounded-2xl border border-line bg-surface p-6 shadow-sm sm:p-8">
           <img src={appLogo} alt="" width={64} height={64} className="h-12 w-12" />
-          <p className="mt-4 text-sm font-semibold text-stone-600">KajiChalle</p>
-          <h1 className="mt-2 text-2xl font-bold text-stone-900">ログインできませんでした</h1>
-          <p className="mt-4 text-sm leading-7 text-stone-700">
+          <p className="mt-4 text-sm font-semibold text-secondary">KajiChalle</p>
+          <h1 className="mt-2 text-2xl font-bold text-heading">ログインできませんでした</h1>
+          <p className="mt-4 text-sm leading-7 text-body">
             {error === "signup_forbidden"
               ? "このアカウントは現在の利用対象に登録されていません。利用を希望する場合は管理者にお問い合わせください。"
               : "ログイン処理を完了できませんでした。もう一度お試しください。"}
           </p>
           <a
             href="/"
-            className="mt-8 inline-flex min-h-11 items-center justify-center rounded-lg bg-stone-900 px-5 py-2 text-sm font-semibold text-white hover:bg-stone-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-400 focus-visible:ring-offset-2"
+            className="mt-8 inline-flex min-h-11 items-center justify-center rounded-lg bg-action px-5 py-2 text-sm font-semibold text-on-action hover:bg-action-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
           >
             ログイン画面に戻る
           </a>

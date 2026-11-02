@@ -27,26 +27,26 @@ export function DeleteConfirmModal({
       <dialog
         open
         aria-labelledby="delete-confirm-title"
-        className="mx-auto w-full max-w-sm rounded-xl border border-stone-200 bg-white p-4 shadow-lg"
+        className="mx-auto w-full max-w-sm rounded-xl border border-line bg-surface p-4 shadow-lg"
       >
         <div className="flex items-center gap-3 text-left">
-          <AlertTriangle className="shrink-0 text-stone-900" size={24} aria-hidden="true" />
-          <h3 id="delete-confirm-title" className="text-base font-semibold text-stone-900">
+          <AlertTriangle className="shrink-0 text-heading" size={24} aria-hidden="true" />
+          <h3 id="delete-confirm-title" className="text-base font-semibold text-heading">
             {title}
           </h3>
         </div>
-        <p className="mt-3 text-left text-sm text-stone-700">{message}</p>
+        <p className="mt-3 text-left text-sm text-body">{message}</p>
         <div className="mt-4 flex justify-end gap-2">
           <button
             type="button"
-            className="h-9 rounded-md border border-stone-300 bg-white px-3 text-sm text-stone-700 transition-colors hover:bg-stone-100"
+            className="h-9 rounded-md border border-line-strong bg-surface px-3 text-sm text-body transition-colors hover:bg-surface-muted"
             onClick={onCancel}
           >
             キャンセル
           </button>
           <button
             type="button"
-            className="h-9 rounded-md border border-rose-300 bg-rose-50 px-3 text-sm text-rose-700 transition-colors hover:bg-rose-100"
+            className="h-9 rounded-md border border-danger-line bg-danger-soft px-3 text-sm text-danger transition-colors hover:bg-danger-hover"
             onClick={onConfirm}
           >
             削除する

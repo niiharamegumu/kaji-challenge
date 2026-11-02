@@ -22,16 +22,16 @@ export function HomePageSkeleton() {
       <section className="grid gap-2 md:grid-cols-2 md:gap-4">
         {["daily", "weekly"].map((panel) => (
           <article key={panel} className={HOME_PANEL_SKELETON_CLASS_NAME}>
-            <div className="mx-2 h-6 w-28 rounded bg-stone-200 md:mx-0" />
+            <div className="mx-2 h-6 w-28 rounded bg-surface-active md:mx-0" />
             <div className="mx-2 mt-3 space-y-2 md:mx-0">
               {[0, 1, 2].map((row) => (
                 <div
                   key={`${panel}-${row}`}
-                  className="rounded-xl border border-stone-100 bg-stone-50 p-3"
+                  className="rounded-xl border border-line-subtle bg-surface-subtle p-3"
                 >
-                  <div className="h-4 w-2/5 rounded bg-stone-200" />
-                  <div className="mt-2 h-3 w-4/5 rounded bg-stone-100" />
-                  <div className="mt-3 h-3 w-3/5 rounded bg-stone-100" />
+                  <div className="h-4 w-2/5 rounded bg-surface-active" />
+                  <div className="mt-2 h-3 w-4/5 rounded bg-surface-muted" />
+                  <div className="mt-3 h-3 w-3/5 rounded bg-surface-muted" />
                 </div>
               ))}
             </div>
@@ -42,16 +42,16 @@ export function HomePageSkeleton() {
       <section className="grid gap-2 md:grid-cols-2 md:gap-4">
         {["reminders", "todo"].map((panel) => (
           <article key={panel} className={HOME_PANEL_SKELETON_CLASS_NAME}>
-            <div className="mx-2 h-6 w-28 rounded bg-stone-200 md:mx-0" />
+            <div className="mx-2 h-6 w-28 rounded bg-surface-active md:mx-0" />
             <div className="mx-2 mt-3 space-y-2 md:mx-0">
               {[0, 1, 2].map((row) => (
                 <div
                   key={`${panel}-${row}`}
-                  className="rounded-xl border border-stone-100 bg-stone-50 p-3"
+                  className="rounded-xl border border-line-subtle bg-surface-subtle p-3"
                 >
-                  <div className="h-4 w-2/5 rounded bg-stone-200" />
-                  <div className="mt-2 h-3 w-4/5 rounded bg-stone-100" />
-                  <div className="mt-3 h-3 w-3/5 rounded bg-stone-100" />
+                  <div className="h-4 w-2/5 rounded bg-surface-active" />
+                  <div className="mt-2 h-3 w-4/5 rounded bg-surface-muted" />
+                  <div className="mt-3 h-3 w-3/5 rounded bg-surface-muted" />
                 </div>
               ))}
             </div>
@@ -60,12 +60,12 @@ export function HomePageSkeleton() {
       </section>
 
       <article className={HOME_PANEL_SKELETON_CLASS_NAME}>
-        <div className="mx-2 h-6 w-48 rounded bg-stone-200 md:mx-0" />
+        <div className="mx-2 h-6 w-48 rounded bg-surface-active md:mx-0" />
         <div className="mx-2 mt-3 grid gap-2 md:mx-0 md:grid-cols-2 xl:grid-cols-3">
           {[0, 1].map((row) => (
             <div
               key={`penalty-${row}`}
-              className="h-16 rounded-xl border border-stone-100 bg-stone-50"
+              className="h-16 rounded-xl border border-line-subtle bg-surface-subtle"
             />
           ))}
         </div>

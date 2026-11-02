@@ -51,7 +51,7 @@ export function AppHeader({ teamName, todayLabel, children }: Props) {
       <header className="app-header-content relative flex items-start justify-between gap-3 p-[11px] md:items-center md:p-[17px]">
         <div
           aria-hidden="true"
-          className="app-glass-surface app-header-surface absolute top-0 right-0 h-full w-full rounded-3xl border border-white/40"
+          className="app-glass-surface app-header-surface absolute top-0 right-0 h-full w-full rounded-3xl border border-glass-edge/40"
         />
         <div className="app-header-info flex min-h-10 min-w-0 flex-1 flex-col justify-center md:flex-row md:items-center md:justify-between md:gap-3">
           <h1
@@ -60,7 +60,7 @@ export function AppHeader({ teamName, todayLabel, children }: Props) {
           >
             {teamName}
           </h1>
-          <span className="shrink-0 whitespace-nowrap text-xs text-stone-700 md:text-sm">
+          <span className="shrink-0 whitespace-nowrap text-xs text-body md:text-sm">
             {todayLabel}
           </span>
         </div>

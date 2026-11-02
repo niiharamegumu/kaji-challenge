@@ -42,21 +42,21 @@ export function PenaltyRuleCreateForm({
 
   return (
     <div className="grid gap-1.5">
-      <label className="text-xs text-stone-700 sm:text-sm" htmlFor="rule-name">
+      <label className="text-xs text-body sm:text-sm" htmlFor="rule-name">
         ルール名
       </label>
       <input
         id="rule-name"
-        className="h-10 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
+        className="h-10 rounded-lg border border-line-strong bg-surface px-3 py-2 text-sm sm:h-11"
         value={form.name}
         onChange={handleChange("name")}
       />
-      <label className="text-xs text-stone-700 sm:text-sm" htmlFor="rule-threshold">
+      <label className="text-xs text-body sm:text-sm" htmlFor="rule-threshold">
         発動しきい値
       </label>
       <input
         id="rule-threshold"
-        className="h-10 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
+        className="h-10 rounded-lg border border-line-strong bg-surface px-3 py-2 text-sm sm:h-11"
         type="number"
         min={1}
         value={form.threshold}
@@ -121,7 +121,7 @@ export function PenaltyRuleManager({
         {showCreateButton ? (
           <button
             type="button"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-stone-900 text-white transition-colors hover:bg-stone-800"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-action text-on-action transition-colors hover:bg-action-hover"
             onClick={onOpenCreate}
             aria-label="追加"
           >
@@ -130,42 +130,39 @@ export function PenaltyRuleManager({
         ) : null}
       </div>
 
-      <div className="mt-4 border-t border-stone-200 pt-3">
+      <div className="mt-4 border-t border-line pt-3">
         {sortedRules.length === 0 ? (
-          <p className="px-2 text-sm text-stone-500 md:px-0">ペナルティルールはまだありません。</p>
+          <p className="px-2 text-sm text-muted md:px-0">ペナルティルールはまだありません。</p>
         ) : (
           <ul className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
             {sortedRules.map((rule) => {
               const isEditing = editingRuleId === rule.id;
               const canSave = editName.trim().length > 0;
               return (
-                <li key={rule.id} className="rounded-xl border border-stone-200 bg-white p-2.5">
+                <li key={rule.id} className="rounded-xl border border-line bg-surface p-2.5">
                   {isEditing ? (
                     <div className="grid gap-2">
-                      <label
-                        className="text-xs text-stone-700"
-                        htmlFor={`rule-edit-name-${rule.id}`}
-                      >
+                      <label className="text-xs text-body" htmlFor={`rule-edit-name-${rule.id}`}>
                         ルール名
                       </label>
                       <input
                         id={`rule-edit-name-${rule.id}`}
-                        className="h-10 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
+                        className="h-10 rounded-lg border border-line-strong bg-surface px-3 py-2 text-sm sm:h-11"
                         value={editName}
                         disabled={isUpdating}
                         onChange={(event) => setEditName(event.target.value)}
                       />
                     </div>
                   ) : (
-                    <div className="font-medium text-stone-900">{rule.name}</div>
+                    <div className="font-medium text-heading">{rule.name}</div>
                   )}
                   {isEditing ? (
                     <>
-                      <div className="mt-1 text-xs text-stone-600">しきい値 {rule.threshold}</div>
+                      <div className="mt-1 text-xs text-secondary">しきい値 {rule.threshold}</div>
                       <div className="mt-2 flex flex-wrap gap-2">
                         <button
                           type="button"
-                          className="flex h-9 items-center gap-1 rounded-lg border border-emerald-300 bg-white px-2.5 py-1.5 text-xs text-emerald-700 transition-colors duration-200 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50 sm:h-11 sm:px-3 sm:py-2"
+                          className="flex h-9 items-center gap-1 rounded-lg border border-success-line bg-surface px-2.5 py-1.5 text-xs text-success transition-colors duration-200 hover:bg-success-soft disabled:cursor-not-allowed disabled:opacity-50 sm:h-11 sm:px-3 sm:py-2"
                           onClick={() => {
                             void saveEdit(rule.id);
                           }}
@@ -176,7 +173,7 @@ export function PenaltyRuleManager({
                         </button>
                         <button
                           type="button"
-                          className="flex h-9 items-center gap-1 rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 text-xs text-stone-700 transition-colors duration-200 hover:bg-stone-100 sm:h-11 sm:px-3 sm:py-2"
+                          className="flex h-9 items-center gap-1 rounded-lg border border-line-strong bg-surface px-2.5 py-1.5 text-xs text-body transition-colors duration-200 hover:bg-surface-muted sm:h-11 sm:px-3 sm:py-2"
                           onClick={cancelEdit}
                           disabled={isUpdating}
                         >
@@ -187,11 +184,11 @@ export function PenaltyRuleManager({
                     </>
                   ) : (
                     <div className="mt-1 flex items-center justify-between gap-2">
-                      <div className="text-xs text-stone-600">しきい値 {rule.threshold}</div>
+                      <div className="text-xs text-secondary">しきい値 {rule.threshold}</div>
                       <div className="flex shrink-0 items-center gap-1">
                         <button
                           type="button"
-                          className="flex h-8 w-8 items-center justify-center rounded-md border border-stone-300 bg-white text-stone-700 transition-colors duration-200 hover:bg-stone-100 sm:h-9 sm:w-9"
+                          className="flex h-8 w-8 items-center justify-center rounded-md border border-line-strong bg-surface text-body transition-colors duration-200 hover:bg-surface-muted sm:h-9 sm:w-9"
                           onClick={() => startEdit(rule)}
                         >
                           <Pencil size={14} aria-hidden="true" />
@@ -199,7 +196,7 @@ export function PenaltyRuleManager({
                         </button>
                         <button
                           type="button"
-                          className="flex h-8 w-8 items-center justify-center rounded-md border border-rose-300 bg-white text-rose-700 transition-colors duration-200 hover:bg-rose-50 sm:h-9 sm:w-9"
+                          className="flex h-8 w-8 items-center justify-center rounded-md border border-danger-line bg-surface text-danger transition-colors duration-200 hover:bg-danger-soft sm:h-9 sm:w-9"
                           onClick={() =>
                             setPendingDeleteRule({
                               id: rule.id,

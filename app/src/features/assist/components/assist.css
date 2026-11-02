@@ -11,15 +11,15 @@
     max(12px, env(safe-area-inset-bottom));
   border: 0;
   overflow: hidden;
-  color: #292524;
-  background: #f6f4ef;
+  color: var(--color-ink);
+  background: var(--color-canvas);
 }
 .assist-mode[open] {
   display: flex;
   flex-direction: column;
 }
 .assist-mode::backdrop {
-  background: #f6f4ef;
+  background: var(--color-canvas);
 }
 .assist-header {
   display: flex;
@@ -59,17 +59,17 @@
   padding: 16px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  border: 1px solid rgb(71 65 57 / 13%);
+  border: 1px solid var(--color-line);
   border-radius: 20px;
-  background: #fffefa;
+  background: var(--color-surface);
   box-shadow: 0 12px 36px -12px rgb(52 45 34 / 20%);
-  color: #57534e;
+  color: var(--color-secondary);
   font-size: 13px;
   line-height: 1.7;
 }
 .assist-help-content h2 {
   margin: 0;
-  color: #292524;
+  color: var(--color-ink);
   font-size: 15px;
   font-weight: 600;
 }
@@ -80,7 +80,7 @@
 }
 .assist-help-content dt {
   margin-top: 12px;
-  color: #292524;
+  color: var(--color-ink);
   font-weight: 600;
 }
 .assist-help-content dd {
@@ -106,15 +106,15 @@
     color 160ms;
 }
 .assist-icon-button {
-  color: #57534e;
+  color: var(--color-secondary);
   background: transparent;
 }
 .assist-icon-button:hover {
-  color: #292524;
-  background: rgb(41 37 36 / 6%);
+  color: var(--color-ink);
+  background: var(--color-surface-muted);
 }
 .assist-close {
-  background: rgb(41 37 36 / 4%);
+  background: var(--color-surface-muted);
 }
 .assist-thread {
   display: flex;
@@ -140,10 +140,10 @@
   width: 44px;
   height: 44px;
   margin: 0 auto 14px;
-  border: 1px solid rgb(41 37 36 / 8%);
+  border: 1px solid var(--color-line);
   border-radius: 14px;
-  color: #393530;
-  background: rgb(255 255 255 / 60%);
+  color: var(--color-body);
+  background: var(--color-surface);
   box-shadow: 0 4px 12px -8px rgb(41 37 36 / 15%);
 }
 .assist-welcome h1 {
@@ -156,7 +156,7 @@
 .assist-welcome p {
   margin-top: 6px;
   font-size: 13px;
-  color: #6f6861;
+  color: var(--color-muted);
 }
 .assist-messages {
   width: 100%;
@@ -170,7 +170,7 @@
   margin: 0 0 18px auto;
   padding: 10px 14px;
   border-radius: 20px 20px 6px 20px;
-  background: #eae6df;
+  background: var(--color-surface-active);
   font-size: 15px;
   line-height: 1.7;
   white-space: pre-wrap;
@@ -185,7 +185,7 @@
   min-height: 46px;
   align-items: center;
   gap: 12px;
-  color: #625c53;
+  color: var(--color-secondary);
   animation: assist-appear 180ms ease-out;
 }
 .assist-audio-placeholder {
@@ -219,7 +219,7 @@
   list-style: disc;
 }
 .assist-result-notes {
-  color: #6f6861;
+  color: var(--color-muted);
   font-size: 13px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -227,7 +227,7 @@
 .assist-more {
   margin-top: 12px;
   font-size: 12px;
-  color: #6f6861;
+  color: var(--color-muted);
 }
 .assist-input-area {
   flex-shrink: 0;
@@ -236,15 +236,15 @@
 }
 .assist-composer {
   padding: 8px;
-  border: 1px solid rgb(71 65 57 / 13%);
+  border: 1px solid var(--color-line);
   border-radius: 24px;
-  background: #fffefa;
+  background: var(--color-surface);
   box-shadow:
     0 5px 24px -14px rgb(52 45 34 / 16%),
     0 1px 2px rgb(52 45 34 / 3%);
 }
 .assist-composer:focus-within {
-  border-color: rgb(71 65 57 / 26%);
+  border-color: var(--color-line-strong);
 }
 .assist-composer textarea {
   display: block;
@@ -257,7 +257,7 @@
   border: 0;
   outline: none;
   background: transparent;
-  color: #292524;
+  color: var(--color-ink);
   font: inherit;
   font-size: 16px;
   line-height: 1.6;
@@ -266,10 +266,10 @@
   display: none;
 }
 .assist-composer textarea::placeholder {
-  color: #746c64;
+  color: var(--color-muted);
 }
 .assist-composer textarea[aria-invalid="true"] {
-  color: #9b3f32;
+  color: var(--color-danger);
 }
 .assist-toolbar {
   display: flex;
@@ -281,16 +281,16 @@
   min-width: 0;
   margin: 0;
   padding-left: 3px;
-  color: #6f6861;
+  color: var(--color-muted);
   font-size: 12px;
   line-height: 1.5;
 }
 .assist-send {
-  background: #292524;
-  color: #fffefa;
+  background: var(--color-action);
+  color: var(--color-on-action);
 }
 .assist-send:hover {
-  background: #44403c;
+  background: var(--color-action-hover);
 }
 .assist-send-recording {
   display: flex;
@@ -303,29 +303,29 @@
   white-space: nowrap;
 }
 .assist-stop {
-  color: #9b3f32;
-  background: #f7eae6;
+  color: var(--color-danger);
+  background: var(--color-danger-soft);
 }
 .assist-stop:hover {
-  color: #863327;
-  background: #f0dcd6;
+  color: var(--color-danger-strong);
+  background: var(--color-danger-hover);
 }
 .assist-icon-button:disabled,
 .assist-send:disabled {
   cursor: default;
-  color: #8b847a;
-  background: #ece8e0;
+  color: var(--color-faint);
+  background: var(--color-surface-muted);
 }
 .assist-icon-button[aria-busy="true"],
 .assist-send[aria-busy="true"] {
-  background: #292524;
-  color: #fffefa;
+  background: var(--color-action);
+  color: var(--color-on-action);
 }
 .assist-icon-button:focus-visible,
 .assist-send:focus-visible,
 .assist-results:focus-visible,
 .assist-help-content:focus-visible {
-  outline: 2px solid #625c53;
+  outline: 2px solid var(--color-secondary);
   outline-offset: 4px;
 }
 .assist-recording {
@@ -341,7 +341,7 @@
   min-height: 64px;
   place-items: center;
   padding: 8px 6px 12px;
-  color: #57534e;
+  color: var(--color-secondary);
 }
 .assist-spinner {
   display: inline-flex;
@@ -354,7 +354,7 @@
 }
 .assist-recording > span {
   font-size: 14px;
-  color: #625c53;
+  color: var(--color-secondary);
   font-variant-numeric: tabular-nums;
   min-width: 38px;
 }
@@ -368,7 +368,7 @@
   display: block;
   width: 3px;
   border-radius: 4px;
-  background: #57534e;
+  background: var(--color-secondary);
   animation: assist-wave 900ms ease-in-out infinite alternate;
   transform-origin: center;
 }
@@ -379,13 +379,13 @@
 .assist-privacy {
   margin-top: 12px;
   text-align: center;
-  color: #6f6861;
+  color: var(--color-muted);
   font-size: 11px;
   line-height: 1.6;
 }
 .assist-error {
   margin: 0 6px 12px;
-  color: #914336;
+  color: var(--color-danger);
   font-size: 14px;
   line-height: 1.7;
   overflow-wrap: anywhere;
@@ -399,7 +399,7 @@
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: #78716c;
+  background: var(--color-muted);
   animation: assist-think 900ms ease-in-out infinite alternate;
 }
 .assist-thinking i:nth-child(2) {

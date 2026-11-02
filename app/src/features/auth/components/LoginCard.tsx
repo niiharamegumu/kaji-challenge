@@ -13,7 +13,7 @@ export function LoginCard({ status, onLogin }: Props) {
   useMarkInitialScreenReady();
 
   return (
-    <main className="ios-safe-main flex min-h-screen items-center justify-center bg-[color:var(--color-washi-50)] px-2 py-4 text-stone-800 md:p-6">
+    <main className="ios-safe-main flex min-h-screen items-center justify-center bg-canvas px-2 py-4 text-ink md:p-6">
       <div
         className={`mx-auto max-w-4xl animate-enter px-0 py-3 md:p-8 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
       >
@@ -26,13 +26,13 @@ export function LoginCard({ status, onLogin }: Props) {
               height={128}
               loading="eager"
               fetchPriority="high"
-              className="h-14 w-14 shrink-0 md:h-16 md:w-16"
+              className="app-logo h-14 w-14 shrink-0 md:h-16 md:w-16"
             />
-            <h1 className="text-3xl font-bold tracking-wide text-stone-900 md:text-4xl">
+            <h1 className="text-3xl font-bold tracking-wide text-heading md:text-4xl">
               KajiChalle
             </h1>
           </div>
-          <p className="mt-4 text-left text-sm leading-7 text-stone-700 md:text-left md:text-base">
+          <p className="mt-4 text-left text-sm leading-7 text-body md:text-left md:text-base">
             家事を見える化して、分担と継続をチームで支えるサービスです。日々のタスクを共有し、進捗を確認しながら、無理なく続く家事運用をつくれます。
           </p>
         </section>
@@ -40,7 +40,7 @@ export function LoginCard({ status, onLogin }: Props) {
         <div className="mt-6 flex justify-center px-2 md:justify-start md:px-0">
           <button
             type="button"
-            className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 py-2 text-white transition-colors duration-200 hover:bg-stone-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white md:w-fit md:min-w-72"
+            className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-action px-4 py-2 text-on-action transition-colors duration-200 hover:bg-action-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface md:w-fit md:min-w-72"
             onClick={onLogin}
           >
             <LogIn size={18} aria-hidden="true" />
@@ -48,7 +48,7 @@ export function LoginCard({ status, onLogin }: Props) {
           </button>
         </div>
         <p
-          className="mt-4 px-2 text-sm text-stone-700 md:px-0"
+          className="mt-4 px-2 text-sm text-body md:px-0"
           data-testid="status-message"
           aria-live="polite"
         >

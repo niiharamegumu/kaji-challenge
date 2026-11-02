@@ -17,38 +17,38 @@ function page(title: string, body: string) {
 <html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escape(title)} | KajiChalle</title>
 <style>
-  :root{color-scheme:light;font-family:"Noto Sans JP",system-ui,-apple-system,sans-serif;color:#292524;background:#f6f4ef;font-synthesis:none}
+  :root{color-scheme:light dark;font-family:"Noto Sans JP",system-ui,-apple-system,sans-serif;color:light-dark(#292524,#e5e7df);background:light-dark(#f6f4ef,#191b19);font-synthesis:none}
   *{box-sizing:border-box}body{margin:0;font-size:0.9375rem;line-height:1.75}
   .shell{width:min(100%,44rem);margin:0 auto;padding:40px 24px 32px}
   .brand{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 4px 24px}
-  .brand-name{font-size:1.375rem;font-weight:750;letter-spacing:.03em;color:#1c1917}
-  .brand-note{font-size:0.75rem;color:#57534e;letter-spacing:.08em}
-  main{background:#fff;border:1px solid #e7e5e4;border-radius:24px;padding:32px;box-shadow:0 12px 36px -28px #44403c40}
-  h1,h2,p,dl{margin:0}h1{font-size:1.75rem;line-height:1.5;letter-spacing:.01em;color:#1c1917}
-  h2,legend{font-size:0.9375rem;font-weight:700;color:#1c1917}p+p{margin-top:8px}
-  .eyebrow{margin-bottom:8px;color:#2f663b;font-size:0.75rem;font-weight:700;letter-spacing:.1em}
-  .intro{margin-top:12px;color:#57534e}.section{margin-top:28px}
-  .details{display:grid;grid-template-columns:6.5rem minmax(0,1fr);gap:10px 16px;margin-top:14px;padding:18px 20px;border-radius:12px;background:#fafaf9;border:1px solid #e7e5e4}
-  dt{font-size:0.8125rem;color:#57534e}dd{margin:0;min-width:0;font-weight:600;color:#292524}
-  .note{margin-top:12px;font-size:0.8125rem;color:#57534e;line-height:1.8}
-  .warning{margin-top:12px;padding:12px 16px;border-radius:10px;background:#fff8ef;color:#78350f;font-size:0.8125rem}
+  .brand-name{font-size:1.375rem;font-weight:750;letter-spacing:.03em;color:light-dark(#1c1917,#f3f2ed)}
+  .brand-note{font-size:0.75rem;color:light-dark(#57534e,#b9c0b5);letter-spacing:.08em}
+  main{background:light-dark(#fff,#232723);border:1px solid light-dark(#e7e5e4,#3d463d);border-radius:24px;padding:32px;box-shadow:0 12px 36px -28px #44403c40}
+  h1,h2,p,dl{margin:0}h1{font-size:1.75rem;line-height:1.5;letter-spacing:.01em;color:light-dark(#1c1917,#f3f2ed)}
+  h2,legend{font-size:0.9375rem;font-weight:700;color:light-dark(#1c1917,#f3f2ed)}p+p{margin-top:8px}
+  .eyebrow{margin-bottom:8px;color:light-dark(#2f663b,#b0dbb1);font-size:0.75rem;font-weight:700;letter-spacing:.1em}
+  .intro{margin-top:12px;color:light-dark(#57534e,#b9c0b5)}.section{margin-top:28px}
+  .details{display:grid;grid-template-columns:6.5rem minmax(0,1fr);gap:10px 16px;margin-top:14px;padding:18px 20px;border-radius:12px;background:light-dark(#fafaf9,#202420);border:1px solid light-dark(#e7e5e4,#3d463d)}
+  dt{font-size:0.8125rem;color:light-dark(#57534e,#b9c0b5)}dd{margin:0;min-width:0;font-weight:600;color:light-dark(#292524,#e5e7df)}
+  .note{margin-top:12px;font-size:0.8125rem;color:light-dark(#57534e,#b9c0b5);line-height:1.8}
+  .warning{margin-top:12px;padding:12px 16px;border-radius:10px;background:light-dark(#fff8ef,#342d20);color:light-dark(#78350f,#f3d6a5);font-size:0.8125rem}
   fieldset{min-width:0;margin:28px 0 0;padding:0;border:0}legend{padding:0;margin-bottom:12px}
-  .scope-list{display:grid;gap:10px}.scope{display:flex;align-items:flex-start;gap:13px;padding:16px;border:1px solid #d6d3d1;border-radius:12px;cursor:pointer}
-  .scope:has(input:checked){border-color:#95c895;background:#eff8ef}.scope:hover{border-color:#4f9859}
-  .scope input{flex-shrink:0;width:20px;height:20px;margin:3px 0 0;accent-color:#2f663b;cursor:pointer}
-  .scope-text{min-width:0}.scope-title{display:block;font-weight:650;color:#1c1917}.scope-description{display:block;margin-top:3px;font-size:0.8125rem;color:#44403c}
-  .scope-code{display:block;margin-top:5px;font-size:0.6875rem;color:#57534e}
-  .duration{margin-top:24px;padding:18px 20px;border-radius:12px;background:#f6f4ef}
-  .duration p{margin-top:7px;font-size:0.8125rem;color:#44403c}.duration h2{font-size:0.875rem}
+  .scope-list{display:grid;gap:10px}.scope{display:flex;align-items:flex-start;gap:13px;padding:16px;border:1px solid light-dark(#d6d3d1,#596455);border-radius:12px;cursor:pointer}
+  .scope:has(input:checked){border-color:light-dark(#95c895,#507b56);background:light-dark(#eff8ef,#263d2b)}.scope:hover{border-color:light-dark(#4f9859,#8cbd8e)}
+  .scope input{flex-shrink:0;width:20px;height:20px;margin:3px 0 0;accent-color:light-dark(#2f663b,#b0dbb1);cursor:pointer}
+  .scope-text{min-width:0}.scope-title{display:block;font-weight:650;color:light-dark(#1c1917,#f3f2ed)}.scope-description{display:block;margin-top:3px;font-size:0.8125rem;color:light-dark(#44403c,#d1d5cc)}
+  .scope-code{display:block;margin-top:5px;font-size:0.6875rem;color:light-dark(#57534e,#b9c0b5)}
+  .duration{margin-top:24px;padding:18px 20px;border-radius:12px;background:light-dark(#f6f4ef,#191b19)}
+  .duration p{margin-top:7px;font-size:0.8125rem;color:light-dark(#44403c,#d1d5cc)}.duration h2{font-size:0.875rem}
   .actions{display:flex;gap:12px;margin-top:26px}.actions button{flex:1}
-  button{min-height:48px;padding:11px 18px;border:1px solid #d6d3d1;border-radius:8px;font:inherit;font-size:0.875rem;font-weight:650;color:#292524;background:#fff;cursor:pointer}
-  button:hover{background:#f5f5f4}.primary{border-color:#1c1917;background:#1c1917;color:#fff}.primary:hover{background:#292524}
-  a{color:#2f663b;text-underline-offset:3px}a:hover{color:#1c1917}
-  :focus-visible{outline:3px solid #3e7f4a;outline-offset:4px}
+  button{min-height:48px;padding:11px 18px;border:1px solid light-dark(#d6d3d1,#596455);border-radius:8px;font:inherit;font-size:0.875rem;font-weight:650;color:light-dark(#292524,#e5e7df);background:light-dark(#fff,#232723);cursor:pointer}
+  button:hover{background:light-dark(#f5f5f4,#2d322d)}.primary{border-color:light-dark(#1c1917,#f3f2ed);background:light-dark(#1c1917,#f3f2ed);color:light-dark(#fff,#191e19)}.primary:hover{background:light-dark(#292524,#e5e7df)}
+  a{color:light-dark(#2f663b,#b0dbb1);text-underline-offset:3px}a:hover{color:light-dark(#1c1917,#f3f2ed)}
+  :focus-visible{outline:3px solid light-dark(#3e7f4a,#a0cba0);outline-offset:4px}
   .footer{margin-top:22px;text-align:center;font-size:0.8125rem}.footer a{display:inline-block;padding:8px}
-  .connection{padding-top:24px;margin-top:24px;border-top:1px solid #e7e5e4}.connection h2{font-size:1.125rem}
-  .status{display:inline-block;margin-top:8px;padding:2px 10px;border-radius:6px;background:#f5f5f4;font-size:0.75rem;color:#44403c}
-  .connection .duration{margin-top:14px}.connection form{margin-top:14px}.empty{margin-top:24px;padding:24px;text-align:center;border-radius:12px;background:#fafaf9;color:#57534e}
+  .connection{padding-top:24px;margin-top:24px;border-top:1px solid light-dark(#e7e5e4,#3d463d)}.connection h2{font-size:1.125rem}
+  .status{display:inline-block;margin-top:8px;padding:2px 10px;border-radius:6px;background:light-dark(#f5f5f4,#2d322d);font-size:0.75rem;color:light-dark(#44403c,#d1d5cc)}
+  .connection .duration{margin-top:14px}.connection form{margin-top:14px}.empty{margin-top:24px;padding:24px;text-align:center;border-radius:12px;background:light-dark(#fafaf9,#202420);color:light-dark(#57534e,#b9c0b5)}
   strong,dd,h1,h2,p,code{overflow-wrap:anywhere}
   @media(max-width:480px){.shell{padding:24px 16px}.brand{margin-bottom:18px}.brand-name{font-size:1.25rem}.brand-note{font-size:0.6875rem}main{padding:24px 20px;border-radius:18px}h1{font-size:1.5rem}.details{grid-template-columns:5.5rem minmax(0,1fr);gap:8px 10px;padding:16px}.actions{flex-direction:column}.scope{padding:14px}.duration{padding:16px}}
   @media(forced-colors:active){.scope:has(input:checked){border-color:Highlight}.primary{border-color:ButtonText}}

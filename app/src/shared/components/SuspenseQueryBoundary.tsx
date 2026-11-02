@@ -33,11 +33,11 @@ function BoundaryFallback({
   }
 
   return (
-    <section className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-rose-800">
+    <section className="mt-4 rounded-xl border border-danger-line bg-danger-soft p-4 text-danger-strong">
       <p className="text-sm font-medium">{errorMessage}</p>
       <button
         type="button"
-        className="mt-3 inline-flex min-h-11 items-center justify-center rounded-lg border border-rose-300 bg-white px-3 py-2 text-sm font-medium text-rose-700 transition-colors hover:bg-rose-100"
+        className="mt-3 inline-flex min-h-11 items-center justify-center rounded-lg border border-danger-line bg-surface px-3 py-2 text-sm font-medium text-danger transition-colors hover:bg-danger-hover"
         onClick={resetErrorBoundary}
       >
         再試行
@@ -61,7 +61,7 @@ export function SuspenseQueryBoundary({
       <div className="mt-4 flex justify-center">
         <LoaderCircle
           size={22}
-          className="text-stone-500 animate-spin motion-reduce:animate-none"
+          className="text-muted animate-spin motion-reduce:animate-none"
           aria-label="読み込み中"
           role="status"
         />

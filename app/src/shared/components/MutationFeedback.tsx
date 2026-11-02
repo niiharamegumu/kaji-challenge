@@ -6,7 +6,7 @@ export function MutationFeedback() {
   if (!pending) return null;
   return (
     <output
-      className="app-glass-surface pointer-events-none fixed bottom-40 left-1/2 z-[90] flex size-8 -translate-x-1/2 items-center justify-center rounded-full border border-white/40 text-stone-700"
+      className="app-glass-surface pointer-events-none fixed bottom-40 left-1/2 z-[90] flex size-8 -translate-x-1/2 items-center justify-center rounded-full border border-glass-edge/40 text-body"
       aria-label="保存中"
       aria-live="polite"
     >

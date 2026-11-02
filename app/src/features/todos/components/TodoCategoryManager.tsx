@@ -47,11 +47,11 @@ export function TodoCategoryManager({ setStatus }: { setStatus: (message: string
     if (from !== -1 && to !== -1) reorderCategories.mutate(arrayMove(categories, from, to));
   };
   return (
-    <div className="mt-4 rounded-xl border border-stone-200 bg-white p-4 md:p-6">
-      <p className="mt-3 text-xs text-stone-600">
+    <div className="mt-4 rounded-xl border border-line bg-surface p-4 md:p-6">
+      <p className="mt-3 text-xs text-secondary">
         0件でもカテゴリーは残ります。カテゴリーを削除してもToDoは残り、未分類になります。
       </p>
-      <p className="mt-2 text-xs text-stone-600">
+      <p className="mt-2 text-xs text-secondary">
         右のハンドルをドラッグすると、未分類も含めて表示順を変更できます。スマホでは長押しして動かします。
       </p>
       <div className="mt-2">
@@ -71,10 +71,10 @@ export function TodoCategoryManager({ setStatus }: { setStatus: (message: string
         }}
       >
         <fieldset disabled={pending} className="flex flex-wrap items-end gap-2">
-          <label className="grid min-w-0 flex-1 gap-1 text-xs text-stone-700">
+          <label className="grid min-w-0 flex-1 gap-1 text-xs text-body">
             新しいカテゴリー
             <input
-              className="h-10 min-w-0 rounded-lg border border-stone-300 px-3 text-sm"
+              className="h-10 min-w-0 rounded-lg border border-line-strong px-3 text-sm"
               value={name}
               onChange={(event) => setName(event.target.value)}
               maxLength={50}
@@ -84,19 +84,19 @@ export function TodoCategoryManager({ setStatus }: { setStatus: (message: string
           <button
             type="submit"
             disabled={!name.trim() || pending}
-            className="min-h-10 rounded-lg bg-stone-900 px-3 text-sm text-white disabled:opacity-50"
+            className="min-h-10 rounded-lg bg-action px-3 text-sm text-on-action disabled:opacity-50"
           >
             {createCategory.isPending ? "追加中…" : "カテゴリーを追加"}
           </button>
         </fieldset>
       </form>
       {createCategory.isError || removeCategory.isError || reorderCategories.isError ? (
-        <p role="alert" className="mt-2 text-sm text-red-700">
+        <p role="alert" className="mt-2 text-sm text-danger">
           保存に失敗しました。もう一度お試しください。
         </p>
       ) : null}
       {reorderCategories.isPending ? (
-        <p role="status" className="mt-2 text-xs text-stone-500">
+        <p role="status" className="mt-2 text-xs text-muted">
           並び順を保存中…
         </p>
       ) : null}
@@ -127,7 +127,7 @@ export function TodoCategoryManager({ setStatus }: { setStatus: (message: string
         </SortableContext>
       </DndContext>
       {query.isSuccess && query.data.length === 1 ? (
-        <p className="mt-2 text-xs text-stone-500">カテゴリーはまだありません。</p>
+        <p className="mt-2 text-xs text-muted">カテゴリーはまだありません。</p>
       ) : null}
       <FormSheet
         isOpen={editing !== null}
@@ -142,10 +142,10 @@ export function TodoCategoryManager({ setStatus }: { setStatus: (message: string
           setEditing(null);
         }}
       >
-        <label className="grid gap-2 text-xs text-stone-700">
+        <label className="grid gap-2 text-xs text-body">
           カテゴリー名
           <input
-            className="h-10 min-w-0 rounded-lg border border-stone-300 bg-white px-3 text-sm"
+            className="h-10 min-w-0 rounded-lg border border-line-strong bg-surface px-3 text-sm"
             value={editing?.name ?? ""}
             maxLength={50}
             onChange={(event) => {
@@ -155,7 +155,7 @@ export function TodoCategoryManager({ setStatus }: { setStatus: (message: string
           />
         </label>
         {renameCategory.isError ? (
-          <p role="alert" className="mt-2 text-sm text-red-700">
+          <p role="alert" className="mt-2 text-sm text-danger">
             保存に失敗しました: {formatError(renameCategory.error)}
           </p>
         ) : null}

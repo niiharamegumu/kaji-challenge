@@ -207,7 +207,7 @@ export function RootLayout() {
   }
 
   return (
-    <main className="ios-safe-main flex min-h-dvh flex-col bg-[color:var(--color-washi-50)] px-2 py-2.5 pb-36 text-stone-800 md:px-8 md:pt-8 md:pb-44">
+    <main className="ios-safe-main flex min-h-dvh flex-col bg-canvas px-2 py-2.5 pb-36 text-ink md:px-8 md:pt-8 md:pb-44">
       <StatusToast
         message={status}
         onDismiss={() => {

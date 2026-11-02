@@ -166,3 +166,9 @@ state/DOMの更新だけではCPU処理中の描画を証明しない。音声�
 音声はASRと実行のHTTP入口を分け、両方で認証・Origin・所属・予算を検証する。50件/120秒/2,000文字の拡張境界と、50カテゴリーでのD1保存を確認する。Sessionとブラウザーでは手動録音・無音中の継続・通常停止の確認待ち・停止して送信・文字だけの入力・未送信破棄・反復起動を確認する。workletは最初の入力を処理してから開始応答を返し、重複開始でPCMを消さず、停止時の末尾PCMとsample数付きfinished応答を順に返すことを確認する。captureは開始応答の期限とsample数不一致で不完全な録音を送らないこと、35秒の音声の先頭/途中/末尾が残ることを検証する。ブラウザーは実AudioContext/AudioWorkletに3種類の合成トーンを通し、送信WAVの全区間・日本語全文の入力と送信までを確認する。文字起こし応答はfixtureであり、実ASRとiPhone Safariの入力品質は別の検証とする。320px幅/480px高でも主要操作が見えることを確認する。
 
 音声アップロードはadapterでWAV BlobのFormData・ブラウザーによるboundary設定・same-origin認証・取消・応答検証を確認する。HTTPでは最大120秒のmultipart音声が既存Gatewayへ同じバイト列のbase64で届くこと、JSON/base64の旧PWA互換、重複/未知field・MIME・実WAV・無音・上限・未認証/越境/頻度/予算の拒否を確認する。本文の実バイト数を4 MiBまで読み込んでからform解析し、Content-Lengthなし/過少申告でも制限する。ブラウザーは実AudioWorklet/Workerから送ったmultipartを解析し、録音の先頭/途中/末尾が保持されることを確認する。
+
+## 表示モード
+
+`ThemeSettings.test.tsx` は初期システム設定、明示選択と再mount、OS変更、別タブ変更/削除/clear、不正保存値、storage例外、保存失敗後の現在値維持と再試行、SSRでの未読込と購読解除を検証する。headスクリプトとReactの初期化結果も比較する。
+
+E2Eの `@theme` はdesktop/mobileでOS追従、明示ライト/ダーク、再読込、別タブ同期、ログインと主要全画面・カレンダー・フォーム・アシストの配色を確認し画像を保存する。外部JavaScriptを遮断しても保存済みモードが起動表示へ適用されることを確認する。CSSだけの変更にAPI/DBの新規テストは追加しない。iPhone実機Safari/PWAのOSスプラッシュ表示はローカルChromium検証に含めない。

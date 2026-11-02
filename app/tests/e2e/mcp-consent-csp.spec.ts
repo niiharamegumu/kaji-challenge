@@ -404,3 +404,31 @@ test(
     expect(unexpectedRequests).toBe(0);
   },
 );
+
+test(
+  "MCP consent follows the system color scheme without relaxing CSP",
+  { tag: ["@mcp", "@theme"] },
+  async ({ page }, testInfo) => {
+    const response = mcpHtml(consentHtml("https://chatgpt.com/test-mcp-callback"));
+    const html = await response.text();
+    expect(response.headers.get("content-security-policy")).toContain("default-src 'none'");
+    expect(html).not.toContain("<script");
+    await interceptAll(page, (url) =>
+      url === authorizeUrl
+        ? {
+            status: 200,
+            headers: Object.fromEntries(response.headers),
+            body: html,
+          }
+        : null,
+    );
+    await page.emulateMedia({ colorScheme: "dark" });
+    await page.goto(authorizeUrl);
+    await expect(page.locator("html")).toHaveCSS("background-color", "rgb(25, 27, 25)");
+    await expect(page.locator("main")).toHaveCSS("background-color", "rgb(35, 39, 35)");
+    await page.screenshot({ path: testInfo.outputPath("theme-consent-dark.png"), fullPage: true });
+    await page.emulateMedia({ colorScheme: "light" });
+    await expect(page.locator("html")).toHaveCSS("background-color", "rgb(246, 244, 239)");
+    await expect(page.locator("main")).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  },
+);

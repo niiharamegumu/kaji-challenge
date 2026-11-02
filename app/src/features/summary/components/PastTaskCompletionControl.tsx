@@ -27,7 +27,7 @@ export function PastTaskCompletionControl({
           aria-label={item.completed ? "過去日タスクを未完了に戻す" : "過去日タスクを完了にする"}
           title={item.completed ? "未完了に戻す" : "完了にする"}
           aria-disabled={isSaving}
-          className={`inline-flex items-center justify-center rounded-full transition-opacity hover:opacity-80 ${item.completed ? "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-500" : "h-5 w-5 border border-[color:var(--color-matcha-400)] bg-white text-[color:var(--color-matcha-700)] hover:bg-[color:var(--color-matcha-50)]"}`}
+          className={`inline-flex items-center justify-center rounded-full transition-opacity hover:opacity-80 ${item.completed ? "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-danger" : "h-5 w-5 border border-[color:var(--color-matcha-400)] bg-surface text-[color:var(--color-matcha-700)] hover:bg-[color:var(--color-matcha-50)]"}`}
           onClick={() => update(item.completed ? "incomplete" : "complete")}
         >
           {item.completed ? (

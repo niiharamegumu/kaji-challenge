@@ -14,7 +14,7 @@ export function TodoCategoryInput({
   const id = useId();
   return (
     <div className="grid min-w-0 gap-2">
-      <label className="text-xs text-stone-700 sm:text-sm" htmlFor={id}>
+      <label className="text-xs text-body sm:text-sm" htmlFor={id}>
         カテゴリー（任意）
       </label>
       <select
@@ -22,7 +22,7 @@ export function TodoCategoryInput({
         value={categoriesQuery.data === undefined ? "" : value}
         disabled={categoriesQuery.data === undefined}
         onChange={(event) => onChange(event.target.value)}
-        className="h-10 min-w-0 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm sm:h-11"
+        className="h-10 min-w-0 rounded-lg border border-line-strong bg-surface px-3 py-2 text-sm sm:h-11"
       >
         {categoriesQuery.data === undefined ? (
           <option value="">

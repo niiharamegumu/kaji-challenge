@@ -50,13 +50,13 @@ export function StatusToast({ message, onDismiss, actionLabel, onAction }: Props
       onPointerCancel={() => setIsPressing(false)}
       onPointerLeave={() => setIsPressing(false)}
     >
-      <div className="flex items-center gap-2 rounded-lg border border-stone-200 bg-white/95 px-2.5 py-1.5 text-stone-800 shadow-md backdrop-blur">
+      <div className="flex items-center gap-2 rounded-lg border border-line bg-surface/95 px-2.5 py-1.5 text-ink shadow-md backdrop-blur">
         <CircleAlert size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
         <p className="min-w-0 flex-1 text-xs leading-5 break-words">{message}</p>
         {hasAction ? (
           <button
             type="button"
-            className="shrink-0 rounded-md bg-[color:var(--color-matcha-600)] px-2 py-1 text-xs font-medium text-white transition-colors duration-200 hover:bg-[color:var(--color-matcha-700)]"
+            className="shrink-0 rounded-md bg-[color:var(--color-matcha-600)] px-2 py-1 text-xs font-medium text-on-action transition-colors duration-200 hover:bg-[color:var(--color-matcha-700)]"
             onClick={onAction}
           >
             {actionLabel}
@@ -64,7 +64,7 @@ export function StatusToast({ message, onDismiss, actionLabel, onAction }: Props
         ) : null}
         <button
           type="button"
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-stone-600 transition-colors duration-200 hover:bg-stone-50"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-secondary transition-colors duration-200 hover:bg-surface-subtle"
           onClick={onDismiss}
           aria-label="ステータスメッセージを閉じる"
         >
