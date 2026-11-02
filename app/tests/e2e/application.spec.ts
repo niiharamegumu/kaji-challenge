@@ -2317,3 +2317,147 @@ test(
     expect(await page.evaluate(() => window.assistFixture.stopped)).toBeGreaterThan(0);
   },
 );
+
+test(
+  "theme follows system, persists explicit choices and colors every screen",
+  { tag: ["@settings", "@theme"] },
+  async ({ page, context }, testInfo) => {
+    test.setTimeout(90_000);
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.emulateMedia({ colorScheme: "dark" });
+    await page.goto("/");
+    await expect(page.getByRole("button", { name: "Googleでログイン" })).toBeVisible();
+    await expect(page.locator("body")).toHaveCSS("background-color", "rgb(25, 27, 25)");
+    await page.screenshot({
+      path: testInfo.outputPath("theme-login-dark.png"),
+      animations: "disabled",
+      fullPage: true,
+    });
+    const signature = createHmac("sha256", secret).update(token).digest("base64");
+    await context.addCookies([
+      {
+        name: "better-auth.session_token",
+        value: encodeURIComponent(`${token}.${signature}`),
+        url: "http://localhost:5194",
+        httpOnly: true,
+        sameSite: "Lax",
+      },
+    ]);
+    await page.goto("/settings");
+    await expect(page.getByRole("radio", { name: "システム", exact: true })).toBeChecked();
+    await page.emulateMedia({ colorScheme: "light" });
+    await expect(page.locator("body")).toHaveCSS("background-color", "rgb(246, 244, 239)");
+    await page.getByText("ダーク", { exact: true }).click();
+    await expect(page.locator("body")).toHaveCSS("background-color", "rgb(25, 27, 25)");
+    await expect(page.getByLabel("ToDo完了の取り消し猶予")).toHaveCSS(
+      "background-color",
+      "rgb(35, 39, 35)",
+    );
+    await page.reload();
+    await expect(page.getByRole("radio", { name: "ダーク", exact: true })).toBeChecked();
+    await page.screenshot({
+      path: testInfo.outputPath("theme-settings-dark.png"),
+      animations: "disabled",
+      fullPage: true,
+    });
+    for (const route of [
+      "/",
+      "/todos",
+      "/tasks",
+      "/summary",
+      "/penalties",
+      "/calendar",
+      "/todo-categories",
+    ]) {
+      await page.goto(route);
+      await expect(page.getByTestId("boot-screen")).toHaveCount(0);
+      await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+      await expect(page.locator("body")).toHaveCSS("background-color", "rgb(25, 27, 25)");
+      if (route === "/calendar") {
+        await expect(page.locator(".reminder-calendar-grid")).toBeVisible();
+        await expect(page.locator(".reminder-calendar-grid")).toHaveCSS(
+          "background-color",
+          "rgb(35, 39, 35)",
+        );
+        await expect(page.locator(".reminder-calendar-day-header").first()).toHaveCSS(
+          "background-color",
+          "rgb(35, 39, 35)",
+        );
+      }
+      await page.screenshot({
+        path: testInfo.outputPath(`theme-dark-${route.replaceAll("/", "_")}.png`),
+        animations: "disabled",
+        fullPage: true,
+      });
+    }
+    await page.goto("/todos");
+    await page.getByRole("button", { name: "追加", exact: true }).click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await expect(page.getByPlaceholder("例: 牛乳", { exact: true })).toHaveCSS(
+      "background-color",
+      "rgb(35, 39, 35)",
+    );
+    await page.screenshot({
+      path: testInfo.outputPath("theme-form-dark.png"),
+      animations: "disabled",
+      fullPage: true,
+    });
+    await page.getByRole("button", { name: "閉じる", exact: true }).click();
+    await page.getByRole("button", { name: "アシスト", exact: true }).click();
+    const assist = page.getByRole("dialog", { name: "音声アシスト" });
+    await expect(assist).toHaveCSS("background-color", "rgb(25, 27, 25)");
+    await expect(assist.locator(".assist-composer")).toHaveCSS(
+      "background-color",
+      "rgb(35, 39, 35)",
+    );
+    await page.screenshot({
+      path: testInfo.outputPath("theme-assist-dark.png"),
+      animations: "disabled",
+      fullPage: true,
+    });
+    await assist.getByRole("button", { name: "アシストを閉じる" }).click();
+    await page.goto("/settings");
+    await page.emulateMedia({ colorScheme: "dark" });
+    await page.getByText("ライト", { exact: true }).click();
+    await expect(page.locator("body")).toHaveCSS("background-color", "rgb(246, 244, 239)");
+    await page.reload();
+    await expect(page.getByRole("radio", { name: "ライト", exact: true })).toBeChecked();
+    await page.screenshot({
+      path: testInfo.outputPath("theme-settings-light.png"),
+      animations: "disabled",
+      fullPage: true,
+    });
+    const other = await context.newPage();
+    await other.goto("/settings");
+    await expect(other.getByRole("radio", { name: "ライト", exact: true })).toBeChecked();
+    await page.getByRole("radio", { name: "ライト", exact: true }).focus();
+    await page.keyboard.press("ArrowLeft");
+    await expect(page.getByRole("radio", { name: "ダーク", exact: true })).toBeChecked();
+    await page.keyboard.press("ArrowLeft");
+    await expect(page.getByRole("radio", { name: "システム", exact: true })).toBeChecked();
+    await expect(page.locator("body")).toHaveCSS("background-color", "rgb(25, 27, 25)");
+    await expect(other.getByRole("radio", { name: "システム", exact: true })).toBeChecked();
+    await other.close();
+    expect(errors).toEqual([]);
+  },
+);
+
+test(
+  "saved theme is applied before application JavaScript loads",
+  { tag: ["@theme"] },
+  async ({ page }) => {
+    await page.emulateMedia({ colorScheme: "light" });
+    await page.addInitScript(() => {
+      localStorage.setItem("kaji:theme:v1", "dark");
+    });
+    await page.route("**/*.js", (route) => route.abort());
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    await expect(page.locator("body")).toHaveCSS("background-color", "rgb(25, 27, 25)");
+    for (const splash of await page.getByTestId("boot-screen").all()) {
+      await expect(splash).toHaveCSS("background-color", "rgb(25, 27, 25)");
+    }
+    await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute("content", "#191b19");
+  },
+);
