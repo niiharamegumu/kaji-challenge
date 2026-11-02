@@ -65,8 +65,8 @@ export function CompletionSlots({
           isDone
             ? "border-transparent"
             : showEmptyCheck
-              ? "border-[color:var(--color-matcha-400)] bg-white text-[color:var(--color-matcha-700)] hover:bg-[color:var(--color-matcha-50)]"
-              : "border-stone-300 bg-stone-100 text-stone-500"
+              ? "border-[color:var(--color-matcha-400)] bg-surface text-[color:var(--color-matcha-700)] hover:bg-[color:var(--color-matcha-50)]"
+              : "border-line-strong bg-surface-muted text-muted"
         }`;
         const slotStyle = isDone ? { backgroundColor: bgColor, color: textColor } : undefined;
 
