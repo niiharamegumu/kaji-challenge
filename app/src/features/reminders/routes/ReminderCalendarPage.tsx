@@ -52,9 +52,9 @@ import {
 } from "../utils/date";
 
 const calendarButtonClass =
-  "flex h-10 w-10 items-center justify-center rounded-full border border-stone-300 bg-white text-stone-700 transition-colors hover:bg-stone-100";
+  "flex h-10 w-10 items-center justify-center rounded-full border border-line-strong bg-surface text-body transition-colors hover:bg-surface-muted";
 const disabledCalendarButtonClass =
-  "flex h-10 w-10 items-center justify-center rounded-full border border-stone-200 bg-stone-100 text-stone-300";
+  "flex h-10 w-10 items-center justify-center rounded-full border border-line bg-surface-muted text-faint";
 const mobileDotIds = [
   "one",
   "two",
@@ -92,26 +92,26 @@ function ReminderFormFields({
   return (
     <div className="grid gap-3">
       <label className="grid gap-1.5">
-        <span className="text-sm font-medium text-stone-700">タイトル</span>
+        <span className="text-sm font-medium text-body">タイトル</span>
         <input
-          className="h-11 rounded-xl border border-stone-300 bg-white px-3 text-sm"
+          className="h-11 rounded-xl border border-line-strong bg-surface px-3 text-sm"
           value={form.title}
           onChange={(event) => onChange({ ...form, title: event.target.value })}
         />
       </label>
       <label className="grid gap-1.5">
-        <span className="text-sm font-medium text-stone-700">メモ</span>
+        <span className="text-sm font-medium text-body">メモ</span>
         <textarea
-          className="min-h-24 rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm"
+          className="min-h-24 rounded-xl border border-line-strong bg-surface px-3 py-2 text-sm"
           value={form.notes}
           onChange={(event) => onChange({ ...form, notes: event.target.value })}
         />
       </label>
       <div className="grid grid-cols-2 gap-3">
         <label className="grid gap-1.5">
-          <span className="text-sm font-medium text-stone-700">種別</span>
+          <span className="text-sm font-medium text-body">種別</span>
           <select
-            className="h-11 rounded-xl border border-stone-300 bg-white px-3 text-sm"
+            className="h-11 rounded-xl border border-line-strong bg-surface px-3 text-sm"
             value={form.kind}
             onChange={(event) =>
               onChange({
@@ -127,9 +127,9 @@ function ReminderFormFields({
         </label>
         {isRecurring ? (
           <label className="grid gap-1.5">
-            <span className="text-sm font-medium text-stone-700">くり返し</span>
+            <span className="text-sm font-medium text-body">くり返し</span>
             <select
-              className="h-11 rounded-xl border border-stone-300 bg-white px-3 text-sm"
+              className="h-11 rounded-xl border border-line-strong bg-surface px-3 text-sm"
               value={form.scheduleType}
               onChange={(event) =>
                 onChange({
@@ -147,20 +147,20 @@ function ReminderFormFields({
       </div>
       <div className="grid grid-cols-2 gap-3">
         <label className={`grid gap-1.5 ${!isRecurring ? "col-span-2" : ""}`}>
-          <span className="text-sm font-medium text-stone-700">開始日</span>
+          <span className="text-sm font-medium text-body">開始日</span>
           <input
             type="date"
-            className="h-11 rounded-xl border border-stone-300 bg-white px-3 text-sm"
+            className="h-11 rounded-xl border border-line-strong bg-surface px-3 text-sm"
             value={form.startDate}
             onChange={(event) => onChange({ ...form, startDate: event.target.value })}
           />
         </label>
         {isRecurring ? (
           <label className="grid gap-1.5">
-            <span className="text-sm font-medium text-stone-700">終了日</span>
+            <span className="text-sm font-medium text-body">終了日</span>
             <input
               type="date"
-              className="h-11 rounded-xl border border-stone-300 bg-white px-3 text-sm"
+              className="h-11 rounded-xl border border-line-strong bg-surface px-3 text-sm"
               value={form.endDate}
               onChange={(event) => onChange({ ...form, endDate: event.target.value })}
             />
@@ -225,9 +225,7 @@ function ReminderAgendaList({
   onEdit: (reminder: Reminder, dateKey: string) => void;
 }) {
   if (selectedOccurrences.length === 0) {
-    return (
-      <p className={className ?? "text-sm text-stone-500"}>この日のリマインダーはありません。</p>
-    );
+    return <p className={className ?? "text-sm text-muted"}>この日のリマインダーはありません。</p>;
   }
 
   return (
@@ -237,24 +235,24 @@ function ReminderAgendaList({
         return (
           <li
             key={`${occurrence.reminderId}-${occurrence.date}`}
-            className="rounded-xl border border-stone-200 bg-white px-3 py-2.5"
+            className="rounded-xl border border-line bg-surface px-3 py-2.5"
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
-                <div className="font-medium text-stone-900">{occurrence.title}</div>
+                <div className="font-medium text-heading">{occurrence.title}</div>
                 {occurrence.notes != null && occurrence.notes !== "" ? (
-                  <div className="mt-1 whitespace-pre-wrap break-words text-xs text-stone-600">
+                  <div className="mt-1 whitespace-pre-wrap break-words text-xs text-secondary">
                     {occurrence.notes}
                   </div>
                 ) : null}
-                <div className="mt-2 inline-flex items-center rounded-full border border-stone-300 bg-stone-50 px-2 py-0.5 text-xs text-stone-700">
+                <div className="mt-2 inline-flex items-center rounded-full border border-line-strong bg-surface-subtle px-2 py-0.5 text-xs text-body">
                   {kindLabel(occurrence.kind, occurrence.scheduleType)}
                 </div>
               </div>
               {reminder != null ? (
                 <button
                   type="button"
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-stone-300 bg-white text-stone-700 transition-colors hover:bg-stone-100"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-line-strong bg-surface text-body transition-colors hover:bg-surface-muted"
                   aria-label={`${occurrence.title} を編集`}
                   onClick={() => onEdit(reminder, occurrence.date)}
                 >
@@ -292,26 +290,26 @@ function MobileAgendaSheet({
     <>
       <button
         type="button"
-        className="fixed inset-0 z-[60] bg-stone-900/20"
+        className="fixed inset-0 z-[60] bg-overlay/40"
         aria-label="選択日の詳細を閉じる"
         onClick={onClose}
       />
       <dialog
         open
-        className="fixed bottom-2 left-1/2 z-[70] w-[min(42rem,calc(100%-1rem))] -translate-x-1/2 overflow-hidden rounded-[1.75rem] border border-stone-200 bg-white p-0 shadow-2xl"
+        className="fixed bottom-2 left-1/2 z-[70] w-[min(42rem,calc(100%-1rem))] -translate-x-1/2 overflow-hidden rounded-[1.75rem] border border-line bg-surface p-0 shadow-2xl"
         aria-modal="true"
         aria-label={`${dateLabel} のリマインダー`}
       >
         <div className="flex max-h-[calc(100dvh-1rem-env(safe-area-inset-top))] flex-col px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <CalendarDays size={18} aria-hidden="true" className="text-stone-600" />
-              <h3 className="text-base font-semibold text-stone-900">{dateLabel}</h3>
+              <CalendarDays size={18} aria-hidden="true" className="text-secondary" />
+              <h3 className="text-base font-semibold text-heading">{dateLabel}</h3>
             </div>
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                className="rounded-md px-2 py-1 text-sm text-stone-600 transition-colors hover:bg-stone-100"
+                className="rounded-md px-2 py-1 text-sm text-secondary transition-colors hover:bg-surface-muted"
                 onClick={onClose}
               >
                 閉じる
@@ -322,7 +320,7 @@ function MobileAgendaSheet({
             <ReminderAgendaList
               selectedOccurrences={selectedOccurrences}
               reminderMap={reminderMap}
-              className={selectedOccurrences.length === 0 ? "text-sm text-stone-500" : "space-y-2"}
+              className={selectedOccurrences.length === 0 ? "text-sm text-muted" : "space-y-2"}
               onEdit={onEdit}
             />
           </div>
@@ -474,7 +472,7 @@ export function ReminderCalendarPage() {
             {canCreate ? (
               <button
                 type="button"
-                className="inline-flex h-7 w-7 items-center justify-center text-stone-500 transition-colors hover:text-stone-800"
+                className="inline-flex h-7 w-7 items-center justify-center text-muted transition-colors hover:text-ink"
                 aria-label={`${formatDateLabel(dateKey)}に追加`}
                 onMouseDown={(event) => {
                   event.preventDefault();
@@ -494,8 +492,8 @@ export function ReminderCalendarPage() {
             <button
               type="button"
               className={`reminder-day-number inline-flex min-h-7 min-w-7 cursor-pointer items-center justify-center rounded-full px-1.5 text-xs font-medium transition-colors ${
-                isSelected ? "bg-amber-100 text-stone-900" : "text-stone-700 hover:bg-stone-100"
-              } ${arg.isOther ? "text-stone-400" : ""}`}
+                isSelected ? "bg-warning-hover text-heading" : "text-body hover:bg-surface-muted"
+              } ${arg.isOther ? "text-faint" : ""}`}
               aria-label={`${formatDateLabel(dateKey)}を選択`}
               onMouseDown={(event) => {
                 event.preventDefault();
@@ -517,8 +515,8 @@ export function ReminderCalendarPage() {
             className={`reminder-day-number inline-flex min-w-7 cursor-pointer items-center justify-center rounded-full px-1.5 text-xs font-medium transition-colors ${
               isMobile ? "min-h-9 py-1.5" : "min-h-7"
             } ${
-              isSelected ? "bg-amber-100 text-stone-900" : "text-stone-700 hover:bg-stone-100"
-            } ${arg.isOther ? "text-stone-400" : ""}`}
+              isSelected ? "bg-warning-hover text-heading" : "text-body hover:bg-surface-muted"
+            } ${arg.isOther ? "text-faint" : ""}`}
             aria-label={`${formatDateLabel(dateKey)}を選択`}
             onMouseDown={(event) => {
               event.preventDefault();
@@ -553,7 +551,7 @@ export function ReminderCalendarPage() {
             {mobileDots.map((dotId) => (
               <span
                 key={`${dateKey}-dot-${dotId}`}
-                className="h-1.5 w-1.5 rounded-full bg-stone-900"
+                className="h-1.5 w-1.5 rounded-full bg-action"
               />
             ))}
           </span>
@@ -621,9 +619,9 @@ export function ReminderCalendarPage() {
     const scheduleType = (arg.event.extendedProps.scheduleType ??
       null) as ReminderScheduleType | null;
     return (
-      <div className="reminder-event-card overflow-hidden rounded-md border border-stone-200 bg-white px-1.5 py-1 text-[11px] leading-tight text-stone-800 shadow-sm">
+      <div className="reminder-event-card overflow-hidden rounded-md border border-line bg-surface px-1.5 py-1 text-[11px] leading-tight text-ink shadow-sm">
         <div className="truncate font-medium">{arg.event.title}</div>
-        <div className="mt-0.5 truncate text-[10px] text-stone-500">
+        <div className="mt-0.5 truncate text-[10px] text-muted">
           {kindLabel(kind, scheduleType)}
         </div>
       </div>
@@ -634,7 +632,26 @@ export function ReminderCalendarPage() {
     <section className="mt-2 w-full pb-1 md:mt-4">
       <style>{`
         .reminder-calendar {
-          --fc-classic-border: rgb(231 229 228);
+          --fc-classic-background: var(--color-surface);
+          --fc-classic-foreground: var(--color-ink);
+          --fc-classic-faint: var(--color-surface-subtle);
+          --fc-classic-muted: var(--color-surface-muted);
+          --fc-classic-strong: var(--color-surface-active);
+          --fc-classic-faint-foreground: var(--color-faint);
+          --fc-classic-muted-foreground: var(--color-muted);
+          --fc-classic-border: var(--color-line);
+          --fc-classic-strong-border: var(--color-line-strong);
+          --fc-classic-button: var(--color-action);
+          --fc-classic-button-border: var(--color-action);
+          --fc-classic-button-strong: var(--color-action-hover);
+          --fc-classic-button-strong-border: var(--color-action-hover);
+          --fc-classic-button-foreground: var(--color-on-action);
+          --fc-classic-button-outline: var(--color-focus);
+          --fc-classic-primary: var(--color-accent);
+          --fc-classic-primary-foreground: var(--color-on-action);
+          --fc-classic-today: var(--color-warning-soft);
+          --fc-classic-highlight: var(--color-success-soft);
+          --fc-classic-now: var(--color-danger);
         }
         .reminder-calendar .reminder-calendar-highlight {
           background: transparent;
@@ -643,22 +660,24 @@ export function ReminderCalendarPage() {
           border: 0;
           border-radius: 1rem;
           overflow: hidden;
-          background: white;
+          background: var(--color-surface);
         }
         .reminder-calendar .reminder-calendar-day-header {
           font-weight: bold;
+          background: var(--color-surface);
+          color: var(--color-ink);
         }
         .reminder-calendar .reminder-calendar-day {
-          background: white;
+          background: var(--color-surface);
         }
         .reminder-calendar .reminder-calendar-day-events {
           min-height: 0;
         }
         .reminder-calendar .reminder-calendar-day[aria-current="date"] {
-          background: rgb(254 249 195 / 0.55);
+          background: var(--color-warning-soft);
         }
         .reminder-calendar .reminder-calendar-day.reminder-selected-day {
-          background: rgb(250 245 235);
+          background: var(--color-warning-hover);
         }
         .reminder-calendar .reminder-calendar-day-top {
           display: block;
@@ -710,7 +729,7 @@ export function ReminderCalendarPage() {
             display: none;
           }
           .reminder-calendar .reminder-calendar-day-header {
-            border-bottom: 1px solid rgb(231 229 228);
+            border-bottom: 1px solid var(--color-line);
           }
         }
       `}</style>
@@ -734,7 +753,7 @@ export function ReminderCalendarPage() {
             >
               <ChevronLeft size={16} aria-hidden="true" />
             </button>
-            <h3 className="min-w-0 text-base font-semibold text-stone-900 md:text-lg">
+            <h3 className="min-w-0 text-base font-semibold text-heading md:text-lg">
               {formatMonthLabel(visibleMonth)}
             </h3>
             <button
@@ -748,7 +767,7 @@ export function ReminderCalendarPage() {
           </div>
           <button
             type="button"
-            className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 transition-colors hover:bg-stone-100"
+            className="rounded-full border border-line-strong bg-surface px-4 py-2 text-sm font-medium text-body transition-colors hover:bg-surface-muted"
             onClick={() => {
               calendarRef.current?.getApi().today();
               updateSelectedDate(todayKey);
@@ -758,7 +777,7 @@ export function ReminderCalendarPage() {
           </button>
         </div>
 
-        <div className="reminder-calendar relative mt-3 overflow-hidden rounded-2xl border border-stone-200 bg-white">
+        <div className="reminder-calendar relative mt-3 overflow-hidden rounded-2xl border border-line bg-surface">
           {/* All events are date-only. UTC preserves their keys; today is determined in JST. */}
           <FullCalendar
             ref={calendarRef}
@@ -820,22 +839,22 @@ export function ReminderCalendarPage() {
             eventInnerClass="reminder-calendar-event-content"
           />
           {calendarQuery.isFetching ? (
-            <div className="absolute inset-2 z-10 flex items-center justify-center rounded-[calc(1rem-2px)] bg-white/65 backdrop-blur-[1px]">
+            <div className="absolute inset-2 z-10 flex items-center justify-center rounded-[calc(1rem-2px)] bg-surface/65 backdrop-blur-[1px]">
               <output
-                className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-2 text-xs font-medium text-stone-600 shadow-sm"
+                className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-2 text-xs font-medium text-secondary shadow-sm"
                 aria-label="カレンダーを読み込み中"
               >
-                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-stone-300 border-t-stone-700 motion-reduce:animate-none" />
+                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-line-strong border-t-body motion-reduce:animate-none" />
                 <span>カレンダーを更新中</span>
               </output>
             </div>
           ) : null}
         </div>
 
-        <section className="mt-4 hidden rounded-2xl border border-stone-200 bg-stone-50 px-3 py-3 md:block">
+        <section className="mt-4 hidden rounded-2xl border border-line bg-surface-subtle px-3 py-3 md:block">
           <div className="flex items-center gap-2">
-            <CalendarDays size={18} aria-hidden="true" className="text-stone-600" />
-            <h3 className="text-base font-semibold text-stone-900">
+            <CalendarDays size={18} aria-hidden="true" className="text-secondary" />
+            <h3 className="text-base font-semibold text-heading">
               {formatDateLabel(selectedDate)}
             </h3>
           </div>
@@ -843,12 +862,12 @@ export function ReminderCalendarPage() {
             selectedOccurrences={selectedOccurrences}
             reminderMap={reminderMap}
             className={
-              selectedOccurrences.length === 0 ? "mt-3 text-sm text-stone-500" : "mt-3 space-y-2"
+              selectedOccurrences.length === 0 ? "mt-3 text-sm text-muted" : "mt-3 space-y-2"
             }
             onEdit={openEditSheet}
           />
         </section>
-        <p className="mt-4 text-xs text-stone-500">{calendarDescription(isMobile)}</p>
+        <p className="mt-4 text-xs text-muted">{calendarDescription(isMobile)}</p>
       </article>
 
       <MobileAgendaSheet
@@ -872,7 +891,7 @@ export function ReminderCalendarPage() {
           editingReminderId != null ? (
             <button
               type="button"
-              className="inline-flex h-10 items-center gap-1 rounded-xl border border-rose-300 bg-rose-50 px-3 text-sm text-rose-700 transition-colors hover:bg-rose-100"
+              className="inline-flex h-10 items-center gap-1 rounded-xl border border-danger-line bg-danger-soft px-3 text-sm text-danger transition-colors hover:bg-danger-hover"
               onClick={() => setPendingDeleteId(editingReminderId)}
             >
               <Trash2 size={15} aria-hidden="true" />
