@@ -5,23 +5,80 @@ html,
 body,
 #root {
   min-height: 100%;
-  background-color: #f6f4ef;
+  background-color: var(--color-canvas);
+  color: var(--color-ink);
+}
+
+/* Native controls and light-dark() follow the OS until an explicit choice is set. */
+:root {
+  color-scheme: light dark;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+body {
+  margin: 0;
+}
+dialog {
+  color: var(--color-ink);
 }
 
 @theme {
+  --color-canvas: light-dark(#f6f4ef, #191b19);
+  --color-surface: light-dark(#ffffff, #232723);
+  --color-surface-subtle: light-dark(#fafaf9, #202420);
+  --color-surface-muted: light-dark(#f5f5f4, #2d322d);
+  --color-surface-active: light-dark(#e7e5e4, #383f38);
+  --color-surface-disabled: light-dark(#d6d3d1, #444c44);
+  --color-heading: light-dark(#1c1917, #f3f2ed);
+  --color-ink: light-dark(#292524, #e5e7df);
+  --color-body: light-dark(#44403c, #d1d5cc);
+  --color-secondary: light-dark(#57534e, #b9c0b5);
+  --color-muted: light-dark(#78716c, #a4ad9f);
+  --color-faint: light-dark(#a8a29e, #929e8d);
+  --color-line-subtle: light-dark(#f5f5f4, #303730);
+  --color-line: light-dark(#e7e5e4, #3d463d);
+  --color-line-strong: light-dark(#d6d3d1, #596455);
+  --color-focus: light-dark(#78716c, #b9c8b1);
+  --color-action: light-dark(#1c1917, #e5e9df);
+  --color-action-hover: light-dark(#292524, #cbd5c3);
+  --color-on-action: light-dark(#ffffff, #191e19);
+  --color-overlay: light-dark(#78716c, #000000);
+  --color-danger-soft: light-dark(#fff1f2, #3b2428);
+  --color-danger-hover: light-dark(#ffe4e6, #4c2c32);
+  --color-danger-line: light-dark(#fda4af, #96525f);
+  --color-danger: light-dark(#be123c, #ffadb9);
+  --color-danger-strong: light-dark(#9f1239, #ffc4cb);
+  --color-warning-soft: light-dark(#fffbeb, #342d20);
+  --color-warning-hover: light-dark(#fef3c7, #443923);
+  --color-warning-line: light-dark(#fcd34d, #92783b);
+  --color-warning: light-dark(#b45309, #edc47c);
+  --color-warning-strong: light-dark(#78350f, #f3d6a5);
+  --color-success-soft: light-dark(#ecfdf5, #21372b);
+  --color-success-line: light-dark(#6ee7b7, #46765c);
+  --color-success: light-dark(#047857, #9bd9b5);
+  --color-accent: light-dark(#3e7f4a, #9bcc9b);
+  --color-glass-edge: light-dark(#ffffff, #697568);
+  --shadow-glass:
+    0 18px 40px -26px rgb(0 0 0 / 45%),
+    inset 0 1px 0 light-dark(rgb(255 255 255 / 62%), rgb(196 215 189 / 12%));
+
   --font-sans: "Noto Sans JP", sans-serif;
 
-  --color-washi-50: #f6f4ef;
-  --color-kohaku-50: #fff8ef;
-  --color-kohaku-200: #f2d4a7;
-  --color-matcha-50: #eff8ef;
-  --color-matcha-100: #daf0da;
-  --color-matcha-200: #b9e0b9;
-  --color-matcha-300: #95c895;
-  --color-matcha-400: #6cad6c;
-  --color-matcha-500: #4f9859;
-  --color-matcha-600: #3e7f4a;
-  --color-matcha-700: #2f663b;
+  --color-washi-50: light-dark(#f6f4ef, #191b19);
+  --color-kohaku-50: light-dark(#fff8ef, #342d20);
+  --color-kohaku-200: light-dark(#f2d4a7, #92783b);
+  --color-matcha-50: light-dark(#eff8ef, #263d2b);
+  --color-matcha-100: light-dark(#daf0da, #314c37);
+  --color-matcha-200: light-dark(#b9e0b9, #3f6145);
+  --color-matcha-300: light-dark(#95c895, #507b56);
+  --color-matcha-400: light-dark(#6cad6c, #7daf81);
+  --color-matcha-500: light-dark(#4f9859, #8cbd8e);
+  --color-matcha-600: light-dark(#3e7f4a, #a0cba0);
+  --color-matcha-700: light-dark(#2f663b, #b0dbb1);
 }
 
 @keyframes enter {
@@ -52,11 +109,7 @@ html {
 .app-glass-surface {
   /* ぼかし非対応の環境でも文字の背後に本文が重ならないようにする。 */
   background: var(--color-washi-50);
-  box-shadow:
-    0 18px 40px -26px rgba(68, 56, 36, 0.44),
-    0 8px 22px -18px rgba(34, 29, 21, 0.22),
-    inset 0 1px 0 rgba(255, 255, 255, 0.62),
-    inset 0 0 0 1px rgba(158, 150, 138, 0.12);
+  box-shadow: var(--shadow-glass);
 }
 
 .app-header-slot {
@@ -139,7 +192,7 @@ html {
 @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
   .app-glass-surface {
     /* 下部ナビと同じ色・ぼかし・光沢で、スクロールする本文を透かす。 */
-    background: linear-gradient(180deg, rgba(244, 242, 238, 0.52), rgba(225, 221, 214, 0.22));
+    background: var(--glass-background);
     -webkit-backdrop-filter: blur(30px) saturate(220%) brightness(0.94) contrast(1.08);
     backdrop-filter: blur(30px) saturate(220%) brightness(0.94) contrast(1.08);
   }
@@ -157,5 +210,47 @@ html {
   .app-header-title {
     max-height: none;
     margin-bottom: 0;
+  }
+}
+
+/* Shared translucent surfaces also work for portals mounted under body. */
+:root {
+  --glass-background: linear-gradient(
+    180deg,
+    light-dark(rgb(244 242 238 / 72%), rgb(42 49 42 / 92%)),
+    light-dark(rgb(225 221 214 / 60%), rgb(27 33 27 / 88%))
+  );
+  --glass-panel: linear-gradient(
+    180deg,
+    light-dark(rgb(255 255 255 / 86%), rgb(43 50 43 / 96%)),
+    light-dark(rgb(246 241 232 / 82%), rgb(29 35 29 / 94%))
+  );
+  --glass-selection: linear-gradient(
+    180deg,
+    light-dark(rgb(228 228 232 / 72%), rgb(101 118 96 / 62%)),
+    light-dark(rgb(208 208 214 / 50%), rgb(72 88 68 / 65%))
+  );
+  --glass-shine: linear-gradient(
+    180deg,
+    light-dark(rgb(255 255 255 / 18%), rgb(187 209 178 / 10%)),
+    transparent
+  );
+  --glass-decoration: radial-gradient(
+    120% 90% at 50% -20%,
+    light-dark(rgb(255 255 255 / 34%), rgb(187 209 178 / 8%)),
+    transparent 48%
+  );
+}
+
+/* The existing monochrome logo keeps its shape and gains contrast in dark mode. */
+.app-logo {
+  filter: var(--app-logo-filter, none);
+}
+:root[data-theme="dark"] {
+  --app-logo-filter: brightness(0) invert(0.92);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --app-logo-filter: brightness(0) invert(0.92);
   }
 }
