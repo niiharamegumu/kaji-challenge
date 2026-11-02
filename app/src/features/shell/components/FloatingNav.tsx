@@ -85,7 +85,7 @@ const primaryItems: PrimaryNavItem[] = [
 
 const dragThresholdPx = 10;
 const navGlassStyle = {
-  background: "linear-gradient(180deg, rgba(244,242,238,0.52), rgba(225,221,214,0.22))",
+  background: "var(--glass-background)",
   backdropFilter: "blur(30px) saturate(220%) brightness(0.94) contrast(1.08)",
   WebkitBackdropFilter: "blur(30px) saturate(220%) brightness(0.94) contrast(1.08)",
 };
@@ -476,7 +476,7 @@ export function FloatingNav({
       {menuOpen ? (
         <button
           type="button"
-          className="fixed inset-0 z-40 bg-stone-500/18 backdrop-blur-[4px]"
+          className="fixed inset-0 z-40 bg-overlay/18 backdrop-blur-[4px]"
           aria-label="その他メニューを閉じる"
           onClick={() => {
             setMenuOpen(false);
@@ -492,22 +492,22 @@ export function FloatingNav({
         data-testid="floating-nav"
       >
         <div
-          className={`pointer-events-auto absolute inset-x-0 bottom-[calc(100%+10px)] origin-bottom overflow-hidden rounded-[1.8rem] border border-white/40 p-3 shadow-[0_24px_48px_-30px_rgba(68,56,36,0.42),inset_0_1px_0_rgba(255,255,255,0.62)] transition-all duration-200 ease-out motion-reduce:transition-none ${
+          className={`pointer-events-auto absolute inset-x-0 bottom-[calc(100%+10px)] origin-bottom overflow-hidden rounded-[1.8rem] border border-glass-edge/40 p-3 shadow-glass transition-all duration-200 ease-out motion-reduce:transition-none ${
             menuOpen
               ? "translate-y-0 scale-100 opacity-100"
               : "pointer-events-none translate-y-4 scale-[0.98] opacity-0"
           }`}
           style={{
-            background: "linear-gradient(180deg, rgba(255,255,255,0.5), rgba(246,241,232,0.34))",
+            background: "var(--glass-panel)",
             backdropFilter: "blur(26px) saturate(180%)",
             WebkitBackdropFilter: "blur(26px) saturate(180%)",
           }}
         >
-          <div className="pointer-events-none absolute inset-x-5 top-0 h-px bg-white/85" />
-          <div className="pointer-events-none absolute inset-x-8 top-2 h-8 rounded-full bg-white/20 blur-xl" />
+          <div className="pointer-events-none absolute inset-x-5 top-0 h-px bg-surface/85" />
+          <div className="pointer-events-none absolute inset-x-8 top-2 h-8 rounded-full bg-surface/20 blur-xl" />
           <div className="mb-3 flex items-center justify-between gap-3">
             <span
-              className="inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs shadow-[inset_0_0_0_1px_rgba(255,255,255,0.28),inset_0_1px_0_rgba(255,255,255,0.34),0_10px_18px_-16px_rgba(34,29,21,0.28)]"
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs shadow-glass"
               style={{ backgroundColor: userBgColor, color: userTextColor }}
             >
               <UserCircle2 size={14} aria-hidden="true" />
@@ -515,7 +515,7 @@ export function FloatingNav({
             </span>
             <button
               type="button"
-              className="inline-flex min-h-10 min-w-10 items-center justify-center gap-1 rounded-full bg-white/40 px-3 text-xs text-stone-700 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.3),inset_0_1px_0_rgba(255,255,255,0.82),0_10px_18px_-16px_rgba(34,29,21,0.22)] transition-colors hover:bg-white/55"
+              className="inline-flex min-h-10 min-w-10 items-center justify-center gap-1 rounded-full bg-surface/40 px-3 text-xs text-body shadow-glass transition-colors hover:bg-surface/55"
               onClick={onRefresh}
               disabled={isRefreshing}
               aria-label="最新状態に更新"
@@ -538,10 +538,10 @@ export function FloatingNav({
                 <button
                   key={item.id}
                   type="button"
-                  className={`flex min-h-12 items-center gap-3 rounded-[1.55rem] border px-3 py-2.5 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.82),0_14px_20px_-20px_rgba(58,48,31,0.32)] transition-colors duration-200 motion-reduce:transition-none ${
+                  className={`flex min-h-12 items-center gap-3 rounded-[1.55rem] border px-3 py-2.5 text-left shadow-glass transition-colors duration-200 motion-reduce:transition-none ${
                     isDanger
-                      ? "border-rose-200/55 bg-[linear-gradient(180deg,rgba(255,248,249,0.52),rgba(255,242,244,0.34))] text-rose-800"
-                      : "border-white/28 bg-[linear-gradient(180deg,rgba(255,255,255,0.42),rgba(255,255,255,0.24))] text-stone-800"
+                      ? "border-danger-line/55 bg-danger-soft text-danger-strong"
+                      : "border-glass-edge/28 bg-[image:var(--glass-panel)] text-ink"
                   }`}
                   onClick={() => handleSecondaryClick(item)}
                   onMouseEnter={() => {
@@ -575,9 +575,9 @@ export function FloatingNav({
           <div
             ref={navRef}
             data-testid="floating-nav-primary"
-            className="relative min-w-0 flex-1 grid grid-cols-3 gap-0.5 overflow-hidden rounded-[2rem] border border-white/34 p-1 shadow-[0_18px_40px_-26px_rgba(68,56,36,0.44),0_8px_22px_-18px_rgba(34,29,21,0.22),inset_0_1px_0_rgba(255,255,255,0.62),inset_0_0_0_1px_rgba(158,150,138,0.12)]"
+            className="relative min-w-0 flex-1 grid grid-cols-3 gap-0.5 overflow-hidden rounded-[2rem] border border-glass-edge/34 p-1 shadow-glass"
             style={{
-              background: "linear-gradient(180deg, rgba(244,242,238,0.52), rgba(225,221,214,0.22))",
+              background: "var(--glass-background)",
               backdropFilter: "blur(30px) saturate(220%) brightness(0.94) contrast(1.08)",
               WebkitBackdropFilter: "blur(30px) saturate(220%) brightness(0.94) contrast(1.08)",
               touchAction: "pan-y",
@@ -589,26 +589,23 @@ export function FloatingNav({
             <div
               className="pointer-events-none absolute inset-0 opacity-90"
               style={{
-                background:
-                  "radial-gradient(120% 90% at 50% -20%, rgba(255,255,255,0.34), rgba(255,255,255,0) 48%), radial-gradient(120% 100% at 50% 120%, rgba(176,184,204,0.14), rgba(255,255,255,0) 52%), linear-gradient(90deg, rgba(214,224,255,0.08), rgba(255,255,255,0) 14%, rgba(255,255,255,0) 86%, rgba(255,215,190,0.08))",
+                background: "var(--glass-decoration)",
               }}
             />
-            <div className="pointer-events-none absolute inset-y-2 left-0 w-px bg-stone-500/10 blur-[1px]" />
-            <div className="pointer-events-none absolute inset-y-2 right-0 w-px bg-stone-500/8 blur-[1px]" />
-            <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-white/82" />
-            <div className="pointer-events-none absolute inset-x-7 top-1 h-7 rounded-full bg-white/28 blur-xl" />
+            <div className="pointer-events-none absolute inset-y-2 left-0 w-px bg-overlay/10 blur-[1px]" />
+            <div className="pointer-events-none absolute inset-y-2 right-0 w-px bg-overlay/8 blur-[1px]" />
+            <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-surface/82" />
+            <div className="pointer-events-none absolute inset-x-7 top-1 h-7 rounded-full bg-surface/28 blur-xl" />
             <div
               className={`pointer-events-none absolute overflow-hidden rounded-[1.6rem] transition-all duration-200 ease-out motion-reduce:transition-none ${
                 indicatorIndex == null ? "opacity-0" : "opacity-100"
               } ${
                 isInteractiveGlass
-                  ? "top-0 bottom-0 border border-white/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.54),inset_0_-16px_22px_rgba(255,255,255,0.06),0_24px_34px_-24px_rgba(255,255,255,0.78),0_18px_34px_-24px_rgba(100,85,62,0.22)]"
-                  : "top-1 bottom-1 border border-white/34 shadow-[inset_0_1px_0_rgba(255,255,255,0.52),inset_0_-8px_14px_rgba(255,255,255,0.08),0_10px_18px_-18px_rgba(85,80,74,0.2)]"
+                  ? "top-0 bottom-0 border border-glass-edge/20 shadow-glass"
+                  : "top-1 bottom-1 border border-glass-edge/34 shadow-glass"
               }`}
               style={{
-                background: isInteractiveGlass
-                  ? "linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0.02))"
-                  : "linear-gradient(180deg, rgba(228,228,232,0.72), rgba(208,208,214,0.5))",
+                background: isInteractiveGlass ? "var(--glass-shine)" : "var(--glass-selection)",
                 backdropFilter: isInteractiveGlass
                   ? "blur(30px) saturate(340%) brightness(1.16) contrast(1.04)"
                   : "blur(14px) saturate(160%) brightness(1.02)",
@@ -622,9 +619,7 @@ export function FloatingNav({
               <div
                 className={`absolute inset-0 ${isInteractiveGlass ? "opacity-100" : "opacity-90"}`}
                 style={{
-                  background: isInteractiveGlass
-                    ? "radial-gradient(145% 92% at 50% -12%, rgba(255,255,255,0.32), rgba(255,255,255,0) 50%), radial-gradient(92% 92% at 18% 20%, rgba(255,255,255,0.14), rgba(255,255,255,0) 42%), radial-gradient(110% 92% at 82% 78%, rgba(255,255,255,0.1), rgba(255,255,255,0) 46%), radial-gradient(120% 90% at 50% 120%, rgba(255,255,255,0.08), rgba(255,255,255,0) 54%)"
-                    : "radial-gradient(120% 80% at 50% -10%, rgba(255,255,255,0.2), rgba(255,255,255,0) 54%), radial-gradient(90% 90% at 50% 70%, rgba(255,255,255,0.08), rgba(255,255,255,0) 55%)",
+                  background: "var(--glass-decoration)",
                 }}
               />
               {isInteractiveGlass ? (
@@ -632,44 +627,41 @@ export function FloatingNav({
                   <div
                     className="absolute inset-0 opacity-55 blur-lg"
                     style={{
-                      background:
-                        "radial-gradient(55% 22% at 50% 0%, rgba(255,255,255,0.3), rgba(255,255,255,0) 72%), radial-gradient(48% 22% at 50% 100%, rgba(160,210,255,0.18), rgba(255,255,255,0) 70%)",
+                      background: "var(--glass-decoration)",
                     }}
                   />
                   <div
                     className="absolute -top-1 left-[28%] right-[28%] h-3 rounded-full opacity-55 blur-md"
                     style={{
-                      background:
-                        "linear-gradient(90deg, rgba(255,180,200,0), rgba(255,180,200,0.32), rgba(180,220,255,0.38), rgba(255,240,180,0.28), rgba(255,180,200,0))",
+                      background: "var(--glass-decoration)",
                     }}
                   />
                   <div
                     className="absolute -bottom-1 left-[30%] right-[30%] h-2.5 rounded-full opacity-35 blur-md"
                     style={{
-                      background:
-                        "linear-gradient(90deg, rgba(255,255,255,0), rgba(190,230,255,0.24), rgba(255,220,180,0.2), rgba(255,255,255,0))",
+                      background: "var(--glass-decoration)",
                     }}
                   />
                 </>
               ) : null}
               <div
                 className={`absolute inset-x-3 top-1.5 rounded-full blur-md ${
-                  isInteractiveGlass ? "h-2 bg-white/08" : "h-2.5 bg-white/8"
+                  isInteractiveGlass ? "h-2 bg-surface/08" : "h-2.5 bg-surface/8"
                 }`}
               />
               <div
                 className={`absolute inset-x-2 bottom-1 rounded-full blur-md ${
-                  isInteractiveGlass ? "h-4 bg-white/[0.06]" : "h-4 bg-white/6"
+                  isInteractiveGlass ? "h-4 bg-surface/[0.06]" : "h-4 bg-surface/6"
                 }`}
               />
               <div
                 className={`absolute left-1.5 top-2 bottom-2 w-px blur-[1px] ${
-                  isInteractiveGlass ? "bg-white/[0.08]" : "bg-white/[0.04]"
+                  isInteractiveGlass ? "bg-surface/[0.08]" : "bg-surface/[0.04]"
                 }`}
               />
               <div
                 className={`absolute right-1.5 top-2 bottom-2 w-px blur-[1px] ${
-                  isInteractiveGlass ? "bg-white/[0.06]" : "bg-white/[0.03]"
+                  isInteractiveGlass ? "bg-surface/[0.06]" : "bg-surface/[0.03]"
                 }`}
               />
             </div>
@@ -686,7 +678,7 @@ export function FloatingNav({
                   }}
                   type="button"
                   className={`relative z-10 flex min-h-[50px] min-w-11 flex-col items-center justify-center gap-0.5 rounded-[1.5rem] px-1 py-1.5 text-center transition-colors duration-200 motion-reduce:transition-none focus-visible:outline-none ${
-                    isSelected ? "text-stone-950" : "text-stone-600"
+                    isSelected ? "text-heading" : "text-secondary"
                   }`}
                   onClick={() => handlePrimaryClick(index)}
                   onPointerDown={(event) => handlePrimaryPointerDown(index, event)}
@@ -724,14 +716,13 @@ export function FloatingNav({
               aria-expanded={assistOpen}
               title="アシストに話しかける"
               style={navGlassStyle}
-              className="relative z-[55] flex size-[62px] shrink-0 cursor-pointer flex-col items-center justify-center gap-1 overflow-hidden rounded-full border border-white/34 text-stone-700 shadow-[0_18px_34px_-24px_rgba(68,56,36,0.42),0_8px_22px_-18px_rgba(34,29,21,0.2),inset_0_1px_0_rgba(255,255,255,0.62),inset_0_0_0_1px_rgba(158,150,138,0.12)] transition-colors duration-200 hover:text-stone-950 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-stone-600 disabled:cursor-default disabled:opacity-40 motion-reduce:transition-none"
+              className="relative z-[55] flex size-[62px] shrink-0 cursor-pointer flex-col items-center justify-center gap-1 overflow-hidden rounded-full border border-glass-edge/34 text-body shadow-glass transition-colors duration-200 hover:text-heading focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-focus disabled:cursor-default disabled:opacity-40 motion-reduce:transition-none"
             >
               <span
                 aria-hidden="true"
                 className="pointer-events-none absolute inset-0 opacity-90"
                 style={{
-                  background:
-                    "radial-gradient(120% 90% at 50% -20%, rgba(255,255,255,0.34), rgba(255,255,255,0) 48%), radial-gradient(120% 100% at 50% 120%, rgba(176,184,204,0.14), rgba(255,255,255,0) 52%)",
+                  background: "var(--glass-decoration)",
                 }}
               />
               <AudioLines size={20} strokeWidth={2.1} aria-hidden="true" className="relative" />
@@ -742,8 +733,8 @@ export function FloatingNav({
             type="button"
             className={`relative z-[55] flex h-[62px] w-[62px] shrink-0 flex-col items-center justify-center gap-1 overflow-hidden rounded-full border text-center transition-all duration-200 motion-reduce:transition-none focus-visible:outline-none ${
               isMoreSelected
-                ? "border-white/34 text-stone-950 shadow-[0_18px_34px_-24px_rgba(68,56,36,0.42),0_8px_22px_-18px_rgba(34,29,21,0.2),inset_0_1px_0_rgba(255,255,255,0.62),inset_0_0_0_1px_rgba(158,150,138,0.12)]"
-                : "border-white/34 text-stone-700 shadow-[0_18px_34px_-24px_rgba(68,56,36,0.42),0_8px_22px_-18px_rgba(34,29,21,0.2),inset_0_1px_0_rgba(255,255,255,0.62),inset_0_0_0_1px_rgba(158,150,138,0.12)]"
+                ? "border-glass-edge/34 text-heading shadow-glass"
+                : "border-glass-edge/34 text-body shadow-glass"
             }`}
             style={navGlassStyle}
             onClick={handleMoreClick}
@@ -753,31 +744,28 @@ export function FloatingNav({
           >
             {isMoreSelected ? (
               <span
-                className="pointer-events-none absolute inset-[4px] rounded-[1.6rem] border border-white/34"
+                className="pointer-events-none absolute inset-[4px] rounded-[1.6rem] border border-glass-edge/34"
                 style={{
-                  background:
-                    "linear-gradient(180deg, rgba(228,228,232,0.72), rgba(208,208,214,0.5))",
+                  background: "var(--glass-selection)",
                   backdropFilter: "blur(14px) saturate(160%) brightness(1.02)",
                   WebkitBackdropFilter: "blur(14px) saturate(160%) brightness(1.02)",
-                  boxShadow:
-                    "inset 0 1px 0 rgba(255,255,255,0.52), inset 0 -8px 14px rgba(255,255,255,0.08), 0 10px 18px -18px rgba(85,80,74,0.2)",
+                  boxShadow: "var(--shadow-glass)",
                 }}
               />
             ) : null}
             <span
               className="pointer-events-none absolute inset-0 opacity-90"
               style={{
-                background:
-                  "radial-gradient(120% 90% at 50% -20%, rgba(255,255,255,0.34), rgba(255,255,255,0) 48%), radial-gradient(120% 100% at 50% 120%, rgba(176,184,204,0.14), rgba(255,255,255,0) 52%), linear-gradient(90deg, rgba(214,224,255,0.08), rgba(255,255,255,0) 18%, rgba(255,255,255,0) 82%, rgba(255,215,190,0.08))",
+                background: "var(--glass-decoration)",
               }}
             />
             {isMoreSelected ? (
               <>
-                <span className="pointer-events-none absolute inset-x-4 top-2 h-2.5 rounded-full bg-white/8 blur-md" />
-                <span className="pointer-events-none absolute inset-x-3 bottom-2 h-4 rounded-full bg-white/6 blur-md" />
+                <span className="pointer-events-none absolute inset-x-4 top-2 h-2.5 rounded-full bg-surface/8 blur-md" />
+                <span className="pointer-events-none absolute inset-x-3 bottom-2 h-4 rounded-full bg-surface/6 blur-md" />
               </>
             ) : null}
-            <span className="pointer-events-none absolute inset-x-3 top-1 h-6 rounded-full bg-white/18 blur-lg" />
+            <span className="pointer-events-none absolute inset-x-3 top-1 h-6 rounded-full bg-surface/18 blur-lg" />
             <span className="relative z-10 flex flex-col items-center gap-1">
               <Ellipsis size={20} strokeWidth={2.1} aria-hidden="true" />
               <span className="text-[10.5px] leading-none">その他</span>
