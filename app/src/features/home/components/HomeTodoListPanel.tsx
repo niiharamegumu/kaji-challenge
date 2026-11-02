@@ -35,7 +35,7 @@ export function HomeTodoListPanel({
         <h2 className="text-lg font-semibold">ToDo</h2>
         <Link
           to="/todos"
-          className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-stone-300 bg-white px-2.5 py-1.5 text-sm font-medium text-stone-700 transition-colors hover:bg-stone-50 hover:text-stone-900"
+          className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-line-strong bg-surface px-2.5 py-1.5 text-sm font-medium text-body transition-colors hover:bg-surface-subtle hover:text-heading"
         >
           <ListTodo size={16} aria-hidden="true" />
           <span>ToDoへ</span>
@@ -63,7 +63,7 @@ export function HomeTodoListPanel({
             ? "ToDoはまだありません。やることを追加してください。"
             : "このカテゴリーのToDoはありません。"
         }
-        emptyClassName="mx-2 rounded-xl border border-dashed border-stone-300 bg-stone-50/80 px-4 py-8 text-center text-sm text-stone-600 md:mx-0"
+        emptyClassName="mx-2 rounded-xl border border-dashed border-line-strong bg-surface-subtle/80 px-4 py-8 text-center text-sm text-secondary md:mx-0"
       />
     </article>
   );
