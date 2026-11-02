@@ -1,16 +1,19 @@
 import { HeadContent, Scripts } from "@tanstack/react-router";
 import App from "../App";
 import stylesheet from "../tailwind.css?url";
+import { THEME_BOOTSTRAP_SCRIPT } from "../shared/state/theme";
 export function Document() {
   return (
-    <html lang="ja">
+    <html lang="ja" suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
         <meta
           name="viewport"
           content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
         />
-        <meta name="theme-color" content="#f6f4ef" />
+        <meta name="color-scheme" content="light dark" />
+        <meta name="theme-color" content="#f6f4ef" suppressHydrationWarning />
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP_SCRIPT }} />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-title" content="KajiChalle" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -20,15 +23,6 @@ export function Document() {
         <link rel="manifest" href="/manifest.webmanifest" />
         <link rel="stylesheet" href={stylesheet} />
         <title>KajiChalle</title>
-        <style>
-          {`
-      body {
-        margin: 0;
-        background: #f6f4ef;
-      }
-
-    `}
-        </style>
         <HeadContent />
       </head>
       <body>
