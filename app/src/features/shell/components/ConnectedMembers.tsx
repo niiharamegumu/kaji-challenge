@@ -13,7 +13,7 @@ function MemberAvatar({ member, online }: { member: TeamMember; online: boolean 
   const color = resolveUserColor(member.colorHex);
   return (
     <span
-      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-white text-xs font-semibold ${online ? "" : "ring-1 ring-stone-300 grayscale-[0.7] opacity-60"}`}
+      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-glass-edge text-xs font-semibold ${online ? "" : "ring-1 ring-line-strong grayscale-[0.7] opacity-60"}`}
       style={{ backgroundColor: color, color: getReadableTextColor(color) }}
     >
       {Array.from(member.effectiveName.trim())[0] ?? "?"}
@@ -70,7 +70,7 @@ export function ConnectedMembers({ members, userIds, connected }: Props) {
               <span
                 id={tooltipId}
                 role="tooltip"
-                className="absolute right-0 top-full z-20 mt-1 w-max max-w-[min(20rem,calc(100vw-2rem))] rounded-md bg-stone-800 px-2 py-1 text-xs break-words text-white"
+                className="absolute right-0 top-full z-20 mt-1 w-max max-w-[min(20rem,calc(100vw-2rem))] rounded-md bg-action-hover px-2 py-1 text-xs break-words text-on-action"
               >
                 {label}
               </span>
@@ -88,7 +88,7 @@ export function ConnectedMembers({ members, userIds, connected }: Props) {
             onClick={() => setOpenPanel(openPanel?.kind === "all" ? null : { kind: "all" })}
             className="flex h-10 w-9 items-start justify-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 md:items-center"
           >
-            <span className="flex h-7 min-w-7 items-center justify-center rounded-full border-2 border-white bg-stone-200 px-1 text-xs font-semibold text-stone-700">
+            <span className="flex h-7 min-w-7 items-center justify-center rounded-full border-2 border-glass-edge bg-surface-active px-1 text-xs font-semibold text-body">
               +{remainingCount}
             </span>
           </button>
@@ -96,7 +96,7 @@ export function ConnectedMembers({ members, userIds, connected }: Props) {
             <ul
               id={`${panelId}-all`}
               aria-label="チームメンバー一覧"
-              className="absolute right-0 top-full z-20 mt-1 max-h-60 w-max max-w-[min(20rem,calc(100vw-2rem))] space-y-2 overflow-y-auto rounded-md border border-stone-200 bg-white p-3 text-xs shadow-lg"
+              className="absolute right-0 top-full z-20 mt-1 max-h-60 w-max max-w-[min(20rem,calc(100vw-2rem))] space-y-2 overflow-y-auto rounded-md border border-line bg-surface p-3 text-xs shadow-lg"
             >
               {memberStates.map(({ member, online, label }) => (
                 <li key={member.userId} className="flex items-center gap-2">
