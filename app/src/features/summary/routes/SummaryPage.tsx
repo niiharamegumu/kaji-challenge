@@ -172,14 +172,14 @@ export function SummaryPage() {
           <div className="min-w-0">
             <h2 className="text-lg font-semibold">月次サマリー</h2>
             {status !== "" ? (
-              <p className="mt-1 [overflow-wrap:anywhere] text-sm text-stone-600">{status}</p>
+              <p className="mt-1 [overflow-wrap:anywhere] text-sm text-secondary">{status}</p>
             ) : null}
           </div>
           <div className="grid w-full min-w-0 justify-items-stretch sm:ml-auto sm:w-auto sm:justify-items-end">
             <div className="grid w-full min-w-0 grid-cols-[2.25rem_minmax(0,1fr)_2.25rem] items-center gap-1.5 sm:w-auto sm:grid-cols-[2.75rem_13rem_2.75rem] sm:gap-2">
               <button
                 type="button"
-                className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border border-stone-300 bg-white text-stone-600 transition-colors hover:bg-stone-100 sm:h-11 sm:w-11"
+                className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border border-line-strong bg-surface text-secondary transition-colors hover:bg-surface-muted sm:h-11 sm:w-11"
                 onClick={() => updateMonth(addMonth(month, -1))}
                 aria-label="前月へ移動"
               >
@@ -188,7 +188,7 @@ export function SummaryPage() {
               <div className="relative flex-1" ref={monthPickerRef}>
                 <button
                   type="button"
-                  className="relative flex h-9 w-full cursor-pointer items-center justify-center rounded-lg border border-stone-300 bg-white px-2 py-1.5 text-sm text-stone-800 sm:h-11 sm:px-3 sm:py-2"
+                  className="relative flex h-9 w-full cursor-pointer items-center justify-center rounded-lg border border-line-strong bg-surface px-2 py-1.5 text-sm text-ink sm:h-11 sm:px-3 sm:py-2"
                   onClick={() => setMonthPickerOpen((open) => !open)}
                   aria-label="対象月を選択"
                 >
@@ -196,11 +196,11 @@ export function SummaryPage() {
                 </button>
 
                 {monthPickerOpen ? (
-                  <div className="absolute right-0 top-full z-50 mt-2 w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-stone-200 bg-white p-2.5 shadow-xl">
+                  <div className="absolute right-0 top-full z-50 mt-2 w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-line bg-surface p-2.5 shadow-xl">
                     <div className="flex items-center justify-between gap-2">
                       <button
                         type="button"
-                        className="flex min-h-11 min-w-11 items-center justify-center rounded-full border border-stone-300 bg-white text-stone-700 hover:bg-stone-100"
+                        className="flex min-h-11 min-w-11 items-center justify-center rounded-full border border-line-strong bg-surface text-body hover:bg-surface-muted"
                         onClick={() => selectYearMonth(currentYear - 1, currentMonth)}
                         aria-label="前年へ移動"
                       >
@@ -208,7 +208,7 @@ export function SummaryPage() {
                       </button>
                       <div className="relative flex-1">
                         <select
-                          className="min-h-11 w-full appearance-none rounded-lg border border-stone-300 bg-white px-3 py-2 pr-12 text-sm text-stone-800"
+                          className="min-h-11 w-full appearance-none rounded-lg border border-line-strong bg-surface px-3 py-2 pr-12 text-sm text-ink"
                           value={currentYear}
                           onChange={(event) =>
                             selectYearMonth(Number(event.target.value), currentMonth)
@@ -223,13 +223,13 @@ export function SummaryPage() {
                         </select>
                         <ChevronDown
                           size={16}
-                          className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-stone-600"
+                          className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-secondary"
                           aria-hidden="true"
                         />
                       </div>
                       <button
                         type="button"
-                        className="flex min-h-11 min-w-11 items-center justify-center rounded-full border border-stone-300 bg-white text-stone-700 hover:bg-stone-100"
+                        className="flex min-h-11 min-w-11 items-center justify-center rounded-full border border-line-strong bg-surface text-body hover:bg-surface-muted"
                         onClick={() => selectYearMonth(currentYear + 1, currentMonth)}
                         aria-label="翌年へ移動"
                       >
@@ -245,7 +245,7 @@ export function SummaryPage() {
                           className={`min-h-11 rounded-lg border px-2 py-2 text-sm ${
                             monthNumber === currentMonth
                               ? "border-[color:var(--color-matcha-400)] bg-[color:var(--color-matcha-50)] text-[color:var(--color-matcha-700)]"
-                              : "border-stone-200 bg-white text-stone-700 hover:bg-stone-100"
+                              : "border-line bg-surface text-body hover:bg-surface-muted"
                           }`}
                           onClick={() => {
                             selectYearMonth(currentYear, monthNumber);
@@ -261,7 +261,7 @@ export function SummaryPage() {
               </div>
               <button
                 type="button"
-                className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border border-stone-300 bg-white text-stone-600 transition-colors hover:bg-stone-100 sm:h-11 sm:w-11"
+                className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border border-line-strong bg-surface text-secondary transition-colors hover:bg-surface-muted sm:h-11 sm:w-11"
                 onClick={() => updateMonth(addMonth(month, 1))}
                 aria-label="翌月へ移動"
               >
@@ -272,23 +272,23 @@ export function SummaryPage() {
         </div>
 
         <div className="mt-3">
-          <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-stone-200 bg-white">
+          <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-line bg-surface">
             <div className="p-3">
-              <p className="text-xs text-stone-700">合計減点</p>
-              <p className="mt-1 text-3xl font-bold leading-none text-stone-900">
+              <p className="text-xs text-body">合計減点</p>
+              <p className="mt-1 text-3xl font-bold leading-none text-heading">
                 {summaryData.totalPenalty}
               </p>
             </div>
-            <div className="grid grid-rows-2 border-l border-stone-200">
+            <div className="grid grid-rows-2 border-l border-line">
               <div className="flex items-end justify-between gap-2 p-3">
-                <p className="text-xs text-stone-700">日次減点</p>
-                <p className="text-xl font-semibold leading-none text-stone-900">
+                <p className="text-xs text-body">日次減点</p>
+                <p className="text-xl font-semibold leading-none text-heading">
                   {summaryData.dailyPenaltyTotal}
                 </p>
               </div>
-              <div className="flex items-end justify-between gap-2 border-t border-stone-200 p-3">
-                <p className="text-xs text-stone-700">週次減点</p>
-                <p className="text-xl font-semibold leading-none text-stone-900">
+              <div className="flex items-end justify-between gap-2 border-t border-line p-3">
+                <p className="text-xs text-body">週次減点</p>
+                <p className="text-xl font-semibold leading-none text-heading">
                   {summaryData.weeklyPenaltyTotal}
                 </p>
               </div>
@@ -296,7 +296,7 @@ export function SummaryPage() {
           </div>
         </div>
 
-        <div className="mt-4 border-t border-stone-200 pt-3">
+        <div className="mt-4 border-t border-line pt-3">
           <h3 className="px-2 text-base font-semibold md:px-0">発生しているペナルティ</h3>
 
           <TriggeredPenaltiesList
@@ -305,18 +305,16 @@ export function SummaryPage() {
           />
         </div>
 
-        <div className="mt-4 border-t border-stone-200 pt-3">
+        <div className="mt-4 border-t border-line pt-3">
           <h3 className="px-2 text-base font-semibold md:px-0">日次サマリー</h3>
           {summaryData.isClosed ? (
-            <p className="mt-2 px-2 text-xs text-stone-600 md:px-0">
+            <p className="mt-2 px-2 text-xs text-secondary md:px-0">
               締め済み月のタスクを変更すると、操作対象外を含め、現在設定で月全体の合計減点と発動ペナルティを再計算します。
             </p>
           ) : null}
 
           {monthlyTaskStatusGroups.length === 0 ? (
-            <p className="mt-3 px-2 text-sm text-stone-500 md:px-0">
-              対象月のタスク履歴はありません。
-            </p>
+            <p className="mt-3 px-2 text-sm text-muted md:px-0">対象月のタスク履歴はありません。</p>
           ) : (
             <div className="mt-2 space-y-3">
               {monthlyTaskStatusGroups.map((group) => {
@@ -331,17 +329,17 @@ export function SummaryPage() {
                   <section key={group.date}>
                     <h4
                       className={`flex items-center gap-2 px-2 text-sm font-semibold md:px-0 ${
-                        group.date < currentDateKey ? "text-stone-400" : "text-stone-800"
+                        group.date < currentDateKey ? "text-faint" : "text-ink"
                       }`}
                     >
                       <span>{`${date.getUTCMonth() + 1}月${date.getUTCDate()}日（${weekday}）`}</span>
                       {group.date === currentDateKey ? (
-                        <span className="rounded-full bg-stone-900 px-2 py-0.5 text-[10px] font-semibold leading-4 text-white">
+                        <span className="rounded-full bg-action px-2 py-0.5 text-[10px] font-semibold leading-4 text-on-action">
                           今日
                         </span>
                       ) : null}
                     </h4>
-                    <ul className="mt-2 divide-y divide-stone-200 overflow-hidden rounded-xl border border-stone-200 bg-white">
+                    <ul className="mt-2 divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
                       {group.items.map((item) => {
                         const isWeekly = item.type === "weekly";
                         const showCrossMonthBadge = isWeekly && isCrossMonthWeek;
@@ -353,19 +351,21 @@ export function SummaryPage() {
                           <li
                             key={`${group.date}-${item.taskId}`}
                             className={`p-2.5 text-sm ${
-                              item.completed ? "bg-[color:var(--color-matcha-50)]" : "bg-rose-50"
+                              item.completed
+                                ? "bg-[color:var(--color-matcha-50)]"
+                                : "bg-danger-soft"
                             }`}
                           >
                             <div className="min-w-0">
                               <p
-                                className={`font-medium text-stone-900 ${item.completed ? "line-through text-stone-500" : ""}`}
+                                className={`font-medium text-heading ${item.completed ? "line-through text-muted" : ""}`}
                               >
                                 {item.title}
                                 {item.isDeleted ? "（削除済み）" : ""}
                               </p>
                               {item.notes != null && item.notes !== "" ? (
                                 <p
-                                  className={`mt-1 whitespace-pre-wrap break-words text-xs text-stone-600 ${item.completed ? "line-through text-stone-400" : ""}`}
+                                  className={`mt-1 whitespace-pre-wrap break-words text-xs text-secondary ${item.completed ? "line-through text-faint" : ""}`}
                                 >
                                   {item.notes}
                                 </p>
@@ -375,8 +375,8 @@ export function SummaryPage() {
                                   <span
                                     className={`inline-flex items-center rounded-full px-2 py-0.5 font-semibold leading-4 ${
                                       isWeekly
-                                        ? "bg-stone-900 text-white"
-                                        : "border border-stone-300 bg-white text-stone-900"
+                                        ? "bg-action text-on-action"
+                                        : "border border-line-strong bg-surface text-heading"
                                     }`}
                                   >
                                     {isWeekly ? "週間" : "日間"}
@@ -385,7 +385,7 @@ export function SummaryPage() {
                                     className={`inline-flex items-center gap-1 whitespace-nowrap ${
                                       item.completed
                                         ? "text-[color:var(--color-matcha-700)]"
-                                        : "text-rose-700"
+                                        : "text-danger"
                                     }`}
                                   >
                                     {item.completed ? (
@@ -396,12 +396,12 @@ export function SummaryPage() {
                                     {item.completed ? "完了" : "未完了"}
                                   </span>
                                   <span
-                                    className={`text-stone-500 ${item.completed ? "line-through" : ""}`}
+                                    className={`text-muted ${item.completed ? "line-through" : ""}`}
                                   >
                                     減点 {item.penaltyPoints} 点
                                   </span>
                                   {showCrossMonthBadge ? (
-                                    <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 font-semibold leading-4 text-amber-800">
+                                    <span className="inline-flex items-center rounded-full bg-warning-hover px-2 py-0.5 font-semibold leading-4 text-warning-strong">
                                       週は前月から継続
                                     </span>
                                   ) : null}
