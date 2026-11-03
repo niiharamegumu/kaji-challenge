@@ -8,7 +8,6 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import type { TodoItem } from "../../../lib/api/operations";
 import { queryKeys } from "../../../shared/query/queryKeys";
-import { MutationFeedback } from "../../../shared/components/MutationFeedback";
 import { useTodoItemMutations, useTodoItemsQuery } from "./useTodoList";
 import { useTodoCategoriesQuery } from "./useTodoCategories";
 
@@ -51,7 +50,6 @@ function Probe({ status }: { status: (message: string) => void }) {
         編集を保存
       </button>
       <button onClick={() => createItem.mutate({ name: "追加済み" })}>新規保存</button>
-      <MutationFeedback />
     </>
   );
 }
@@ -98,7 +96,7 @@ it("hides completed items before the response and restores only the failed item"
   const { client, user, status } = setup();
   await user.click(screen.getByRole("button", { name: "A" }));
   await waitFor(() => expect(screen.queryByRole("button", { name: "A" })).not.toBeInTheDocument());
-  expect(screen.getByRole("status", { name: "保存中" })).toBeVisible();
+  expect(client.isMutating()).toBe(1);
   expect(client.getQueryData<TodoItem[]>(queryKeys.todoItems)).toHaveLength(2);
   await user.click(screen.getByRole("button", { name: "B" }));
   await act(async () => {
@@ -110,9 +108,7 @@ it("hides completed items before the response and restores only the failed item"
   });
   expect(await screen.findByRole("button", { name: "A" })).toBeVisible();
   expect(screen.queryByRole("button", { name: "B" })).not.toBeInTheDocument();
-  await waitFor(() =>
-    expect(screen.queryByRole("status", { name: "保存中" })).not.toBeInTheDocument(),
-  );
+  await waitFor(() => expect(client.isMutating()).toBe(0));
   expect(status).toHaveBeenCalledWith(expect.stringContaining("失敗"));
 });
 
