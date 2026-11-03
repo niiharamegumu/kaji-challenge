@@ -790,12 +790,11 @@ test(
     });
     try {
       await card.click();
-      // リクエストをまだ送っていない段階で、完了表示と保存中表示が出る。
+      // 応答前から完了を表示し、通信中の状態は保つが共通スピナーは出さない。
       await expect(card.getByRole("img")).toHaveAttribute("aria-label", "1回目: テストユーザー");
       await expect(card).toBeDisabled();
-      const saving = page.getByRole("status", { name: "保存中", exact: true });
-      await expect(saving).toBeVisible();
-      await expect(saving).toHaveText("");
+      await expect(card).toHaveAttribute("aria-busy", "true");
+      await expect(page.getByRole("status", { name: "保存中", exact: true })).toHaveCount(0);
     } finally {
       release();
     }
@@ -1032,6 +1031,7 @@ test(
       await expect(daily.getByRole("img", { name: "1回目: サマリー検証" })).toBeVisible();
       await expect(weekly.getByText("完了", { exact: true })).toBeVisible();
       await expect(day.getByText("保存中…")).toHaveCount(0);
+      await expect(page.getByRole("status", { name: "保存中", exact: true })).toHaveCount(0);
       await expect(page.getByRole("dialog")).toHaveCount(0);
       await day.screenshot({ path: testInfo.outputPath("summary-optimistic-pending.png") });
     } finally {
