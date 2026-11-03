@@ -40,7 +40,8 @@ export function StatusToast({ message, onDismiss, actionLabel, onAction }: Props
 
   return (
     <output
-      className="fixed z-50 w-[min(80vw,22rem)] top-2 right-2 bottom-auto left-auto w-[22rem] translate-x-0"
+      // Fixed positioning bypasses the main layout's safe-area padding, including in the PWA.
+      className="fixed top-[calc(env(safe-area-inset-top,0px)+12px)] right-[calc(env(safe-area-inset-right,0px)+8px)] z-50 w-[min(80vw,22rem)]"
       aria-live="polite"
       data-testid="status-message"
       onMouseEnter={() => setIsHovered(true)}
