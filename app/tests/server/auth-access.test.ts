@@ -157,9 +157,15 @@ it.each([null, "github"])(
     expect(await counts()).toEqual(before);
   },
 );
-it.each([false, undefined])(
-  "rejects Google profiles without a verified email (%s)",
-  async (email_verified) => {
+it.each(
+  [false, undefined, null, "false", "TRUE", " true ", "", 0, 1, [], ["true"], {}].map(
+    (email_verified) => ({
+      email_verified,
+    }),
+  ),
+)(
+  "rejects Google profiles without an explicitly verified email ($email_verified)",
+  async ({ email_verified }) => {
     const auth = createAuth(connection.db, settings);
     const provider = (await auth.$context).socialProviders.find((p) => p.id === "google")!;
     // This tests profile policy after signature verification, not Google's signature validation.
@@ -168,6 +174,22 @@ it.each([false, undefined])(
     ).toString("base64url");
     await expect(provider.getUserInfo({ idToken: `e30.${claims}.fixture` })).rejects.toThrow(
       "Google email must be verified",
+    );
+  },
+);
+it.each([true, "true"])(
+  "accepts a verified Google profile and normalizes its email (%j)",
+  async (email_verified) => {
+    const auth = createAuth(connection.db, settings);
+    const provider = (await auth.$context).socialProviders.find((p) => p.id === "google")!;
+    // This tests the profile policy, not Google's signature validation.
+    const claims = Buffer.from(
+      JSON.stringify({ sub: "fixture", email: "Allowed@Example.com", email_verified }),
+    ).toString("base64url");
+    await expect(provider.getUserInfo({ idToken: `e30.${claims}.fixture` })).resolves.toMatchObject(
+      {
+        user: { email: "allowed@example.com", emailVerified: true },
+      },
     );
   },
 );
