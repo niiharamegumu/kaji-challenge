@@ -55,6 +55,15 @@ describe("StatusToast", () => {
     expect(onAction).not.toHaveBeenCalled();
   });
 
+  it("keeps the app update prompt until the user chooses or dismisses it", () => {
+    const onDismiss = vi.fn();
+    render(<StatusToast message="更新があります" onDismiss={onDismiss} autoDismiss={false} />);
+    act(() => vi.advanceTimersByTime(60_000));
+    expect(onDismiss).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "ステータスメッセージを閉じる" }));
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
   it("does not restart the timer when action props change for the same message", () => {
     const onDismiss = vi.fn();
     const onAction = vi.fn();
