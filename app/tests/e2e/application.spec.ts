@@ -477,9 +477,8 @@ test(
   async ({ page, context }) => {
     await page.goto("/");
     await expect(page.getByRole("button", { name: "Googleでログイン" })).toBeVisible();
-    await expect(
-      page.locator('meta[name="apple-mobile-web-app-status-bar-style"]'),
-    ).toHaveAttribute("content", "black-translucent");
+    const statusBar = page.locator('meta[name="apple-mobile-web-app-status-bar-style"]');
+    await expect(statusBar).toHaveAttribute("content", "default");
     expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe(
       "rgb(246, 244, 239)",
     );
@@ -509,6 +508,7 @@ test(
     await context.setOffline(true);
     await page.goto("/calendar");
     await expect(page).toHaveTitle("KajiChalle");
+    await expect(statusBar).toHaveAttribute("content", "default");
     await context.setOffline(false);
   },
 );
