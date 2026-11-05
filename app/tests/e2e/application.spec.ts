@@ -368,15 +368,21 @@ test(
       ).toBe(true);
       expect(row.height).toBeLessThanOrEqual(60);
       expect(row.x + row.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+      const pencil = (await edit.locator("svg").boundingBox())!;
+      const check = (await complete.locator("svg").boundingBox())!;
+      const grip = (await drag.locator("svg").boundingBox())!;
       if (tablet && path === "/") {
         expect(category.y).toBeGreaterThanOrEqual(title.y + title.height);
       } else {
         expect(category.x).toBeGreaterThanOrEqual(title.x + title.width);
+        expect(pencil.x - (category.x + category.width)).toBeLessThanOrEqual(9);
       }
+      expect(check.x - (pencil.x + pencil.width)).toBeLessThanOrEqual(16);
+      expect(grip.x - (check.x + check.width)).toBeLessThanOrEqual(16);
       let previousRight = title.x + title.width;
       for (const control of [edit, complete, drag]) {
         const box = (await control.boundingBox())!;
-        expect(box.width).toBeGreaterThanOrEqual(44);
+        expect(box.width).toBeGreaterThanOrEqual(32);
         expect(box.height).toBeGreaterThanOrEqual(44);
         expect(box.x).toBeGreaterThanOrEqual(previousRight);
         previousRight = box.x + box.width;
@@ -386,11 +392,12 @@ test(
       await region.getByRole("list").screenshot({
         path: testInfo.outputPath(path === "/" ? "home-todo-rows.png" : "todo-page-rows.png"),
       });
-      const completeX = (await complete.boundingBox())!.x;
       await complete.click();
       const undo = item.getByRole("button", { name: "取り消す" });
       await expect(undo.getByText("取り消す", { exact: true })).toBeVisible();
-      expect((await undo.boundingBox())!.x).toBeCloseTo(completeX, 0);
+      const undoBox = (await undo.boundingBox())!;
+      expect(undoBox.width).toBeGreaterThanOrEqual(44);
+      expect(undoBox.x + undoBox.width / 2).toBeCloseTo(check.x + check.width / 2, 0);
       await undo.click();
       await edit.click();
       await expect(region.getByLabel("名前", { exact: true })).toHaveValue(singleLineName);

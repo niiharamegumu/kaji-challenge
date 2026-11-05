@@ -243,10 +243,12 @@ function SortableTodoItem({
           >
             {categoryLabel}
           </span>
-          <div className="col-start-2 row-span-2 row-start-1 flex items-center @min-[340px]:col-start-3 @min-[340px]:row-span-1">
+          <div
+            className={`col-start-2 row-span-2 row-start-1 grid w-24 items-center @min-[340px]:col-start-3 @min-[340px]:row-span-1 ${isCompleting ? "grid-cols-[1fr_2.75rem_1fr]" : "grid-cols-3"}`}
+          >
             <button
               type="button"
-              className="flex size-11 cursor-pointer items-center justify-center rounded-lg text-secondary transition-colors hover:bg-surface-muted hover:text-heading focus-visible:outline-2 focus-visible:outline-focus disabled:opacity-50"
+              className="flex h-11 cursor-pointer items-center justify-start rounded-lg pl-2 text-secondary transition-colors hover:bg-surface-muted hover:text-heading focus-visible:outline-2 focus-visible:outline-focus disabled:opacity-50"
               onClick={() => onStartEdit(item)}
               disabled={isCompleting}
               aria-label="編集"
@@ -256,7 +258,7 @@ function SortableTodoItem({
             </button>
             <button
               type="button"
-              className="group flex size-11 cursor-pointer items-center justify-center rounded-lg focus-visible:outline-2 focus-visible:outline-focus"
+              className="group flex h-11 cursor-pointer items-center justify-center rounded-lg focus-visible:outline-2 focus-visible:outline-focus"
               onClick={onComplete}
               aria-label={completionLabel}
               title={completionLabel}
@@ -284,7 +286,7 @@ function SortableTodoItem({
               {...attributes}
               {...listeners}
               aria-label={`${item.name} をドラッグして並び替え`}
-              className="flex size-11 cursor-grab touch-none items-center justify-center rounded-lg text-faint select-none hover:bg-surface-muted hover:text-body focus-visible:outline-2 focus-visible:outline-focus active:cursor-grabbing disabled:opacity-50"
+              className="flex h-11 cursor-grab touch-none items-center justify-end rounded-lg pr-2 text-faint select-none hover:bg-surface-muted hover:text-body focus-visible:outline-2 focus-visible:outline-focus active:cursor-grabbing disabled:opacity-50"
               disabled={isReordering || isCompleting}
             >
               <GripVertical size={16} aria-hidden="true" />
