@@ -226,8 +226,8 @@ function SortableTodoItem({
           </div>
         </fieldset>
       ) : (
-        <div className="grid min-h-14 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-1 py-1.5 pr-1 pl-3 @min-[340px]:grid-cols-[minmax(0,1fr)_auto_auto]">
-          <div className="col-start-1 row-start-1 min-w-0">
+        <div className="grid min-h-14 grid-cols-[minmax(0,1fr)_auto] items-center py-1.5 pl-3 @min-[340px]:grid-cols-[minmax(0,1fr)_auto_auto]">
+          <div className="col-start-1 row-start-1 min-w-0 pr-1">
             <div className="font-medium wrap-anywhere text-heading">{item.name}</div>
             {item.notes != null && item.notes !== "" ? (
               <div className="mt-0.5 text-xs whitespace-pre-wrap wrap-anywhere text-secondary">
@@ -237,7 +237,7 @@ function SortableTodoItem({
             {isCompleting ? <span className="text-xs text-secondary">完了待ち</span> : null}
           </div>
           <span
-            className="col-start-1 row-start-2 max-w-full justify-self-start truncate rounded bg-surface-muted px-1.5 py-0.5 text-[11px] leading-tight text-secondary @min-[340px]:col-start-2 @min-[340px]:row-start-1 @min-[340px]:max-w-20 @min-[480px]:max-w-36"
+            className="col-start-1 row-start-2 max-w-full justify-self-start truncate rounded bg-surface-muted px-1 py-0.5 text-[11px] leading-tight text-secondary @min-[340px]:col-start-2 @min-[340px]:row-start-1 @min-[340px]:max-w-20 @min-[480px]:max-w-36"
             title={categoryLabel}
           >
             {categoryLabel}
@@ -255,11 +255,13 @@ function SortableTodoItem({
             </button>
             <button
               type="button"
-              className="group flex min-h-11 w-20 cursor-pointer items-center justify-center rounded-lg focus-visible:outline-2 focus-visible:outline-focus"
+              className="group flex min-h-11 w-13 cursor-pointer items-center justify-center rounded-lg focus-visible:outline-2 focus-visible:outline-focus"
               onClick={onComplete}
               aria-label={isCompleting ? "取り消す" : "完了にする"}
             >
-              <span className="inline-flex min-h-7 items-center gap-1 rounded-md bg-matcha-50 px-1.5 text-xs font-medium whitespace-nowrap text-matcha-700 transition-colors group-hover:bg-matcha-100">
+              <span
+                className={`inline-flex min-h-7 items-center justify-center rounded-md bg-matcha-50 text-xs font-medium whitespace-nowrap text-matcha-700 transition-colors group-hover:bg-matcha-100 ${isCompleting ? "flex-col px-0.5 py-0.5" : "gap-0.5 px-1"}`}
+              >
                 {pendingCompletion !== undefined ? (
                   <ActionCountdown
                     key={pendingCompletion.deadline}
