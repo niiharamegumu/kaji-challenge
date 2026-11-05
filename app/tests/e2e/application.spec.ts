@@ -19,6 +19,7 @@ const peerToken = crypto.randomUUID(),
   summaryToken = crypto.randomUUID(),
   bulkDailyToken = crypto.randomUUID(),
   todoDelayToken = crypto.randomUUID(),
+  todoLayoutToken = crypto.randomUUID(),
   todoDefaultToken = crypto.randomUUID(),
   performanceToken = crypto.randomUUID();
 test.beforeAll(async () => {
@@ -45,6 +46,7 @@ test.beforeAll(async () => {
       ["サマリー検証", summaryToken],
       ["日間一括検証", bulkDailyToken],
       ["ToDo猶予検証", todoDelayToken],
+      ["ToDo行の表示検証", todoLayoutToken],
       ["ToDo初期カテゴリー", todoDefaultToken],
       ["キャッシュ検証", performanceToken],
     ]) {
@@ -310,6 +312,78 @@ test(
   },
 );
 test(
+  "keeps compact ToDo controls aligned and reachable on home and ToDo pages",
+  { tag: ["@todos", "@home"] },
+  async ({ page, context }, testInfo) => {
+    // At tablet width the two-column home panel is narrower than the ToDo page.
+    const tablet = testInfo.project.name === "desktop";
+    if (tablet) await page.setViewportSize({ width: 800, height: 900 });
+    await authenticate(context, todoLayoutToken);
+    await page.goto("/todo-categories");
+    await page.getByLabel("新しいカテゴリー").fill("買い物");
+    await page.getByRole("button", { name: "カテゴリーを追加", exact: true }).click();
+    await expect(page.getByRole("button", { name: "買い物 を削除" })).toBeVisible();
+    await page.goto("/todos");
+    const url = `https://example.test/${"a".repeat(72)}`;
+    for (const [name, notes] of [
+      ["岩塩", ""],
+      ["黒コショウ", `粒コショウ ${url}`],
+    ]) {
+      await page.getByRole("button", { name: "追加", exact: true }).click();
+      const form = page.getByRole("dialog", { name: "ToDoを追加" });
+      await form.getByLabel("名前", { exact: true }).fill(name);
+      await form.getByLabel("メモ", { exact: true }).fill(notes);
+      await form.getByLabel("カテゴリー（任意）").selectOption({ label: "買い物" });
+      await form.getByRole("button", { name: "追加する", exact: true }).click();
+      await expect(form).toHaveCount(0);
+    }
+
+    for (const path of ["/", "/todos"]) {
+      await page.goto(path);
+      const region = page.getByRole("region", { name: "ToDo一覧" });
+      const salt = region.getByRole("listitem").filter({ hasText: "岩塩" });
+      await expect(salt.getByText("買い物")).toBeVisible();
+      await expect(region.getByRole("link", { name: url })).toHaveAttribute("href", url);
+      const edit = salt.getByRole("button", { name: "編集" });
+      const complete = salt.getByRole("button", { name: "完了にする" });
+      const drag = salt.getByRole("button", { name: /をドラッグして並び替え/ });
+      await salt.scrollIntoViewIfNeeded();
+      const row = (await salt.boundingBox())!;
+      const title = (await salt.getByText("岩塩", { exact: true }).boundingBox())!;
+      const category = (await salt.getByText("買い物").boundingBox())!;
+      expect(row.height).toBeLessThanOrEqual(60);
+      expect(row.x + row.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+      if (tablet && path === "/") {
+        expect(category.y).toBeGreaterThanOrEqual(title.y + title.height);
+      } else {
+        expect(category.x).toBeGreaterThanOrEqual(title.x + title.width);
+      }
+      let previousRight = title.x + title.width;
+      for (const control of [edit, complete, drag]) {
+        const box = (await control.boundingBox())!;
+        expect(box.width).toBeGreaterThanOrEqual(44);
+        expect(box.height).toBeGreaterThanOrEqual(44);
+        expect(box.x).toBeGreaterThanOrEqual(previousRight);
+        previousRight = box.x + box.width;
+      }
+      expect(previousRight).toBeLessThanOrEqual(row.x + row.width);
+      expect(await region.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+      await region.getByRole("list").screenshot({
+        path: testInfo.outputPath(path === "/" ? "home-todo-rows.png" : "todo-page-rows.png"),
+      });
+      const completeX = (await complete.boundingBox())!.x;
+      await complete.click();
+      const undo = salt.getByRole("button", { name: "取り消す" });
+      await expect(undo).toBeVisible();
+      expect((await undo.boundingBox())!.x).toBeCloseTo(completeX, 0);
+      await undo.click();
+      await edit.click();
+      await expect(region.getByLabel("名前", { exact: true })).toHaveValue("岩塩");
+      await region.getByRole("button", { name: "キャンセル" }).click();
+    }
+  },
+);
+test(
   "persists the browser's ToDo undo delay and uses it on home and ToDo pages",
   { tag: ["@todos", "@home", "@settings"] },
   async ({ page, context, browser }, testInfo) => {
@@ -477,9 +551,8 @@ test(
   async ({ page, context }) => {
     await page.goto("/");
     await expect(page.getByRole("button", { name: "Googleでログイン" })).toBeVisible();
-    await expect(
-      page.locator('meta[name="apple-mobile-web-app-status-bar-style"]'),
-    ).toHaveAttribute("content", "black-translucent");
+    const statusBar = page.locator('meta[name="apple-mobile-web-app-status-bar-style"]');
+    await expect(statusBar).toHaveAttribute("content", "default");
     expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe(
       "rgb(246, 244, 239)",
     );
@@ -509,6 +582,7 @@ test(
     await context.setOffline(true);
     await page.goto("/calendar");
     await expect(page).toHaveTitle("KajiChalle");
+    await expect(statusBar).toHaveAttribute("content", "default");
     await context.setOffline(false);
   },
 );
