@@ -16,6 +16,7 @@ import {
 import { getColorHexError, getNicknameError, getTeamNameError } from "./settingsUtils";
 import { TodoCompletionSettings } from "./TodoCompletionSettings";
 import { ThemeSettings } from "./ThemeSettings";
+import { AppUpdateSettings } from "./AppUpdateSettings";
 
 type Props = {
   identityKey: string;
@@ -136,6 +137,7 @@ export function SettingsManager({
       <TodoCompletionSettings>
         <ThemeSettings />
         <TodoDefaultCategorySettings key={identityKey} identityKey={identityKey} />
+        <AppUpdateSettings />
       </TodoCompletionSettings>
 
       <article

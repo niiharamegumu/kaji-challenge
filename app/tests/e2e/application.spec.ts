@@ -110,6 +110,45 @@ test(
   },
 );
 test(
+  "settings checks for app updates, retries offline and reapplies a dismissed update prompt",
+  { tag: ["@pwa", "@settings"] },
+  async ({ page, context }) => {
+    await authenticate(context);
+    await page.goto("/settings");
+    const check = page.getByRole("button", { name: "アップデートを確認" });
+    await expect(check).toBeVisible();
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await check.click();
+    await expect(page.getByText("最新バージョンです。")).toBeVisible();
+    await context.setOffline(true);
+    try {
+      await check.click();
+      await expect(page.getByText(/更新を確認できませんでした/)).toBeVisible();
+    } finally {
+      await context.setOffline(false);
+    }
+    await check.click();
+    await expect(page.getByText("最新バージョンです。")).toBeVisible();
+
+    // A different script URL installs a real waiting worker at the same scope.
+    await page.evaluate(() => navigator.serviceWorker.register("/sw.js?e2e=next").then(() => {}));
+    const toast = page.getByTestId("status-message").filter({ hasText: "新しいバージョン" });
+    await expect(toast).toBeVisible();
+    await toast.getByRole("button", { name: "ステータスメッセージを閉じる" }).click();
+    await expect(toast).toHaveCount(0);
+    await check.click();
+    await expect(toast).toBeVisible();
+    await Promise.all([
+      page.waitForEvent("load"),
+      toast.getByRole("button", { name: "更新する" }).click(),
+    ]);
+    await expect(check).toBeVisible();
+    expect(await page.evaluate(() => navigator.serviceWorker.controller?.scriptURL)).toContain(
+      "/sw.js?e2e=next",
+    );
+  },
+);
+test(
   "existing identity loads every route and updates todo through Workers",
   { tag: ["@smoke", "@penalties"] },
   async ({ page, context }, testInfo) => {
@@ -290,8 +329,11 @@ test(
     if (testInfo.project.name === "desktop") {
       const teamName = page.getByRole("textbox", { name: "チーム名", exact: true });
       const initialCategory = page.getByRole("combobox", { name: "最初に表示するToDoカテゴリー" });
+      const checkUpdate = page.getByRole("button", { name: "アップデートを確認" });
       await expect(initialCategory).toBeEnabled();
       await teamName.focus();
+      await page.keyboard.press("Shift+Tab");
+      await expect(checkUpdate).toBeFocused();
       await page.keyboard.press("Shift+Tab");
       await expect(initialCategory).toBeFocused();
       await page.keyboard.press("Shift+Tab");
@@ -304,6 +346,8 @@ test(
       await expect(themePreference).toBeFocused();
       await page.keyboard.press("Tab");
       await expect(initialCategory).toBeFocused();
+      await page.keyboard.press("Tab");
+      await expect(checkUpdate).toBeFocused();
       await page.keyboard.press("Tab");
       await expect(teamName).toBeFocused();
     }
