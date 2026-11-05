@@ -69,7 +69,8 @@ export function createAuth(db: Database, settings: AuthSettings) {
         clientId: settings.googleClientId,
         clientSecret: settings.googleClientSecret,
         mapProfileToUser(profile) {
-          if (!profile.email_verified)
+          const emailVerified: unknown = profile.email_verified;
+          if (emailVerified !== true && emailVerified !== "true")
             throw new APIError("FORBIDDEN", { message: "Google email must be verified" });
           return { email: profile.email.toLowerCase(), emailVerified: true };
         },
