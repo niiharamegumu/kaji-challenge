@@ -17,6 +17,12 @@ export function Document() {
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-title" content="KajiChalle" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              'if (navigator.standalone === true) document.documentElement.dataset.iosStandalone = "true";',
+          }}
+        />
         <link rel="icon" href="/favicon.ico" sizes="any" />
         <link rel="icon" type="image/png" href="/icons/pwa-192x192.png" />
         <link rel="apple-touch-icon" href="/icons/apple-touch-icon-180x180.png" />
@@ -26,6 +32,7 @@ export function Document() {
         <HeadContent />
       </head>
       <body>
+        <div className="ios-pwa-blur-workaround" aria-hidden="true" />
         <div id="root">
           <App />
         </div>
