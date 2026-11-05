@@ -10,53 +10,63 @@ const activateWaitingWorker = async (
   options?: { reload?: boolean },
 ) => {
   const waiting = registration.waiting;
-  if (!waiting) {
-    return;
+  if (waiting) {
+    await new Promise<void>((resolve, reject) => {
+      const cleanup = () => {
+        clearTimeout(timer);
+        navigator.serviceWorker.removeEventListener(REFRESH_EVENT, onControllerChange);
+      };
+      const onControllerChange = () => {
+        if (navigator.serviceWorker.controller !== waiting) return;
+        cleanup();
+        resolve();
+      };
+      const timer = window.setTimeout(() => {
+        cleanup();
+        reject(new Error("Update activation timed out"));
+      }, 30_000);
+      navigator.serviceWorker.addEventListener(REFRESH_EVENT, onControllerChange);
+      try {
+        waiting.postMessage({ type: "SKIP_WAITING" });
+      } catch (error) {
+        cleanup();
+        reject(error);
+      }
+    });
   }
-
-  await new Promise<void>((resolve) => {
-    const onControllerChange = () => {
-      navigator.serviceWorker.removeEventListener(REFRESH_EVENT, onControllerChange);
-      resolve();
-    };
-
-    navigator.serviceWorker.addEventListener(REFRESH_EVENT, onControllerChange);
-    waiting.postMessage({ type: "SKIP_WAITING" });
-  });
 
   if (options?.reload ?? true) {
     window.location.reload();
   }
 };
 
-const bindRegistrationListeners = (registration: ServiceWorkerRegistration) => {
-  const notifyIfWaiting = () => {
-    if (registration.waiting) {
-      notifyPWARefresh(() => activateWaitingWorker(registration, { reload: true }));
-    }
-  };
+function notifyIfWaiting(registration: ServiceWorkerRegistration) {
+  if (!registration.waiting || !registration.active) return false;
+  notifyPWARefresh(() => activateWaitingWorker(registration));
+  return true;
+}
 
+const bindRegistrationListeners = (registration: ServiceWorkerRegistration) => {
   const checkForUpdates = () => {
     void registration.update().catch(() => {
       // Offline or transient network failures are expected here.
     });
   };
 
-  notifyIfWaiting();
-  checkForUpdates();
-
-  registration.addEventListener("updatefound", () => {
+  const watchInstalling = () => {
     const installing = registration.installing;
-    if (!installing) {
-      return;
-    }
-
-    installing.addEventListener("statechange", () => {
-      if (installing.state === "installed" && navigator.serviceWorker.controller != null) {
-        notifyPWARefresh(() => activateWaitingWorker(registration, { reload: true }));
-      }
-    });
-  });
+    if (!installing) return;
+    const onStateChange = () => {
+      if (installing.state === "installing") return;
+      installing.removeEventListener("statechange", onStateChange);
+      notifyIfWaiting(registration);
+    };
+    installing.addEventListener("statechange", onStateChange);
+  };
+  registration.addEventListener("updatefound", watchInstalling);
+  watchInstalling();
+  notifyIfWaiting(registration);
+  if (!registration.installing && !registration.waiting) checkForUpdates();
 
   window.addEventListener("focus", checkForUpdates);
   document.addEventListener("visibilitychange", () => {
@@ -65,6 +75,53 @@ const bindRegistrationListeners = (registration: ServiceWorkerRegistration) => {
     }
   });
 };
+
+function registerOnce() {
+  swRegistrationPromise ??= navigator.serviceWorker
+    .register(SW_URL)
+    .then((registration) => {
+      bindRegistrationListeners(registration);
+      return registration;
+    })
+    .catch((error: unknown) => {
+      registrationScheduled = false;
+      swRegistrationPromise = null;
+      throw error;
+    });
+  return swRegistrationPromise;
+}
+
+function waitForInstallation(worker: ServiceWorker) {
+  return new Promise<void>((resolve, reject) => {
+    const finish = (error?: Error) => {
+      clearTimeout(timer);
+      worker.removeEventListener("statechange", check);
+      if (error) reject(error);
+      else resolve();
+    };
+    const check = () => {
+      if (worker.state === "redundant") finish(new Error("Update installation failed"));
+      else if (worker.state !== "installing") finish();
+    };
+    const timer = window.setTimeout(
+      () => finish(new Error("Update installation timed out")),
+      60_000,
+    );
+    worker.addEventListener("statechange", check);
+    check();
+  });
+}
+
+export async function checkForPWAUpdate(): Promise<"unavailable" | "available" | "current"> {
+  if (import.meta.env.DEV || !("serviceWorker" in navigator)) return "unavailable";
+  const registration = await registerOnce();
+  if (notifyIfWaiting(registration)) return "available";
+  if (!navigator.onLine) throw new Error("Cannot check for updates offline");
+  if (!registration.installing) await registration.update();
+  const installing = registration.installing;
+  if (installing) await waitForInstallation(installing);
+  return notifyIfWaiting(registration) ? "available" : "current";
+}
 
 export const initializePWA = () => {
   if (import.meta.env.DEV) {
@@ -78,14 +135,8 @@ export const initializePWA = () => {
   if (registrationScheduled) return;
   registrationScheduled = true;
   const register = () => {
-    swRegistrationPromise = (async () => {
-      const registration = await navigator.serviceWorker.register(SW_URL);
-      bindRegistrationListeners(registration);
-      return registration;
-    })();
-    void swRegistrationPromise.catch(() => {
-      registrationScheduled = false;
-      swRegistrationPromise = null;
+    void registerOnce().catch(() => {
+      // A manual check can retry registration and report the error to the user.
     });
   };
   if (document.readyState === "complete") register();
