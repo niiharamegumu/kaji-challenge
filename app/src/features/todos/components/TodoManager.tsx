@@ -169,6 +169,7 @@ function SortableTodoItem({
   onComplete: () => void;
 }) {
   const isCompleting = pendingCompletion !== undefined;
+  const completionLabel = isCompleting ? "取り消す" : "完了にする";
   const {
     attributes,
     listeners,
@@ -255,23 +256,26 @@ function SortableTodoItem({
             </button>
             <button
               type="button"
-              className="group flex min-h-11 w-13 cursor-pointer items-center justify-center rounded-lg focus-visible:outline-2 focus-visible:outline-focus"
+              className="group flex size-11 cursor-pointer items-center justify-center rounded-lg focus-visible:outline-2 focus-visible:outline-focus"
               onClick={onComplete}
-              aria-label={isCompleting ? "取り消す" : "完了にする"}
+              aria-label={completionLabel}
+              title={completionLabel}
             >
               <span
-                className={`inline-flex min-h-7 items-center justify-center rounded-md bg-matcha-50 text-xs font-medium whitespace-nowrap text-matcha-700 transition-colors group-hover:bg-matcha-100 ${isCompleting ? "flex-col px-0.5 py-0.5" : "gap-0.5 px-1"}`}
+                className={`inline-flex items-center justify-center rounded-md bg-matcha-50 text-matcha-700 transition-colors group-hover:bg-matcha-100 ${isCompleting ? "w-full flex-col py-0.5 text-[0.6875rem] leading-tight font-medium whitespace-nowrap" : "size-7"}`}
               >
                 {pendingCompletion !== undefined ? (
-                  <ActionCountdown
-                    key={pendingCompletion.deadline}
-                    deadline={pendingCompletion.deadline}
-                    durationMs={pendingCompletion.durationMs}
-                  />
+                  <>
+                    <ActionCountdown
+                      key={pendingCompletion.deadline}
+                      deadline={pendingCompletion.deadline}
+                      durationMs={pendingCompletion.durationMs}
+                    />
+                    <span>{completionLabel}</span>
+                  </>
                 ) : (
-                  <CircleCheck size={15} aria-hidden="true" />
+                  <CircleCheck size={18} aria-hidden="true" />
                 )}
-                {isCompleting ? "取り消す" : "完了"}
               </span>
             </button>
             <button

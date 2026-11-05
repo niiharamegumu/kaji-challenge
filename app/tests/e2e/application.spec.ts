@@ -350,6 +350,7 @@ test(
       const edit = item.getByRole("button", { name: "編集" });
       const complete = item.getByRole("button", { name: "完了にする" });
       const drag = item.getByRole("button", { name: /をドラッグして並び替え/ });
+      await expect(complete).toHaveText("");
       await item.scrollIntoViewIfNeeded();
       const row = (await item.boundingBox())!;
       const title = (await item.getByText(singleLineName, { exact: true }).boundingBox())!;
@@ -388,7 +389,7 @@ test(
       const completeX = (await complete.boundingBox())!.x;
       await complete.click();
       const undo = item.getByRole("button", { name: "取り消す" });
-      await expect(undo).toBeVisible();
+      await expect(undo.getByText("取り消す", { exact: true })).toBeVisible();
       expect((await undo.boundingBox())!.x).toBeCloseTo(completeX, 0);
       await undo.click();
       await edit.click();
