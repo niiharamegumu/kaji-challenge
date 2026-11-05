@@ -9,7 +9,7 @@ body,
   color: var(--color-ink);
 }
 
-/* iOSホーム画面起動時の上端のぼけを避ける、実機検証に基づく回避策。 */
+/* iOSの上端判定用。背景を空のテキスト領域に限定し、本文に帯を描かない。 */
 .ios-pwa-blur-workaround {
   display: none;
 }
@@ -20,9 +20,10 @@ html[data-ios-standalone="true"] .ios-pwa-blur-workaround {
   top: 0;
   left: 0;
   width: 100%;
-  height: 10.1px;
-  background-color: #ffffff01;
-  opacity: 0.1;
+  height: 11px;
+  background-color: var(--color-canvas);
+  -webkit-background-clip: text;
+  background-clip: text;
   pointer-events: none;
   z-index: 10000;
 }
