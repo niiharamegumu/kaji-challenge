@@ -10,6 +10,7 @@ import { BootScreen } from "./shared/components/BootScreen";
 
 function AppShell() {
   const [needRefresh, setNeedRefresh] = useState(false);
+  const [updateFailed, setUpdateFailed] = useState(false);
   const { isInitialBootPending, markReactMounted } = useBootFlow();
 
   useEffect(() => {
@@ -32,9 +33,16 @@ function AppShell() {
           message="新しいバージョンを利用できます。更新して最新状態にしますか？"
           onDismiss={dismissPWAUpdate}
           actionLabel="更新する"
+          autoDismiss={false}
           onAction={() => {
-            void applyPWAUpdateNow();
+            setUpdateFailed(false);
+            void applyPWAUpdateNow().catch(() => setUpdateFailed(true));
           }}
+        />
+      ) : updateFailed ? (
+        <StatusToast
+          message="更新を適用できませんでした。設定からもう一度確認してください。"
+          onDismiss={() => setUpdateFailed(false)}
         />
       ) : null}
     </>
