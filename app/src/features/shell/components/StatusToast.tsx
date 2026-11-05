@@ -6,9 +6,16 @@ type Props = {
   onDismiss: () => void;
   actionLabel?: string;
   onAction?: () => void;
+  autoDismiss?: boolean;
 };
 
-export function StatusToast({ message, onDismiss, actionLabel, onAction }: Props) {
+export function StatusToast({
+  message,
+  onDismiss,
+  actionLabel,
+  onAction,
+  autoDismiss = true,
+}: Props) {
   const [isHovered, setIsHovered] = useState(false);
   const [isPressing, setIsPressing] = useState(false);
   const onDismissRef = useRef(onDismiss);
@@ -21,7 +28,7 @@ export function StatusToast({ message, onDismiss, actionLabel, onAction }: Props
   useEffect(() => {
     // The toast lifetime is keyed to the visible message itself.
     // Optional actions can appear or disappear without restarting the timer.
-    if (!message || isHovered || isPressing) {
+    if (!autoDismiss || !message || isHovered || isPressing) {
       return;
     }
 
@@ -32,7 +39,7 @@ export function StatusToast({ message, onDismiss, actionLabel, onAction }: Props
     return () => {
       window.clearTimeout(timer);
     };
-  }, [isHovered, isPressing, message]);
+  }, [autoDismiss, isHovered, isPressing, message]);
 
   if (!message) {
     return null;
