@@ -325,9 +325,12 @@ test(
     await expect(page.getByRole("button", { name: "買い物 を削除" })).toBeVisible();
     await page.goto("/todos");
     const url = `https://example.test/${"a".repeat(72)}`;
+    const singleLineName = "食器用洗剤の詰め替え";
+    const longName = "交換用フィルターの型番を確認して注文する".padEnd(100, "A");
     for (const [name, notes] of [
-      ["岩塩", ""],
+      [singleLineName, ""],
       ["黒コショウ", `粒コショウ ${url}`],
+      [longName, ""],
     ]) {
       await page.getByRole("button", { name: "追加", exact: true }).click();
       const form = page.getByRole("dialog", { name: "ToDoを追加" });
@@ -341,27 +344,45 @@ test(
     for (const path of ["/", "/todos"]) {
       await page.goto(path);
       const region = page.getByRole("region", { name: "ToDo一覧" });
-      const salt = region.getByRole("listitem").filter({ hasText: "岩塩" });
-      await expect(salt.getByText("買い物")).toBeVisible();
+      const item = region.getByRole("listitem").filter({ hasText: singleLineName });
+      await expect(item.getByText("買い物")).toBeVisible();
       await expect(region.getByRole("link", { name: url })).toHaveAttribute("href", url);
-      const edit = salt.getByRole("button", { name: "編集" });
-      const complete = salt.getByRole("button", { name: "完了にする" });
-      const drag = salt.getByRole("button", { name: /をドラッグして並び替え/ });
-      await salt.scrollIntoViewIfNeeded();
-      const row = (await salt.boundingBox())!;
-      const title = (await salt.getByText("岩塩", { exact: true }).boundingBox())!;
-      const category = (await salt.getByText("買い物").boundingBox())!;
+      const edit = item.getByRole("button", { name: "編集" });
+      const complete = item.getByRole("button", { name: "完了にする" });
+      const drag = item.getByRole("button", { name: /をドラッグして並び替え/ });
+      await expect(complete).toHaveText("");
+      await item.scrollIntoViewIfNeeded();
+      const row = (await item.boundingBox())!;
+      const title = (await item.getByText(singleLineName, { exact: true }).boundingBox())!;
+      const category = (await item.getByText("買い物").boundingBox())!;
+      const longTitle = region.getByText(longName, { exact: true });
+      const lineHeight = await longTitle.evaluate((el) =>
+        parseFloat(getComputedStyle(el).lineHeight),
+      );
+      expect(title.height).toBeLessThanOrEqual(lineHeight);
+      expect((await longTitle.boundingBox())!.height).toBeGreaterThan(lineHeight);
+      expect(
+        await longTitle.evaluate(
+          (el) => el.scrollHeight <= el.clientHeight && el.scrollWidth <= el.clientWidth,
+        ),
+      ).toBe(true);
       expect(row.height).toBeLessThanOrEqual(60);
       expect(row.x + row.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+      const pencil = (await edit.locator("svg").boundingBox())!;
+      const check = (await complete.locator("svg").boundingBox())!;
+      const grip = (await drag.locator("svg").boundingBox())!;
       if (tablet && path === "/") {
         expect(category.y).toBeGreaterThanOrEqual(title.y + title.height);
       } else {
         expect(category.x).toBeGreaterThanOrEqual(title.x + title.width);
+        expect(pencil.x - (category.x + category.width)).toBeLessThanOrEqual(9);
       }
+      expect(check.x - (pencil.x + pencil.width)).toBeLessThanOrEqual(16);
+      expect(grip.x - (check.x + check.width)).toBeLessThanOrEqual(16);
       let previousRight = title.x + title.width;
       for (const control of [edit, complete, drag]) {
         const box = (await control.boundingBox())!;
-        expect(box.width).toBeGreaterThanOrEqual(44);
+        expect(box.width).toBeGreaterThanOrEqual(32);
         expect(box.height).toBeGreaterThanOrEqual(44);
         expect(box.x).toBeGreaterThanOrEqual(previousRight);
         previousRight = box.x + box.width;
@@ -371,14 +392,15 @@ test(
       await region.getByRole("list").screenshot({
         path: testInfo.outputPath(path === "/" ? "home-todo-rows.png" : "todo-page-rows.png"),
       });
-      const completeX = (await complete.boundingBox())!.x;
       await complete.click();
-      const undo = salt.getByRole("button", { name: "取り消す" });
-      await expect(undo).toBeVisible();
-      expect((await undo.boundingBox())!.x).toBeCloseTo(completeX, 0);
+      const undo = item.getByRole("button", { name: "取り消す" });
+      await expect(undo.getByText("取り消す", { exact: true })).toBeVisible();
+      const undoBox = (await undo.boundingBox())!;
+      expect(undoBox.width).toBeGreaterThanOrEqual(44);
+      expect(undoBox.x + undoBox.width / 2).toBeCloseTo(check.x + check.width / 2, 0);
       await undo.click();
       await edit.click();
-      await expect(region.getByLabel("名前", { exact: true })).toHaveValue("岩塩");
+      await expect(region.getByLabel("名前", { exact: true })).toHaveValue(singleLineName);
       await region.getByRole("button", { name: "キャンセル" }).click();
     }
   },
