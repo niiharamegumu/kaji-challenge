@@ -9,11 +9,11 @@ import {
 import type { AssistAi } from "../application/assist-ports";
 import { AppError } from "../domain/errors";
 
-export const assistModels = {
+const assistModels = {
   transcription: "@cf/openai/whisper-large-v3-turbo",
   intent: "@cf/google/gemma-4-26b-a4b-it",
 } as const;
-export const assistInferenceLimits = {
+const assistInferenceLimits = {
   inputBytes: 65_536,
   outputTokens: 8192,
   outputBytes: 65_536,
