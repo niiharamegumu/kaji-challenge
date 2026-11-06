@@ -1,6 +1,55 @@
 import { callOperation, type ApiResult, type CallOptions } from "./serverClient";
 import type * as M from "../../contracts/models";
 export * from "../../contracts/models";
+export function listSharedPages(
+  options?: CallOptions,
+): Promise<ApiResult<{ items: M.SharedPageSummary[] }>> {
+  return callOperation("listSharedPages", { params: {} }, 200, options);
+}
+export function getSharedPage(
+  pageId: string,
+  options?: CallOptions,
+): Promise<ApiResult<M.SharedPage>> {
+  return callOperation("getSharedPage", { params: { pageId } }, 200, options);
+}
+export function postSharedPage(
+  body: M.CreateSharedPageRequest,
+  options?: CallOptions,
+): Promise<ApiResult<M.SharedPage>> {
+  return callOperation("postSharedPage", { params: {}, body }, 201, options);
+}
+export function patchSharedPage(
+  pageId: string,
+  body: M.UpdateSharedPageRequest,
+  options?: CallOptions,
+): Promise<ApiResult<M.SharedPage>> {
+  return callOperation("patchSharedPage", { params: { pageId }, body }, 200, options);
+}
+export function deleteSharedPage(
+  pageId: string,
+  body: M.DeleteSharedPageRequest,
+  options?: CallOptions,
+): Promise<ApiResult<Record<string, never>>> {
+  return callOperation("deleteSharedPage", { params: { pageId }, body }, 204, options);
+}
+export function postSharedPageLease(
+  pageId: string,
+  options?: CallOptions,
+): Promise<ApiResult<M.SharedPageLeaseResponse>> {
+  return callOperation("postSharedPageLease", { params: { pageId } }, 200, options);
+}
+export function renewSharedPageLease(
+  pageId: string,
+  options?: CallOptions,
+): Promise<ApiResult<M.SharedPageLease>> {
+  return callOperation("renewSharedPageLease", { params: { pageId } }, 200, options);
+}
+export function releaseSharedPageLease(
+  pageId: string,
+  options?: CallOptions,
+): Promise<ApiResult<Record<string, never>>> {
+  return callOperation("releaseSharedPageLease", { params: { pageId } }, 204, options);
+}
 export function getMe(options?: CallOptions): Promise<ApiResult<M.MeResponse>> {
   return callOperation("getMe", { params: {} }, 200, options);
 }
