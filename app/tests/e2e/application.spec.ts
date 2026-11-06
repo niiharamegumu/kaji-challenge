@@ -22,6 +22,32 @@ async function selectSettingsCategory(page: Page, name: string) {
     .getByRole("button", { name: new RegExp(`^${name}`) })
     .click();
 }
+
+async function expectFocusKeepsFrame(page: Page, control: Locator, surface = control) {
+  await expect(control).toBeVisible();
+  await page.evaluate(() => {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  });
+  const readFrame = (target: Locator) =>
+    target.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        border: [style.borderTop, style.borderRight, style.borderBottom, style.borderLeft],
+        shadow: style.boxShadow,
+      };
+    });
+  const frame = () => Promise.all([readFrame(control), readFrame(surface)]);
+  const before = await frame();
+  // Use keyboard modality so this exercises :focus-visible as well as :focus.
+  await page.keyboard.press("Tab");
+  await control.focus();
+  await expect(control).toBeFocused();
+  expect(await control.evaluate((element) => element.matches(":focus-visible"))).toBe(true);
+  await expect(control).toHaveCSS("outline-style", "none");
+  await expect(surface).toHaveCSS("outline-style", "none");
+  await expect.poll(frame).toEqual(before);
+}
+
 const secret = "kaji-e2e-only-secret-do-not-use-in-production";
 const userId = crypto.randomUUID(),
   token = crypto.randomUUID();
@@ -758,6 +784,11 @@ test(
       has: page.getByRole("heading", { name: "日間タスク" }),
     });
     const cards = dailyPanel.getByRole("button", { name: /一括確認.*日間/ });
+    await expect(cards.first()).toBeVisible();
+    expect(await cards.first().evaluate((element) => getComputedStyle(element).boxShadow)).not.toBe(
+      "none",
+    );
+    await expectFocusKeepsFrame(page, cards.first());
     const weeklyPanel = page.getByRole("article").filter({
       has: page.getByRole("heading", { name: "週間タスク" }),
     });
@@ -1032,6 +1063,11 @@ test(
     const card = page
       .getByRole("listitem")
       .filter({ has: page.getByRole("button", { name: "週間3回の保持確認 を1増やす" }) });
+    await expectFocusKeepsFrame(
+      page,
+      card.getByRole("button", { name: "週間3回の保持確認 を1増やす" }),
+      card,
+    );
     for (let count = 1; count <= 3; count++) {
       await card.getByRole("button", { name: "週間3回の保持確認 を1増やす" }).click();
       await expect(card.getByText(`進捗 ${count}/3`, { exact: true })).toBeVisible();
@@ -2522,6 +2558,83 @@ test(
     expect(await page.evaluate(() => window.assistFixture.stopped)).toBeGreaterThan(0);
   },
 );
+
+for (const colorScheme of ["light", "dark"] as const) {
+  test(
+    `focus keeps normal borders and shadows without adding a frame in ${colorScheme} mode`,
+    { tag: ["@theme", "@settings", "@auth", "@assist", "@pages"] },
+    async ({ page, context }, testInfo) => {
+      await page.emulateMedia({ colorScheme });
+      await page.goto("/");
+      await expectFocusKeepsFrame(page, page.getByRole("button", { name: "Googleでログイン" }));
+      await page.goto("/auth/callback?error=signup_forbidden");
+      await expectFocusKeepsFrame(page, page.getByRole("link", { name: "ログイン画面に戻る" }));
+
+      await authenticate(context);
+      await page.goto("/settings");
+      const nickname = page.getByRole("textbox", { name: "ニックネーム", exact: true });
+      await expectFocusKeepsFrame(page, nickname);
+      await expect(nickname).toHaveCSS("border-top-width", "1px");
+      await page.screenshot({
+        path: testInfo.outputPath(`focus-settings-${colorScheme}.png`),
+        animations: "disabled",
+        fullPage: true,
+      });
+      await selectSettingsCategory(page, "表示");
+      const selected = page.getByRole("radio", { name: "システム", exact: true });
+      const selectedSurface = selected.locator("..").locator(":scope > span");
+      await expect(selected).toBeChecked();
+      const unselectedSurface = page
+        .getByRole("radio", { name: "ライト", exact: true })
+        .locator("..")
+        .locator(":scope > span");
+      expect(
+        await selectedSurface.evaluate((element) => getComputedStyle(element).borderTopColor),
+      ).not.toBe(
+        await unselectedSurface.evaluate((element) => getComputedStyle(element).borderTopColor),
+      );
+      await expectFocusKeepsFrame(page, selected, selectedSurface);
+      await expect(selected).toBeChecked();
+      await selectSettingsCategory(page, "ToDo");
+      await expectFocusKeepsFrame(page, page.getByLabel("ToDo完了の取り消し猶予"));
+
+      const assistButton = page.getByRole("button", { name: "アシスト", exact: true });
+      await expectFocusKeepsFrame(page, assistButton);
+      expect(
+        await assistButton.evaluate((element) => getComputedStyle(element).boxShadow),
+      ).not.toBe("none");
+      await assistButton.press("Enter");
+      const assist = page.getByRole("dialog", { name: "音声アシスト" });
+      const composer = assist.locator(".assist-composer");
+      await expectFocusKeepsFrame(
+        page,
+        assist.getByRole("textbox", { name: "送信する内容" }),
+        composer,
+      );
+      await expect(composer).toHaveCSS("border-top-width", "1px");
+      await assist.getByRole("button", { name: "アシストを閉じる" }).click();
+
+      await page.goto("/pages/new");
+      const editor = page.getByRole("textbox", { name: "ページ本文", exact: true });
+      await expect(editor).toBeVisible();
+      // Check after the lazy-loaded editor stylesheet has entered the cascade.
+      const title = page.getByRole("textbox", { name: "タイトル", exact: true });
+      await title.click();
+      await expect(title).toHaveCSS("outline-style", "none");
+      await expectFocusKeepsFrame(page, title);
+      await expectFocusKeepsFrame(page, editor);
+      await expectFocusKeepsFrame(
+        page,
+        page.getByRole("button", { name: "ブロックを追加", exact: true }),
+      );
+      await page.screenshot({
+        path: testInfo.outputPath(`focus-shared-page-${colorScheme}.png`),
+        animations: "disabled",
+        fullPage: true,
+      });
+    },
+  );
+}
 
 test(
   "theme follows system, persists explicit choices and colors every screen",

@@ -117,13 +117,6 @@
   opacity: 0.45;
   cursor: default;
 }
-.shared-page-icon-button:focus-visible,
-.shared-pages-section button:focus-visible,
-.shared-pages-section input:focus-visible,
-.shared-pages-section a:focus-visible {
-  outline: 2px solid var(--color-focus);
-  outline-offset: 3px;
-}
 .shared-page-editor .bn-container {
   --bn-colors-editor-background: var(--color-surface);
   --bn-colors-editor-text: var(--color-ink);

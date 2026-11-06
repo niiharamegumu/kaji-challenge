@@ -44,7 +44,7 @@ function page(title: string, body: string) {
   button{min-height:48px;padding:11px 18px;border:1px solid light-dark(#d6d3d1,#596455);border-radius:8px;font:inherit;font-size:0.875rem;font-weight:650;color:light-dark(#292524,#e5e7df);background:light-dark(#fff,#232723);cursor:pointer}
   button:hover{background:light-dark(#f5f5f4,#2d322d)}.primary{border-color:light-dark(#1c1917,#f3f2ed);background:light-dark(#1c1917,#f3f2ed);color:light-dark(#fff,#191e19)}.primary:hover{background:light-dark(#292524,#e5e7df)}
   a{color:light-dark(#2f663b,#b0dbb1);text-underline-offset:3px}a:hover{color:light-dark(#1c1917,#f3f2ed)}
-  :focus-visible{outline:3px solid light-dark(#3e7f4a,#a0cba0);outline-offset:4px}
+  :focus,:focus-visible{outline:none!important}
   .footer{margin-top:22px;text-align:center;font-size:0.8125rem}.footer a{display:inline-block;padding:8px}
   .connection{padding-top:24px;margin-top:24px;border-top:1px solid light-dark(#e7e5e4,#3d463d)}.connection h2{font-size:1.125rem}
   .status{display:inline-block;margin-top:8px;padding:2px 10px;border-radius:6px;background:light-dark(#f5f5f4,#2d322d);font-size:0.75rem;color:light-dark(#44403c,#d1d5cc)}

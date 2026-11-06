@@ -40,7 +40,7 @@ export function LoginCard({ status, onLogin }: Props) {
         <div className="mt-6 flex justify-center px-2 md:justify-start md:px-0">
           <button
             type="button"
-            className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-action px-4 py-2 text-on-action transition-colors duration-200 hover:bg-action-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface md:w-fit md:min-w-72"
+            className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-action px-4 py-2 text-on-action transition-colors duration-200 hover:bg-action-hover md:w-fit md:min-w-72"
             onClick={onLogin}
           >
             <LogIn size={18} aria-hidden="true" />

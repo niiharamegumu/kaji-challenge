@@ -28,7 +28,7 @@ export function ThemeSettings() {
               onChange={() => setSaveFailed(!setPreference(value))}
               className="peer sr-only"
             />
-            <span className="flex flex-col gap-3 rounded-xl border border-line-strong bg-surface p-2 text-xs font-medium text-body transition-colors peer-checked:border-accent peer-checked:bg-success-soft peer-checked:text-success peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent sm:p-3 sm:text-sm">
+            <span className="flex flex-col gap-3 rounded-xl border border-line-strong bg-surface p-2 text-xs font-medium text-body transition-colors peer-checked:border-accent peer-checked:bg-success-soft peer-checked:text-success sm:p-3 sm:text-sm">
               <span
                 aria-hidden="true"
                 className={`flex h-16 overflow-hidden rounded-md border border-black/10 sm:h-24 ${value === "dark" ? "bg-[#202822]" : value === "light" ? "bg-[#fafbf7]" : "bg-linear-to-r from-[#fafbf7] from-50% to-[#202822] to-50%"}`}
