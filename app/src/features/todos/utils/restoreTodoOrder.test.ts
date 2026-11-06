@@ -18,4 +18,14 @@ describe("restoreTodoOrder", () => {
   it("keeps the order when the selected category is empty", () => {
     expect(restoreTodoOrder(items, [])).toEqual(items.map((item) => item.id));
   });
+
+  it("ignores an item removed during the drag and keeps newly arrived items in place", () => {
+    expect(restoreTodoOrder(items, ["deleted", "b", "a"])).toEqual([
+      "hidden-start",
+      "b",
+      "hidden-middle",
+      "a",
+      "hidden-end",
+    ]);
+  });
 });
