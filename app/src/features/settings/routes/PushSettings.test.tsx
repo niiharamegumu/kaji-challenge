@@ -271,6 +271,7 @@ describe("PushSettings", () => {
       </AppProviders>,
     );
 
+    await user.click(await screen.findByRole("button", { name: /^通知/ }));
     await user.click(await screen.findByRole("button", { name: "プッシュ通知をテスト" }));
 
     await waitFor(() => {
