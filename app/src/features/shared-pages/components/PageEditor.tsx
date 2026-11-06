@@ -16,7 +16,7 @@ import {
   useCreateBlockNote,
 } from "@blocknote/react";
 import { Plus } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { SharedPageBlock, SharedPageDocument } from "../../../contracts/shared-pages";
 import "@blocknote/mantine/style.css";
 import "../shared-pages.css";
@@ -93,6 +93,9 @@ export function PageEditor({
   onCompositionChange?: (composing: boolean) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuId = useId();
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const editor = useCreateBlockNote({
     schema,
@@ -126,13 +129,26 @@ export function PageEditor({
     };
   }, []);
   useEffect(() => {
-    if (!editable) return;
-    const root = document.getElementById("root");
-    root?.classList.add("bn-scroll-container");
-    return () => {
-      root?.classList.remove("bn-scroll-container");
+    if (!menuOpen || !editable) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (event.target instanceof Node && !menuRef.current?.contains(event.target)) {
+        setMenuOpen(false);
+      }
     };
-  }, [editable]);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.isComposing || event.defaultPrevented) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setMenuOpen(false);
+      menuButtonRef.current?.focus({ preventScroll: true });
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [editable, menuOpen]);
 
   const insert = (
     type: "paragraph" | "heading" | "bulletListItem" | "numberedListItem" | "checkListItem",
@@ -168,19 +184,22 @@ export function PageEditor({
         {editable ? <FormattingToolbarController formattingToolbar={BasicToolbar} /> : null}
       </BlockNoteView>
       {editable ? (
-        <div className="relative mt-3 px-1">
+        <div ref={menuRef} className="relative mt-3 px-1">
           <button
+            ref={menuButtonRef}
             type="button"
             className="shared-page-icon-button"
             aria-label="ブロックを追加"
             title="ブロックを追加"
             aria-expanded={menuOpen}
+            aria-controls={menuOpen ? menuId : undefined}
             onClick={() => setMenuOpen(!menuOpen)}
           >
             <Plus size={16} aria-hidden="true" />
           </button>
           {menuOpen ? (
             <div
+              id={menuId}
               className="mt-1 grid grid-cols-2 gap-1 rounded-xl border border-line bg-surface p-2 shadow-sm"
               role="group"
               aria-label="追加するブロック"
