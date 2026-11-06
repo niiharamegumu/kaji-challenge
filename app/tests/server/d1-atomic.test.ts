@@ -67,11 +67,11 @@ it("applies simultaneous increments up to capacity and decrements down to zero",
     ),
   );
   expect(
-    await connection.repository.GetTaskCompletionWeeklyEntryCount({
-      TaskID: weeklyId,
+    await connection.repository.ListTaskCompletionWeeklyCountsByTeamAndWeek({
+      TeamID: teamId,
       WeekStart: "2026-09-21",
     }),
-  ).toBe(3);
+  ).toEqual([{ TaskID: weeklyId, CompletionCount: 3 }]);
   await Promise.all(
     Array.from({ length: 8 }, () =>
       run(
@@ -82,11 +82,11 @@ it("applies simultaneous increments up to capacity and decrements down to zero",
     ),
   );
   expect(
-    await connection.repository.GetTaskCompletionWeeklyEntryCount({
-      TaskID: weeklyId,
+    await connection.repository.ListTaskCompletionWeeklyCountsByTeamAndWeek({
+      TeamID: teamId,
       WeekStart: "2026-09-21",
     }),
-  ).toBe(0);
+  ).toEqual([]);
 });
 it("simultaneous complete requests never toggle a daily task back", async () => {
   await Promise.all(
@@ -99,22 +99,22 @@ it("simultaneous complete requests never toggle a daily task back", async () => 
     ),
   );
   expect(
-    await connection.repository.HasTaskCompletionDaily({
-      TaskID: dailyId,
+    await connection.repository.ListTaskCompletionDailyByTeamAndDate({
+      TeamID: teamId,
       TargetDate: "2026-09-25",
     }),
-  ).toBe(true);
+  ).toMatchObject([{ TaskID: dailyId }]);
   await run(
     "postTaskCompletion",
     { targetDate: "2026-09-25", action: "incomplete" },
     { taskId: dailyId },
   );
   expect(
-    await connection.repository.HasTaskCompletionDaily({
-      TaskID: dailyId,
+    await connection.repository.ListTaskCompletionDailyByTeamAndDate({
+      TeamID: teamId,
       TargetDate: "2026-09-25",
     }),
-  ).toBe(false);
+  ).toEqual([]);
 });
 it("updates only submitted task fields during concurrent edits", async () => {
   await Promise.all([
@@ -158,11 +158,11 @@ it("rolls back a completion when recalculating the same batch fails", async () =
       ),
     ).rejects.toThrow();
     expect(
-      await connection.repository.HasTaskCompletionDaily({
-        TaskID: dailyId,
+      await connection.repository.ListTaskCompletionDailyByTeamAndDate({
+        TeamID: teamId,
         TargetDate: "2026-09-24",
       }),
-    ).toBe(false);
+    ).toEqual([]);
   } finally {
     await connection.db.run(sql`DROP TRIGGER reject_summary`);
   }
