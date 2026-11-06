@@ -27,7 +27,7 @@ export function TodoDefaultCategorySettings({ identityKey }: { identityKey: stri
   const value = saved === undefined ? "all" : optionValue(saved);
   const available = options.some((option) => optionValue(option.selection) === value);
   return (
-    <div className="mt-5 grid min-w-0 gap-2">
+    <div className="grid min-w-0 gap-2">
       <label htmlFor={inputId} className="text-sm font-medium text-body">
         最初に表示するToDoカテゴリー
       </label>
@@ -42,7 +42,7 @@ export function TodoDefaultCategorySettings({ identityKey }: { identityKey: stri
           );
           if (selected) setSaveFailed(!setSaved(selected.selection));
         }}
-        className="h-10 min-w-0 rounded-lg border border-line-strong bg-surface px-3 py-2 text-sm disabled:opacity-60 sm:h-11"
+        className="min-h-11 min-w-0 rounded-lg border border-line-strong bg-surface px-3 py-2 text-base disabled:opacity-60 sm:text-sm"
       >
         {options.map((option) => (
           <option key={optionValue(option.selection)} value={optionValue(option.selection)}>
