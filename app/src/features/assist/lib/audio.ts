@@ -43,13 +43,6 @@ export function encodeWav(chunks: Float32Array[], sampleRate: number): Uint8Arra
   return bytes;
 }
 
-export function wavBase64(bytes: Uint8Array): string {
-  let binary = "";
-  for (let i = 0; i < bytes.length; i += 8192)
-    binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
-  return btoa(binary);
-}
-
 /** Explicit dictation keeps pauses and stops only on request or the duration limit. */
 export class SpeechDetector {
   private chunks: Float32Array[] = [];
@@ -72,9 +65,5 @@ export class SpeechDetector {
   }
   pcm(): CapturedAudio | null {
     return this.voiced >= 0.18 ? { chunks: this.chunks, sampleRate: this.sampleRate } : null;
-  }
-  finish() {
-    const audio = this.pcm();
-    return audio ? encodeWav(audio.chunks, audio.sampleRate) : null;
   }
 }
