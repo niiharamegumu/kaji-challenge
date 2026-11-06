@@ -46,10 +46,9 @@ import {
   formatDateKey,
   formatDateLabel,
   formatMonthLabel,
-  monthKeyFromDateKey,
-  normalizeDateKey,
-  todayDateKey,
-} from "../utils/date";
+  dateStringInJST,
+} from "../../../shared/utils/dates";
+import { resolveCalendarDate } from "../../../shared/router/dateParams";
 
 const calendarButtonClass =
   "flex h-10 w-10 items-center justify-center rounded-full border border-line-strong bg-surface text-body transition-colors hover:bg-surface-muted";
@@ -74,10 +73,6 @@ function calendarDescription(isMobile: boolean) {
   return isMobile
     ? "今月と来月以降の予定を表示します。過去月は表示しません。日付変更は編集から行えます。"
     : "今月と来月以降の予定を表示します。過去月は表示しません。ドラッグで日付を変更できます。";
-}
-
-function normalizeVisibleDateKey(dateKey: string, todayKey: string) {
-  return monthKeyFromDateKey(dateKey) < monthKeyFromDateKey(todayKey) ? todayKey : dateKey;
 }
 
 function ReminderFormFields({
@@ -334,16 +329,16 @@ function MobileAgendaSheet({
 export function ReminderCalendarPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const initialDateParam = searchParams.get("date");
-  const todayKey = todayDateKey();
-  const currentMonthKey = monthKeyFromDateKey(todayKey);
-  const initialSelectedDate = normalizeVisibleDateKey(normalizeDateKey(initialDateParam), todayKey);
+  const todayKey = dateStringInJST();
+  const currentMonthKey = todayKey.slice(0, 7);
+  const initialSelectedDate = resolveCalendarDate(initialDateParam, todayKey);
   const isMobile = useIsMobile();
   const viewportHeight = useViewportHeight(isMobile);
   const [selectedDate, setSelectedDate] = useState(initialSelectedDate);
   const [mobileAgendaOpen, setMobileAgendaOpen] = useState(
     () => isMobile && initialDateParam != null,
   );
-  const [visibleMonth, setVisibleMonth] = useState(monthKeyFromDateKey(initialSelectedDate));
+  const [visibleMonth, setVisibleMonth] = useState(initialSelectedDate.slice(0, 7));
   const [sheetMode, setSheetMode] = useState<"create" | "edit" | null>(null);
   const [editingReminderId, setEditingReminderId] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
@@ -412,7 +407,7 @@ export function ReminderCalendarPage() {
   );
 
   const updateSelectedDate = (nextDate: string) => {
-    const normalizedDate = normalizeVisibleDateKey(nextDate, todayKey);
+    const normalizedDate = resolveCalendarDate(nextDate, todayKey);
     setSelectedDate(normalizedDate);
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
@@ -512,9 +507,7 @@ export function ReminderCalendarPage() {
         {isMobile ? (
           <button
             type="button"
-            className={`reminder-day-number inline-flex min-w-7 cursor-pointer items-center justify-center rounded-full px-1.5 text-xs font-medium transition-colors ${
-              isMobile ? "min-h-9 py-1.5" : "min-h-7"
-            } ${
+            className={`reminder-day-number inline-flex min-h-9 min-w-7 cursor-pointer items-center justify-center rounded-full px-1.5 py-1.5 text-xs font-medium transition-colors ${
               isSelected ? "bg-warning-hover text-heading" : "text-body hover:bg-surface-muted"
             } ${arg.isOther ? "text-faint" : ""}`}
             aria-label={`${formatDateLabel(dateKey)}を選択`}
@@ -526,9 +519,7 @@ export function ReminderCalendarPage() {
               event.preventDefault();
               event.stopPropagation();
               updateSelectedDate(dateKey);
-              if (isMobile) {
-                setMobileAgendaOpen(true);
-              }
+              setMobileAgendaOpen(true);
             }}
           >
             {dayNumber}
