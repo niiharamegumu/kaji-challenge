@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 
 import type { TeamMember } from "../../../lib/api/operations";
-import { PAGE_SECTION_CHROMELESS_CLASS_NAME } from "../../../shared/styles/pageSection";
 import { PushNotificationsSection } from "../../push";
 import { TodoDefaultCategorySettings } from "../../todos";
 import { COPY_FEEDBACK_TIMEOUT_MS } from "../constants/invite";
@@ -10,6 +9,7 @@ import {
   AccountSettingsSection,
   InviteCodeIssueSection,
   JoinTeamSection,
+  LeaveTeamSection,
   TeamMembersSection,
   TeamNameSection,
 } from "./SettingsSections";
@@ -17,6 +17,11 @@ import { getColorHexError, getNicknameError, getTeamNameError } from "./settings
 import { TodoCompletionSettings } from "./TodoCompletionSettings";
 import { ThemeSettings } from "./ThemeSettings";
 import { AppUpdateSettings } from "./AppUpdateSettings";
+import {
+  SETTINGS_CATEGORIES,
+  SettingsNavigation,
+  type SettingsCategory,
+} from "./SettingsNavigation";
 
 type Props = {
   identityKey: string;
@@ -69,6 +74,7 @@ export function SettingsManager({
   onSaveColor,
   onSaveTeamName,
 }: Props) {
+  const [activeCategory, setActiveCategory] = useState<SettingsCategory>("profile");
   const [copied, setCopied] = useState(false);
   const [currentTime, setCurrentTime] = useState(() => Date.now());
   const inviteExpiresAt = invite == null ? null : new Date(invite.expiresAt).getTime();
@@ -126,85 +132,107 @@ export function SettingsManager({
   };
 
   return (
-    <section className="space-y-2 pb-1 md:space-y-4">
-      <header className="py-0.5 md:px-6">
-        <h2 className="text-lg font-semibold text-heading">設定</h2>
-        <p className="mt-2 text-xs text-muted">
-          チーム・アカウント・ブラウザーの設定を管理できます。
+    <section className="space-y-5 pb-1 md:space-y-6">
+      <header>
+        <h2 className="text-xl font-semibold tracking-tight text-heading">設定</h2>
+        <p className="mt-1.5 text-sm text-secondary">
+          毎日使いやすい、自分たちの家事チャレンジに。
         </p>
       </header>
-
-      <TodoCompletionSettings>
-        <ThemeSettings />
-        <TodoDefaultCategorySettings key={identityKey} identityKey={identityKey} />
-        <AppUpdateSettings />
-      </TodoCompletionSettings>
-
-      <article
-        className={`rounded-xl px-0 py-2.5 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
-      >
-        <h2 className="text-base font-semibold text-heading">チーム設定</h2>
-        <div className="mt-3 space-y-6">
-          <TeamNameSection
-            teamName={teamName}
-            teamNameError={teamNameError}
-            isSavingTeamName={isSavingTeamName}
-            onTeamNameChange={onTeamNameChange}
-            onSaveTeamName={onSaveTeamName}
-          />
-
-          <div>
-            <TeamMembersSection
-              members={members}
-              isLeavingTeam={isLeavingTeam}
-              onLeaveTeam={onLeaveTeam}
-            />
-          </div>
-
-          <div>
-            <InviteCodeIssueSection
-              invite={invite}
-              inviteExpired={inviteExpired}
-              copied={copied}
-              isCreatingInvite={isCreatingInvite}
-              onCreateInvite={onCreateInvite}
-              onCopyInviteCode={() => {
-                void handleCopyInviteCode();
-              }}
-            />
-          </div>
-
-          <div>
-            <JoinTeamSection
-              joinCode={joinCode}
-              isJoiningTeam={isJoiningTeam}
-              onJoinCodeChange={onJoinCodeChange}
-              onJoinTeam={onJoinTeam}
-            />
-          </div>
+      <div className="grid min-w-0 gap-5 lg:grid-cols-[13.5rem_minmax(0,1fr)] lg:gap-8">
+        <SettingsNavigation activeCategory={activeCategory} onSelect={setActiveCategory} />
+        <div className="min-w-0">
+          {SETTINGS_CATEGORIES.map(({ id, label, scope }) => (
+            <article
+              key={id}
+              id={`settings-${id}`}
+              hidden={activeCategory !== id}
+              aria-labelledby={`settings-${id}-heading`}
+              className="min-w-0 rounded-2xl border border-line bg-surface p-4 sm:p-6"
+            >
+              <header className="mb-6 flex flex-wrap items-center justify-between gap-2 border-b border-line pb-4">
+                <h2 id={`settings-${id}-heading`} className="text-base font-semibold text-heading">
+                  {label}
+                </h2>
+                <span className="rounded-full bg-surface-muted px-2.5 py-1 text-xs text-secondary">
+                  {scope}
+                </span>
+              </header>
+              {id === "profile" ? (
+                <>
+                  <p className="mb-5 text-sm leading-relaxed text-secondary">
+                    チームに表示する名前と、自分の目印になるカラーを設定します。
+                  </p>
+                  <AccountSettingsSection
+                    nickname={nickname}
+                    colorHex={colorHex}
+                    nicknameError={nicknameError}
+                    colorHexError={colorHexError}
+                    isSavingNickname={isSavingNickname}
+                    isSavingColor={isSavingColor}
+                    onNicknameChange={onNicknameChange}
+                    onColorHexChange={onColorHexChange}
+                    onSaveNickname={onSaveNickname}
+                    onSaveColor={onSaveColor}
+                  />
+                </>
+              ) : null}
+              {id === "appearance" ? <ThemeSettings /> : null}
+              {id === "todos" ? (
+                <div className="divide-y divide-line">
+                  <TodoCompletionSettings />
+                  <div className="mt-6 pt-6">
+                    <TodoDefaultCategorySettings key={identityKey} identityKey={identityKey} />
+                  </div>
+                </div>
+              ) : null}
+              {id === "notifications" ? <PushNotificationsSection key={identityKey} /> : null}
+              {id === "team" ? (
+                <div className="space-y-6">
+                  <TeamNameSection
+                    teamName={teamName}
+                    teamNameError={teamNameError}
+                    isSavingTeamName={isSavingTeamName}
+                    onTeamNameChange={onTeamNameChange}
+                    onSaveTeamName={onSaveTeamName}
+                  />
+                  <TeamMembersSection members={members} />
+                  <div className="border-t border-line pt-6">
+                    <InviteCodeIssueSection
+                      invite={invite}
+                      inviteExpired={inviteExpired}
+                      copied={copied}
+                      isCreatingInvite={isCreatingInvite}
+                      onCreateInvite={onCreateInvite}
+                      onCopyInviteCode={() => {
+                        void handleCopyInviteCode();
+                      }}
+                    />
+                  </div>
+                  <details className="group border-t border-line pt-4">
+                    <summary className="min-h-11 cursor-pointer rounded-lg py-3 text-sm font-medium text-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">
+                      チームの参加・切り替え
+                    </summary>
+                    <div className="space-y-6 pt-3">
+                      <p className="text-xs leading-relaxed text-muted">
+                        参加や離脱をすると、現在のチームから移動します。
+                      </p>
+                      <JoinTeamSection
+                        joinCode={joinCode}
+                        isJoiningTeam={isJoiningTeam}
+                        onJoinCodeChange={onJoinCodeChange}
+                        onJoinTeam={onJoinTeam}
+                      />
+                      <LeaveTeamSection isLeavingTeam={isLeavingTeam} onLeaveTeam={onLeaveTeam} />
+                    </div>
+                  </details>
+                </div>
+              ) : null}
+              {id === "app" ? <AppUpdateSettings /> : null}
+            </article>
+          ))}
         </div>
-      </article>
-
-      <article
-        className={`rounded-xl px-0 py-2.5 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
-      >
-        <h2 className="text-base font-semibold text-heading">アカウント設定</h2>
-        <div className="mt-3 space-y-6">
-          <AccountSettingsSection
-            nickname={nickname}
-            colorHex={colorHex}
-            nicknameError={nicknameError}
-            colorHexError={colorHexError}
-            isSavingNickname={isSavingNickname}
-            isSavingColor={isSavingColor}
-            onNicknameChange={onNicknameChange}
-            onColorHexChange={onColorHexChange}
-            onSaveNickname={onSaveNickname}
-            onSaveColor={onSaveColor}
-          />
-          <PushNotificationsSection key={identityKey} />
-        </div>
-      </article>
+      </div>
     </section>
   );
 }

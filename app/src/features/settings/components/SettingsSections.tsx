@@ -6,7 +6,7 @@ import type { InviteState } from "../model/invite";
 import { formatDateTime } from "./settingsUtils";
 
 const SETTINGS_PRIMARY_BUTTON_CLASS_NAME =
-  "min-h-11 rounded-lg bg-action px-4 py-2 text-sm whitespace-nowrap text-on-action transition-colors duration-200 hover:bg-action-hover disabled:cursor-not-allowed disabled:opacity-60";
+  "min-h-11 cursor-pointer rounded-lg bg-action px-4 py-2 text-sm whitespace-nowrap text-on-action transition-colors duration-200 hover:bg-action-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-60";
 
 type TeamNameSectionProps = {
   teamName: string;
@@ -33,7 +33,7 @@ export function TeamNameSection({
         <div className="mt-2 flex items-center gap-2">
           <input
             id="team-name"
-            className="min-h-11 w-full flex-1 rounded-lg border border-line-strong bg-surface px-3 py-2 text-heading focus-visible:border-[color:var(--color-matcha-500)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-matcha-200)]"
+            className="min-h-11 min-w-0 flex-1 rounded-lg border border-line-strong bg-surface px-3 py-2 text-heading focus-visible:border-[color:var(--color-matcha-500)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-matcha-200)]"
             value={teamName}
             onChange={(event) => onTeamNameChange(event.target.value)}
             placeholder="チーム名"
@@ -56,18 +56,17 @@ export function TeamNameSection({
 
 type TeamMembersSectionProps = {
   members: TeamMember[];
-  isLeavingTeam: boolean;
-  onLeaveTeam: () => void;
 };
 
-export function TeamMembersSection({
-  members,
-  isLeavingTeam,
-  onLeaveTeam,
-}: TeamMembersSectionProps) {
+export function TeamMembersSection({ members }: TeamMembersSectionProps) {
   return (
     <section className="space-y-3">
-      <h3 className="text-sm font-semibold text-heading">チームメンバー</h3>
+      <h3 className="flex items-center gap-2 text-sm font-semibold text-heading">
+        チームメンバー
+        <span className="rounded-full bg-surface-muted px-2 py-0.5 text-xs font-normal text-secondary">
+          {members.length}人
+        </span>
+      </h3>
       <ul className="space-y-2">
         {members.map((member) => (
           <li
@@ -94,21 +93,31 @@ export function TeamMembersSection({
           </li>
         )}
       </ul>
-
-      <div className="rounded-lg border border-danger-line bg-danger-soft/70 p-3">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <p className="text-xs text-danger">離脱すると新しいチームを作成します。</p>
-          <button
-            type="button"
-            className="min-h-11 w-full rounded-lg border border-danger-line px-4 py-2 text-sm text-danger transition-colors duration-200 hover:bg-danger-hover disabled:cursor-not-allowed disabled:opacity-60 md:w-auto md:shrink-0"
-            onClick={onLeaveTeam}
-            disabled={isLeavingTeam}
-          >
-            {isLeavingTeam ? "処理中..." : "離脱して新しいチームを作成"}
-          </button>
-        </div>
-      </div>
     </section>
+  );
+}
+
+export function LeaveTeamSection({
+  isLeavingTeam,
+  onLeaveTeam,
+}: {
+  isLeavingTeam: boolean;
+  onLeaveTeam: () => void;
+}) {
+  return (
+    <div className="rounded-lg border border-danger-line bg-danger-soft/70 p-3">
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+        <p className="text-xs text-danger">離脱すると新しいチームを作成します。</p>
+        <button
+          type="button"
+          className="min-h-11 w-full cursor-pointer rounded-lg border border-danger-line px-4 py-2 text-sm text-danger transition-colors duration-200 hover:bg-danger-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-danger disabled:cursor-not-allowed disabled:opacity-60 xl:w-auto xl:shrink-0"
+          onClick={onLeaveTeam}
+          disabled={isLeavingTeam}
+        >
+          {isLeavingTeam ? "処理中..." : "離脱して新しいチームを作成"}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -132,14 +141,17 @@ export function InviteCodeIssueSection({
   return (
     <section className="space-y-3">
       <h3 className="text-sm font-semibold text-heading">招待コード</h3>
+      <p className="text-xs leading-relaxed text-secondary">
+        一緒に家事をする人にコードを共有して、チームへ招待できます。
+      </p>
       <div className="flex flex-wrap items-center gap-1.5 text-sm text-ink">
         <span>コード:</span>
-        <code className="rounded bg-surface-muted px-1.5 py-0.5 font-mono text-[11px] tracking-wide">
+        <code className="min-w-0 rounded bg-surface-muted px-2.5 py-2 font-mono text-sm tracking-wider break-all">
           {invite?.code ?? "未発行"}
         </code>
         <button
           type="button"
-          className="flex h-8 w-8 items-center justify-center rounded-md text-secondary transition-colors duration-200 hover:bg-surface-muted hover:text-ink disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-line text-secondary transition-colors duration-200 hover:bg-surface-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-60"
           onClick={onCopyInviteCode}
           disabled={!invite?.code}
           aria-label={copied ? "招待コードをコピー済み" : "招待コードをコピー"}
@@ -149,7 +161,7 @@ export function InviteCodeIssueSection({
         </button>
         <button
           type="button"
-          className="flex h-8 w-8 items-center justify-center rounded-md text-secondary transition-colors duration-200 hover:bg-surface-muted hover:text-ink disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border border-line px-3 text-xs text-secondary transition-colors duration-200 hover:bg-surface-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-60"
           onClick={onCreateInvite}
           disabled={isCreatingInvite}
           aria-label={isCreatingInvite ? "招待コードを発行中" : "招待コードを発行"}
@@ -160,6 +172,7 @@ export function InviteCodeIssueSection({
             aria-hidden="true"
             className={isCreatingInvite ? "animate-spin" : undefined}
           />
+          {isCreatingInvite ? "発行中…" : invite ? "再発行" : "コードを発行"}
         </button>
       </div>
       <p className="text-sm text-secondary">
@@ -195,7 +208,7 @@ export function JoinTeamSection({
         <div className="mt-2 flex items-center gap-2">
           <input
             id="join-code"
-            className="min-h-11 w-full flex-1 rounded-lg border border-line-strong bg-surface px-3 py-2 text-heading focus-visible:border-[color:var(--color-matcha-500)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-matcha-200)]"
+            className="min-h-11 min-w-0 flex-1 rounded-lg border border-line-strong bg-surface px-3 py-2 text-heading focus-visible:border-[color:var(--color-matcha-500)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-matcha-200)]"
             value={joinCode}
             onChange={(event) => onJoinCodeChange(event.target.value)}
             placeholder="招待コード入力"
@@ -242,18 +255,37 @@ export function AccountSettingsSection({
 }: AccountSettingsSectionProps) {
   return (
     <section className="space-y-6">
+      <div className="flex items-center gap-3 rounded-xl bg-surface-subtle p-4">
+        <span
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-base font-semibold"
+          aria-hidden="true"
+          style={{
+            backgroundColor: resolveUserColor(colorHex),
+            color: getReadableTextColor(resolveUserColor(colorHex)),
+          }}
+        >
+          {Array.from(nickname.trim())[0] || "あ"}
+        </span>
+        <div className="min-w-0">
+          <p className="text-xs text-muted">表示イメージ</p>
+          <p className="mt-0.5 truncate text-sm font-semibold text-heading">
+            {nickname.trim() || "あなたの名前"}
+          </p>
+        </div>
+      </div>
       <div>
         <h3 className="text-sm font-semibold text-heading">ニックネーム</h3>
+        <p className="mt-1 text-xs text-muted">空欄で保存すると、アカウントの名前を使用します。</p>
         <label className="sr-only" htmlFor="nickname">
           ニックネーム
         </label>
         <div className="mt-2 flex w-full items-center gap-2">
           <input
             id="nickname"
-            className="min-h-11 w-full flex-1 rounded-lg border border-line-strong bg-surface px-3 py-2 text-heading focus-visible:border-[color:var(--color-matcha-500)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-matcha-200)]"
+            className="min-h-11 min-w-0 flex-1 rounded-lg border border-line-strong bg-surface px-3 py-2 text-heading focus-visible:border-[color:var(--color-matcha-500)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-matcha-200)]"
             value={nickname}
             onChange={(event) => onNicknameChange(event.target.value)}
-            placeholder="ニックネーム（未入力でも保存可能）"
+            placeholder="チームで使う名前"
             disabled={isSavingNickname}
           />
           <button
@@ -269,6 +301,9 @@ export function AccountSettingsSection({
       </div>
       <div>
         <h3 className="text-sm font-semibold text-heading">表示カラー</h3>
+        <p className="mt-1 text-xs text-muted">
+          家事の担当者や完了した人の目印になります。空欄で既定色に戻せます。
+        </p>
         <label className="sr-only" htmlFor="color-hex">
           表示カラー
         </label>
@@ -276,17 +311,18 @@ export function AccountSettingsSection({
           <input
             id="color-picker"
             type="color"
-            className="h-11 w-12 rounded border border-line-strong bg-surface p-1"
+            aria-label="表示カラーを選択"
+            className="h-11 w-11 shrink-0 cursor-pointer rounded-lg border border-line-strong bg-surface p-1"
             value={resolveUserColor(colorHex)}
             onChange={(event) => onColorHexChange(event.target.value)}
             disabled={isSavingColor}
           />
           <input
             id="color-hex"
-            className="min-h-11 w-full flex-1 rounded-lg border border-line-strong bg-surface px-3 py-2 font-mono text-heading focus-visible:border-[color:var(--color-matcha-500)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-matcha-200)]"
+            className="min-h-11 min-w-0 flex-1 rounded-lg border border-line-strong bg-surface px-3 py-2 font-mono text-heading focus-visible:border-[color:var(--color-matcha-500)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-matcha-200)]"
             value={colorHex}
             onChange={(event) => onColorHexChange(event.target.value)}
-            placeholder="#RRGGBB（空欄で既定色）"
+            placeholder="#RRGGBB"
             disabled={isSavingColor}
           />
           <button

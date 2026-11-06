@@ -1,4 +1,11 @@
-import { test, expect, type BrowserContext, type Locator, type Request } from "@playwright/test";
+import {
+  test,
+  expect,
+  type BrowserContext,
+  type Locator,
+  type Page,
+  type Request,
+} from "@playwright/test";
 import { createHmac } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { createTestDatabase } from "../helpers/d1";
@@ -9,6 +16,12 @@ import {
   installNativeAssistAudioFixture,
   readAssistAudioUpload,
 } from "./assist-fixture";
+async function selectSettingsCategory(page: Page, name: string) {
+  await page
+    .getByRole("navigation", { name: "設定カテゴリー" })
+    .getByRole("button", { name: new RegExp(`^${name}`) })
+    .click();
+}
 const secret = "kaji-e2e-only-secret-do-not-use-in-production";
 const userId = crypto.randomUUID(),
   token = crypto.randomUUID();
@@ -112,11 +125,62 @@ test(
   },
 );
 test(
+  "settings categories keep drafts and fit narrow screens",
+  { tag: ["@settings"] },
+  async ({ page, context }, testInfo) => {
+    await authenticate(context);
+    await page.goto("/settings");
+    const navigation = page.getByRole("navigation", { name: "設定カテゴリー" });
+    await expect(navigation.getByRole("button")).toHaveCount(6);
+    await expect(page.getByRole("heading", { name: "プロフィール", exact: true })).toBeVisible();
+    const nickname = page.getByRole("textbox", { name: "ニックネーム", exact: true });
+    await nickname.fill("入力途中の名前");
+    const teamButton = navigation.getByRole("button", { name: /^チーム/ });
+    await teamButton.focus();
+    await page.keyboard.press("Enter");
+    await expect(teamButton).toHaveAttribute("aria-pressed", "true");
+    await expect(nickname).toBeHidden();
+    await expect(page.getByRole("button", { name: "離脱して新しいチームを作成" })).toBeHidden();
+    await page.getByText("チームの参加・切り替え", { exact: true }).click();
+    await expect(page.getByRole("button", { name: "離脱して新しいチームを作成" })).toBeVisible();
+    await selectSettingsCategory(page, "プロフィール");
+    await expect(nickname).toHaveValue("入力途中の名前");
+    for (const category of ["プロフィール", "表示", "ToDo", "通知", "チーム", "アプリ"]) {
+      await selectSettingsCategory(page, category);
+      await expect(page.getByRole("heading", { name: category, exact: true })).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      await page.screenshot({
+        path: testInfo.outputPath(`settings-${category}.png`),
+        animations: "disabled",
+        fullPage: true,
+      });
+    }
+    if (testInfo.project.name === "desktop") {
+      for (const width of [320, 375, 768, 1024, 1440]) {
+        await page.setViewportSize({ width, height: 900 });
+        await selectSettingsCategory(page, "プロフィール");
+        await expect(nickname).toBeVisible();
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+          true,
+        );
+        await page.screenshot({
+          path: testInfo.outputPath(`settings-width-${width}.png`),
+          animations: "disabled",
+          fullPage: true,
+        });
+      }
+    }
+  },
+);
+test(
   "settings checks for app updates, retries offline and reapplies a dismissed update prompt",
   { tag: ["@pwa", "@settings"] },
   async ({ page, context }) => {
     await authenticate(context);
     await page.goto("/settings");
+    await selectSettingsCategory(page, "アプリ");
     const check = page.getByRole("button", { name: "アップデートを確認" });
     await expect(check).toBeVisible();
     await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
@@ -144,6 +208,7 @@ test(
       page.waitForEvent("load"),
       toast.getByRole("button", { name: "更新する" }).click(),
     ]);
+    await selectSettingsCategory(page, "アプリ");
     await expect(check).toBeVisible();
     expect(await page.evaluate(() => navigator.serviceWorker.controller?.scriptURL)).toContain(
       "/sw.js?e2e=next",
@@ -257,9 +322,11 @@ test(
       await expect(page.getByRole("button", { name: `${name} を削除`, exact: true })).toBeVisible();
     }
     await page.goto("/settings");
+    await selectSettingsCategory(page, "ToDo");
     const select = page.getByRole("combobox", { name: "最初に表示するToDoカテゴリー" });
     await select.selectOption({ label: "買い物" });
     await page.reload();
+    await selectSettingsCategory(page, "ToDo");
     await expect(select.locator("option:checked")).toHaveText("買い物");
     await page.screenshot({
       path: testInfo.outputPath("todo-default-settings.png"),
@@ -296,6 +363,7 @@ test(
       "true",
     );
     await page.goto("/settings");
+    await selectSettingsCategory(page, "ToDo");
     await select.selectOption({ label: "未分類" });
     await page.goto("/todos");
     await expect(filter.getByRole("button", { name: "未分類", exact: true })).toHaveAttribute(
@@ -303,6 +371,7 @@ test(
       "true",
     );
     await page.goto("/settings");
+    await selectSettingsCategory(page, "ToDo");
     await select.selectOption({ label: "すべて" });
     await page.goto("/");
     await expect(filter.getByRole("button", { name: "すべて", exact: true })).toHaveAttribute(
@@ -411,6 +480,7 @@ test(
   async ({ page, context, browser }, testInfo) => {
     await authenticate(context, todoDelayToken);
     await page.goto("/settings");
+    await selectSettingsCategory(page, "ToDo");
     const select = page.getByRole("combobox", { name: "ToDo完了の取り消し猶予" });
     const chooseDelay = async (seconds: number) => {
       await select.selectOption(String(seconds * 1_000));
@@ -421,36 +491,22 @@ test(
     // Existing browser profiles can still hold a fractional-second slider setting.
     await page.evaluate(() => localStorage.setItem("kaji:todo-completion-delay-ms:v1", "1700"));
     await page.reload();
+    await selectSettingsCategory(page, "ToDo");
     await expect(select).toHaveValue("2000");
     if (testInfo.project.name === "desktop") {
-      const teamName = page.getByRole("textbox", { name: "チーム名", exact: true });
       const initialCategory = page.getByRole("combobox", { name: "最初に表示するToDoカテゴリー" });
-      const checkUpdate = page.getByRole("button", { name: "アップデートを確認" });
       await expect(initialCategory).toBeEnabled();
-      await teamName.focus();
-      await page.keyboard.press("Shift+Tab");
-      await expect(checkUpdate).toBeFocused();
-      await page.keyboard.press("Shift+Tab");
+      await select.focus();
+      await page.keyboard.press("Tab");
       await expect(initialCategory).toBeFocused();
-      await page.keyboard.press("Shift+Tab");
-      const themePreference = page.getByRole("radio", { name: "システム", exact: true });
-      await expect(themePreference).toBeChecked();
-      await expect(themePreference).toBeFocused();
       await page.keyboard.press("Shift+Tab");
       await expect(select).toBeFocused();
-      await page.keyboard.press("Tab");
-      await expect(themePreference).toBeFocused();
-      await page.keyboard.press("Tab");
-      await expect(initialCategory).toBeFocused();
-      await page.keyboard.press("Tab");
-      await expect(checkUpdate).toBeFocused();
-      await page.keyboard.press("Tab");
-      await expect(teamName).toBeFocused();
     }
     await chooseDelay(1);
     await chooseDelay(2);
     await chooseDelay(5);
     await page.reload();
+    await selectSettingsCategory(page, "ToDo");
     await expect(select).toHaveValue("5000");
     await expect(page.getByText("別の端末やブラウザーには引き継がれません。")).toBeVisible();
     expect(
@@ -464,6 +520,7 @@ test(
       await authenticate(otherContext, todoDelayToken);
       const otherPage = await otherContext.newPage();
       await otherPage.goto("/settings");
+      await selectSettingsCategory(otherPage, "ToDo");
       await expect(otherPage.getByRole("combobox", { name: "ToDo完了の取り消し猶予" })).toHaveValue(
         "3000",
       );
@@ -496,8 +553,10 @@ test(
     await page.waitForTimeout(5_100);
     expect(completions).toBe(0);
     await page.goto("/settings");
+    await selectSettingsCategory(page, "ToDo");
     await chooseDelay(1);
     await page.reload();
+    await selectSettingsCategory(page, "ToDo");
     await expect(select).toHaveValue("1000");
     for (const [route, name] of [
       ["ホーム", "猶予検証ホーム"],
@@ -2491,6 +2550,7 @@ test(
       },
     ]);
     await page.goto("/settings");
+    await selectSettingsCategory(page, "表示");
     await expect(page.getByRole("radio", { name: "システム", exact: true })).toBeChecked();
     await page.emulateMedia({ colorScheme: "light" });
     await expect(page.locator("body")).toHaveCSS("background-color", "rgb(246, 244, 239)");
@@ -2501,6 +2561,7 @@ test(
       "rgb(35, 39, 35)",
     );
     await page.reload();
+    await selectSettingsCategory(page, "表示");
     await expect(page.getByRole("radio", { name: "ダーク", exact: true })).toBeChecked();
     await page.screenshot({
       path: testInfo.outputPath("theme-settings-dark.png"),
@@ -2564,10 +2625,12 @@ test(
     });
     await assist.getByRole("button", { name: "アシストを閉じる" }).click();
     await page.goto("/settings");
+    await selectSettingsCategory(page, "表示");
     await page.emulateMedia({ colorScheme: "dark" });
     await page.getByText("ライト", { exact: true }).click();
     await expect(page.locator("body")).toHaveCSS("background-color", "rgb(246, 244, 239)");
     await page.reload();
+    await selectSettingsCategory(page, "表示");
     await expect(page.getByRole("radio", { name: "ライト", exact: true })).toBeChecked();
     await page.screenshot({
       path: testInfo.outputPath("theme-settings-light.png"),
@@ -2576,6 +2639,7 @@ test(
     });
     const other = await context.newPage();
     await other.goto("/settings");
+    await selectSettingsCategory(other, "表示");
     await expect(other.getByRole("radio", { name: "ライト", exact: true })).toBeChecked();
     await page.getByRole("radio", { name: "ライト", exact: true }).focus();
     await page.keyboard.press("ArrowLeft");

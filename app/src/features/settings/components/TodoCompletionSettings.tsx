@@ -1,21 +1,16 @@
 import { useAtom } from "jotai";
 import { useId, useState } from "react";
-import type { ReactNode } from "react";
 import { todoCompletionDelayAtom } from "../../../shared/state/todoCompletionDelay";
-import { PAGE_SECTION_CHROMELESS_CLASS_NAME } from "../../../shared/styles/pageSection";
 
-export function TodoCompletionSettings({ children }: { children?: ReactNode }) {
+export function TodoCompletionSettings() {
   const [delayMs, setDelayMs] = useAtom(todoCompletionDelayAtom);
   const [saveFailed, setSaveFailed] = useState(false);
   const inputId = useId();
   const descriptionId = useId();
 
   return (
-    <article
-      className={`rounded-xl px-0 py-2.5 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
-    >
-      <h2 className="text-base font-semibold text-heading">このブラウザーの設定</h2>
-      <div className="mt-3 grid min-w-0 gap-2">
+    <section>
+      <div className="grid min-w-0 gap-2">
         <label htmlFor={inputId} className="text-sm font-medium text-body">
           ToDo完了の取り消し猶予
         </label>
@@ -24,7 +19,7 @@ export function TodoCompletionSettings({ children }: { children?: ReactNode }) {
           value={delayMs}
           aria-describedby={descriptionId}
           onChange={(event) => setSaveFailed(!setDelayMs(Number(event.currentTarget.value)))}
-          className="h-10 min-w-0 rounded-lg border border-line-strong bg-surface px-3 py-2 text-sm sm:h-11"
+          className="min-h-11 min-w-0 rounded-lg border border-line-strong bg-surface px-3 py-2 text-base sm:text-sm"
         >
           {[1, 2, 3, 4, 5].map((seconds) => (
             <option key={seconds} value={seconds * 1_000}>
@@ -43,7 +38,6 @@ export function TodoCompletionSettings({ children }: { children?: ReactNode }) {
           </p>
         ) : null}
       </div>
-      {children}
-    </article>
+    </section>
   );
 }

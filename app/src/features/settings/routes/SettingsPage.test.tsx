@@ -141,6 +141,22 @@ describe("SettingsPage", () => {
     cleanup();
   });
 
+  it("keeps unsaved profile and team fields when switching categories", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+    await user.type(await screen.findByRole("textbox", { name: "ニックネーム" }), "編集中の名前");
+    await user.click(screen.getByRole("button", { name: /^チーム/ }));
+    const teamName = screen.getByRole("textbox", { name: "チーム名" });
+    await user.clear(teamName);
+    await user.type(teamName, "編集中のチーム");
+    await user.click(screen.getByRole("button", { name: /^プロフィール/ }));
+    expect(screen.getByRole("textbox", { name: "ニックネーム" })).toHaveValue("編集中の名前");
+    await user.click(screen.getByRole("button", { name: /^チーム/ }));
+    expect(screen.getByRole("textbox", { name: "チーム名" })).toHaveValue("編集中のチーム");
+    expect(mockPatchMeNickname).not.toHaveBeenCalled();
+    expect(mockPatchTeamCurrent).not.toHaveBeenCalled();
+  });
+
   it("does not fetch me on settings page render", async () => {
     render(
       <AppProviders>
@@ -195,6 +211,8 @@ describe("SettingsPage", () => {
       );
       const user = userEvent.setup();
       renderWithProviders(<SettingsPage />);
+      if (label === "チーム名")
+        await user.click(await screen.findByRole("button", { name: /^チーム/ }));
       const input = await screen.findByRole("textbox", { name: label });
       const field = input.parentElement!;
       await user.clear(input);
@@ -220,6 +238,7 @@ describe("SettingsPage", () => {
   it("discards a team-name draft when moving to another team with the same name", async () => {
     const user = userEvent.setup();
     const { rerender } = renderWithProviders(<SettingsPage />);
+    await user.click(await screen.findByRole("button", { name: /^チーム/ }));
     const input = await screen.findByRole("textbox", { name: "チーム名" });
     await user.clear(input);
     await user.type(input, "編集中");
@@ -244,6 +263,7 @@ describe("SettingsPage", () => {
       </AppProviders>,
     );
 
+    await user.click(await screen.findByRole("button", { name: /^チーム/ }));
     await user.click(await screen.findByRole("button", { name: "招待コードを発行" }));
 
     await waitFor(() => {
@@ -279,7 +299,7 @@ describe("SettingsPage", () => {
     );
 
     const accountHeading = await screen.findByRole("heading", {
-      name: "アカウント設定",
+      name: "プロフィール",
     });
     const accountCard = accountHeading.closest("article");
     if (accountCard == null) {
@@ -344,7 +364,7 @@ describe("SettingsPage", () => {
     );
 
     const accountHeading = await screen.findByRole("heading", {
-      name: "アカウント設定",
+      name: "プロフィール",
     });
     const accountCard = accountHeading.closest("article");
     if (accountCard == null) {

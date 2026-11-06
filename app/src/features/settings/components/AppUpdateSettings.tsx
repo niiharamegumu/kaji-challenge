@@ -25,13 +25,16 @@ export function AppUpdateSettings() {
   }
 
   return (
-    <section className="mt-5 space-y-2">
+    <section className="space-y-3">
       <h3 className="text-sm font-medium text-body">アプリの更新</h3>
+      <p className="text-sm leading-relaxed text-secondary">
+        最新バージョンを確認して、新しい機能や改善を受け取れます。
+      </p>
       <button
         type="button"
         disabled={checking}
         onClick={() => void check()}
-        className="min-h-11 rounded-lg border border-line-strong bg-surface px-3 py-2 text-sm text-body hover:bg-surface-muted disabled:opacity-60"
+        className="min-h-11 cursor-pointer rounded-lg border border-line-strong bg-surface px-3 py-2 text-sm text-body transition-colors hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-60"
       >
         アップデートを確認
       </button>
