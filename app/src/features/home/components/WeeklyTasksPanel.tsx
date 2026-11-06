@@ -149,7 +149,7 @@ export function WeeklyTasksPanel({
                   </div>
                   <button
                     type="button"
-                    className="absolute inset-y-0 left-0 z-20 w-1/2 touch-manipulation rounded-l-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-matcha-500)] focus-visible:ring-offset-2 disabled:cursor-not-allowed"
+                    className="absolute inset-y-0 left-0 z-20 w-1/2 touch-manipulation rounded-l-xl disabled:cursor-not-allowed"
                     onClick={() => onDecrement(item.task.id)}
                     disabled={item.weekCompletedCount <= 0 || pendingTasks.has(item.task.id)}
                     aria-busy={pendingTasks.has(item.task.id)}
@@ -157,7 +157,7 @@ export function WeeklyTasksPanel({
                   />
                   <button
                     type="button"
-                    className="absolute inset-y-0 right-0 z-20 w-1/2 touch-manipulation rounded-r-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-matcha-500)] focus-visible:ring-offset-2 disabled:cursor-not-allowed"
+                    className="absolute inset-y-0 right-0 z-20 w-1/2 touch-manipulation rounded-r-xl disabled:cursor-not-allowed"
                     onClick={() => onIncrement(item.task.id)}
                     disabled={
                       item.weekCompletedCount >= item.requiredCompletionsPerWeek ||
