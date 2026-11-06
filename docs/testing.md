@@ -172,6 +172,8 @@ state/DOMの更新だけではCPU処理中の描画を証明しない。音声�
 
 ## 表示モード
 
+フォーカス時は全体のoutlineを共通CSSで無効化し、focus専用のring・border色変更を追加しない。E2Eでdesktop/mobile・light/darkのログイン、設定入力と選択済みテーマ、共有ページ、アシストをフォーカスし、通常の境界線・カードのring・影が維持され、追加の枠が出ないことを確認する。独立したMCP認可HTMLでも枠を表示せず、既存のTab・Space・Enter操作を維持する。
+
 `ThemeSettings.test.tsx` は初期システム設定、明示選択と再mount、OS変更、別タブ変更/削除/clear、不正保存値、storage例外、保存失敗後の現在値維持と再試行、SSRでの未読込と購読解除を検証する。headスクリプトとReactの初期化結果も比較する。
 
 E2Eの `@theme` はdesktop/mobileでOS追従、明示ライト/ダーク、再読込、別タブ同期、ログインと主要全画面・カレンダー・フォーム・アシストの配色を確認し画像を保存する。外部JavaScriptを遮断しても保存済みモードが起動表示へ適用されることを確認する。CSSだけの変更にAPI/DBの新規テストは追加しない。iPhone実機Safari/PWAのOSスプラッシュ表示はローカルChromium検証に含めない。
