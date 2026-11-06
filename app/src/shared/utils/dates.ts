@@ -13,7 +13,7 @@ const dateLabelFormatter = new Intl.DateTimeFormat("ja-JP", {
 });
 
 export function formatDateLabel(dateKey: string) {
-  return dateLabelFormatter.format(new Date(`${dateKey}T00:00:00Z`));
+  return dateLabelFormatter.format(parseDateKey(dateKey));
 }
 
 export function monthStartDateKey(monthKey: string) {
@@ -34,3 +34,29 @@ export const dateStringInJST = (date: Date = new Date()) => {
     parts.find((part) => part.type === type)?.value ?? "";
   return `${getPart("year")}-${getPart("month")}-${getPart("day")}`;
 };
+
+export function endOfWeekDateKey(dateKey: string) {
+  const date = parseDateKey(dateKey);
+  const weekday = date.getUTCDay();
+  const delta = weekday === 0 ? 0 : 7 - weekday;
+  date.setUTCDate(date.getUTCDate() + delta);
+  return formatDateKey(date);
+}
+
+// Date-only keys are calendar dates, not instants. Use UTC fields to avoid device/DST shifts.
+export function parseDateKey(dateKey: string) {
+  return new Date(`${dateKey}T00:00:00Z`);
+}
+
+export function formatDateKey(date: Date) {
+  return [
+    String(date.getUTCFullYear()).padStart(4, "0"),
+    String(date.getUTCMonth() + 1).padStart(2, "0"),
+    String(date.getUTCDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+export function formatMonthLabel(monthKey: string) {
+  const [yearPart, monthPart] = monthKey.split("-");
+  return `${yearPart}年${monthPart}月`;
+}
