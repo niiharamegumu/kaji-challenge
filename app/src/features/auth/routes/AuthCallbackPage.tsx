@@ -48,7 +48,7 @@ export function AuthCallbackPage() {
           </p>
           <a
             href="/"
-            className="mt-8 inline-flex min-h-11 items-center justify-center rounded-lg bg-action px-5 py-2 text-sm font-semibold text-on-action hover:bg-action-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+            className="mt-8 inline-flex min-h-11 items-center justify-center rounded-lg bg-action px-5 py-2 text-sm font-semibold text-on-action hover:bg-action-hover"
           >
             ログイン画面に戻る
           </a>
