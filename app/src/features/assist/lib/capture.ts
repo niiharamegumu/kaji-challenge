@@ -4,7 +4,7 @@ import { assistAudio } from "../../../contracts/assist";
 type Callbacks = {
   onRecording: () => void;
   onAudio: (audio: CapturedAudio, limited?: boolean) => void;
-  onStop: (message: string, reason: "idle" | "error") => void;
+  onStop: (message: string) => void;
 };
 type AudioResources = {
   context: AudioContext;
@@ -56,33 +56,29 @@ export function createCapture(callbacks: Callbacks) {
   let stream: MediaStream | undefined;
   let detector: SpeechDetector | undefined;
   let receivedSamples = 0;
-  let idleTimer: ReturnType<typeof setTimeout> | undefined;
+  let durationTimer: ReturnType<typeof setTimeout> | undefined;
   let finishing = false;
   let finished: ((sampleCount: number) => void) | undefined;
   let started: (() => void) | undefined;
   let starting: Promise<void> | undefined;
   let audio: AudioResources;
-  const disable = () => {
-    listening = false;
-    detector = undefined;
-    audio.node?.port.postMessage({ type: "cancel" });
-    clearTimeout(idleTimer);
-    stream?.getTracks().forEach((track) => {
-      track.enabled = false;
-    });
-  };
   const stop = () => {
     if (closed) return;
     closed = true;
     lifetime.abort();
-    disable();
+    clearTimeout(durationTimer);
+    detector = undefined;
+    audio.node?.port.postMessage({ type: "cancel" });
     disposeAudio(audio);
-    stream?.getTracks().forEach((track) => track.stop());
+    stream?.getTracks().forEach((track) => {
+      track.enabled = false;
+      track.stop();
+    });
   };
-  const stopWithReason = (message: string, reason: "idle" | "error" = "error") => {
+  const stopWithReason = (message: string) => {
     if (closed) return;
     stop();
-    callbacks.onStop(message, reason);
+    callbacks.onStop(message);
   };
   const openAudio = (): AudioResources => {
     const current: AudioResources = { context: new AudioContext(), disposed: false };
@@ -136,7 +132,7 @@ export function createCapture(callbacks: Callbacks) {
   const send = async (limited = false) => {
     if (closed || !listening || finishing) return;
     finishing = true;
-    clearTimeout(idleTimer);
+    clearTimeout(durationTimer);
     try {
       // Port messages are ordered: consume queued PCM and the final partial block first.
       const sampleCount = await bounded(
@@ -235,7 +231,6 @@ export function createCapture(callbacks: Callbacks) {
   return {
     ready,
     stop,
-    disable,
     send,
     listen() {
       if (starting) return starting;
@@ -244,17 +239,11 @@ export function createCapture(callbacks: Callbacks) {
         try {
           await ready;
           lifetime.signal.throwIfAborted();
-          // SpeechSynthesis can interrupt Safari's audio session while input is disabled.
+          // The context can be interrupted between preparation and the first input.
           if (audio.context.state !== "running") await prepareWithRecovery();
           lifetime.signal.throwIfAborted();
           detector = new SpeechDetector(audio.context.sampleRate);
-          receivedSamples = 0;
           listening = true;
-          finishing = false;
-          stream?.getTracks().forEach((track) => {
-            track.enabled = true;
-          });
-          clearTimeout(idleTimer);
           await bounded(
             new Promise<void>((resolve) => {
               started = resolve;
@@ -265,7 +254,7 @@ export function createCapture(callbacks: Callbacks) {
             lifetime.signal,
           );
           lifetime.signal.throwIfAborted();
-          idleTimer = setTimeout(() => {
+          durationTimer = setTimeout(() => {
             void send(true);
           }, assistAudio.maxSeconds * 1000);
         } catch (error) {

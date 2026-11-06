@@ -298,12 +298,10 @@ it("ignores a late worklet load and never retries after closing", async () => {
   expect(fixture.track.stop).toHaveBeenCalledOnce();
 });
 
-it("resumes audio interrupted during a reply before enabling the microphone", async () => {
+it("resumes audio interrupted between preparation and the start of recording", async () => {
   const fixture = setup();
   const capture = fixture.start();
   await capture.ready;
-  await capture.listen();
-  capture.disable();
   const context = fixture.contexts[0];
   context.state = "suspended";
   context.stateChanged?.();
@@ -315,7 +313,7 @@ it("resumes audio interrupted during a reply before enabling the microphone", as
     }),
   );
   const listening = capture.listen();
-  expect(fixture.track.enabled).toBe(false);
+  expect(fixture.track.stop).not.toHaveBeenCalled();
   resumed.resolve();
   await listening;
   expect(fixture.track.enabled).toBe(true);
@@ -423,10 +421,7 @@ it.each([1, 120])(
     await capture.send();
     await vi.advanceTimersByTimeAsync(0);
     expect(fixture.callbacks.onAudio).not.toHaveBeenCalled();
-    expect(fixture.callbacks.onStop).toHaveBeenCalledWith(
-      expect.stringContaining("録音の一部"),
-      "error",
-    );
+    expect(fixture.callbacks.onStop).toHaveBeenCalledWith(expect.stringContaining("録音の一部"));
     expect(fixture.track.stop).toHaveBeenCalledOnce();
   },
 );
@@ -453,9 +448,6 @@ it("bounds a missing flush acknowledgement without sending incomplete audio", as
   await vi.advanceTimersByTimeAsync(1500);
   await stopping;
   expect(fixture.callbacks.onAudio).not.toHaveBeenCalled();
-  expect(fixture.callbacks.onStop).toHaveBeenCalledWith(
-    expect.stringContaining("停止できません"),
-    "error",
-  );
+  expect(fixture.callbacks.onStop).toHaveBeenCalledWith(expect.stringContaining("停止できません"));
   expect(fixture.track.stop).toHaveBeenCalledOnce();
 });

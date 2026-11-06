@@ -2,7 +2,8 @@ import { afterAll, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import { sql } from "drizzle-orm";
 import { provisionUser } from "../../src/server/application/provision-user";
 import { createTestDatabase } from "../helpers/d1";
-import { encodeWav, wavBase64 } from "../../src/features/assist/lib/audio";
+import { encodeWav } from "../../src/features/assist/lib/audio";
+import { wavBase64 } from "../helpers/audio";
 import { assistLimits } from "../../src/contracts/assist";
 import type { RuntimeBindings } from "../../src/server/transport/runtime.server";
 const mocks = vi.hoisted(() => ({

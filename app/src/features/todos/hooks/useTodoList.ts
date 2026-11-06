@@ -20,6 +20,7 @@ import {
 import { isApiRequestError } from "../../../lib/api/api-client-state";
 import { queryKeys } from "../../../shared/query/queryKeys";
 import { formatError } from "../../../shared/utils/errors";
+import { reorderItems } from "../../../shared/utils/reorderItems";
 
 type StatusSetter = (message: string) => void;
 export const createTodoItemMutationKey = ["todo-create"];
@@ -64,21 +65,11 @@ export function useOptimisticTodoItems(items: TodoItem[]) {
             : item;
         });
   const order = orders.at(-1);
-  if (order) {
-    const byId = new Map(result.map((item) => [item.id, item]));
-    const ordered = order.itemIds.flatMap((id) => {
-      const item = byId.get(id);
-      return item ? [item] : [];
-    });
-    const ids = new Set(order.itemIds);
-    let index = 0;
-    // 並べ替え中に追加された項目の位置は保持し、削除された項目は復活させない。
-    result = result.map((item) => (ids.has(item.id) ? ordered[index++] : item));
-  }
+  if (order) result = reorderItems(result, order.itemIds);
   return removed.size === 0 ? result : result.filter((item) => !removed.has(item.id));
 }
 
-export function usePendingTodoRemovals() {
+function usePendingTodoRemovals() {
   return useMutationState({
     filters: { mutationKey: removeMutationKey, status: "pending" },
     select: (mutation) => mutation.state.variables as string,
@@ -159,7 +150,7 @@ export function useTodoItemMutations(setStatus: StatusSetter) {
     },
   });
 
-  const reorderItems = useMutation({
+  const reorderMutation = useMutation({
     mutationKey: reorderMutationKey,
     onMutate: () => queryClient.cancelQueries({ queryKey: queryKeys.todoItems }),
     mutationFn: async (payload: ReorderTodoItemsRequest) => {
@@ -194,10 +185,15 @@ export function useTodoItemMutations(setStatus: StatusSetter) {
     },
   });
 
+  const reorder: typeof reorderMutation.mutate = (payload, options) => {
+    if (queryClient.isMutating({ mutationKey: reorderMutationKey }) > 0) return;
+    reorderMutation.mutate(payload, options);
+  };
+
   return {
     createItem,
     updateItem,
     removeItem,
-    reorderItems: { ...reorderItems, isPending: isReordering },
+    reorderItems: { mutate: reorder, isPending: isReordering },
   };
 }

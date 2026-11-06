@@ -12,57 +12,25 @@ import {
 } from "../../../shared/query/monthlyPenaltyQueries";
 import { queryKeys } from "../../../shared/query/queryKeys";
 import { PAGE_SECTION_CHROMELESS_CLASS_NAME } from "../../../shared/styles/pageSection";
-import { dateStringInJST } from "../../../shared/utils/dates";
+import {
+  dateStringInJST,
+  endOfWeekDateKey,
+  formatMonthLabel,
+  parseDateKey,
+} from "../../../shared/utils/dates";
+import { resolveSummaryMonth } from "../../../shared/router/dateParams";
+import { summaryMonthSchema } from "../../../contracts/operations";
 import { formatError } from "../../../shared/utils/errors";
 import { closeMonth as closeMonthRequest, useMonthCloseCandidate } from "../../month-close";
 import { PastTaskCompletionControl } from "../components/PastTaskCompletionControl";
 import { usePastTaskCompletion } from "../hooks/usePastTaskCompletion";
 
-const monthPattern = /^\d{4}-\d{2}$/;
-
-const initialMonth = () => dateStringInJST().slice(0, 7);
+const weekdayFormatter = new Intl.DateTimeFormat("ja-JP", { timeZone: "UTC", weekday: "short" });
 
 const addMonth = (month: string, delta: number) => {
-  const [yearPart, monthPart] = month.split("-");
-  const year = Number(yearPart);
-  const monthIndex = Number(monthPart) - 1;
-  if (Number.isNaN(year) || Number.isNaN(monthIndex)) {
-    return month;
-  }
-  const d = new Date(Date.UTC(year, monthIndex + delta, 1));
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-};
-
-const formatMonthLabel = (month: string) => {
-  const [yearPart, monthPart] = month.split("-");
-  if (yearPart == null || monthPart == null) {
-    return month;
-  }
-  return `${yearPart}年${monthPart}月`;
-};
-
-const dateFromDateKey = (dateKey: string) => {
-  const [yearPart, monthPart, dayPart] = dateKey.split("-");
-  const year = Number(yearPart);
-  const month = Number(monthPart);
-  const day = Number(dayPart);
-  if (Number.isNaN(year) || Number.isNaN(month) || Number.isNaN(day)) {
-    return new Date(`${dateKey}T00:00:00Z`);
-  }
-  return new Date(Date.UTC(year, month - 1, day));
-};
-
-const weekEndDateKey = (dateKey: string) => {
-  const [yearPart, monthPart, dayPart] = dateKey.split("-");
-  const year = Number(yearPart);
-  const month = Number(monthPart);
-  const day = Number(dayPart);
-  if (Number.isNaN(year) || Number.isNaN(month) || Number.isNaN(day)) {
-    return dateKey;
-  }
-  const date = new Date(Date.UTC(year, month - 1, day));
-  date.setUTCDate(date.getUTCDate() + ((7 - date.getUTCDay()) % 7));
-  return date.toISOString().slice(0, 10);
+  const date = parseDateKey(`${month}-01`);
+  date.setUTCMonth(date.getUTCMonth() + delta);
+  return date.toISOString().slice(0, 7);
 };
 
 export function SummaryPage() {
@@ -72,9 +40,8 @@ export function SummaryPage() {
   const monthPickerRef = useRef<HTMLDivElement>(null);
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
   const [status, setStatus] = useState("");
-  const monthFromUrl = searchParams.get("month");
-  const month =
-    monthFromUrl != null && monthPattern.test(monthFromUrl) ? monthFromUrl : initialMonth();
+  const currentDateKey = dateStringInJST();
+  const month = resolveSummaryMonth(searchParams.get("month"), currentDateKey);
 
   const [summary, rules] = useSuspenseQueries({
     queries: [monthlyPenaltySummaryQueryOptions(month), penaltyRulesWithDeletedQueryOptions],
@@ -91,7 +58,6 @@ export function SummaryPage() {
   const monthCloseCandidate = useMonthCloseCandidate();
   const closeCandidate = monthCloseCandidate.data?.candidate;
   const monthlyTaskStatusGroups = summaryData.taskStatusByDate;
-  const currentDateKey = dateStringInJST();
 
   const closeRequested = searchParams.get("close") === "1" && closeCandidate?.month === month;
   const clearCloseRequest = () => {
@@ -125,7 +91,7 @@ export function SummaryPage() {
   });
 
   const updateMonth = (nextMonth: string) => {
-    if (!monthPattern.test(nextMonth) || nextMonth === month) {
+    if (!summaryMonthSchema.safeParse(nextMonth).success || nextMonth === month) {
       return;
     }
     startTransition(() => {
@@ -144,7 +110,7 @@ export function SummaryPage() {
   const yearOptions = Array.from({ length: 7 }, (_, index) => currentYear - 3 + index);
 
   const selectYearMonth = (year: number, monthNumber: number) => {
-    updateMonth(`${year}-${String(monthNumber).padStart(2, "0")}`);
+    updateMonth(`${String(year).padStart(4, "0")}-${String(monthNumber).padStart(2, "0")}`);
   };
 
   useEffect(() => {
@@ -318,11 +284,8 @@ export function SummaryPage() {
           ) : (
             <div className="mt-2 space-y-3">
               {monthlyTaskStatusGroups.map((group) => {
-                const date = dateFromDateKey(group.date);
-                const weekday = new Intl.DateTimeFormat("ja-JP", {
-                  timeZone: "UTC",
-                  weekday: "short",
-                }).format(date);
+                const date = parseDateKey(group.date);
+                const weekday = weekdayFormatter.format(date);
                 const isCrossMonthWeek = date.getUTCDay() !== 1;
 
                 return (
@@ -346,7 +309,7 @@ export function SummaryPage() {
                         const canAdjustPastDaily =
                           group.date < currentDateKey && item.type === "daily";
                         const canAdjustPastWeekly =
-                          item.type === "weekly" && weekEndDateKey(group.date) < currentDateKey;
+                          item.type === "weekly" && endOfWeekDateKey(group.date) < currentDateKey;
                         return (
                           <li
                             key={`${group.date}-${item.taskId}`}

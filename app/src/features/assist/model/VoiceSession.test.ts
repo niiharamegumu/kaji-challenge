@@ -34,7 +34,6 @@ describe("explicit dictation and submission", () => {
     capture = {
       ready: Promise.resolve(),
       listen: vi.fn(),
-      disable: vi.fn(),
       stop: vi.fn(),
       send: vi.fn(async () => {
         callbacks.onAudio(audio);
@@ -268,7 +267,7 @@ describe("explicit dictation and submission", () => {
       session.close();
       session.start();
       old.onAudio(audio);
-      old.onStop("old", "error");
+      old.onStop("old");
       expect(session.getSnapshot().phase).toBe("idle");
     }
     expect(transcribe).toHaveBeenCalledTimes(3);

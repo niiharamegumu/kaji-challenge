@@ -2,7 +2,7 @@ import type { TodoCategory } from "../contracts/models";
 
 // Stable IDs for fixture lookup only. Production code never derives identity from a name.
 const categories = new Map<string, TodoCategory>();
-export function categoryFixture(name: string): TodoCategory {
+function categoryFixture(name: string): TodoCategory {
   const existing = categories.get(name);
   if (existing) return existing;
   const category = { id: crypto.randomUUID(), name };

@@ -40,7 +40,6 @@ Applicationは応答前にも認証と期待する所属を再確認し、所属
 
 集計・履歴のSQLも個別に否定テストへ登録する：
 
-- GetTaskCompletionWeeklyEntryCount、HasTaskCompletionDaily
 - ListTaskCompletionDailyByMonthAndTeam、ListTaskCompletionDailyByTeamAndDate
 - ListTaskCompletionWeeklyCountsByTeamAndWeek、ListTaskCompletionWeeklySlotsByMonthAndTeam、ListTaskCompletionWeeklySlotsByTeamAndWeek
 - GetEarliestTaskCreatedAtByTeam、ListTasksEffectiveForCloseByTeamAndType、ListTasksForMonthlyStatusByTeam
@@ -54,7 +53,7 @@ Applicationは応答前にも認証と期待する所属を再確認し、所属
 - `GetInviteCode` は参加先の有効な招待を提示する操作。現在チーム以外の招待を一覧取得するAPIはなく、招待コード照合とMoveMember内の再検査を通す。所属変更後に通常業務でアクセスできるのは新しいチームだけ。
 - `MoveMember` のowner引継ぎは移動前の有効な所属で検査する。直後の空チーム削除は、同じbatchで所属UPDATEが成功した場合に限定する。SQLiteの標準 [changes()](https://www.sqlite.org/lang_corefunc.html#changes) と [D1 batch](https://developers.cloudflare.com/d1/worker-api/d1-database/#batch) を使用し、失敗時・最後のメンバーの正常移動を実D1 fixtureで検証する。
 - Push再登録の旧レコード整理は、本人の同じendpointの非アクティブ購読だけを対象とする。現在チームでの登録認可と同じbatchで行い、他人の購読・他チームのアクティブ購読は整理しない。旧チームの購読を通常の一覧/ID指定削除で操作することはできない。
-- `ListTeamIDsForClose`、`ListTeamIDsForPush`、`ListActivePushSubscriptionsByTeamID`、`DeactivatePushSubscriptionByEndpoint`、`ClosePeriod` はtrusted Cron専用、`ProvisionUser` は認証hook専用、`DeleteTeam` はfixture cleanup用。これらは認証済み/所属付きRepositoryからの呼出を403で拒否する。`DeleteExpiredOneTimeRemindersByTeam` は対象teamの条件を保持する。
+- `ListTeamIDsForClose`、`ListTeamIDsForPush`、`ListActivePushSubscriptionsByTeamID`、`DeactivatePushSubscriptionByEndpoint`、`ClosePeriod` はtrusted Cron専用、`ProvisionUser` は認証hook専用。これらは認証済み/所属付きRepositoryからの呼出を403で拒否する。`DeleteExpiredOneTimeRemindersByTeam` は対象teamの条件を保持する。
 - Push配送のclaimは、購読ID・team/user・endpoint/鍵・有効性・現在所属をSQLで照合する。finishはそのclaimを照合する。これらはCron専用の配信台帳で、ユーザーの業務更新APIではない。
 - Better Authのuser/account/session/rate limit、MCP connection/consent/grantは本人・認証主体のデータでありteamIdを後付けしない。既存の本人/所有者/セッション/nonce検証を保持する。MCPの管理操作がチーム業務SQLを迂回する経路は作らない。
 - MCP管理画面の失効フォームは、認証済みセッションから本人・セッション・接続IDに結び付いたclaimを生成し、一括保存する。同じD1 batchでDBの実時計を過ぎたclaimだけを削除する。期限内の未使用/使用済みclaimや他セッションの画面は保持し、KV失効の再実行に必要な接続履歴も削除しない。

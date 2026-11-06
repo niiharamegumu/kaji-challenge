@@ -73,7 +73,7 @@ Git除外には環境ファイル・状態・DB・鍵・HAR・SQLダンプを含
 
 業務日付はJST、保存する時刻はUTCのISO 8601文字列、対象日・対象月は日付文字列として扱う。ブラウザーやコンテナの既定timezoneに依存させない。日付のみの計算にはUTCフィールドを用い、現在時刻を日付に変換するときはAsia/Tokyoを明示する。
 
-`tests/e2e/application.spec.ts` はUTC・Los Angeles・Aucklandのブラウザーで、UTCと日本で日付・月が異なる時刻のヘッダー・集計月・カレンダーの今日とセルを確認する。日付utilityと招待期限のテストは `TZ=UTC` / `TZ=America/Los_Angeles` / `TZ=Pacific/Auckland` を付けたVitestでも実行できる。これはテスト時の環境変更で、配備にTZ環境変数を要求するものではない。
+`tests/e2e/application.spec.ts` はUTC・Los Angeles・Aucklandのブラウザーで、UTCと日本で日付・月が異なる時刻のヘッダー・集計月・カレンダーの今日とセルを確認する。日付utilityと招待期限のテストは `TZ=UTC` / `TZ=America/Los_Angeles` / `TZ=Pacific/Auckland` を付けたVitestでも実行できる。これはテスト時の環境変更で、配備にTZ環境変数を要求するものではない。カレンダーと集計画面では、存在しない日付やAPIの対象外の月がURLに指定された場合に、日本時間の今日・当月へ戻ることを画面と先読みの両方で確認する。
 
 `user-schema.test.ts` は0001→0002→0003→0004でrevision列/テーブルを撤去し、0005でToDoへ移行し、業務データを保持すること、認証日時・nullable期限・Push配信日時のISO変換とミリ秒精度を検証する。セッション期限での絞り込み、期限切れOAuth stateの削除、rate limitの加算・429・期間経過後の解除も実Better Auth/D1で確認する。`push.test.ts` はISO形式のlease比較・再取得・成功後再送抑止を検証する。
 
@@ -123,7 +123,7 @@ MCP claimの一括保存は125件でD1のbind上限を超えず1つのbatchで�
 
 `App.test.tsx` は起動時に全画面コードやホーム外のホームデータを先読みしないこと、認証後に現在画面とsearchに対応する取得を開始すること、操作時の先読みと失敗後の再試行を確認する。`route-preload.test.ts` は画面moduleの読み込み待ちを挟まない並列取得、URLの集計月・予定日、実行中通信と新鮮なキャッシュの共有、先読み失敗後の再試行、キャンセル後の旧データ破棄、ログアウト・所属変更後の旧データ破棄を確認する。カレンダーのhookテストは定義の応答を保留しても発生日取得が始まること、月移動時に直前の結果を保持することを確認する。`teamStateRefresh.test.ts` と `useTeamRealtime.test.tsx` はToDo変更時に無関係なQueryを無効化しないこと、通知範囲の重複除去、保存中の集約、旧形式と再接続時の全体同期を確認する。サーバー側はoperationと通知範囲の網羅、D1保存後の通知、認可済み接続だけへの範囲付き配信を検証する。
 
-`todoFeedback.test.tsx` は応答前の編集/並べ替え、画面の再mountでの共有、部分失敗、別操作の追加/編集/完了を遅い並べ替え応答で消さないことを確認する。E2Eでは保存リクエストを保留した状態でToDoからホームへ移動し、順序の即時共有・失敗後の復元・再試行とリロード後の保存をdesktop/mobileで検証する。
+`todoFeedback.test.tsx` は応答前の編集/並べ替え、画面の再mountでの共有、描画前の並べ替え二重送信の抑止、部分失敗、別操作の追加/編集/完了を遅い並べ替え応答で消さないことを確認する。E2Eでは保存リクエストを保留した状態でToDoからホームへ移動し、順序の即時共有・失敗後の復元・再試行とリロード後の保存をdesktop/mobileで検証する。
 
 `reminder-period.test.ts` は実D1で期間に重ならない予定の除外、開始/終了日の包含、期限切れ単発予定と繰り返し予定の区別、別チーム分離を確認する。取得行数の減少は検証するが、本番D1のレイテンシ改善率としては扱わない。
 
@@ -160,7 +160,7 @@ ToDo操作の拡張は `assist.test.ts` でカテゴリー候補の推論入力�
 
 state/DOMの更新だけではCPU処理中の描画を証明しない。音声のWAV化へ1秒のCPU負荷を入れ、即時ASR/LLM応答で送信準備中のボタンをrAFごとに観測する。変換がメインスレッドへ戻る回帰を検出するため、専用Web Workerでは描画待ちを挟まずに複数frameの更新を必須にする。WorkerのPCM転送・異常・期限・取消と、変換を直ちに開始すること、変換中に閉じた場合に後続処理を始めないことをunitで確認する。初期化は入力接続までresumeが完了しないfixtureを使い、最初のcontextで5秒期限を待たずに準備できることを確認する。実機Safariの入力状態・速度は別の受け入れ検証とする。
 
-`assist.test.ts` / `assist-transport.test.ts` は実D1とfixture AIを使い、ASRだけでは保存しない・明示送信後の追加・一覧・聞き返し、AI待機中の所属固定と失効、不正WAV/未知キー/本文上限/Origin/頻度制限を検証する。フロントの音声ライフサイクルとブラウザー検証、最初の対象であるiPhone Safari/PWAの手動受け入れは [voice-assist.md](voice-assist.md) に記載する。通常の `test:local` はAI bindingなしで起動し、実推論を行わない。実AIの認識精度・速度・費用と端末のマイク/TTSは未検証の別項目として報告する。
+`assist.test.ts` / `assist-transport.test.ts` は実D1とfixture AIを使い、ASRだけでは保存しない・明示送信後の追加・一覧・聞き返し、AI待機中の所属固定と失効、不正WAV/未知キー/本文上限/Origin/頻度制限を検証する。フロントの音声ライフサイクルとブラウザー検証、最初の対象であるiPhone Safari/PWAの手動受け入れは [voice-assist.md](voice-assist.md) に記載する。通常の `test:local` はAI bindingなしで起動し、実推論を行わない。実AIの認識精度・速度・費用と端末のマイクは未検証の別項目として報告する。
 
 `assist-budget.test.ts` は全体の60秒・UTC日・試用累計上限の同時予約と欠損時停止、`todo-batch.test.ts` は複数追加の全件保存/全件拒否・SQL時の認可・rollbackを検証する。`assist-ai.test.ts` はモデルと入力/出力の形式・上限・自動再送なしを検証する。
 

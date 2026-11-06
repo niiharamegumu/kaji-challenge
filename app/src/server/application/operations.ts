@@ -27,7 +27,7 @@ export interface OperationContext {
   now: Date;
   vapidPublicKey: string;
 }
-export function isTeamMutation(operation: Operation["operation"]) {
+function isTeamMutation(operation: Operation["operation"]) {
   return operationChanges[operation].length > 0;
 }
 const requiredText = (value: string) => {

@@ -235,6 +235,29 @@ it("shows edits before the response and rolls back only the failed edit", async 
   expect(screen.queryByRole("button", { name: "B" })).not.toBeInTheDocument();
 });
 
+it("sends only the first reorder when two drags finish before the next render", async () => {
+  const { client, items } = setup();
+  let finish!: () => void;
+  api.reorder.mockReturnValue(
+    new Promise((resolve) => {
+      finish = () => resolve({ data: { items: [items[1], items[0]] } });
+    }),
+  );
+  const { result } = renderHook(() => useTodoItemMutations(vi.fn()), {
+    wrapper: ({ children }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    ),
+  });
+  act(() => {
+    result.current.reorderItems.mutate({ itemIds: ["B", "A"] });
+    result.current.reorderItems.mutate({ itemIds: ["A", "B"] });
+  });
+  await waitFor(() => expect(api.reorder).toHaveBeenCalled());
+  expect(api.reorder.mock.calls).toEqual([[{ itemIds: ["B", "A"] }]]);
+  await act(async () => finish());
+  await waitFor(() => expect(result.current.reorderItems.isPending).toBe(false));
+});
+
 it("shares a pending reorder across remounts and restores order without losing another save", async () => {
   let rejectOrder!: (error: Error) => void;
   api.reorder.mockImplementation(

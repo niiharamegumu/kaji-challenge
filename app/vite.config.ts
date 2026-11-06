@@ -1,11 +1,11 @@
 import { injectManifest } from "workbox-build";
+import { build as bundle } from "esbuild";
 import { cloudflare } from "@cloudflare/vite-plugin";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import babel from "@rolldown/plugin-babel";
 import tailwindcss from "@tailwindcss/vite";
 import react, { reactCompilerPreset } from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
-import { VitePWA, type VitePluginPWAAPI } from "vite-plugin-pwa";
 
 const tooling = {
   lint: {
@@ -36,20 +36,6 @@ export default defineConfig(({ mode }) => {
   const testD1Path = process.env.KAJI_D1_TEST_PATH;
   const testOrigin =
     mode === "development-test" ? "http://localhost:5195" : "http://localhost:5194";
-  const pwa = VitePWA({
-    strategies: "injectManifest",
-    injectManifest: { injectionPoint: undefined },
-    srcDir: "src",
-    outDir: "dist/client",
-    filename: "sw.ts",
-    registerType: "prompt",
-    injectRegister: false,
-    includeAssets: ["app.png", "favicon.ico", "icons/apple-touch-icon-180x180.png"],
-    manifest: false,
-    devOptions: {
-      enabled: false,
-    },
-  });
 
   return {
     ...tooling,
@@ -77,23 +63,26 @@ export default defineConfig(({ mode }) => {
       react(),
       babel({ presets: [reactCompilerPreset()] }),
       tailwindcss(),
-      pwa,
       {
         name: "kaji:pwa-shell",
         enforce: "post",
         buildApp: {
           order: "post",
           async handler() {
-            // 複数Worker環境ではPWAのcloseBundleがSW生成を省略するため、
-            // SPA shell生成後に公開APIでclient向けSWをbuildしてからprecacheを確定する。
-            const pwaApi = pwa.find((plugin) => plugin.name === "vite-plugin-pwa")?.api as
-              | VitePluginPWAAPI
-              | undefined;
-            if (!pwaApi) throw new Error("Vite PWA API is unavailable");
-            await pwaApi.generateSW();
+            // Register a standalone classic worker. Its precache needs the final SPA shell.
+            const worker = "dist/client/sw.js";
+            await bundle({
+              entryPoints: ["src/sw.ts"],
+              outfile: worker,
+              bundle: true,
+              format: "iife",
+              target: "es2022",
+              minify: true,
+              sourcemap: true,
+            });
             await injectManifest({
-              swSrc: "dist/client/sw.js",
-              swDest: "dist/client/sw.js",
+              swSrc: worker,
+              swDest: worker,
               globDirectory: "dist/client",
               globPatterns: ["**/*.{js,css,html,png,ico,webmanifest}"],
               globIgnores: ["sw.js"],

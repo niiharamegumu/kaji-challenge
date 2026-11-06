@@ -5,8 +5,8 @@ import {
   formatDateLabel,
   monthEndDateKey,
   parseDateKey,
-  todayDateKey,
-} from "./date";
+  dateStringInJST,
+} from "./dates";
 
 describe("Japanese calendar dates", () => {
   it.each([
@@ -14,7 +14,7 @@ describe("Japanese calendar dates", () => {
     ["2026-03-31T15:00:00Z", "2026-04-01"],
     ["2026-12-31T15:00:00Z", "2027-01-01"],
   ])("uses the JST date for %s", (instant, expected) => {
-    expect(todayDateKey(new Date(instant))).toBe(expected);
+    expect(dateStringInJST(new Date(instant))).toBe(expected);
   });
 
   it("preserves date-only keys when formatting labels and FullCalendar cells", () => {

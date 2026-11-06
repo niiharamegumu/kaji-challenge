@@ -13,7 +13,6 @@ import { teamMembersQueryOptions } from "../../../shared/query/teamMembersQuery"
 import { extractHttpStatus, formatError } from "../../../shared/utils/errors";
 import { INVITE_CODE_EXPIRES_IN_HOURS } from "../constants/invite";
 import { currentInviteQueryOptions } from "../../../shared/query/currentInviteQuery";
-export { currentInviteQueryOptions } from "../../../shared/query/currentInviteQuery";
 
 export function useTeamSettingsQueries() {
   const [membersQuery, currentInviteQuery] = useSuspenseQueries({

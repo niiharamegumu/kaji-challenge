@@ -1,10 +1,10 @@
 import { atom } from "jotai";
 
 export const TODO_COMPLETION_DELAY_STORAGE_KEY = "kaji:todo-completion-delay-ms:v1";
-export const DEFAULT_TODO_COMPLETION_DELAY_MS = 3_000;
-export const MIN_TODO_COMPLETION_DELAY_MS = 1_000;
-export const MAX_TODO_COMPLETION_DELAY_MS = 5_000;
-export const TODO_COMPLETION_DELAY_STEP_MS = 1_000;
+const DEFAULT_TODO_COMPLETION_DELAY_MS = 3_000;
+const MIN_TODO_COMPLETION_DELAY_MS = 1_000;
+const MAX_TODO_COMPLETION_DELAY_MS = 5_000;
+const TODO_COMPLETION_DELAY_STEP_MS = 1_000;
 
 function validatedDelay(value: unknown): number {
   return typeof value === "number" &&

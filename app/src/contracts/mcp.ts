@@ -7,7 +7,6 @@ import {
 } from "./operations";
 
 export const mcpScopes = ["todos:read", "todos:write"] as const;
-export const McpScopeSchema = z.enum(mcpScopes);
 export const mcpAccessPolicy = "seven-day-no-refresh" as const;
 export const McpTokenPropsSchema = z.strictObject({
   connectionId: z.uuid(),

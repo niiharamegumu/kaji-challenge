@@ -119,6 +119,19 @@ describe("SummaryPage", () => {
       </AppProviders>,
     );
 
+  it.each(["2026-13", "9999-12"])(
+    "opens the current month for an unsupported URL month %s",
+    async (invalid) => {
+      renderPage(`/summary?month=${invalid}`);
+      const picker = await screen.findByRole("button", { name: "対象月を選択" });
+      expect(picker).toHaveTextContent("2026年03月");
+      expect(mockGetPenaltySummaryMonthly).toHaveBeenCalledWith(
+        { month: "2026-03" },
+        expect.anything(),
+      );
+    },
+  );
+
   it("renders summary content when queries succeed", async () => {
     renderPage();
 

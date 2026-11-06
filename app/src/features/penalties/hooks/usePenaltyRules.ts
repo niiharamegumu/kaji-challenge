@@ -10,7 +10,6 @@ import {
 import { queryKeys } from "../../../shared/query/queryKeys";
 import { formatError } from "../../../shared/utils/errors";
 import { penaltyRulesQueryOptions } from "../../../shared/query/monthlyPenaltyQueries";
-export { penaltyRulesQueryOptions } from "../../../shared/query/monthlyPenaltyQueries";
 
 export function usePenaltyRulesQuery() {
   return useSuspenseQuery(penaltyRulesQueryOptions);
