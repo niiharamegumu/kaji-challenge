@@ -19,8 +19,6 @@ vi.mock("../hooks/useReminders", () => ({
     definitionsQuery: mockUseReminderDefinitionsQuery(),
     calendarQuery: mockUseReminderCalendarQuery(monthKey),
   }),
-  useReminderDefinitionsQuery: () => mockUseReminderDefinitionsQuery(),
-  useReminderCalendarQuery: (monthKey: string) => mockUseReminderCalendarQuery(monthKey),
   useReminderMutations: (setStatus: (message: string) => void) =>
     mockUseReminderMutations(setStatus),
 }));
@@ -281,20 +279,23 @@ describe("ReminderCalendarPage", () => {
     expect(latestCalendarProps()?.eventDrop).toBeTypeOf("function");
   });
 
-  it("normalizes a past-month URL to the current month and hides the previous month button", () => {
-    setViewport(1280);
+  it.each(["2026-03-27", "2026-04-31", "2026-13-01"])(
+    "opens today's calendar for an unavailable URL date %s",
+    (date) => {
+      setViewport(1280);
 
-    render(
-      <MemoryRouter initialEntries={["/calendar?date=2026-03-27"]}>
-        <ReminderCalendarPage />
-      </MemoryRouter>,
-    );
+      render(
+        <MemoryRouter initialEntries={[`/calendar?date=${date}`]}>
+          <ReminderCalendarPage />
+        </MemoryRouter>,
+      );
 
-    expect(mockUseReminderCalendarQuery).toHaveBeenLastCalledWith("2026-04");
-    expect(screen.getByText("2026年04月")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "前の月" })).toBeDisabled();
-    expect(latestCalendarProps()?.initialDate).toBe("2026-04-01");
-  });
+      expect(mockUseReminderCalendarQuery).toHaveBeenLastCalledWith("2026-04");
+      expect(screen.getByText("2026年04月")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "前の月" })).toBeDisabled();
+      expect(latestCalendarProps()?.initialDate).toBe("2026-04-01");
+    },
+  );
 
   it("keeps current-month past reminders visible while rejecting past-date drops", () => {
     setViewport(1280);
