@@ -1,5 +1,14 @@
 import { z } from "zod";
 import { isDate } from "../server/domain/dates";
+import {
+  SharedPageSchema,
+  SharedPageListSchema,
+  SharedPageLeaseSchema,
+  SharedPageLeaseResponseSchema,
+  CreateSharedPageSchema,
+  UpdateSharedPageSchema,
+  DeleteSharedPageSchema,
+} from "./shared-pages";
 
 export const dateKeySchema = z.string().refine(isDate, "invalid date");
 
@@ -302,6 +311,41 @@ export const summaryMonthSchema = z
   .refine((month) => !month.startsWith("0000-") && month !== "9999-12", "unsupported month");
 
 export const operationSchema = z.discriminatedUnion("operation", [
+  z.strictObject({
+    operation: z.literal("listSharedPages"),
+    params: z.strictObject({}).default({}),
+  }),
+  z.strictObject({
+    operation: z.literal("getSharedPage"),
+    params: z.strictObject({ pageId: z.uuid() }),
+  }),
+  z.strictObject({
+    operation: z.literal("postSharedPage"),
+    params: z.strictObject({}).default({}),
+    body: CreateSharedPageSchema,
+  }),
+  z.strictObject({
+    operation: z.literal("patchSharedPage"),
+    params: z.strictObject({ pageId: z.uuid() }),
+    body: UpdateSharedPageSchema,
+  }),
+  z.strictObject({
+    operation: z.literal("deleteSharedPage"),
+    params: z.strictObject({ pageId: z.uuid() }),
+    body: DeleteSharedPageSchema,
+  }),
+  z.strictObject({
+    operation: z.literal("postSharedPageLease"),
+    params: z.strictObject({ pageId: z.uuid() }),
+  }),
+  z.strictObject({
+    operation: z.literal("renewSharedPageLease"),
+    params: z.strictObject({ pageId: z.uuid() }),
+  }),
+  z.strictObject({
+    operation: z.literal("releaseSharedPageLease"),
+    params: z.strictObject({ pageId: z.uuid() }),
+  }),
   z.object({
     operation: z.literal("getMe"),
     params: z.object({}).default({}),
@@ -501,6 +545,14 @@ export const operationSchema = z.discriminatedUnion("operation", [
 ]);
 export type Operation = z.infer<typeof operationSchema>;
 export const responseSchemas = {
+  listSharedPages: SharedPageListSchema,
+  getSharedPage: SharedPageSchema,
+  postSharedPage: SharedPageSchema,
+  patchSharedPage: SharedPageSchema,
+  deleteSharedPage: z.strictObject({}),
+  postSharedPageLease: SharedPageLeaseResponseSchema,
+  renewSharedPageLease: SharedPageLeaseSchema,
+  releaseSharedPageLease: z.strictObject({}),
   getMe: MeResponseSchema,
   patchMeNickname: UpdateNicknameResponseSchema,
   patchMeColor: UpdateColorResponseSchema,
