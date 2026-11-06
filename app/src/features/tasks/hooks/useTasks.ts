@@ -17,8 +17,8 @@ import {
 } from "../../../lib/api/operations";
 import { queryKeys } from "../../../shared/query/queryKeys";
 import { formatError } from "../../../shared/utils/errors";
+import { reorderItems } from "../../../shared/utils/reorderItems";
 import { tasksQueryOptions } from "../../../shared/query/taskQueries";
-export { tasksQueryOptions } from "../../../shared/query/taskQueries";
 const reorderMutationKey = ["task-reorder"];
 
 export function useTasksQuery() {
@@ -28,16 +28,7 @@ export function useTasksQuery() {
     select: (mutation) => mutation.state.variables as ReorderTasksRequest,
   });
   const order = orders.at(-1);
-  if (!order) return { data: query.data };
-  const byId = new Map(query.data.map((task) => [task.id, task]));
-  const ordered = order.taskIds.flatMap((id) => {
-    const task = byId.get(id);
-    return task ? [task] : [];
-  });
-  const ids = new Set(order.taskIds);
-  let index = 0;
-  // Keep new tasks in place and never restore tasks deleted during the request.
-  return { data: query.data.map((task) => (ids.has(task.id) ? ordered[index++] : task)) };
+  return { data: order ? reorderItems(query.data, order.taskIds) : query.data };
 }
 
 type StatusSetter = (message: string) => void;
@@ -165,6 +156,6 @@ export function useTaskMutations(setStatus: StatusSetter) {
     createTask,
     removeTask,
     updateTask,
-    reorderTasks: { ...reorderTasks, isPending: isReordering, mutate: reorder },
+    reorderTasks: { mutate: reorder, isPending: isReordering },
   };
 }
