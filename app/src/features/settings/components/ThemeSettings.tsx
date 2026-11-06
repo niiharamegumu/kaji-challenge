@@ -15,9 +15,9 @@ export function ThemeSettings() {
   const id = useId();
 
   return (
-    <fieldset className="mt-5 min-w-0" aria-describedby={`${id}-description`}>
+    <fieldset className="min-w-0" aria-describedby={`${id}-description`}>
       <legend className="text-sm font-medium text-body">表示モード</legend>
-      <div className="mt-2 grid grid-cols-3 gap-2">
+      <div className="mt-3 grid grid-cols-3 gap-2 sm:gap-3">
         {options.map(({ value, label, Icon }) => (
           <label key={value} className="relative cursor-pointer">
             <input
@@ -28,9 +28,26 @@ export function ThemeSettings() {
               onChange={() => setSaveFailed(!setPreference(value))}
               className="peer sr-only"
             />
-            <span className="flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-xl border border-line-strong bg-surface px-2 py-3 text-xs font-medium text-body transition-colors peer-checked:border-accent peer-checked:bg-success-soft peer-checked:text-success peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent sm:flex-row sm:text-sm">
-              <Icon size={18} aria-hidden="true" />
-              {label}
+            <span className="flex flex-col gap-3 rounded-xl border border-line-strong bg-surface p-2 text-xs font-medium text-body transition-colors peer-checked:border-accent peer-checked:bg-success-soft peer-checked:text-success peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent sm:p-3 sm:text-sm">
+              <span
+                aria-hidden="true"
+                className={`flex h-16 overflow-hidden rounded-md border border-black/10 sm:h-24 ${value === "dark" ? "bg-[#202822]" : value === "light" ? "bg-[#fafbf7]" : "bg-linear-to-r from-[#fafbf7] from-50% to-[#202822] to-50%"}`}
+              >
+                <span
+                  className={`w-1/4 border-r ${value === "dark" ? "border-white/10 bg-white/5" : "border-black/5 bg-black/5"}`}
+                />
+                <span className="flex flex-1 flex-col gap-2 p-2 sm:p-3">
+                  <span className="h-2 w-3/4 rounded-full bg-[#8ba17c]" />
+                  <span
+                    className={`h-2 rounded-full ${value === "dark" ? "bg-white/20" : "bg-[#b3bcb0]"}`}
+                  />
+                  <span className="h-2 w-2/3 rounded-full bg-[#8ba17c]/40" />
+                </span>
+              </span>
+              <span className="flex items-center justify-center gap-1.5">
+                <Icon size={16} aria-hidden="true" />
+                {label}
+              </span>
             </span>
           </label>
         ))}
