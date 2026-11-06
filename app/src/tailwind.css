@@ -43,8 +43,9 @@ body {
 }
 
 @media (width < 48rem) {
-  .shared-page-focused {
-    padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  .ios-safe-main.shared-page-focused {
+    /* The document toolbar owns the top safe area, including while it is sticky. */
+    padding: 0 0 env(safe-area-inset-bottom);
   }
 
   .shared-page-focused [data-shared-page-shell] {
