@@ -13,6 +13,7 @@ import {
   penaltyRulesQueryOptions,
   penaltyRulesWithDeletedQueryOptions,
 } from "../shared/query/monthlyPenaltyQueries";
+import { resolveCalendarDate, resolveSummaryMonth } from "../shared/router/dateParams";
 import { dateStringInJST } from "../shared/utils/dates";
 
 /** ナビゲーション意図の時点で取得する。queryの鮮度・実行中リクエストを共有し、失敗は遷移を妨げない。 */
@@ -48,9 +49,7 @@ export async function prefetchRouteData(client: QueryClient, destination: string
       break;
     }
     case "/summary": {
-      const requestedMonth = url.searchParams.get("month");
-      const month =
-        requestedMonth && /^\d{4}-\d{2}$/.test(requestedMonth) ? requestedMonth : today.slice(0, 7);
+      const month = resolveSummaryMonth(url.searchParams.get("month"), today);
       await Promise.all([
         client.prefetchQuery(monthlyPenaltySummaryQueryOptions(month)),
         client.prefetchQuery(penaltyRulesWithDeletedQueryOptions),
@@ -58,10 +57,7 @@ export async function prefetchRouteData(client: QueryClient, destination: string
       break;
     }
     case "/calendar": {
-      const date = url.searchParams.get("date");
-      const requestedMonth =
-        date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date.slice(0, 7) : today.slice(0, 7);
-      const month = requestedMonth < today.slice(0, 7) ? today.slice(0, 7) : requestedMonth;
+      const month = resolveCalendarDate(url.searchParams.get("date"), today).slice(0, 7);
       await Promise.all([
         client.prefetchQuery(reminderDefinitionsQueryOptions),
         client.prefetchQuery(reminderCalendarQueryOptions(month)),
