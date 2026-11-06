@@ -88,12 +88,9 @@ dialog {
   --font-sans: "Noto Sans JP", sans-serif;
 
   --color-washi-50: light-dark(#f6f4ef, #191b19);
-  --color-kohaku-50: light-dark(#fff8ef, #342d20);
-  --color-kohaku-200: light-dark(#f2d4a7, #92783b);
   --color-matcha-50: light-dark(#eff8ef, #263d2b);
   --color-matcha-100: light-dark(#daf0da, #314c37);
   --color-matcha-200: light-dark(#b9e0b9, #3f6145);
-  --color-matcha-300: light-dark(#95c895, #507b56);
   --color-matcha-400: light-dark(#6cad6c, #7daf81);
   --color-matcha-500: light-dark(#4f9859, #8cbd8e);
   --color-matcha-600: light-dark(#3e7f4a, #a0cba0);
