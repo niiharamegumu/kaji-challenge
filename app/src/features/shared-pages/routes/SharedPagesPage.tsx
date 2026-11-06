@@ -4,19 +4,20 @@ import { useSetAtom } from "jotai";
 import {
   ArrowLeft,
   Check,
-  Ellipsis,
+  Copy,
   FileText,
   LoaderCircle,
   LockKeyhole,
   Pencil,
   Plus,
-  Save,
   Trash2,
 } from "lucide-react";
-import { lazy, Suspense, useEffect, useState, useSyncExternalStore } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { TeamMember } from "../../../contracts/models";
 import type { SharedPageSummary } from "../../../contracts/shared-pages";
 import { DeleteConfirmModal } from "../../../shared/components/DeleteConfirmModal";
+import { ConfirmModal } from "../../../shared/components/ConfirmModal";
+import { FormSheet } from "../../../shared/components/FormSheet";
 import {
   sharedPageQueryOptions,
   sharedPagesQueryOptions,
@@ -26,7 +27,6 @@ import { teamMembersQueryOptions } from "../../../shared/query/teamMembersQuery"
 import { Link, useNavigate, useOutletContext } from "../../../shared/router/navigation";
 import type { RootLayoutOutletContext } from "../../../shared/router/rootLayoutContext";
 import { sharedPageDraftDirtyAtom } from "../../../shared/state/sharedPageDraft";
-import { useFormPresence } from "../../../shared/state/overlay";
 import { getReadableTextColor, resolveUserColor } from "../../../shared/utils/userColor";
 import {
   PageEditSession,
@@ -107,11 +107,11 @@ function SharedPagesContent({
   });
   const state = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
   const [composing, setComposing] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [latestRequested, setLatestRequested] = useState(false);
   const [copyFallback, setCopyFallback] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const copyInputRef = useRef<HTMLTextAreaElement>(null);
   const setDraftDirty = useSetAtom(sharedPageDraftDirtyAtom);
   const hasUnsaved = state.dirty || state.busy;
   const blocker = useBlocker({
@@ -120,7 +120,12 @@ function SharedPagesContent({
     enableBeforeUnload: hasUnsaved,
   });
   const showLeave = blocker.status === "blocked" || latestRequested;
-  useFormPresence(showLeave || copyFallback !== null);
+
+  useEffect(() => {
+    if (!copied) return;
+    const timeout = window.setTimeout(() => setCopied(false), 1500);
+    return () => window.clearTimeout(timeout);
+  }, [copied]);
 
   useEffect(() => {
     session.activate();
@@ -219,7 +224,7 @@ function SharedPagesContent({
             : "保存済み";
 
   return (
-    <section className={detail ? "shared-pages-section pb-6" : "shared-pages-section mt-4 pb-8"}>
+    <section className={detail ? "shared-pages-section md:pb-6" : "shared-pages-section mt-4 pb-8"}>
       <header
         className={`mb-5 items-center justify-between gap-3 ${detail ? "hidden md:flex" : "flex"}`}
       >
@@ -238,13 +243,12 @@ function SharedPagesContent({
       </header>
       <div className="shared-pages-layout" data-detail={detail}>
         <aside className="shared-pages-list" aria-label="共有ページ一覧">
-          {list.isPending ? (
-            <p className="py-8 text-sm text-secondary" role="status">
-              ページを読み込んでいます…
-            </p>
-          ) : null}
+          {list.isPending ? <PageLoading label="ページを読み込んでいます…" /> : null}
           {list.isError ? (
-            <div role="alert" className="mb-3 text-sm text-danger">
+            <div
+              role="alert"
+              className="mb-3 rounded-xl border border-danger-line bg-danger-soft p-4 text-sm text-danger-strong"
+            >
               一覧を取得できませんでした。
               <button className="shared-page-text-button" onClick={() => void list.refetch()}>
                 再読み込み
@@ -327,35 +331,21 @@ function SharedPagesContent({
                       <Check size={16} aria-hidden="true" />
                     </button>
                   ) : (
-                    <>
-                      <span className="hidden md:inline-flex">
-                        <button
-                          type="button"
-                          className="shared-page-icon-button"
-                          aria-label="保存する"
-                          title="保存する"
-                          disabled={state.busy || stopped || composing || !state.dirty}
-                          onClick={() => void session.save()}
-                        >
-                          <Save size={16} aria-hidden="true" />
-                        </button>
-                      </span>
-                      <button
-                        type="button"
-                        className="shared-page-icon-button shared-page-icon-button--success"
-                        aria-label="完了"
-                        title="完了"
-                        aria-busy={state.busy}
-                        disabled={state.busy || stopped || composing}
-                        onClick={() => {
-                          void session.finish().then((finished) => {
-                            if (finished) void query.refetch();
-                          });
-                        }}
-                      >
-                        <Check size={16} aria-hidden="true" />
-                      </button>
-                    </>
+                    <button
+                      type="button"
+                      className="shared-page-icon-button shared-page-icon-button--success"
+                      aria-label="完了"
+                      title="完了"
+                      aria-busy={state.busy}
+                      disabled={state.busy || stopped || composing}
+                      onClick={() => {
+                        void session.finish().then((finished) => {
+                          if (finished) void query.refetch();
+                        });
+                      }}
+                    >
+                      <Check size={16} aria-hidden="true" />
+                    </button>
                   )}
                 </>
               ) : page ? (
@@ -382,33 +372,16 @@ function SharedPagesContent({
                 </button>
               ) : null}
               {page ? (
-                <div className="relative">
-                  <button
-                    type="button"
-                    className="shared-page-icon-button"
-                    aria-label="ページの操作"
-                    title="ページの操作"
-                    aria-expanded={menuOpen}
-                    disabled={state.busy || stopped}
-                    onClick={() => setMenuOpen(!menuOpen)}
-                  >
-                    <Ellipsis size={16} aria-hidden="true" />
-                  </button>
-                  {menuOpen ? (
-                    <div className="absolute right-0 top-full z-30 w-44 rounded-xl border border-line bg-surface p-1 shadow-lg">
-                      <button
-                        className="shared-page-text-button w-full text-danger"
-                        onClick={() => {
-                          setMenuOpen(false);
-                          setDeleting(true);
-                        }}
-                      >
-                        <Trash2 size={16} aria-hidden="true" />
-                        ページを削除
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
+                <button
+                  type="button"
+                  className="shared-page-icon-button shared-page-icon-button--danger"
+                  aria-label="ページを削除"
+                  title={locked ? "編集中は削除できません" : "ページを削除"}
+                  disabled={state.busy || stopped || locked}
+                  onClick={() => setDeleting(true)}
+                >
+                  <Trash2 size={16} aria-hidden="true" />
+                </button>
               ) : null}
             </div>
             {backupWarning ? (
@@ -417,11 +390,7 @@ function SharedPagesContent({
                 className="mx-5 mt-4 rounded-xl border border-warning-line bg-warning-soft p-3 text-sm leading-7 text-warning-strong"
               >
                 このタブへの一時保存を更新できません。画面を閉じる前に入力をコピーしてください。
-                {draft ? (
-                  <button className="shared-page-text-button" onClick={() => void copy()}>
-                    入力をコピー
-                  </button>
-                ) : null}
+                {draft ? <CopyDraftButton copied={copied} onCopy={() => void copy()} /> : null}
               </div>
             ) : null}
             {state.error ? (
@@ -441,12 +410,7 @@ function SharedPagesContent({
                         再試行
                       </button>
                     ) : null}
-                    <button
-                      className="shared-page-text-button border border-line-strong"
-                      onClick={() => void copy()}
-                    >
-                      入力をコピー
-                    </button>
+                    <CopyDraftButton copied={copied} onCopy={() => void copy()} />
                     {stopped ? (
                       <button
                         className="shared-page-text-button border border-line-strong"
@@ -464,13 +428,11 @@ function SharedPagesContent({
                 )}
               </div>
             ) : null}
-            {copied ? (
-              <p role="status" className="mx-5 mt-2 text-sm text-success">
-                入力内容をコピーしました。
-              </p>
-            ) : null}
             {query.isError ? (
-              <div role="alert" className="mx-5 mt-4 text-sm text-danger">
+              <div
+                role="alert"
+                className="mx-5 mt-4 rounded-xl border border-danger-line bg-danger-soft p-4 text-sm text-danger-strong"
+              >
                 ページを取得できませんでした。
                 {draft
                   ? "入力内容はこの画面に残っています。"
@@ -481,16 +443,12 @@ function SharedPagesContent({
               </div>
             ) : null}
             {!editing && !stopped && locked && page?.editing ? (
-              <div className="mx-5 mt-4 flex items-start gap-2 rounded-xl bg-warning-soft p-3 text-sm leading-6 text-warning-strong">
+              <div className="mx-5 mt-4 flex items-start gap-2 rounded-xl border border-line bg-surface-subtle p-3 text-sm leading-6 text-secondary">
                 <LockKeyhole size={17} aria-hidden="true" className="mt-1 shrink-0" />
                 <p>{page.editing.displayName}が編集中です。保存された内容を表示しています。</p>
               </div>
             ) : null}
-            {query.isPending && !newPage ? (
-              <p role="status" className="p-10 text-secondary">
-                ページを読み込んでいます…
-              </p>
-            ) : null}
+            {query.isPending && !newPage ? <PageLoading label="ページを読み込んでいます…" /> : null}
             {draft || page ? (
               <div
                 className="shared-page-paper"
@@ -519,13 +477,7 @@ function SharedPagesContent({
                     </h2>
                   </>
                 )}
-                <Suspense
-                  fallback={
-                    <p role="status" className="py-8 text-sm text-secondary">
-                      本文を読み込んでいます…
-                    </p>
-                  }
-                >
+                <Suspense fallback={<PageLoading label="本文を読み込んでいます…" />}>
                   <PageEditor
                     key={draft ? `edit-${state.editorKey}` : `read-${page!.id}-${page!.version}`}
                     document={draft?.document ?? page!.document}
@@ -554,6 +506,7 @@ function SharedPagesContent({
       </div>
       <DeleteConfirmModal
         isOpen={deleting}
+        isDeleting={state.busy}
         title="このページを削除しますか？"
         message={`「${page?.title ?? ""}」はふたりの一覧から削除されます。この操作は取り消せません。`}
         onCancel={() => {
@@ -570,81 +523,101 @@ function SharedPagesContent({
           });
         }}
       />
-      {showLeave ? (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-overlay/40 p-5">
-          <dialog
-            open
-            aria-labelledby="shared-page-leave-title"
-            className="m-auto w-full max-w-sm rounded-2xl border border-line bg-surface p-6 shadow-xl"
-          >
-            <h2 id="shared-page-leave-title" className="text-lg font-bold">
-              保存していない変更があります
-            </h2>
-            <p className="mt-3 text-sm leading-7 text-secondary">
-              {state.busy
-                ? "通信の結果を確認しています。入力内容を残してお待ちください。"
-                : "このまま戻ると、変更は保存されません。"}
-            </p>
-            <div className="mt-5 flex flex-col gap-2">
-              <button
-                autoFocus
-                className="shared-page-button"
-                onClick={() => {
-                  setLatestRequested(false);
-                  blocker.reset?.();
-                }}
-              >
-                編集を続ける
-              </button>
-              {draft ? (
-                <button
-                  className="shared-page-text-button border border-line-strong"
-                  onClick={() => void copy()}
-                >
-                  入力をコピー
-                </button>
-              ) : null}
-              <button
-                className="shared-page-text-button text-danger"
-                disabled={state.busy}
-                onClick={() => {
-                  if (newPage && latestRequested) session.restartNew();
-                  else session.discard();
-                  setLatestRequested(false);
-                  if (blocker.status === "blocked") blocker.proceed();
-                  else if (!newPage) void query.refetch();
-                }}
-              >
-                変更を破棄して戻る
-              </button>
-            </div>
-          </dialog>
-        </div>
-      ) : null}
-      {copyFallback !== null ? (
-        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-overlay/40 p-5">
-          <dialog
-            open
-            aria-label="入力内容をコピー"
-            className="m-auto w-full max-w-lg rounded-2xl border border-line bg-surface p-5"
-          >
-            <p className="mb-3 text-sm">
-              自動コピーが利用できません。本文を選択してコピーしてください。
-            </p>
-            <textarea
-              aria-label="コピーする入力内容"
-              className="h-64 w-full rounded-lg border border-line p-3 text-base"
-              readOnly
-              value={copyFallback}
-              onFocus={(event) => event.currentTarget.select()}
-            />
-            <button className="shared-page-button mt-3" onClick={() => setCopyFallback(null)}>
-              閉じる
-            </button>
-          </dialog>
-        </div>
-      ) : null}
+      <ConfirmModal
+        isOpen={showLeave && copyFallback === null}
+        title="保存していない変更があります"
+        message={
+          state.busy
+            ? "通信の結果を確認しています。入力内容を残してお待ちください。"
+            : latestRequested
+              ? newPage
+                ? "変更を破棄して、新しいページを書き直します。"
+                : "変更を破棄して、最新の内容を表示します。"
+              : "このまま戻ると、変更は保存されません。"
+        }
+        tone="warning"
+        cancelLabel="編集を続ける"
+        confirmLabel={
+          latestRequested
+            ? newPage
+              ? "変更を破棄して書き直す"
+              : "変更を破棄して最新を表示"
+            : "変更を破棄して戻る"
+        }
+        confirmDisabled={state.busy}
+        onCancel={() => {
+          setLatestRequested(false);
+          blocker.reset?.();
+        }}
+        onConfirm={() => {
+          if (session.getSnapshot().busy) return;
+          if (newPage && latestRequested) session.restartNew();
+          else session.discard();
+          setLatestRequested(false);
+          if (blocker.status === "blocked") blocker.proceed();
+          else if (!newPage) void query.refetch();
+        }}
+      >
+        {draft ? <CopyDraftButton copied={copied} onCopy={() => void copy()} /> : null}
+      </ConfirmModal>
+      <FormSheet
+        isOpen={copyFallback !== null}
+        title="入力内容をコピー"
+        submitLabel="入力を選択"
+        submitIcon={<Copy size={16} aria-hidden="true" />}
+        isSubmitting={false}
+        onClose={() => setCopyFallback(null)}
+        onSubmit={() => {
+          copyInputRef.current?.focus();
+          copyInputRef.current?.select();
+        }}
+      >
+        <p className="mb-3 text-sm text-secondary">
+          自動コピーが利用できません。本文を選択してコピーしてください。
+        </p>
+        <textarea
+          ref={copyInputRef}
+          aria-label="コピーする入力内容"
+          className="h-48 w-full rounded-lg border border-line-strong bg-surface px-3 py-2 text-base text-ink"
+          readOnly
+          value={copyFallback ?? ""}
+          onFocus={(event) => event.currentTarget.select()}
+        />
+      </FormSheet>
     </section>
+  );
+}
+
+function PageLoading({ label }: { label: string }) {
+  return (
+    <div className="flex justify-center py-8" role="status">
+      <LoaderCircle
+        size={22}
+        className="animate-spin text-muted motion-reduce:animate-none"
+        aria-hidden="true"
+      />
+      <span className="sr-only">{label}</span>
+    </div>
+  );
+}
+
+function CopyDraftButton({ copied, onCopy }: { copied: boolean; onCopy: () => void }) {
+  const label = copied ? "入力をコピー済み" : "入力をコピー";
+  return (
+    <span className="inline-flex">
+      <button
+        type="button"
+        className="shared-page-icon-button border border-line"
+        aria-label={label}
+        title={label}
+        onClick={onCopy}
+      >
+        {copied ? <Check size={16} aria-hidden="true" /> : <Copy size={16} aria-hidden="true" />}
+      </button>
+      <span className="sr-only" role="status">
+        {copied ? "入力内容をコピーしました。" : ""}
+      </span>
+    </span>
   );
 }
 
@@ -699,7 +672,7 @@ function PageListItem({
           {page.updatedByName}・{timestamp.format(new Date(page.updatedAt))}
         </span>
         {page.editing ? (
-          <span className="mt-2 inline-flex max-w-full items-center gap-1.5 rounded-full bg-warning-soft px-2 py-1 text-xs text-warning-strong">
+          <span className="mt-2 inline-flex max-w-full items-center gap-1.5 rounded-full bg-surface-muted px-2 py-1 text-xs text-secondary">
             <EditingUserAvatar editing={page.editing} member={editorMember} decorative />
             <span className="min-w-0 break-words">
               {editorMember?.effectiveName ?? page.editing.displayName}が編集中
