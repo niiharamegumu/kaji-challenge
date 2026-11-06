@@ -42,10 +42,7 @@ describe("scheduled entry with D1", () => {
     );
   });
   afterAll(async () => {
-    if (!connection) return;
-    if (teamId) await connection.repository.DeleteTeam(teamId);
-    await connection.query(sql`DELETE FROM auth_user WHERE id=${userId}`);
-    await connection.close();
+    await connection?.close();
   });
   it("does not connect or close while disabled or in maintenance", async () => {
     await scheduled(controller, { ...bindings, JOBS_ENABLED: "false" });
