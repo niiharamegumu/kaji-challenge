@@ -4,16 +4,6 @@ export interface TodoCategory {
   id: string;
   name: string;
 }
-export interface GetTaskCompletionWeeklyEntryCountParams {
-  TaskID: string;
-  WeekStart: string;
-}
-
-export interface HasTaskCompletionDailyParams {
-  TaskID: string;
-  TargetDate: string;
-}
-
 export interface ListTaskCompletionDailyByMonthAndTeamParams {
   TeamID: string;
   TargetDate: string;
@@ -434,21 +424,6 @@ export interface PenaltyRule {
   UpdatedAt: string;
 }
 
-export interface PushSubscription {
-  ID: string;
-  TeamID: string;
-  UserID: string;
-  Endpoint: string;
-  P256dh: string;
-  Auth: string;
-  UserAgent: string | null;
-  Platform: string;
-  IsActive: boolean;
-  LastSeenAt: string;
-  CreatedAt: string;
-  UpdatedAt: string;
-}
-
 export interface Reminder {
   ID: string;
   TeamID: string;
@@ -471,43 +446,6 @@ export interface TodoItem {
   SortKey: number;
   CreatedAt: string;
   UpdatedAt: string;
-}
-
-export interface Task {
-  ID: string;
-  TeamID: string;
-  Title: string;
-  Notes: string | null;
-  Type: string;
-  PenaltyPoints: number;
-  AssigneeUserID: string;
-  RequiredCompletionsPerWeek: number;
-  CreatedAt: string;
-  UpdatedAt: string;
-  DeletedAt: string | null;
-  SortKey: number;
-}
-
-export interface Team {
-  ID: string;
-  CreatedAt: string;
-  Name: string;
-}
-
-export interface TeamMember {
-  TeamID: string;
-  UserID: string;
-  Role: string;
-  CreatedAt: string;
-}
-
-export interface User {
-  ID: string;
-  Email: string;
-  DisplayName: string;
-  CreatedAt: string;
-  Nickname: string | null;
-  ColorHex: string | null;
 }
 
 export interface MoveMemberParams {
@@ -566,8 +504,6 @@ export interface Repository {
   SetCompletion(arg: SetCompletionParams): Promise<number>;
   ClosePeriod(teamId: string, scope: "day" | "week", date: string): Promise<boolean>;
   RecalculateMonth(arg: RecalculateMonthParams): Promise<void>;
-  GetTaskCompletionWeeklyEntryCount(arg: GetTaskCompletionWeeklyEntryCountParams): Promise<number>;
-  HasTaskCompletionDaily(arg: HasTaskCompletionDailyParams): Promise<boolean>;
   ListTaskCompletionDailyByMonthAndTeam(
     arg: ListTaskCompletionDailyByMonthAndTeamParams,
   ): Promise<ListTaskCompletionDailyByMonthAndTeamRow[]>;
@@ -583,7 +519,6 @@ export interface Repository {
   ListTaskCompletionWeeklySlotsByTeamAndWeek(
     arg: ListTaskCompletionWeeklySlotsByTeamAndWeekParams,
   ): Promise<ListTaskCompletionWeeklySlotsByTeamAndWeekRow[]>;
-  DeleteTeam(id: string): Promise<void>;
   ListMembershipsByUserID(userID: string): Promise<ListMembershipsByUserIDRow[]>;
   ListTeamIDsForClose(): Promise<string[]>;
   ListTeamMembersByTeamID(teamID: string): Promise<ListTeamMembersByTeamIDRow[]>;
