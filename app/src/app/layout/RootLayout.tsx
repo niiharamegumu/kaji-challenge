@@ -28,6 +28,7 @@ import {
   type RootLayoutOutletContext,
 } from "../../shared/router/rootLayoutContext";
 import { statusMessageAtom } from "../../shared/state/status";
+import { sharedPageDraftDirtyAtom } from "../../shared/state/sharedPageDraft";
 import { isLoggedInAtom, sessionAtom } from "../../state/session";
 import { useBootFlow } from "../boot";
 import { AppHeader } from "./AppHeader";
@@ -40,6 +41,7 @@ import {
   preloadReminderCalendarPageChunk,
   preloadTodoPageChunk,
   preloadTodoCategoriesPageChunk,
+  preloadSharedPagesPageChunk,
 } from "../route-chunks";
 
 const FloatingNav = lazy(async () => {
@@ -55,6 +57,7 @@ const routePreloaders: Record<string, () => Promise<unknown>> = {
   "/calendar": preloadReminderCalendarPageChunk,
   "/todo-categories": preloadTodoCategoriesPageChunk,
   "/todos": preloadTodoPageChunk,
+  "/pages": preloadSharedPagesPageChunk,
 };
 
 export function RootLayout() {
@@ -63,6 +66,7 @@ export function RootLayout() {
   const queryClient = useQueryClient();
   const setSession = useSetAtom(sessionAtom);
   const [status, setStatus] = useAtom(statusMessageAtom);
+  const hasUnsavedPage = useAtomValue(sharedPageDraftDirtyAtom);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const loggedIn = useAtomValue(isLoggedInAtom);
   const navigate = useNavigate();
@@ -207,7 +211,9 @@ export function RootLayout() {
   }
 
   return (
-    <main className="ios-safe-main flex min-h-dvh flex-col bg-canvas px-2 py-2.5 pb-36 text-ink md:px-8 md:pt-8 md:pb-44">
+    <main
+      className={`ios-safe-main flex min-h-dvh flex-col bg-canvas px-2 py-2.5 pb-36 text-ink md:px-8 md:pt-8 md:pb-44 ${location.pathname.startsWith("/pages/") && location.pathname !== "/pages/" ? "shared-page-focused" : ""}`}
+    >
       <StatusToast
         message={status}
         onDismiss={() => {
@@ -216,15 +222,17 @@ export function RootLayout() {
       />
 
       <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col">
-        <AppHeader teamName={currentTeamName} todayLabel={todayLabel}>
-          <ConnectedMembers
-            members={cachedMembersQuery.data ?? []}
-            userIds={realtime.userIds}
-            connected={realtime.connected}
-          />
-        </AppHeader>
+        <div className="contents" data-shared-page-shell>
+          <AppHeader teamName={currentTeamName} todayLabel={todayLabel}>
+            <ConnectedMembers
+              members={cachedMembersQuery.data ?? []}
+              userIds={realtime.userIds}
+              connected={realtime.connected}
+            />
+          </AppHeader>
 
-        <MonthCloseBanner />
+          <MonthCloseBanner />
+        </div>
 
         <RootLayoutContext value={outletContext}>
           <DelayedActionProvider key={`${currentUserId}:${currentTeamId}`}>
@@ -234,29 +242,38 @@ export function RootLayout() {
       </div>
 
       {!isInitialBootPending ? (
-        <Suspense fallback={null}>
-          <AssistHost key={`${currentUserId}:${currentTeamId}`} teamId={currentTeamId}>
-            {(assist) => (
-              <FloatingNav
-                currentUserName={currentUserName}
-                currentUserColorHex={currentUserColorHex}
-                isRefreshing={isRefreshing}
-                onRouteIntent={handleRouteIntent}
-                onLogout={() => {
-                  assist.close();
-                  void logoutAction();
-                }}
-                onRefresh={() => {
-                  assist.close();
-                  void refreshTeamState();
-                }}
-                onAssist={assist.open}
-                assistOpen={assist.isOpen}
-                assistDisabled={assist.disabled}
-              />
-            )}
-          </AssistHost>
-        </Suspense>
+        <div className="contents" data-shared-page-shell>
+          <Suspense fallback={null}>
+            <AssistHost key={`${currentUserId}:${currentTeamId}`} teamId={currentTeamId}>
+              {(assist) => (
+                <FloatingNav
+                  currentUserName={currentUserName}
+                  currentUserColorHex={currentUserColorHex}
+                  isRefreshing={isRefreshing}
+                  onRouteIntent={handleRouteIntent}
+                  onLogout={() => {
+                    if (
+                      hasUnsavedPage &&
+                      !window.confirm(
+                        "保存していない変更があります。変更を破棄してログアウトしますか？",
+                      )
+                    )
+                      return;
+                    assist.close();
+                    void logoutAction();
+                  }}
+                  onRefresh={() => {
+                    assist.close();
+                    void refreshTeamState();
+                  }}
+                  onAssist={assist.open}
+                  assistOpen={assist.isOpen}
+                  assistDisabled={assist.disabled}
+                />
+              )}
+            </AssistHost>
+          </Suspense>
+        </div>
       ) : null}
     </main>
   );
