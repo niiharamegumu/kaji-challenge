@@ -3,7 +3,7 @@ import type { AssistBudget } from "../application/assist-ports";
 import { AppError } from "../domain/errors";
 import type { Database } from "./database";
 
-export const assistBudgetLimits = { perMinute: 12, perDay: 50, trial: 500 } as const;
+const assistBudgetLimits = { perMinute: 12, perDay: 50, trial: 500 } as const;
 
 export function createAssistBudget(db: Database): AssistBudget {
   return {
