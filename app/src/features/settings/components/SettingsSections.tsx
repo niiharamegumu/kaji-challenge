@@ -33,7 +33,7 @@ export function TeamNameSection({
         <div className="mt-2 flex items-center gap-2">
           <input
             id="team-name"
-            className="min-h-11 min-w-0 flex-1 rounded-lg border border-line-strong bg-surface px-3 py-2 text-heading focus-visible:border-[color:var(--color-matcha-500)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-matcha-200)]"
+            className="min-h-11 min-w-0 flex-1 rounded-lg border border-line-strong bg-surface px-3 py-2 text-heading"
             value={teamName}
             onChange={(event) => onTeamNameChange(event.target.value)}
             placeholder="チーム名"
@@ -208,7 +208,7 @@ export function JoinTeamSection({
         <div className="mt-2 flex items-center gap-2">
           <input
             id="join-code"
-            className="min-h-11 min-w-0 flex-1 rounded-lg border border-line-strong bg-surface px-3 py-2 text-heading focus-visible:border-[color:var(--color-matcha-500)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-matcha-200)]"
+            className="min-h-11 min-w-0 flex-1 rounded-lg border border-line-strong bg-surface px-3 py-2 text-heading"
             value={joinCode}
             onChange={(event) => onJoinCodeChange(event.target.value)}
             placeholder="招待コード入力"
@@ -282,7 +282,7 @@ export function AccountSettingsSection({
         <div className="mt-2 flex w-full items-center gap-2">
           <input
             id="nickname"
-            className="min-h-11 min-w-0 flex-1 rounded-lg border border-line-strong bg-surface px-3 py-2 text-heading focus-visible:border-[color:var(--color-matcha-500)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-matcha-200)]"
+            className="min-h-11 min-w-0 flex-1 rounded-lg border border-line-strong bg-surface px-3 py-2 text-heading"
             value={nickname}
             onChange={(event) => onNicknameChange(event.target.value)}
             placeholder="チームで使う名前"
@@ -319,7 +319,7 @@ export function AccountSettingsSection({
           />
           <input
             id="color-hex"
-            className="min-h-11 min-w-0 flex-1 rounded-lg border border-line-strong bg-surface px-3 py-2 font-mono text-heading focus-visible:border-[color:var(--color-matcha-500)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-matcha-200)]"
+            className="min-h-11 min-w-0 flex-1 rounded-lg border border-line-strong bg-surface px-3 py-2 font-mono text-heading"
             value={colorHex}
             onChange={(event) => onColorHexChange(event.target.value)}
             placeholder="#RRGGBB"
