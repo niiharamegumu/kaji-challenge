@@ -230,7 +230,7 @@ function SharedPagesContent({
       >
         <div>
           <h1 className="text-lg font-semibold text-heading">共有ページ</h1>
-          <p className="mt-2 text-sm text-secondary">メモも、計画も、ふたりの好きな形で。</p>
+          <p className="mt-2 text-sm text-secondary">メモも、計画も、好きな形で。</p>
         </div>
         <Link
           to="/pages/new"
@@ -258,7 +258,7 @@ function SharedPagesContent({
           {list.data?.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-line-strong p-8 text-center">
               <FileText size={28} aria-hidden="true" className="mx-auto text-muted" />
-              <h2 className="mt-4 font-semibold text-heading">ふたりのページをはじめよう</h2>
+              <h2 className="mt-4 font-semibold text-heading">最初のページを作ろう</h2>
               <p className="mt-2 text-sm leading-7 text-secondary">
                 行きたいお店、旅行の計画、暮らしのメモ。好きなことを自由に書きとめられます。
               </p>
@@ -496,7 +496,7 @@ function SharedPagesContent({
                 ) : null}
                 {newPage ? (
                   <p className="mt-10 border-t border-line pt-4 text-xs leading-6 text-muted">
-                    作成すると、同じチームのふたりに共有されます。
+                    作成すると、同じチームのメンバーに共有されます。
                   </p>
                 ) : null}
               </div>
@@ -508,7 +508,7 @@ function SharedPagesContent({
         isOpen={deleting}
         isDeleting={state.busy}
         title="このページを削除しますか？"
-        message={`「${page?.title ?? ""}」はふたりの一覧から削除されます。この操作は取り消せません。`}
+        message={`「${page?.title ?? ""}」は共有ページの一覧から削除されます。この操作は取り消せません。`}
         onCancel={() => {
           if (!state.busy) setDeleting(false);
         }}
