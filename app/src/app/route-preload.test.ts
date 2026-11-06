@@ -72,6 +72,28 @@ it("prefetches the requested summary month and future calendar month", async () 
   client.clear();
 });
 
+it("uses the current JST month when a route date is outside the API contract", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-10-31T15:00:00Z"));
+  const client = makeClient();
+  try {
+    api.summary.mockResolvedValue({ data: {} });
+    api.rules.mockResolvedValue({ data: { items: [] } });
+    api.definitions.mockResolvedValue({ data: { items: [] } });
+    api.reminders.mockResolvedValue({ data: { days: [] } });
+    await prefetchRouteData(client, "/summary?month=9999-12");
+    await prefetchRouteData(client, "/calendar?date=2027-02-29");
+    expect(api.summary).toHaveBeenCalledWith({ month: "2026-11" }, expect.anything());
+    expect(api.reminders).toHaveBeenCalledWith(
+      { from: "2026-11-01", to: "2026-11-30" },
+      expect.anything(),
+    );
+  } finally {
+    client.clear();
+    vi.useRealTimers();
+  }
+});
+
 it("starts both requests before the page loads and shares in-flight and fresh cache data", async () => {
   const client = makeClient();
   let finish!: (value: unknown) => void;
