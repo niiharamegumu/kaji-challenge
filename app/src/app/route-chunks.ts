@@ -7,6 +7,7 @@ const loadSummaryPage = () => import("../features/summary/routes/SummaryPage");
 const loadReminderCalendarPage = () => import("../features/reminders/routes/ReminderCalendarPage");
 const loadTodoCategoriesPage = () => import("../features/todos/routes/TodoCategoriesPage");
 const loadTodoPage = () => import("../features/todos/routes/TodoPage");
+const loadSharedPagesPage = () => import("../features/shared-pages/routes/SharedPagesPage");
 
 // import自体がmoduleをキャッシュする。失敗したPromiseを独自に保持して再試行を妨げない。
 export const preloadTasksPageChunk = loadTasksPage;
@@ -16,6 +17,12 @@ export const preloadSummaryPageChunk = loadSummaryPage;
 export const preloadReminderCalendarPageChunk = loadReminderCalendarPage;
 export const preloadTodoCategoriesPageChunk = loadTodoCategoriesPage;
 export const preloadTodoPageChunk = loadTodoPage;
+export const preloadSharedPagesPageChunk = loadSharedPagesPage;
+
+export const SharedPagesPage = lazy(async () => {
+  const module = await preloadSharedPagesPageChunk();
+  return { default: module.SharedPagesPage };
+});
 
 export const TasksPage = lazy(async () => {
   const module = await preloadTasksPageChunk();
