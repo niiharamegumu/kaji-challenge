@@ -14,6 +14,8 @@ const api = vi.hoisted(() => ({
   definitions: vi.fn(),
   reminders: vi.fn(),
   summary: vi.fn(),
+  pages: vi.fn(),
+  page: vi.fn(),
 }));
 vi.mock("../lib/api/operations", async (original) => ({
   ...(await original<object>()),
@@ -26,10 +28,29 @@ vi.mock("../lib/api/operations", async (original) => ({
   listReminderDefinitions: api.definitions,
   listReminders: api.reminders,
   getPenaltySummaryMonthly: api.summary,
+  listSharedPages: api.pages,
+  getSharedPage: api.page,
 }));
 afterEach(() => vi.resetAllMocks());
 const makeClient = () =>
   new QueryClient({ defaultOptions: { queries: { staleTime: 30_000, retry: false } } });
+
+it("prefetches shared page data without creating a document or acquiring an edit lease", async () => {
+  const client = makeClient();
+  api.pages.mockResolvedValue({ data: { items: [] } });
+  api.page.mockResolvedValue({ data: { id: "page-1" } });
+  await prefetchRouteData(client, "/pages");
+  await prefetchRouteData(client, "/pages/new");
+  expect(api.pages).toHaveBeenCalledTimes(1);
+  expect(api.page).not.toHaveBeenCalled();
+  await prefetchRouteData(client, "/pages/page-1");
+  expect(api.page).toHaveBeenCalledWith(
+    "page-1",
+    expect.objectContaining({ signal: expect.any(AbortSignal) }),
+  );
+  expect(client.getQueryData([...queryKeys.sharedPages, "page-1"])).toEqual({ id: "page-1" });
+  client.clear();
+});
 
 it.each(["/tasks", "/penalties", "/settings", "/calendar"])(
   "starts %s data immediately without waiting for page code",
