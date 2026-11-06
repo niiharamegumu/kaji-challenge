@@ -150,7 +150,6 @@ export const assistErrorSchema = z.strictObject({ code: z.string(), message: z.s
 export type AssistDraft = z.infer<typeof assistDraftSchema>;
 export type AssistTodoAction = z.infer<typeof assistTodoActionSchema>;
 export type AssistOperationResult = z.infer<typeof assistOperationResultSchema>;
-export type AssistIntent = z.infer<typeof assistIntentSchema>;
 export type AssistRequest = z.infer<typeof assistRequestSchema>;
 export type AssistAudioRequest = z.infer<typeof assistAudioRequestSchema>;
 export type AssistAudioUpload = z.infer<typeof assistAudioUploadSchema>;
