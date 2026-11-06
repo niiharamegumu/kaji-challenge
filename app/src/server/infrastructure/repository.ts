@@ -15,6 +15,15 @@ import {
   type SQL,
 } from "drizzle-orm";
 import type * as P from "../application/ports";
+import {
+  sharedPageLimits,
+  type SharedPage,
+  type SharedPageBlock,
+  type SharedPageDocument,
+  type SharedPageSummary,
+  type SharedPageLease,
+  type SharedPageLeaseResponse,
+} from "../../contracts/shared-pages";
 import { assistLimits } from "../../contracts/assist";
 import { AppError } from "../domain/errors";
 import { addDays, todayJST, weekStart } from "../domain/dates";
@@ -163,6 +172,63 @@ const penaltyFields = {
   UpdatedAt: iso(penaltyRules.updated_at),
 };
 
+const sharedPageClock = sql`strftime('%Y-%m-%dT%H:%M:%fZ','now')`;
+const sharedPageLeaseExpiry = sql`strftime('%Y-%m-%dT%H:%M:%fZ','now',${`+${sharedPageLimits.leaseSeconds} seconds`})`;
+// Ownership belongs to a team member, independently of their tabs or login sessions.
+const liveSharedPageLease = sql`lease_user_id IS NOT NULL AND lease_expires_at>${sharedPageClock}
+  AND EXISTS (SELECT 1 FROM team_members WHERE team_id=shared_pages.team_id
+    AND user_id=shared_pages.lease_user_id)`;
+const sharedPageSummaryFields = sql`id,title,version,created_at AS createdAt,updated_at AS updatedAt,
+  COALESCE((SELECT COALESCE(NULLIF(nickname,''),name) FROM auth_user WHERE id=shared_pages.updated_by),'メンバー') AS updatedByName,
+  CASE WHEN ${liveSharedPageLease} THEN lease_user_id ELSE NULL END AS editUserId,
+  CASE WHEN ${liveSharedPageLease} THEN (SELECT COALESCE(NULLIF(nickname,''),name,'メンバー') FROM auth_user WHERE id=shared_pages.lease_user_id) ELSE NULL END AS editName,
+  CASE WHEN ${liveSharedPageLease} THEN lease_expires_at ELSE NULL END AS editExpiresAt`;
+const sharedPageFields = sql`${sharedPageSummaryFields},document_json AS documentJson`;
+type SharedPageRecord = Omit<SharedPage, "document" | "editing"> & {
+  documentJson: string;
+  editUserId: string | null;
+  editName: string | null;
+  editExpiresAt: string | null;
+};
+function pageMetadata(row: Omit<SharedPageRecord, "documentJson">) {
+  return {
+    id: row.id,
+    title: row.title,
+    version: row.version,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    updatedByName: row.updatedByName,
+    editing:
+      row.editUserId && row.editExpiresAt
+        ? {
+            userId: row.editUserId,
+            displayName: row.editName ?? "メンバー",
+            expiresAt: row.editExpiresAt,
+          }
+        : null,
+  };
+}
+function sharedPage(row: SharedPageRecord): SharedPage {
+  return { ...pageMetadata(row), document: JSON.parse(row.documentJson) as SharedPageDocument };
+}
+function sharedPagePreview(document: SharedPageDocument): string {
+  const fragments: string[] = [];
+  const walk = (blocks: SharedPageBlock[]) => {
+    for (const block of blocks) {
+      fragments.push(
+        block.content
+          .map((part) =>
+            part.type === "text" ? part.text : part.content.map((text) => text.text).join(""),
+          )
+          .join(""),
+      );
+      walk(block.children);
+    }
+  };
+  walk(document.blocks);
+  return fragments.join(" ").replace(/\s+/g, " ").trim().slice(0, 160);
+}
+
 export class D1Repository implements P.Repository {
   constructor(
     private readonly db: Database,
@@ -228,6 +294,131 @@ export class D1Repository implements P.Repository {
   private requireSystemAccess() {
     if (this.member || this.authorization)
       throw new AppError(403, "forbidden", "System operation required");
+  }
+  private sharedPageActor() {
+    if (!this.member || !this.authorization || !("sessionId" in this.authorization))
+      throw new AppError(403, "forbidden", "認証済みのチームメンバーとして操作してください。");
+    return { userId: this.member.userId };
+  }
+  private sharedPageLeaseAccess() {
+    const actor = this.sharedPageActor();
+    return sql`(${this.teamAccess(sql`team_id`)}) AND lease_user_id=${actor.userId}
+      AND lease_expires_at>${sharedPageClock}`;
+  }
+  private async sharedPageConflict(id: string, code: string, message: string): Promise<never> {
+    await this.assertAccess();
+    await this.GetSharedPage(id); // Unknown and other-team IDs remain indistinguishable.
+    throw new AppError(409, code, message);
+  }
+  async ListSharedPages(teamId: string): Promise<SharedPageSummary[]> {
+    this.sharedPageActor();
+    const rows = await this.db.all<
+      Omit<SharedPageRecord, "documentJson"> & { preview: string }
+    >(sql`
+      SELECT ${sharedPageSummaryFields},preview FROM shared_pages
+      WHERE team_id=${teamId} AND ${this.teamAccess(sql`team_id`)}
+      ORDER BY updated_at DESC,id DESC
+    `);
+    return rows.map((row) => ({ ...pageMetadata(row), preview: row.preview }));
+  }
+  async GetSharedPage(id: string): Promise<SharedPage> {
+    this.sharedPageActor();
+    const row = await this.db.get<SharedPageRecord>(sql`
+      SELECT ${sharedPageFields} FROM shared_pages WHERE id=${id} AND ${this.teamAccess(sql`team_id`)}
+    `);
+    return sharedPage(required(row ? [row] : [], "GetSharedPage"));
+  }
+  async CreateSharedPage(
+    arg: Parameters<P.Repository["CreateSharedPage"]>[0],
+  ): Promise<SharedPage> {
+    const actor = this.sharedPageActor();
+    const row = await this.db.get<SharedPageRecord>(sql`
+      INSERT INTO shared_pages(id,team_id,title,document_json,preview,version,created_at,updated_at,updated_by)
+      SELECT ${arg.id},${arg.teamId},${arg.title},${JSON.stringify(arg.document)},${sharedPagePreview(arg.document)},
+        0,${sharedPageClock},${sharedPageClock},${actor.userId}
+      WHERE ${this.teamAccess(arg.teamId)} AND ${arg.userId}=${actor.userId}
+      RETURNING ${sharedPageFields}
+    `);
+    if (!row) {
+      await this.assertAccess();
+      throw new AppError(403, "forbidden", "このチームには作成できません。");
+    }
+    return sharedPage(row);
+  }
+  async AcquireSharedPageLease(id: string): Promise<SharedPageLeaseResponse> {
+    const actor = this.sharedPageActor();
+    const row = await this.db.get<SharedPageRecord & { expiresAt: string; serverNow: string }>(sql`
+      UPDATE shared_pages SET lease_user_id=${actor.userId},lease_expires_at=${sharedPageLeaseExpiry}
+      WHERE id=${id} AND ${this.teamAccess(sql`team_id`)}
+        AND (NOT (${liveSharedPageLease}) OR lease_user_id=${actor.userId})
+      RETURNING ${sharedPageFields},lease_expires_at AS expiresAt,${sharedPageClock} AS serverNow
+    `);
+    if (!row)
+      return this.sharedPageConflict(
+        id,
+        "page_locked",
+        "ほかのメンバーが編集中です。保存された内容を閲覧できます。",
+      );
+    return {
+      page: sharedPage(row),
+      lease: { expiresAt: row.expiresAt, serverNow: row.serverNow },
+    };
+  }
+  async RenewSharedPageLease(id: string): Promise<SharedPageLease> {
+    const row = await this.db.get<{ expiresAt: string; serverNow: string }>(sql`
+      UPDATE shared_pages SET lease_expires_at=${sharedPageLeaseExpiry}
+      WHERE id=${id} AND ${this.sharedPageLeaseAccess()}
+      RETURNING lease_expires_at AS expiresAt,${sharedPageClock} AS serverNow
+    `);
+    if (!row)
+      return this.sharedPageConflict(
+        id,
+        "edit_lease_lost",
+        "編集権が失効しました。入力内容をコピーして最新のページを確認してください。",
+      );
+    return row;
+  }
+  async ReleaseSharedPageLease(id: string): Promise<void> {
+    const row = await this.db.get<{ id: string }>(sql`
+      UPDATE shared_pages SET lease_user_id=NULL,lease_expires_at=NULL
+      WHERE id=${id} AND ${this.sharedPageLeaseAccess()} RETURNING id
+    `);
+    if (!row)
+      return this.sharedPageConflict(id, "edit_lease_lost", "編集権はすでに失効しています。");
+  }
+  async UpdateSharedPage(
+    arg: Parameters<P.Repository["UpdateSharedPage"]>[0],
+  ): Promise<SharedPage> {
+    const actor = this.sharedPageActor();
+    const row = await this.db.get<SharedPageRecord>(sql`
+      UPDATE shared_pages SET title=${arg.title},document_json=${JSON.stringify(arg.document)},
+        preview=${sharedPagePreview(arg.document)},version=version+1,updated_at=${sharedPageClock},updated_by=${actor.userId}
+      WHERE id=${arg.id} AND ${this.sharedPageLeaseAccess()}
+        AND version=${arg.expectedVersion} AND ${arg.userId}=${actor.userId}
+      RETURNING ${sharedPageFields}
+    `);
+    if (!row) {
+      const lease = await this.db.get<{ id: string }>(sql`SELECT id FROM shared_pages
+        WHERE id=${arg.id} AND ${this.sharedPageLeaseAccess()}`);
+      return this.sharedPageConflict(
+        arg.id,
+        lease ? "page_version_conflict" : "edit_lease_lost",
+        "保存できませんでした。入力内容をコピーして最新のページを確認してください。",
+      );
+    }
+    return sharedPage(row);
+  }
+  async DeleteSharedPage(id: string, expectedVersion: number): Promise<void> {
+    const row = await this.db.get<{ id: string }>(sql`
+      DELETE FROM shared_pages WHERE id=${id} AND ${this.sharedPageLeaseAccess()}
+        AND version=${expectedVersion} RETURNING id
+    `);
+    if (!row)
+      return this.sharedPageConflict(
+        id,
+        "edit_lease_lost",
+        "編集権またはページが更新されました。最新のページを確認してください。",
+      );
   }
   async assertAccess(): Promise<void> {
     const row = await this.db.get<AccessState>(sql`
