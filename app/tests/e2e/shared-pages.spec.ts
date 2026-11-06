@@ -133,6 +133,77 @@ async function expectUnobscured(button: Locator) {
 }
 
 test(
+  "shared page creation uses the app theme and restores navigation after returning",
+  { tag: ["@shared-pages", "@theme"] },
+  async ({ page, context, isMobile }, testInfo) => {
+    await authenticate(context);
+    const viewport = page.viewportSize()!;
+    const nav = page.getByTestId("floating-nav");
+    const navBottomGap = () =>
+      nav.evaluate((element) => window.innerHeight - element.getBoundingClientRect().bottom);
+
+    for (const colorScheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme });
+      await page.goto("/pages");
+      await expect(nav).toBeVisible();
+      const originalGap = await navBottomGap();
+      const canvas = await page.locator("body").evaluate((element) => {
+        return getComputedStyle(element).backgroundColor;
+      });
+      await page.getByRole("link", { name: "ページを作成", exact: true }).click();
+      await expect(editor(page)).toBeVisible();
+      const addBlock = page.getByRole("button", { name: "ブロックを追加", exact: true });
+      const blockMenu = page.getByRole("group", { name: "追加するブロック", exact: true });
+      await addBlock.click();
+      await expect(blockMenu).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(blockMenu).toHaveCount(0);
+      await expect(addBlock).toBeFocused();
+      await addBlock.click();
+      await page.getByRole("textbox", { name: "タイトル", exact: true }).click();
+      await expect(blockMenu).toHaveCount(0);
+      // Editing must not replace the whole app's scroll/positioning context.
+      await expect(page.locator("#root")).toHaveCSS("position", "static");
+      const surface = isMobile
+        ? canvas
+        : colorScheme === "dark"
+          ? "rgb(35, 39, 35)"
+          : "rgb(255, 255, 255)";
+      await expect(page.getByRole("article", { name: "共有ページ本文" })).toHaveCSS(
+        "background-color",
+        surface,
+      );
+      await expect(page.locator(".shared-page-toolbar")).toHaveCSS("background-color", surface);
+      if (isMobile) {
+        await expect(nav).toBeHidden();
+        // A short page must fit the viewport without an extra screen-height + padding.
+        await expect
+          .poll(() => page.evaluate(() => document.documentElement.scrollHeight - innerHeight))
+          .toBeLessThanOrEqual(1);
+      }
+      await page.screenshot({ path: testInfo.outputPath(`shared-page-new-${colorScheme}.png`) });
+      await page.getByRole("textbox", { name: "タイトル", exact: true }).focus();
+      await editor(page).focus();
+      // Exercise a viewport change, without claiming to emulate an iPhone keyboard.
+      await page.setViewportSize({ width: viewport.width, height: viewport.height - 250 });
+      await page.getByRole("button", { name: "共有ページへ戻る", exact: true }).click();
+      await expect(page).toHaveURL(/\/pages$/);
+      await page.setViewportSize(viewport);
+      await expect(nav).toBeVisible();
+      await expect(page.locator("#root")).toHaveCSS("position", "static");
+      await expect
+        .poll(() =>
+          page.evaluate(() => document.documentElement.style.getPropertyValue("--bn-vv-height")),
+        )
+        .toBe("");
+      await expect.poll(navBottomGap).toBeCloseTo(originalGap, 0);
+      await expectUnobscured(nav.getByRole("button", { name: "ホーム", exact: true }));
+      await page.screenshot({ path: testInfo.outputPath(`shared-page-return-${colorScheme}.png`) });
+    }
+  },
+);
+
+test(
   "shared page toolbar stays reachable while scrolling a long page in read and edit modes",
   { tag: ["@shared-pages"] },
   async ({ page, context }, testInfo) => {
@@ -147,7 +218,7 @@ test(
     await expect(page.locator(".bn-editor")).toContainText("64日目の相談。");
     const viewportHeight = page.viewportSize()!.height;
     const scrollPage = async () => {
-      // BlockNote editing uses its fixed scroll container; reading uses the document.
+      // Exercise the actual scroll owner in both read and edit modes.
       const scrollContainer = await page.locator(".bn-editor").evaluateHandle((element) => {
         for (let ancestor = element.parentElement; ancestor; ancestor = ancestor.parentElement) {
           if (
@@ -238,15 +309,42 @@ test(
       await loggedInAgain.close();
     }
 
-    await page.getByRole("button", { name: "ページの操作", exact: true }).click();
     await page.getByRole("button", { name: "ページを削除", exact: true }).click();
     const confirmation = page.getByRole("dialog");
     await expect(confirmation).toContainText("削除");
     await expect(confirmation).toContainText(updatedTitle);
     await page.screenshot({ path: testInfo.outputPath("shared-page-delete.png"), fullPage: true });
+    let releaseDelete!: () => void;
+    const deleteGate = new Promise<void>((resolve) => {
+      releaseDelete = resolve;
+    });
+    let deleteRequests = 0;
+    await page.route("**/_serverFn/**", async (route) => {
+      if (route.request().postData()?.includes('"deleteSharedPage"')) {
+        deleteRequests++;
+        await deleteGate;
+      }
+      return route.continue();
+    });
     const deleted = operationResponse(page, "deleteSharedPage");
-    await confirmation.getByRole("button", { name: "削除する", exact: true }).click();
+    try {
+      await confirmation.getByRole("button", { name: "削除する", exact: true }).click();
+      await expect.poll(() => deleteRequests).toBe(1);
+      await expect(
+        confirmation.getByRole("button", { name: "削除中…", exact: true }),
+      ).toBeDisabled();
+      await expect(
+        confirmation.getByRole("button", { name: "削除中…", exact: true }),
+      ).toHaveAttribute("aria-busy", "true");
+      await expect(
+        confirmation.getByRole("button", { name: "キャンセル", exact: true }),
+      ).toBeDisabled();
+      await page.screenshot({ path: testInfo.outputPath("shared-page-deleting.png") });
+    } finally {
+      releaseDelete();
+    }
     await saved(deleted);
+    await page.unrouteAll({ behavior: "wait" });
     await expect(page).toHaveURL(/\/pages\/?$/);
     await page.reload();
     await expect(page.getByText(updatedTitle, { exact: true })).toHaveCount(0);
@@ -458,6 +556,48 @@ test(
     const confirmation = page.getByRole("dialog");
     await expect(confirmation).toContainText("保存していない変更");
     await page.screenshot({ path: testInfo.outputPath("shared-page-unsaved.png"), fullPage: true });
+    // Exercise both clipboard acknowledgement and the shared fallback sheet without OS clipboard access.
+    await page.evaluate(() => {
+      Object.defineProperty(navigator.clipboard, "writeText", {
+        configurable: true,
+        value: async (text: string) => {
+          (window as unknown as { copiedDraft: string }).copiedDraft = text;
+        },
+      });
+    });
+    await confirmation.getByRole("button", { name: "入力をコピー", exact: true }).click();
+    await expect(
+      confirmation.getByRole("button", { name: "入力をコピー済み", exact: true }),
+    ).toBeVisible();
+    expect(
+      await page.evaluate(() => (window as unknown as { copiedDraft: string }).copiedDraft),
+    ).toContain(draft);
+    await expect(
+      confirmation.getByRole("button", { name: "入力をコピー", exact: true }),
+    ).toBeVisible();
+    await page.evaluate(() => {
+      Object.defineProperty(navigator.clipboard, "writeText", {
+        configurable: true,
+        value: async () => {
+          throw new Error("clipboard unavailable");
+        },
+      });
+    });
+    await confirmation.getByRole("button", { name: "入力をコピー", exact: true }).click();
+    const copySheet = page.getByRole("dialog", { name: "入力内容をコピー", exact: true });
+    await expect(copySheet).toBeVisible();
+    await expect(page.getByRole("dialog")).toHaveCount(1);
+    const copyInput = copySheet.getByRole("textbox", { name: "コピーする入力内容", exact: true });
+    await expect(copyInput).toHaveValue(`${title}\n\n${draft}`);
+    await copySheet.getByRole("button", { name: "入力を選択", exact: true }).click();
+    expect(
+      await copyInput.evaluate(
+        (element: HTMLTextAreaElement) => element.selectionEnd - element.selectionStart,
+      ),
+    ).toBe(`${title}\n\n${draft}`.length);
+    await page.screenshot({ path: testInfo.outputPath("shared-page-copy-fallback.png") });
+    await copySheet.getByRole("button", { name: "閉じる", exact: true }).click();
+    await expect(confirmation).toContainText("保存していない変更");
     await confirmation.getByRole("button", { name: "編集を続ける", exact: true }).click();
     await expect(editor(page)).toContainText(draft);
     await page.getByRole("button", { name: "共有ページへ戻る", exact: true }).click();
@@ -543,7 +683,9 @@ test(
     await page.getByRole("button", { name: "最新を確認", exact: true }).click();
     const confirmation = page.getByRole("dialog");
     await expect(confirmation).toContainText("保存していない変更");
-    await confirmation.getByRole("button", { name: "変更を破棄して戻る", exact: true }).click();
+    await confirmation
+      .getByRole("button", { name: "変更を破棄して最新を表示", exact: true })
+      .click();
     await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
     await expect(page.locator(".bn-editor")).toContainText(savedBody);
     await expect(page.locator(".bn-editor")).not.toContainText(draftBody);

@@ -1,4 +1,4 @@
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, LoaderCircle } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useFormPresence } from "../state/overlay";
 
@@ -6,6 +6,7 @@ type DeleteConfirmModalProps = {
   isOpen: boolean;
   title: string;
   message: string;
+  isDeleting?: boolean;
   onCancel: () => void;
   onConfirm: () => void;
 };
@@ -14,6 +15,7 @@ export function DeleteConfirmModal({
   isOpen,
   title,
   message,
+  isDeleting = false,
   onCancel,
   onConfirm,
 }: DeleteConfirmModalProps) {
@@ -39,17 +41,27 @@ export function DeleteConfirmModal({
         <div className="mt-4 flex justify-end gap-2">
           <button
             type="button"
-            className="h-9 rounded-md border border-line-strong bg-surface px-3 text-sm text-body transition-colors hover:bg-surface-muted"
+            className="h-9 rounded-md border border-line-strong bg-surface px-3 text-sm text-body transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={isDeleting}
             onClick={onCancel}
           >
             キャンセル
           </button>
           <button
             type="button"
-            className="h-9 rounded-md border border-danger-line bg-danger-soft px-3 text-sm text-danger transition-colors hover:bg-danger-hover"
+            className="inline-flex h-9 items-center gap-2 rounded-md border border-danger-line bg-danger-soft px-3 text-sm text-danger transition-colors hover:bg-danger-hover disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={isDeleting}
+            aria-busy={isDeleting}
             onClick={onConfirm}
           >
-            削除する
+            {isDeleting ? (
+              <LoaderCircle
+                size={16}
+                className="animate-spin motion-reduce:animate-none"
+                aria-hidden="true"
+              />
+            ) : null}
+            {isDeleting ? "削除中…" : "削除する"}
           </button>
         </div>
       </dialog>
