@@ -225,9 +225,6 @@ export class D1Repository implements P.Repository {
       this.member ? sql`${teamId}=${this.member.teamId}` : this.authorization ? sql`0` : sql`1`,
     )!;
   }
-  private taskAccess(taskId: string | SQLWrapper) {
-    return sql`EXISTS (SELECT 1 FROM tasks WHERE id=${taskId} AND ${this.teamAccess(tasks.team_id)})`;
-  }
   private requireSystemAccess() {
     if (this.member || this.authorization)
       throw new AppError(403, "forbidden", "System operation required");
@@ -259,35 +256,6 @@ export class D1Repository implements P.Repository {
     if (row.TeamID === null || row.Role === null || row.TeamName === null)
       throw new AppError(403, "forbidden", "user has no team membership");
     return { TeamID: row.TeamID, Role: row.Role, TeamName: row.TeamName };
-  }
-  async GetTaskCompletionWeeklyEntryCount(
-    arg: P.GetTaskCompletionWeeklyEntryCountParams,
-  ): Promise<number> {
-    const rows = await this.db
-      .select({ count: count() })
-      .from(taskCompletionWeeklyEntries)
-      .where(
-        and(
-          eq(taskCompletionWeeklyEntries.task_id, arg.TaskID),
-          eq(taskCompletionWeeklyEntries.week_start, arg.WeekStart),
-          this.taskAccess(taskCompletionWeeklyEntries.task_id),
-        ),
-      );
-    return required(rows, "GetTaskCompletionWeeklyEntryCount").count;
-  }
-  async HasTaskCompletionDaily(arg: P.HasTaskCompletionDailyParams): Promise<boolean> {
-    const rows = await this.db
-      .select({ id: taskCompletionDaily.task_id })
-      .from(taskCompletionDaily)
-      .where(
-        and(
-          eq(taskCompletionDaily.task_id, arg.TaskID),
-          eq(taskCompletionDaily.target_date, arg.TargetDate),
-          this.taskAccess(taskCompletionDaily.task_id),
-        ),
-      )
-      .limit(1);
-    return rows.length > 0;
   }
   async ListTaskCompletionDailyByMonthAndTeam(
     arg: P.ListTaskCompletionDailyByMonthAndTeamParams,
@@ -418,15 +386,6 @@ export class D1Repository implements P.Repository {
         taskCompletionWeeklyEntries.id,
       );
   }
-  async DeleteTeam(id: string): Promise<void> {
-    this.requireSystemAccess();
-    await this.db.batch([
-      this.db.update(tasks).set({ assignee_user_id: null }).where(eq(tasks.team_id, id)),
-      this.db.delete(tasks).where(eq(tasks.team_id, id)),
-      this.db.delete(teams).where(eq(teams.id, id)),
-    ]);
-  }
-
   async ListMembershipsByUserID(userID: string): Promise<P.ListMembershipsByUserIDRow[]> {
     return this.db
       .select({ TeamID: teamMembers.team_id, Role: teamMembers.role, TeamName: teams.name })
