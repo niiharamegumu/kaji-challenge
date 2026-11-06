@@ -17,7 +17,7 @@ function groupBy<T>(items: T[], keyOf: (item: T) => string): Map<string, T[]> {
   return groups;
 }
 
-export async function readSummary(repo: Repository, teamId: string, month: string) {
+async function readSummary(repo: Repository, teamId: string, month: string) {
   try {
     return await repo.GetMonthlyPenaltySummary({ TeamID: teamId, MonthStart: month + "-01" });
   } catch (error) {
