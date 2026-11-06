@@ -145,12 +145,8 @@ export class VoiceSession {
           if (generation === this.generation)
             void this.reviewAudio(wav, generation, base, limited ?? false);
         },
-        onStop: (message, reason) => {
-          if (generation !== this.generation) return;
-          if (reason === "idle") {
-            this.release();
-            this.update({ phase: "idle" });
-          } else this.fail(message);
+        onStop: (message) => {
+          if (generation === this.generation) this.fail(message);
         },
       });
       const capture = this.capture;
