@@ -6,6 +6,8 @@ import AppShell from "./App";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";
 import { lazy, useState } from "react";
+import { useSetAtom } from "jotai";
+import { sharedPageDraftDirtyAtom } from "./shared/state/sharedPageDraft";
 import { getRouter } from "./router";
 function App() {
   const [router] = useState(getRouter);
@@ -16,7 +18,7 @@ vi.mock("./app/pwa-register", () => ({ initializePWA: vi.fn() }));
 vi.mock("./features/auth/api/authClient", () => ({
   authClient: {
     signIn: { social: (...args: unknown[]) => mockGetAuthStart(...args) },
-    signOut: vi.fn(),
+    signOut: (...args: unknown[]) => mockSignOut(...args),
   },
 }));
 import { appQueryClient } from "./shared/query/queryClient";
@@ -25,6 +27,7 @@ import { tasksQueryOptions } from "./shared/query/taskQueries";
 import { withExpectedConsoleError } from "./test/console";
 
 const mockGetAuthStart = vi.fn();
+const mockSignOut = vi.fn();
 const mockGetTaskOverview = vi.fn();
 const mockListTasks = vi.fn();
 const mockListRules = vi.fn();
@@ -60,6 +63,8 @@ vi.mock("./lib/api/operations", () => ({
   getTeamCurrentInvite: (...args: unknown[]) => mockGetTeamCurrentInvite(...args),
   listTodoCategories: vi.fn().mockResolvedValue({ data: { categories: [] } }),
   listTodoItems: (...args: unknown[]) => mockListTodoItems(...args),
+  listSharedPages: vi.fn().mockResolvedValue({ data: { items: [] } }),
+  getSharedPage: vi.fn(),
   listReminders: vi.fn(),
   listReminderDefinitions: vi.fn(),
   postReminder: vi.fn(),
@@ -93,6 +98,15 @@ vi.mock("./app/route-chunks", () => ({
   ReminderCalendarPage: () => <div>calendar page</div>,
   TodoPage: () => <div>todo page</div>,
   TodoCategoriesPage: () => <div>todo categories page</div>,
+  SharedPagesPage: function SharedPagesMock() {
+    const setDirty = useSetAtom(sharedPageDraftDirtyAtom);
+    return (
+      <div>
+        shared pages page<button onClick={() => setDirty(true)}>未保存にする</button>
+      </div>
+    );
+  },
+  preloadSharedPagesPageChunk: vi.fn(),
   preloadTodoCategoriesPageChunk: vi.fn(),
   preloadTasksPageChunk: (...args: unknown[]) => mockPreloadTasksPageChunk(...args),
   preloadPenaltiesPageChunk: (...args: unknown[]) => mockPreloadPenaltiesPageChunk(...args),
@@ -114,6 +128,7 @@ describe("App", () => {
     appQueryClient.clear();
 
     mockGetAuthStart.mockReset();
+    mockSignOut.mockReset().mockResolvedValue({});
     mockGetTaskOverview.mockReset();
     mockListTasks.mockReset();
     mockListRules.mockReset();
@@ -223,6 +238,7 @@ describe("App", () => {
     await user.click(floatingNav.getByRole("button", { name: "その他" }));
 
     expect(screen.getByRole("button", { name: "カレンダー" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "共有ページ" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "タスク" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "設定" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "ログアウト" })).toBeInTheDocument();
@@ -234,6 +250,7 @@ describe("App", () => {
     ["ペナルティ", "/penalties", "penalties page"],
     ["設定", "/settings", "settings page"],
     ["カテゴリー", "/todo-categories", "todo categories page"],
+    ["共有ページ", "/pages", "shared pages page"],
   ])("navigates from %s to %s", async (label, path, page) => {
     mockGetMe.mockResolvedValue({
       data: { user: { id: "u1", displayName: "Owner" }, memberships: [] },
@@ -249,6 +266,28 @@ describe("App", () => {
 
     expect(await screen.findByText(page)).toBeInTheDocument();
     expect(window.location.pathname).toBe(path);
+  });
+
+  it("keeps an unsaved shared-page draft when logout is canceled", async () => {
+    mockGetMe.mockResolvedValue({
+      data: { user: { id: "u1", displayName: "Owner" }, memberships: [] },
+    });
+    window.history.pushState({}, "", "/pages");
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    try {
+      const user = userEvent.setup();
+      render(<App />);
+      await user.click(await screen.findByRole("button", { name: "未保存にする" }));
+      const navigation = within(await screen.findByTestId("floating-nav"));
+      await user.click(navigation.getByRole("button", { name: "その他" }));
+      await user.click(navigation.getByRole("button", { name: "ログアウト" }));
+      expect(confirm).toHaveBeenCalledWith(expect.stringContaining("保存していない変更"));
+      expect(mockSignOut).not.toHaveBeenCalled();
+      expect(screen.getByText("shared pages page")).toBeInTheDocument();
+      expect(window.location.pathname).toBe("/pages");
+    } finally {
+      confirm.mockRestore();
+    }
   });
 
   it("shows the home shell while task overview is still loading", async () => {
