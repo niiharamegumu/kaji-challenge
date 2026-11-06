@@ -41,6 +41,16 @@ html[data-ios-standalone="true"] .ios-pwa-blur-workaround {
 body {
   margin: 0;
 }
+
+@media (width < 48rem) {
+  .shared-page-focused {
+    padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  }
+
+  .shared-page-focused [data-shared-page-shell] {
+    display: none;
+  }
+}
 dialog {
   color: var(--color-ink);
 }
