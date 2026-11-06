@@ -233,8 +233,8 @@ describe("transport transaction with D1", () => {
         connection.repository.ListRemindersByTeamID(foreign.team),
         connection.repository.ListPenaltyRulesByTeamID(foreign.team),
         connection.repository.ListPushSubscriptionsByUserID(otherId),
-        connection.repository.HasTaskCompletionDaily({
-          TaskID: foreign.task,
+        connection.repository.ListTaskCompletionDailyByTeamAndDate({
+          TeamID: foreign.team,
           TargetDate: "2026-10-10",
         }),
       ]);
