@@ -13,7 +13,7 @@ export type { TaskType };
 
 export const TaskTypeConst = TaskTypeValues;
 
-export function isWeeklyTaskType(type: TaskType) {
+function isWeeklyTaskType(type: TaskType) {
   return type === TaskTypeConst.weekly;
 }
 
