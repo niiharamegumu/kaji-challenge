@@ -250,7 +250,7 @@ test(
     const write = page.getByRole("checkbox", { name: /ToDo の追加・更新・完了/ });
     await page.keyboard.press("Tab");
     await expect(read).toBeFocused();
-    expect(await read.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe("solid");
+    await expect(read).toHaveCSS("outline-style", "none");
     await page.keyboard.press("Space");
     await expect(read).not.toBeChecked();
     await page.keyboard.press("Tab");
@@ -260,6 +260,7 @@ test(
     await expect(page.getByRole("link", { name: "連携の管理" })).toBeFocused();
     await page.keyboard.press("Tab");
     await expect(approve).toBeFocused();
+    await expect(approve).toHaveCSS("outline-style", "none");
     await page.keyboard.press("Enter");
     await expect(page.getByText("Selection received")).toBeVisible();
     expect(submitted?.getAll("scope")).toEqual(["todos:write"]);
