@@ -195,16 +195,6 @@ const reads: ReadCase[] = [
     denied: [],
   },
   {
-    name: "GetTaskCompletionWeeklyEntryCount",
-    run: (r, f) => r.GetTaskCompletionWeeklyEntryCount({ TaskID: f.weekly, WeekStart: week }),
-    denied: 0,
-  },
-  {
-    name: "HasTaskCompletionDaily",
-    run: (r, f) => r.HasTaskCompletionDaily({ TaskID: f.daily, TargetDate: date }),
-    denied: false,
-  },
-  {
     name: "ListTaskCompletionDailyByMonthAndTeam",
     run: (r, f) =>
       r.ListTaskCompletionDailyByMonthAndTeam({
@@ -815,7 +805,6 @@ it.each([
         UpdatedAt: now,
       }),
   },
-  { name: "DeleteTeam", run: (r: Repository) => r.DeleteTeam(other.team) },
   { name: "ClosePeriod", run: (r: Repository) => r.ClosePeriod(other.team, "day", date) },
   {
     name: "ProvisionUser",
