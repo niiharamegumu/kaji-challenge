@@ -1,5 +1,8 @@
 import { z } from "zod";
 import { isDate } from "../server/domain/dates";
+
+export const dateKeySchema = z.string().refine(isDate, "invalid date");
+
 export const UserSchema = z.object({
   id: z.string(),
   email: z.string(),
@@ -82,8 +85,8 @@ export const ReminderSchema = z.object({
   notes: z.string().nullable().optional(),
   kind: ReminderKindSchema,
   scheduleType: ReminderScheduleTypeSchema.nullable().optional(),
-  startDate: z.string().refine(isDate, "invalid date"),
-  endDate: z.string().refine(isDate, "invalid date").nullable().optional(),
+  startDate: dateKeySchema,
+  endDate: dateKeySchema.nullable().optional(),
   createdAt: z.iso.datetime({ offset: true }),
   updatedAt: z.iso.datetime({ offset: true }),
 });
@@ -92,27 +95,27 @@ export const CreateReminderRequestSchema = z.object({
   notes: z.string().max(500).optional(),
   kind: ReminderKindSchema,
   scheduleType: ReminderScheduleTypeSchema.optional(),
-  startDate: z.string().refine(isDate, "invalid date"),
-  endDate: z.string().refine(isDate, "invalid date").optional(),
+  startDate: dateKeySchema,
+  endDate: dateKeySchema.optional(),
 });
 export const UpdateReminderRequestSchema = z.object({
   title: z.string().min(1).max(100).optional(),
   notes: z.string().max(500).nullable().optional(),
   kind: ReminderKindSchema.optional(),
   scheduleType: ReminderScheduleTypeSchema.nullable().optional(),
-  startDate: z.string().refine(isDate, "invalid date").optional(),
-  endDate: z.string().refine(isDate, "invalid date").nullable().optional(),
+  startDate: dateKeySchema.optional(),
+  endDate: dateKeySchema.nullable().optional(),
 });
 export const ReminderOccurrenceSchema = z.object({
   reminderId: z.string(),
-  date: z.string().refine(isDate, "invalid date"),
+  date: dateKeySchema,
   title: z.string(),
   notes: z.string().nullable().optional(),
   kind: ReminderKindSchema,
   scheduleType: ReminderScheduleTypeSchema.nullable().optional(),
 });
 export const ReminderCalendarDaySchema = z.object({
-  date: z.string().refine(isDate, "invalid date"),
+  date: dateKeySchema,
   items: z.array(ReminderOccurrenceSchema),
 });
 export const ReminderCalendarResponseSchema = z.object({
@@ -130,7 +133,7 @@ export const TaskSchema = z.object({
   requiredCompletionsPerWeek: z.number().int().min(1).max(7),
   scheduledWeeklyRequirement: z
     .object({
-      effectiveWeek: z.string().refine(isDate, "invalid date"),
+      effectiveWeek: dateKeySchema,
       requiredCompletionsPerWeek: z.number().int().min(1).max(7),
     })
     .optional(),
@@ -155,12 +158,12 @@ export const UpdateTaskRequestSchema = z.object({
 });
 export const ReorderTasksRequestSchema = z.object({ taskIds: z.array(z.string()).min(1) });
 export const TaskCompletionRequestSchema = z.object({
-  targetDate: z.string().refine(isDate, "invalid date"),
+  targetDate: dateKeySchema,
   action: z.enum(["complete", "incomplete", "increment", "decrement"]),
 });
 export const TaskCompletionResponseSchema = z.object({
   taskId: z.string(),
-  targetDate: z.string().refine(isDate, "invalid date"),
+  targetDate: dateKeySchema,
   completed: z.boolean(),
   weeklyCompletedCount: z.number().int(),
 });
@@ -247,7 +250,7 @@ export const TaskOverviewWeeklyTaskSchema = z.object({
 });
 export const TaskOverviewResponseSchema = z.object({
   month: z.string(),
-  today: z.string().refine(isDate, "invalid date"),
+  today: dateKeySchema,
   elapsedDaysInWeek: z.number().int(),
   monthlyPenaltyTotal: z.number().int(),
   dailyTasks: z.array(TaskOverviewDailyTaskSchema),
@@ -265,7 +268,7 @@ export const MonthlyTaskStatusItemSchema = z.object({
   completionSlots: z.array(TaskCompletionSlotSchema),
 });
 export const MonthlyTaskStatusGroupSchema = z.object({
-  date: z.string().refine(isDate, "invalid date"),
+  date: dateKeySchema,
   items: z.array(MonthlyTaskStatusItemSchema),
 });
 export const MonthlyPenaltySummarySchema = z.object({
@@ -284,8 +287,8 @@ export const CloseResponseSchema = z.object({
 });
 export const MonthCloseCandidateSchema = z.object({
   month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
-  dailyThroughDate: z.string().refine(isDate, "invalid date"),
-  weeklyThroughDate: z.string().refine(isDate, "invalid date"),
+  dailyThroughDate: dateKeySchema,
+  weeklyThroughDate: dateKeySchema,
 });
 export const MonthCloseCandidateResponseSchema = z.object({
   candidate: MonthCloseCandidateSchema.nullable(),
@@ -293,7 +296,7 @@ export const MonthCloseCandidateResponseSchema = z.object({
 });
 
 // Monthly calculations need both the month's first day and the next month's boundary.
-const summaryMonthSchema = z
+export const summaryMonthSchema = z
   .string()
   .regex(/^\d{4}-(0[1-9]|1[0-2])$/)
   .refine((month) => !month.startsWith("0000-") && month !== "9999-12", "unsupported month");
@@ -385,8 +388,8 @@ export const operationSchema = z.discriminatedUnion("operation", [
     operation: z.literal("listReminders"),
     params: z
       .object({
-        from: z.string().refine(isDate, "invalid date"),
-        to: z.string().refine(isDate, "invalid date"),
+        from: dateKeySchema,
+        to: dateKeySchema,
       })
       .refine(
         ({ from, to }) => from <= to && Date.parse(to) - Date.parse(from) <= 365 * 86_400_000,
