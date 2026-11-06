@@ -1,10 +1,11 @@
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { SettingsManager } from "./SettingsManager";
 
 vi.mock("../../push", () => ({ PushNotificationsSection: () => null }));
 vi.mock("./TodoCompletionSettings", () => ({ TodoCompletionSettings: () => null }));
+vi.mock("../../todos", () => ({ TodoDefaultCategorySettings: () => null }));
 
 const props: ComponentProps<typeof SettingsManager> = {
   identityKey: "user:team",
@@ -45,6 +46,7 @@ it("marks an invite expired at its deadline and stops scheduling updates", () =>
   render(
     <SettingsManager {...props} invite={{ code: "INVITE", expiresAt: "2026-10-16T00:01:30Z" }} />,
   );
+  fireEvent.click(screen.getByRole("button", { name: /^チーム/ }));
   act(() => vi.advanceTimersByTime(89_999));
   expect(screen.queryByText(/この招待コードは期限切れ/)).not.toBeInTheDocument();
   act(() => vi.advanceTimersByTime(1));
@@ -70,10 +72,24 @@ it("handles a 30-day invite without overflowing the browser timeout limit", () =
   render(
     <SettingsManager {...props} invite={{ code: "LONG", expiresAt: "2026-11-15T00:00:00Z" }} />,
   );
+  fireEvent.click(screen.getByRole("button", { name: /^チーム/ }));
   act(() => vi.advanceTimersByTime(2_147_483_647));
   expect(screen.queryByText(/この招待コードは期限切れ/)).not.toBeInTheDocument();
   expect(vi.getTimerCount()).toBe(1);
   act(() => vi.advanceTimersByTime(30 * 86_400_000 - 2_147_483_647));
   expect(screen.getByText(/この招待コードは期限切れ/)).toBeInTheDocument();
   expect(vi.getTimerCount()).toBe(0);
+});
+
+it("shows only the selected settings category and exposes its selected state", () => {
+  render(<SettingsManager {...props} />);
+  expect(screen.getByRole("heading", { name: "プロフィール" })).toBeVisible();
+  expect(screen.queryByRole("textbox", { name: "チーム名" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /^チーム/ }));
+  expect(screen.getByRole("button", { name: /^チーム/ })).toHaveAttribute("aria-pressed", "true");
+  expect(screen.getByRole("textbox", { name: "チーム名" })).toBeVisible();
+  expect(screen.queryByRole("textbox", { name: "ニックネーム" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /^アプリ/ }));
+  expect(screen.getByRole("button", { name: "アップデートを確認" })).toBeVisible();
+  expect(screen.queryByRole("textbox", { name: "チーム名" })).not.toBeInTheDocument();
 });
