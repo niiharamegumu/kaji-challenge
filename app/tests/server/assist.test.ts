@@ -18,7 +18,8 @@ import {
   transcribeAssistAudio,
 } from "../../src/server/application/assist-operations";
 import { createTestDatabase } from "../helpers/d1";
-import { encodeWav, wavBase64 } from "../../src/features/assist/lib/audio";
+import { encodeWav } from "../../src/features/assist/lib/audio";
+import { wavBase64 } from "../helpers/audio";
 import { validateAssistAudio } from "../../src/server/transport/assist-audio";
 
 const add = { intent: "add_todo", items: [{ name: "牛乳", categoryName: null }] };
