@@ -10,6 +10,7 @@ import {
   check,
 } from "drizzle-orm/sqlite-core";
 import { session, user } from "./auth-schema";
+import type { SharedPageDocument } from "../../contracts/shared-pages";
 
 // Runtime mapping of the deployed D1 schema. SQL migrations remain the DDL source of truth.
 export const mcpConnections = sqliteTable(
@@ -377,5 +378,38 @@ export const assistUsage = sqliteTable(
     check("assist_usage_window", sql`${t.window_count} >= 0`),
     check("assist_usage_daily", sql`${t.daily_count} >= 0`),
     check("assist_usage_total", sql`${t.total_count} >= 0`),
+  ],
+);
+
+export const sharedPages = sqliteTable(
+  "shared_pages",
+  {
+    id: text("id").primaryKey().notNull(),
+    team_id: text("team_id").notNull(),
+    title: text("title").notNull(),
+    document_json: text("document_json", { mode: "json" }).$type<SharedPageDocument>().notNull(),
+    preview: text("preview").notNull(),
+    version: integer("version").notNull().default(0),
+    created_at: text("created_at").notNull(),
+    updated_at: text("updated_at").notNull(),
+    updated_by: text("updated_by").notNull(),
+    lease_user_id: text("lease_user_id"),
+    lease_expires_at: text("lease_expires_at"),
+  },
+  (t) => [
+    foreignKey({ columns: [t.team_id], foreignColumns: [teams.id] }).onDelete("cascade"),
+    foreignKey({ columns: [t.updated_by], foreignColumns: [user.id] }).onDelete("restrict"),
+    index("shared_pages_team_updated_idx").on(t.team_id, t.updated_at, t.id),
+    check("shared_pages_document", sql`json_valid(${t.document_json})`),
+    check("shared_pages_version", sql`${t.version}>=0`),
+    check("shared_pages_title", sql`length(${t.title}) BETWEEN 1 AND 200`),
+    check(
+      "shared_pages_lease",
+      sql`(
+      ${t.lease_user_id} IS NULL AND ${t.lease_expires_at} IS NULL
+    ) OR (
+      ${t.lease_user_id} IS NOT NULL AND ${t.lease_expires_at} IS NOT NULL
+    )`,
+    ),
   ],
 );
