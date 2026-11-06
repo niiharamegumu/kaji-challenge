@@ -57,6 +57,12 @@ test("multiple feature changes select their union, without duplicate tags", () =
     "@calendar",
   ]);
 });
+test("shared page UI changes retain smoke and the shared-page browser suite", () => {
+  assert.deepEqual(selected(["app/src/features/shared-pages/routes/SharedPagesPage.tsx"]), [
+    "@smoke",
+    "@shared-pages",
+  ]);
+});
 for (const path of [
   "app/src/features/auth/components/LoginPage.tsx",
   "app/src/features/shell/components/FloatingNav.tsx",
