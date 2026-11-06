@@ -21,30 +21,18 @@ import {
   reminderDefinitionsQueryOptions,
   reminderCalendarQueryOptions,
 } from "../../../shared/query/reminderQueries";
-export {
-  reminderDefinitionsQueryOptions,
-  reminderCalendarQueryOptions,
-} from "../../../shared/query/reminderQueries";
 
 type StatusSetter = (message: string) => void;
-
-export function useReminderDefinitionsQuery() {
-  return useSuspenseQuery(reminderDefinitionsQueryOptions);
-}
-
-export function useReminderCalendarQuery(monthKey: string) {
-  return useQuery({
-    ...reminderCalendarQueryOptions(monthKey),
-    placeholderData: keepPreviousData,
-  });
-}
 
 export function useReminderPageQueries(monthKey: string) {
   // Start occurrences even when definitions suspend this render. Month changes still
   // use the observer below to retain the previous data and its error/loading state.
   usePrefetchQuery(reminderCalendarQueryOptions(monthKey));
-  const definitionsQuery = useReminderDefinitionsQuery();
-  const calendarQuery = useReminderCalendarQuery(monthKey);
+  const definitionsQuery = useSuspenseQuery(reminderDefinitionsQueryOptions);
+  const calendarQuery = useQuery({
+    ...reminderCalendarQueryOptions(monthKey),
+    placeholderData: keepPreviousData,
+  });
   return { definitionsQuery, calendarQuery };
 }
 
@@ -121,7 +109,7 @@ export function useReminderMutations(setStatus: StatusSetter) {
   };
 }
 
-export function sortRemindersByDate(reminders: Reminder[]) {
+function sortRemindersByDate(reminders: Reminder[]) {
   return [...reminders].sort((a, b) => {
     if (a.startDate === b.startDate) {
       return a.createdAt.localeCompare(b.createdAt);
