@@ -37,6 +37,39 @@ vi.mock("../../src/server/transport/runtime.server", () => ({
 }));
 import "../../src/server/transport/operations.functions";
 
+const sharedPageId = crypto.randomUUID();
+const sharedPageBody = {
+  title: "共有メモ",
+  document: { format: "blocknote", schemaVersion: 1, blocks: [] },
+};
+const sharedPageRequests = [
+  { operation: "listSharedPages", params: {} },
+  { operation: "getSharedPage", params: { pageId: sharedPageId } },
+  { operation: "postSharedPage", body: sharedPageBody },
+  {
+    operation: "postSharedPageLease",
+    params: { pageId: sharedPageId },
+  },
+  {
+    operation: "renewSharedPageLease",
+    params: { pageId: sharedPageId },
+  },
+  {
+    operation: "releaseSharedPageLease",
+    params: { pageId: sharedPageId },
+  },
+  {
+    operation: "patchSharedPage",
+    params: { pageId: sharedPageId },
+    body: { ...sharedPageBody, expectedVersion: 0 },
+  },
+  {
+    operation: "deleteSharedPage",
+    params: { pageId: sharedPageId },
+    body: { expectedVersion: 0 },
+  },
+];
+
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.headers = new Headers({ origin: "https://app.example.com" });
@@ -57,6 +90,7 @@ it("rejects malformed inputs before opening the runtime", async () => {
 });
 
 it.each([
+  ...sharedPageRequests,
   { operation: "getMe" },
   { operation: "postTodoCategoriesReorder", body: { categoryIds: [null] } },
   {
@@ -88,6 +122,15 @@ it.each<Record<string, string>>([
   });
   expect(mocks.session).not.toHaveBeenCalled();
 });
+
+it.each(sharedPageRequests)(
+  "rejects other-origin shared page operations before authentication: $operation",
+  async (data) => {
+    mocks.headers = new Headers({ origin: "https://other.example.com" });
+    expect(await mocks.handler({ data })).toMatchObject({ ok: false, error: { status: 403 } });
+    expect(mocks.session).not.toHaveBeenCalled();
+  },
+);
 
 describe("transport transaction with D1", () => {
   let connection: Awaited<ReturnType<typeof createTestDatabase>>;

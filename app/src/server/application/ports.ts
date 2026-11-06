@@ -1,4 +1,11 @@
 import type { WeeklyRequirement } from "../domain/task-requirements";
+import type {
+  SharedPage,
+  SharedPageSummary,
+  SharedPageDocument,
+  SharedPageLease,
+  SharedPageLeaseResponse,
+} from "../../contracts/shared-pages";
 
 export interface TodoCategory {
   id: string;
@@ -493,6 +500,26 @@ export type TodoAssistActionResult =
   | { kind: "list"; items: TodoItem[] };
 
 export interface Repository {
+  ListSharedPages(teamId: string): Promise<SharedPageSummary[]>;
+  GetSharedPage(id: string): Promise<SharedPage>;
+  CreateSharedPage(arg: {
+    id: string;
+    teamId: string;
+    userId: string;
+    title: string;
+    document: SharedPageDocument;
+  }): Promise<SharedPage>;
+  AcquireSharedPageLease(id: string): Promise<SharedPageLeaseResponse>;
+  RenewSharedPageLease(id: string): Promise<SharedPageLease>;
+  ReleaseSharedPageLease(id: string): Promise<void>;
+  UpdateSharedPage(arg: {
+    id: string;
+    userId: string;
+    title: string;
+    document: SharedPageDocument;
+    expectedVersion: number;
+  }): Promise<SharedPage>;
+  DeleteSharedPage(id: string, expectedVersion: number): Promise<void>;
   forSession(userId: string, sessionId: string): Repository;
   forMember(teamId: string, userId: string): Repository;
   assertAccess(): Promise<void>;

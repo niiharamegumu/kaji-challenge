@@ -3,6 +3,14 @@ import type { TeamChangeScope } from "../../contracts/realtime";
 
 // 読み取りと変更通知の対象を一箇所で定義する。operation追加時は型検査で対応を要求する。
 export const operationChanges = {
+  listSharedPages: [],
+  getSharedPage: [],
+  postSharedPage: ["shared-pages"],
+  patchSharedPage: ["shared-pages"],
+  deleteSharedPage: ["shared-pages"],
+  postSharedPageLease: ["shared-pages"],
+  renewSharedPageLease: [],
+  releaseSharedPageLease: ["shared-pages"],
   getMe: [],
   patchMeNickname: ["profile"],
   patchMeColor: ["profile"],

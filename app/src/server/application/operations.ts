@@ -56,6 +56,37 @@ export async function executeOperation(
   const repo = repository.forMember(teamId, userId);
   let data: unknown;
   switch (input.operation) {
+    case "listSharedPages":
+      data = { items: await repo.ListSharedPages(teamId) };
+      break;
+    case "getSharedPage":
+      data = await repo.GetSharedPage(input.params.pageId);
+      break;
+    case "postSharedPage":
+      data = await repo.CreateSharedPage({
+        id: crypto.randomUUID(),
+        teamId,
+        userId,
+        ...input.body,
+      });
+      break;
+    case "postSharedPageLease":
+      data = await repo.AcquireSharedPageLease(input.params.pageId);
+      break;
+    case "renewSharedPageLease":
+      data = await repo.RenewSharedPageLease(input.params.pageId);
+      break;
+    case "releaseSharedPageLease":
+      await repo.ReleaseSharedPageLease(input.params.pageId);
+      data = {};
+      break;
+    case "patchSharedPage":
+      data = await repo.UpdateSharedPage({ id: input.params.pageId, userId, ...input.body });
+      break;
+    case "deleteSharedPage":
+      await repo.DeleteSharedPage(input.params.pageId, input.body.expectedVersion);
+      data = {};
+      break;
     case "getMe": {
       const user = await repo.GetUserByID(userId);
       data = {

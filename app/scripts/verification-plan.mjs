@@ -6,6 +6,7 @@ const features = new Set([
   "penalties",
   "reminders",
   "settings",
+  "shared-pages",
   "summary",
   "tasks",
   "todos",

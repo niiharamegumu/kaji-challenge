@@ -8,6 +8,7 @@ export const queryKeys = {
   rules: ["rules"] as const,
   todoCategories: ["todo-categories"] as const,
   todoItems: ["todo-items"] as const,
+  sharedPages: ["shared-pages"] as const,
   reminders: ["reminders"] as const,
   reminderDefinitions: ["reminder-definitions"] as const,
   monthlySummary: ["monthly-summary"] as const,

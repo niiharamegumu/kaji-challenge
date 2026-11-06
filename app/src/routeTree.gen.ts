@@ -20,6 +20,9 @@ import { Route as AppTasksRouteImport } from './routes/_app.tasks'
 import { Route as AppTodoCategoriesRouteImport } from './routes/_app.todo-categories'
 import { Route as AppTodosRouteImport } from './routes/_app.todos'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
+import { Route as AppPagesIndexRouteImport } from './routes/_app.pages.index'
+import { Route as AppPagesPageIdRouteImport } from './routes/_app.pages.$pageId'
+import { Route as AppPagesNewRouteImport } from './routes/_app.pages.new'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -75,6 +78,21 @@ const AuthCallbackRoute = AuthCallbackRouteImport.update({
   path: '/auth/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppPagesIndexRoute = AppPagesIndexRouteImport.update({
+  id: '/pages/',
+  path: '/pages/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppPagesPageIdRoute = AppPagesPageIdRouteImport.update({
+  id: '/pages/$pageId',
+  path: '/pages/$pageId',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppPagesNewRoute = AppPagesNewRouteImport.update({
+  id: '/pages/new',
+  path: '/pages/new',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
@@ -87,6 +105,9 @@ export interface FileRoutesByFullPath {
   '/todo-categories': typeof AppTodoCategoriesRoute
   '/todos': typeof AppTodosRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/pages/$pageId': typeof AppPagesPageIdRoute
+  '/pages/new': typeof AppPagesNewRoute
+  '/pages/': typeof AppPagesIndexRoute
 }
 export interface FileRoutesByTo {
   '/calendar': typeof AppCalendarRoute
@@ -99,6 +120,9 @@ export interface FileRoutesByTo {
   '/todos': typeof AppTodosRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/': typeof AppIndexRoute
+  '/pages/$pageId': typeof AppPagesPageIdRoute
+  '/pages/new': typeof AppPagesNewRoute
+  '/pages': typeof AppPagesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -113,6 +137,9 @@ export interface FileRoutesById {
   '/_app/todos': typeof AppTodosRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/_app/': typeof AppIndexRoute
+  '/_app/pages/$pageId': typeof AppPagesPageIdRoute
+  '/_app/pages/new': typeof AppPagesNewRoute
+  '/_app/pages/': typeof AppPagesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -127,6 +154,9 @@ export interface FileRouteTypes {
     | '/todo-categories'
     | '/todos'
     | '/auth/callback'
+    | '/pages/$pageId'
+    | '/pages/new'
+    | '/pages/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/calendar'
@@ -139,6 +169,9 @@ export interface FileRouteTypes {
     | '/todos'
     | '/auth/callback'
     | '/'
+    | '/pages/$pageId'
+    | '/pages/new'
+    | '/pages'
   id:
     | '__root__'
     | '/_app'
@@ -152,6 +185,9 @@ export interface FileRouteTypes {
     | '/_app/todos'
     | '/auth/callback'
     | '/_app/'
+    | '/_app/pages/$pageId'
+    | '/_app/pages/new'
+    | '/_app/pages/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -238,6 +274,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_app/pages/': {
+      id: '/_app/pages/'
+      path: '/pages'
+      fullPath: '/pages/'
+      preLoaderRoute: typeof AppPagesIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/pages/$pageId': {
+      id: '/_app/pages/$pageId'
+      path: '/pages/$pageId'
+      fullPath: '/pages/$pageId'
+      preLoaderRoute: typeof AppPagesPageIdRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/pages/new': {
+      id: '/_app/pages/new'
+      path: '/pages/new'
+      fullPath: '/pages/new'
+      preLoaderRoute: typeof AppPagesNewRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
@@ -251,6 +308,9 @@ interface AppRouteChildren {
   AppTodoCategoriesRoute: typeof AppTodoCategoriesRoute
   AppTodosRoute: typeof AppTodosRoute
   AppIndexRoute: typeof AppIndexRoute
+  AppPagesPageIdRoute: typeof AppPagesPageIdRoute
+  AppPagesNewRoute: typeof AppPagesNewRoute
+  AppPagesIndexRoute: typeof AppPagesIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -263,6 +323,9 @@ const AppRouteChildren: AppRouteChildren = {
   AppTodoCategoriesRoute: AppTodoCategoriesRoute,
   AppTodosRoute: AppTodosRoute,
   AppIndexRoute: AppIndexRoute,
+  AppPagesPageIdRoute: AppPagesPageIdRoute,
+  AppPagesNewRoute: AppPagesNewRoute,
+  AppPagesIndexRoute: AppPagesIndexRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

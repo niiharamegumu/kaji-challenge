@@ -1,0 +1,218 @@
+.shared-pages-layout {
+  display: grid;
+  gap: 1.5rem;
+  min-width: 0;
+}
+.shared-pages-list {
+  min-width: 0;
+}
+.shared-page-sheet {
+  min-width: 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: 1.25rem;
+}
+.shared-page-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 3.5rem;
+  padding: 0.375rem 0.75rem;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-line);
+  border-radius: 1.25rem 1.25rem 0 0;
+}
+.shared-page-paper {
+  max-width: 52rem;
+  margin: 0 auto;
+  padding: 2rem 3rem 4rem;
+}
+.shared-page-icon-button {
+  display: inline-flex;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  color: var(--color-secondary);
+  cursor: pointer;
+  transition:
+    background-color 150ms,
+    color 150ms;
+}
+.shared-page-icon-button:hover {
+  background: var(--color-surface-muted);
+  color: var(--color-heading);
+}
+.shared-page-icon-button--primary {
+  background: var(--color-action);
+  color: var(--color-on-action);
+}
+.shared-page-icon-button--primary:hover {
+  background: var(--color-action-hover);
+  color: var(--color-on-action);
+}
+.shared-page-icon-button--success {
+  color: var(--color-success);
+  background: var(--color-success-soft);
+}
+.shared-page-icon-button--success:hover {
+  color: var(--color-success);
+  background: var(--color-success-line);
+}
+.shared-page-icon-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.shared-page-button {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 0.75rem;
+  padding: 0.5rem 1rem;
+  background: var(--color-action);
+  color: var(--color-on-action);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+.shared-page-button:hover {
+  background: var(--color-action-hover);
+}
+.shared-page-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.shared-page-text-button {
+  display: inline-flex;
+  min-height: 44px;
+  min-width: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border-radius: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  color: var(--color-secondary);
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+.shared-page-text-button:hover {
+  background: var(--color-surface-muted);
+  color: var(--color-heading);
+}
+.shared-page-text-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.shared-pages-section button:focus-visible,
+.shared-pages-section input:focus-visible,
+.shared-pages-section a:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 3px;
+}
+.shared-page-editor .bn-container {
+  --bn-colors-editor-background: var(--color-surface);
+  --bn-colors-editor-text: var(--color-ink);
+  --bn-font-family: var(--font-sans);
+}
+.shared-page-editor .bn-editor {
+  padding-inline: 0;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.8;
+}
+.shared-page-editor .bn-block-content {
+  padding-block: 0.35rem;
+}
+.shared-page-editor .bn-block-content[data-content-type="heading"] {
+  margin-top: 1.25rem;
+}
+.shared-page-editor .bn-inline-content a {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+}
+.shared-page-editor .bn-inline-content {
+  overflow-wrap: anywhere;
+}
+.shared-page-editor
+  .bn-block-content[data-content-type="checkListItem"]
+  > div
+  > input[type="checkbox"] {
+  width: 1.5rem;
+  height: 1.5rem;
+  accent-color: var(--color-accent);
+}
+.shared-page-editor .bn-editor[contenteditable="false"] input[type="checkbox"] {
+  pointer-events: none;
+}
+.shared-page-editor [data-content-type="checkListItem"] {
+  min-height: 44px;
+}
+.shared-page-editor .bn-block-outer {
+  min-width: 0;
+}
+.bn-mobile-formatting-toolbar button {
+  min-width: 44px;
+  min-height: 44px;
+}
+@media (min-width: 768px) {
+  /* Keep the document actions reachable while long pages scroll. */
+  .shared-page-focused .app-header-slot {
+    position: static;
+    top: auto;
+    z-index: auto;
+  }
+  .shared-pages-layout[data-detail="true"] {
+    grid-template-columns: 17rem minmax(0, 1fr);
+    gap: 0;
+  }
+  .shared-pages-layout[data-detail="true"] .shared-pages-list {
+    border: 1px solid var(--color-line);
+    border-right: none;
+    border-radius: 1.25rem 0 0 1.25rem;
+    background: var(--color-surface);
+    padding: 1rem;
+  }
+  .shared-pages-layout[data-detail="true"] .shared-page-sheet {
+    border-radius: 0 1.25rem 1.25rem 0;
+  }
+  .shared-pages-layout[data-detail="true"] .shared-page-toolbar {
+    border-radius: 0 1.25rem 0 0;
+  }
+}
+@media (max-width: 767px) {
+  .shared-pages-layout[data-detail="true"] .shared-pages-list {
+    display: none;
+  }
+  .shared-page-sheet {
+    border: 0;
+    border-radius: 0;
+    min-height: 100dvh;
+  }
+  .shared-page-toolbar {
+    padding-inline: 0.5rem;
+    border-radius: 0;
+    top: 0;
+  }
+  .shared-page-paper {
+    padding: 1.5rem 1.25rem 3rem;
+  }
+  .shared-page-editor .bn-side-menu {
+    display: none;
+  }
+  .shared-page-editor .bn-editor {
+    padding-inline: 0;
+  }
+  .shared-page-editor .bn-block-group .bn-block-group {
+    margin-left: 1rem;
+  }
+}

@@ -50,6 +50,8 @@ Applicationは応答前にも認証と期待する所属を再確認し、所属
 
 ## 用途別の境界
 
+- 共有ページの一覧・取得・作成・更新・削除・編集権取得/更新/解放は通常の認証入口と現在所属を使う。編集権は編集ユーザーIDと期限だけを保存する。専用SQLは対象teamIdに加え、編集ユーザーの一致・呼出元の現在有効な認証セッション・所属・期限を照合し、保存/削除では本文versionも比較する。同一ユーザーの別セッションは同じ編集権を利用できる。他チームのIDを知っていても本文や編集権を取得できない。詳細は [shared-pages.md](shared-pages.md) を参照する。
+
 - `GetInviteCode` は参加先の有効な招待を提示する操作。現在チーム以外の招待を一覧取得するAPIはなく、招待コード照合とMoveMember内の再検査を通す。所属変更後に通常業務でアクセスできるのは新しいチームだけ。
 - `MoveMember` のowner引継ぎは移動前の有効な所属で検査する。直後の空チーム削除は、同じbatchで所属UPDATEが成功した場合に限定する。SQLiteの標準 [changes()](https://www.sqlite.org/lang_corefunc.html#changes) と [D1 batch](https://developers.cloudflare.com/d1/worker-api/d1-database/#batch) を使用し、失敗時・最後のメンバーの正常移動を実D1 fixtureで検証する。
 - Push再登録の旧レコード整理は、本人の同じendpointの非アクティブ購読だけを対象とする。現在チームでの登録認可と同じbatchで行い、他人の購読・他チームのアクティブ購読は整理しない。旧チームの購読を通常の一覧/ID指定削除で操作することはできない。
