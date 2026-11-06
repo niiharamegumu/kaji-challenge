@@ -243,9 +243,6 @@
     0 5px 24px -14px rgb(52 45 34 / 16%),
     0 1px 2px rgb(52 45 34 / 3%);
 }
-.assist-composer:focus-within {
-  border-color: var(--color-line-strong);
-}
 .assist-composer textarea {
   display: block;
   width: 100%;
@@ -320,13 +317,6 @@
 .assist-send[aria-busy="true"] {
   background: var(--color-action);
   color: var(--color-on-action);
-}
-.assist-icon-button:focus-visible,
-.assist-send:focus-visible,
-.assist-results:focus-visible,
-.assist-help-content:focus-visible {
-  outline: 2px solid var(--color-secondary);
-  outline-offset: 4px;
 }
 .assist-recording {
   display: flex;
