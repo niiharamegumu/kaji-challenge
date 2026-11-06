@@ -86,10 +86,6 @@ it("starts a new week at Monday JST without deleting the previous week's history
   expect(overview.weeklyTasks.find((item) => item.task.id === taskId)).toMatchObject({
     weekCompletedCount: 0,
   });
-  expect(
-    await connection.repository.GetTaskCompletionWeeklyEntryCount({
-      TaskID: taskId,
-      WeekStart: "2026-09-21",
-    }),
-  ).toBe(3);
+  const previous = responseSchemas.getTaskOverview.parse(await run("getTaskOverview", initialTime));
+  expect(previous.weeklyTasks.find((item) => item.task.id === taskId)?.weekCompletedCount).toBe(3);
 });
