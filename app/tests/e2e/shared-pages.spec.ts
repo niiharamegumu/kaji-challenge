@@ -19,6 +19,7 @@ const peer = { id: crypto.randomUUID(), token: crypto.randomUUID(), name: "ペ�
 const outsider = { id: crypto.randomUUID(), token: crypto.randomUUID(), name: "ページ別チーム" };
 const secondSessionToken = crypto.randomUUID();
 const reorderPageId = crypto.randomUUID();
+const checklistPageId = crypto.randomUUID();
 
 function pageBlock(
   type: SharedPageBlock["type"],
@@ -56,31 +57,44 @@ test.beforeAll(async () => {
     await connection.query(
       sql`INSERT INTO auth_session(id,token,user_id,expires_at) VALUES (${sessionId},${secondSessionToken},${owner.id},strftime('%Y-%m-%dT%H:%M:%fZ','now','+30 days'))`,
     );
-    await connection.repository
-      .forSession(owner.id, sessionId)
-      .forMember(teamId, owner.id)
-      .CreateSharedPage({
-        id: reorderPageId,
-        teamId,
-        userId: owner.id,
-        title: "旅の持ち物",
-        document: {
-          format: "blocknote",
-          schemaVersion: 1,
-          blocks: [
-            pageBlock("heading", "旅", [
-              pageBlock("checkListItem", "荷造り", [
-                pageBlock("numberedListItem", "着替え", [pageBlock("bulletListItem", "靴下")]),
-                pageBlock("bulletListItem", "雨具"),
-              ]),
-              pageBlock("bulletListItem", "交通"),
+    const pages = connection.repository.forSession(owner.id, sessionId).forMember(teamId, owner.id);
+    await pages.CreateSharedPage({
+      id: reorderPageId,
+      teamId,
+      userId: owner.id,
+      title: "旅の持ち物",
+      document: {
+        format: "blocknote",
+        schemaVersion: 1,
+        blocks: [
+          pageBlock("heading", "旅", [
+            pageBlock("checkListItem", "荷造り", [
+              pageBlock("numberedListItem", "着替え", [pageBlock("bulletListItem", "靴下")]),
+              pageBlock("bulletListItem", "雨具"),
             ]),
-            pageBlock("paragraph", "出発前のメモ"),
-            pageBlock("bulletListItem", "予約"),
-            pageBlock("numberedListItem", "出発"),
-          ],
-        },
-      });
+            pageBlock("bulletListItem", "交通"),
+          ]),
+          pageBlock("paragraph", "出発前のメモ"),
+          pageBlock("bulletListItem", "予約"),
+          pageBlock("numberedListItem", "出発"),
+        ],
+      },
+    });
+    await pages.CreateSharedPage({
+      id: checklistPageId,
+      teamId,
+      userId: owner.id,
+      title: "長いチェックリスト",
+      document: {
+        format: "blocknote",
+        schemaVersion: 1,
+        blocks: [
+          pageBlock("checkListItem", "荷造り"),
+          ...Array.from({ length: 48 }, (_, i) => pageBlock("paragraph", `予定 ${i + 1}`)),
+          pageBlock("paragraph", "最後のメモ"),
+        ],
+      },
+    });
   } finally {
     // Browser interaction uses only the preview Worker's D1, never a second live emulator.
     await connection.close();
@@ -376,6 +390,40 @@ test(
     await page.screenshot({ path: testInfo.outputPath("shared-page-scrolled-edit.png") });
     await finishEditing(page);
     await expect(page.locator(".bn-editor")).toContainText("64日目の相談。");
+  },
+);
+
+test(
+  "toggling a checklist keeps the current scroll position with the caret offscreen",
+  { tag: ["@shared-pages"] },
+  async ({ page, context, isMobile }) => {
+    await authenticate(context);
+    await page.goto(`/pages/${checklistPageId}`);
+    await beginEditing(page);
+    const status = page.locator(".shared-page-toolbar").getByRole("status");
+    const checkbox = editor(page).getByRole("checkbox");
+    const lastLine = editor(page).getByText("最後のメモ", { exact: true });
+    const activate = (element: Locator) => (isMobile ? element.tap() : element.click());
+    await activate(lastLine);
+    expect(await page.evaluate(() => getSelection()?.anchorNode?.textContent)).toBe("最後のメモ");
+    await checkbox.evaluate((el) => el.scrollIntoView({ block: "center", behavior: "instant" }));
+    await expect(lastLine).not.toBeInViewport();
+    const checkboxTop = () => checkbox.evaluate((el) => el.getBoundingClientRect().top);
+    const top = await checkboxTop();
+    const toggle = async (checked: boolean) => {
+      await activate(checkbox);
+      await expect(checkbox).toBeChecked({ checked });
+      expect(await checkboxTop()).toBeCloseTo(top, 0);
+      await expect(status).toHaveText("保存済み");
+      expect(await checkboxTop()).toBeCloseTo(top, 0);
+    };
+
+    await toggle(false);
+    await expect(editor(page)).toBeFocused();
+    await editor(page).blur();
+    await toggle(true);
+    await expect(editor(page)).not.toBeFocused();
+    await finishEditing(page);
   },
 );
 
