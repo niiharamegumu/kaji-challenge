@@ -28,6 +28,7 @@ import type {
 import { ConfirmModal } from "../../../shared/components/ConfirmModal";
 import { FooterQuickAction } from "../../../shared/components/FooterQuickAction";
 import { FormSheet } from "../../../shared/components/FormSheet";
+import { InfoHelp } from "../../../shared/components/InfoHelp";
 import { statusMessageAtom } from "../../../shared/state/status";
 import { PAGE_SECTION_CHROMELESS_CLASS_NAME } from "../../../shared/styles/pageSection";
 import { useReminderPageQueries, useReminderMutations } from "../hooks/useReminders";
@@ -727,10 +728,9 @@ export function ReminderCalendarPage() {
       <article
         className={`animate-enter rounded-xl px-0 py-2.5 md:rounded-2xl md:p-4 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
       >
-        <div className="flex items-center justify-between gap-2 px-2 md:px-0">
-          <div>
-            <h2 className="text-lg font-semibold">リマインダーカレンダー</h2>
-          </div>
+        <div className="flex items-center gap-2 px-2 md:px-0">
+          <h2 className="text-lg font-semibold">リマインダーカレンダー</h2>
+          <InfoHelp label="カレンダーの使い方">{calendarDescription(isMobile)}</InfoHelp>
         </div>
 
         <div className="mt-4 flex items-center justify-between gap-3 px-2 md:px-0">
@@ -858,7 +858,6 @@ export function ReminderCalendarPage() {
             onEdit={openEditSheet}
           />
         </section>
-        <p className="mt-4 text-xs text-muted">{calendarDescription(isMobile)}</p>
       </article>
 
       <MobileAgendaSheet
