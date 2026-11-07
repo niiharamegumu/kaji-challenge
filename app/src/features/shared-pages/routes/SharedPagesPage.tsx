@@ -1,5 +1,7 @@
+import { useMediaQuery } from "@mantine/hooks";
 import { useBlocker } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import equal from "fast-deep-equal";
 import { useSetAtom } from "jotai";
 import {
   ArrowLeft,
@@ -13,7 +15,8 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
-import { lazy, Suspense, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { useSyncExternalStoreWithSelector } from "use-sync-external-store/with-selector";
 import type { TeamMember } from "../../../contracts/models";
 import type { SharedPageSummary } from "../../../contracts/shared-pages";
 import { DeleteConfirmModal } from "../../../shared/components/DeleteConfirmModal";
@@ -31,17 +34,14 @@ import type { RootLayoutOutletContext } from "../../../shared/router/rootLayoutC
 import { sharedPageDraftDirtyAtom } from "../../../shared/state/sharedPageDraft";
 import { getReadableTextColor, resolveUserColor } from "../../../shared/utils/userColor";
 import {
+  type EditSnapshot,
   PageEditSession,
   draftText,
   editTiming,
   isEditingByAnotherUser,
 } from "../model/editSession";
-import {
-  clearDraftBackup,
-  draftBackupKey,
-  readDraftBackup,
-  writeDraftBackup,
-} from "../model/draftBackup";
+import { draftBackupKey, readDraftBackup, syncDraftBackup } from "../model/draftBackup";
+import { sharedPageSidebarMedia } from "../preload";
 import "../shared-pages.css";
 
 const PageEditor = lazy(async () => ({
@@ -67,6 +67,11 @@ export function SharedPagesPage(props: { pageId?: string; newPage?: boolean }) {
   );
 }
 
+// The body is owned by BlockNote. The route only displays the title and edit status.
+function selectPageControls({ draft, ...controls }: EditSnapshot) {
+  return { ...controls, title: draft?.title };
+}
+
 function SharedPagesContent({
   pageId,
   newPage = false,
@@ -80,7 +85,9 @@ function SharedPagesContent({
 }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const list = useQuery({ ...sharedPagesQueryOptions, refetchInterval: 30_000 });
+  const wideScreen = useMediaQuery(sharedPageSidebarMedia, undefined, {
+    getInitialValueInEffect: false,
+  });
   const members = useQuery(teamMembersQueryOptions);
   const query = useQuery({
     ...sharedPageQueryOptions(pageId ?? ""),
@@ -96,18 +103,21 @@ function SharedPagesContent({
     if (pageId || newPage) {
       const restored = readDraftBackup(recoveryKey);
       if (restored) created.restore(restored);
-      created.subscribe(() => {
-        const snapshot = created.getSnapshot();
-        const persisted =
-          snapshot.dirty && snapshot.draft
-            ? writeDraftBackup(recoveryKey, snapshot.draft)
-            : clearDraftBackup(recoveryKey);
-        setBackupWarning(!persisted);
-      });
     }
     return created;
   });
-  const state = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
+  useEffect(() => {
+    if (pageId || newPage) {
+      return syncDraftBackup(recoveryKey, session, (ok) => setBackupWarning(!ok));
+    }
+  }, [pageId, newPage, recoveryKey, session]);
+  const state = useSyncExternalStoreWithSelector(
+    session.subscribe,
+    session.getSnapshot,
+    session.getSnapshot,
+    selectPageControls,
+    equal,
+  );
   const [composing, setComposing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [latestRequested, setLatestRequested] = useState(false);
@@ -131,6 +141,10 @@ function SharedPagesContent({
 
   useEffect(() => {
     session.activate();
+    return session.dispose;
+  }, [session]);
+  useEffect(() => {
+    if (state.mode !== "edit") return;
     const heartbeat = window.setInterval(() => {
       void session.renew();
     }, editTiming.heartbeat);
@@ -142,9 +156,8 @@ function SharedPagesContent({
       window.clearInterval(expiry);
       document.removeEventListener("visibilitychange", session.tick);
       window.removeEventListener("online", session.tick);
-      session.dispose();
     };
-  }, [session]);
+  }, [session, state.mode]);
   useEffect(() => {
     setDraftDirty(hasUnsaved);
     return () => {
@@ -152,37 +165,27 @@ function SharedPagesContent({
     };
   }, [hasUnsaved, setDraftDirty]);
   useEffect(() => {
-    if (
-      state.mode !== "edit" ||
-      !state.dirty ||
-      state.busy ||
-      state.status === "error" ||
-      composing ||
-      showLeave ||
-      deleting
-    )
-      return;
-    const timeout = window.setTimeout(() => {
-      void session.save();
-    }, editTiming.autosave);
-    return () => {
-      window.clearTimeout(timeout);
+    if (state.mode !== "edit" || composing || showLeave || deleting) return;
+    let timer: number | undefined;
+    const schedule = () => {
+      window.clearTimeout(timer);
+      const { mode, dirty, busy, status } = session.getSnapshot();
+      if (mode === "edit" && dirty && !busy && status !== "error") {
+        timer = window.setTimeout(() => void session.save(), editTiming.autosave);
+      }
     };
-  }, [
-    session,
-    state.mode,
-    state.dirty,
-    state.busy,
-    state.status,
-    state.draft,
-    composing,
-    showLeave,
-    deleting,
-  ]);
+    const unsubscribe = session.subscribe(schedule);
+    schedule();
+    return () => {
+      unsubscribe();
+      window.clearTimeout(timer);
+    };
+  }, [session, state.mode, composing, showLeave, deleting]);
 
   const copy = async () => {
-    if (!state.draft) return;
-    const text = draftText(state.draft);
+    const { draft } = session.getSnapshot();
+    if (!draft) return;
+    const text = draftText(draft);
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -210,7 +213,7 @@ function SharedPagesContent({
   const detail = Boolean(pageId) || newPage;
   const editing = state.mode === "edit" || state.mode === "new";
   const stopped = state.mode === "lost";
-  const draft = state.draft;
+  const hasDraft = state.title !== undefined;
   // The server decides lease expiry; reconnect/polling refreshes this snapshot.
   const locked = isEditingByAnotherUser(page?.editing, currentUserId);
   const editLabel = state.busy ? "確認中…" : locked ? "編集中" : "編集する";
@@ -246,37 +249,9 @@ function SharedPagesContent({
         </Link>
       </header>
       <div className="shared-pages-layout" data-detail={detail}>
-        <aside className="shared-pages-list" aria-label="共有ページ一覧">
-          {list.isPending ? <PageLoading label="ページを読み込んでいます…" /> : null}
-          {list.isError ? (
-            <div
-              role="alert"
-              className="mb-3 rounded-xl border border-danger-line bg-danger-soft p-4 text-sm text-danger-strong"
-            >
-              一覧を取得できませんでした。
-              <button className="shared-page-text-button" onClick={() => void list.refetch()}>
-                再読み込み
-              </button>
-            </div>
-          ) : null}
-          {list.data?.length === 0 ? (
-            <p className="rounded-2xl border border-dashed border-line-strong p-4 text-center text-sm text-secondary">
-              共有ページはまだありません。
-            </p>
-          ) : null}
-          <div className={detail ? "space-y-1" : "grid gap-3 md:grid-cols-2"}>
-            {list.data?.map((item) => (
-              <PageListItem
-                key={item.id}
-                page={item}
-                selected={pageId === item.id}
-                editorMember={members.data?.find(
-                  (member) => member.userId === item.editing?.userId,
-                )}
-              />
-            ))}
-          </div>
-        </aside>
+        {(!detail || wideScreen) && (
+          <PageList detail={detail} pageId={pageId} members={members.data} />
+        )}
         {detail ? (
           <article className="shared-page-sheet" aria-label="共有ページ本文">
             <div
@@ -336,7 +311,7 @@ function SharedPagesContent({
                       aria-label="作成する"
                       title="作成する"
                       aria-busy={state.busy}
-                      disabled={state.busy || stopped || composing || !draft?.title.trim()}
+                      disabled={state.busy || stopped || composing || !state.title?.trim()}
                       onClick={() => void savePage()}
                     >
                       <Plus size={16} aria-hidden="true" />
@@ -401,7 +376,7 @@ function SharedPagesContent({
                 className="mx-5 mt-4 rounded-xl border border-warning-line bg-warning-soft p-3 text-sm leading-7 text-warning-strong"
               >
                 このタブへの一時保存を更新できません。画面を閉じる前に入力をコピーしてください。
-                {draft ? <CopyDraftButton copied={copied} onCopy={() => void copy()} /> : null}
+                {hasDraft ? <CopyDraftButton copied={copied} onCopy={() => void copy()} /> : null}
               </div>
             ) : null}
             {state.error ? (
@@ -410,7 +385,7 @@ function SharedPagesContent({
                 className={`mx-5 mt-4 rounded-xl border p-4 text-sm leading-7 ${stopped ? "border-warning-line bg-warning-soft text-warning-strong" : "border-danger-line bg-danger-soft text-danger-strong"}`}
               >
                 <p>{state.error}</p>
-                {draft ? (
+                {hasDraft ? (
                   <div className="mt-2 flex flex-wrap gap-2">
                     {!stopped ? (
                       <button
@@ -445,7 +420,7 @@ function SharedPagesContent({
                 className="mx-5 mt-4 rounded-xl border border-danger-line bg-danger-soft p-4 text-sm text-danger-strong"
               >
                 ページを取得できませんでした。
-                {draft
+                {hasDraft
                   ? "入力内容はこの画面に残っています。"
                   : "ページが削除されたか、アクセスできません。"}
                 <button className="shared-page-text-button" onClick={() => void query.refetch()}>
@@ -460,20 +435,20 @@ function SharedPagesContent({
               </div>
             ) : null}
             {query.isPending && !newPage ? <PageLoading label="ページを読み込んでいます…" /> : null}
-            {draft || page ? (
+            {hasDraft || page ? (
               <div
                 className="shared-page-paper"
                 onPointerDown={session.activity}
                 onKeyDown={session.activity}
               >
-                {draft ? (
+                {hasDraft ? (
                   <input
                     aria-label="タイトル"
                     placeholder="タイトル"
                     maxLength={200}
-                    value={draft.title}
+                    value={state.title}
                     readOnly={!editing || (state.busy && newPage)}
-                    onChange={(event) => session.change({ ...draft, title: event.target.value })}
+                    onChange={(event) => session.changeTitle(event.target.value)}
                     onCompositionStart={() => setComposing(true)}
                     onCompositionEnd={() => setComposing(false)}
                     className="mb-6 w-full min-w-0 rounded-md border-0 bg-transparent py-1 text-2xl font-bold leading-relaxed text-heading outline-none placeholder:text-faint md:text-3xl"
@@ -489,16 +464,20 @@ function SharedPagesContent({
                   </>
                 )}
                 <Suspense fallback={<PageLoading label="本文を読み込んでいます…" />}>
-                  <PageEditor
-                    key={draft ? `edit-${state.editorKey}` : `read-${page!.id}-${page!.version}`}
-                    document={draft?.document ?? page!.document}
-                    editable={editing && !(state.busy && newPage)}
-                    onChange={(document) => {
-                      const latest = session.getSnapshot().draft;
-                      if (latest) session.change({ ...latest, document });
-                    }}
-                    onCompositionChange={setComposing}
-                  />
+                  {hasDraft ? (
+                    <DraftEditor
+                      key={state.editorKey}
+                      session={session}
+                      editable={editing && !(state.busy && newPage)}
+                      onCompositionChange={setComposing}
+                    />
+                  ) : (
+                    <PageEditor
+                      key={page!.version}
+                      initialDocument={page!.document}
+                      editable={false}
+                    />
+                  )}
                 </Suspense>
               </div>
             ) : null}
@@ -518,7 +497,11 @@ function SharedPagesContent({
           void session.remove(page).then((removed) => {
             if (removed) {
               setDeleting(false);
-              void queryClient.invalidateQueries({ queryKey: queryKeys.sharedPages });
+              queryClient.removeQueries({
+                queryKey: sharedPageQueryOptions(page.id).queryKey,
+                exact: true,
+              });
+              void queryClient.invalidateQueries({ queryKey: queryKeys.sharedPages, exact: true });
               navigate("/pages", { replace: true });
             } else setDeleting(false);
           });
@@ -559,7 +542,7 @@ function SharedPagesContent({
           else if (!newPage) void query.refetch();
         }}
       >
-        {draft ? <CopyDraftButton copied={copied} onCopy={() => void copy()} /> : null}
+        {hasDraft ? <CopyDraftButton copied={copied} onCopy={() => void copy()} /> : null}
       </ConfirmModal>
       <FormSheet
         isOpen={copyFallback !== null}
@@ -586,6 +569,28 @@ function SharedPagesContent({
         />
       </FormSheet>
     </section>
+  );
+}
+
+// BlockNote owns the live document. Only a new editing/recovery session
+// supplies new initial content; save status and drafts must not feed back into it.
+function DraftEditor({
+  session,
+  editable,
+  onCompositionChange,
+}: {
+  session: PageEditSession;
+  editable: boolean;
+  onCompositionChange: (composing: boolean) => void;
+}) {
+  const [initialDocument] = useState(() => session.getSnapshot().draft!.document);
+  return (
+    <PageEditor
+      initialDocument={initialDocument}
+      editable={editable}
+      onChange={session.changeDocument}
+      onCompositionChange={onCompositionChange}
+    />
   );
 }
 
@@ -645,6 +650,50 @@ function EditingUserAvatar({
     >
       {Array.from(name.trim())[0] ?? "?"}
     </span>
+  );
+}
+
+function PageList({
+  detail,
+  pageId,
+  members,
+}: {
+  detail: boolean;
+  pageId?: string;
+  members?: TeamMember[];
+}) {
+  const list = useQuery({ ...sharedPagesQueryOptions, refetchInterval: 30_000 });
+  const membersById = new Map(members?.map((member) => [member.userId, member]));
+  return (
+    <aside className="shared-pages-list" aria-label="共有ページ一覧">
+      {list.isPending ? <PageLoading label="ページを読み込んでいます…" /> : null}
+      {list.isError ? (
+        <div
+          role="alert"
+          className="mb-3 rounded-xl border border-danger-line bg-danger-soft p-4 text-sm text-danger-strong"
+        >
+          一覧を取得できませんでした。
+          <button className="shared-page-text-button" onClick={() => void list.refetch()}>
+            再読み込み
+          </button>
+        </div>
+      ) : null}
+      {list.data?.length === 0 ? (
+        <p className="rounded-2xl border border-dashed border-line-strong p-4 text-center text-sm text-secondary">
+          共有ページはまだありません。
+        </p>
+      ) : null}
+      <div className={detail ? "space-y-1" : "grid gap-3 md:grid-cols-2"}>
+        {list.data?.map((item) => (
+          <PageListItem
+            key={item.id}
+            page={item}
+            selected={pageId === item.id}
+            editorMember={item.editing ? membersById.get(item.editing.userId) : undefined}
+          />
+        ))}
+      </div>
+    </aside>
   );
 }
 
