@@ -147,10 +147,7 @@ export function TodoPage() {
           nameInputRef={nameInputRef}
           onInputKeyDown={handleInputKeyDown}
         />
-        <p className="mt-3 text-xs leading-relaxed text-secondary">
-          「続けて追加」またはEnterで、同じカテゴリーに次のToDoを入力できます。
-        </p>
-        <p role="status" className="mt-2 min-h-5 break-words text-sm text-success">
+        <p role="status" className="mt-2 break-words text-sm text-success empty:m-0">
           {createItem.isSuccess ? `「${createItem.data.data.name}」を追加しました` : ""}
         </p>
       </FooterQuickAction>
