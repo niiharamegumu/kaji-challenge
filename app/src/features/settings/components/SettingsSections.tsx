@@ -1,7 +1,9 @@
 import { Check, Copy, RefreshCw } from "lucide-react";
 
 import type { TeamMember } from "../../../lib/api/operations";
+import { InfoHelp } from "../../../shared/components/InfoHelp";
 import { getReadableTextColor, resolveUserColor } from "../../../shared/utils/userColor";
+import { NICKNAME_MAX_LENGTH, TEAM_NAME_MAX_LENGTH } from "../constants/invite";
 import type { InviteState } from "../model/invite";
 import { formatDateTime } from "./settingsUtils";
 
@@ -25,7 +27,12 @@ export function TeamNameSection({
 }: TeamNameSectionProps) {
   return (
     <section className="space-y-2">
-      <h3 className="text-sm font-semibold text-heading">チーム名</h3>
+      <div className="flex items-center gap-1">
+        <h3 className="text-sm font-semibold text-heading">チーム名</h3>
+        <InfoHelp label="チーム名の説明">
+          チーム全体に表示する名前を{TEAM_NAME_MAX_LENGTH}文字以内で入力します。
+        </InfoHelp>
+      </div>
       <div>
         <label className="sr-only" htmlFor="team-name">
           チーム名
@@ -106,8 +113,7 @@ export function LeaveTeamSection({
 }) {
   return (
     <div className="rounded-lg border border-danger-line bg-danger-soft/70 p-3">
-      <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-        <p className="text-xs text-danger">離脱すると新しいチームを作成します。</p>
+      <div className="flex items-center gap-1">
         <button
           type="button"
           className="min-h-11 w-full cursor-pointer rounded-lg border border-danger-line px-4 py-2 text-sm text-danger transition-colors duration-200 hover:bg-danger-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-danger disabled:cursor-not-allowed disabled:opacity-60 xl:w-auto xl:shrink-0"
@@ -116,6 +122,9 @@ export function LeaveTeamSection({
         >
           {isLeavingTeam ? "処理中..." : "離脱して新しいチームを作成"}
         </button>
+        <InfoHelp label="チーム離脱の説明">
+          現在のチームから離脱し、新しいチームを作成します。
+        </InfoHelp>
       </div>
     </div>
   );
@@ -140,10 +149,12 @@ export function InviteCodeIssueSection({
 }: InviteCodeIssueSectionProps) {
   return (
     <section className="space-y-3">
-      <h3 className="text-sm font-semibold text-heading">招待コード</h3>
-      <p className="text-xs leading-relaxed text-secondary">
-        一緒に家事をする人にコードを共有して、チームへ招待できます。
-      </p>
+      <div className="flex items-center gap-1">
+        <h3 className="text-sm font-semibold text-heading">招待コード</h3>
+        <InfoHelp label="招待コードの使い方">
+          コードを発行して、チームに招待したい人に共有します。
+        </InfoHelp>
+      </div>
       <div className="flex flex-wrap items-center gap-1.5 text-sm text-ink">
         <span>コード:</span>
         <code className="min-w-0 rounded bg-surface-muted px-2.5 py-2 font-mono text-sm tracking-wider break-all">
@@ -200,7 +211,12 @@ export function JoinTeamSection({
 }: JoinTeamSectionProps) {
   return (
     <section className="space-y-2">
-      <h3 className="text-sm font-semibold text-heading">チーム参加</h3>
+      <div className="flex items-center gap-1">
+        <h3 className="text-sm font-semibold text-heading">チーム参加</h3>
+        <InfoHelp label="チーム参加の説明">
+          招待コードで参加すると、現在のチームから招待先のチームに移動します。
+        </InfoHelp>
+      </div>
       <label className="sr-only" htmlFor="join-code">
         招待コード
       </label>
@@ -274,8 +290,13 @@ export function AccountSettingsSection({
         </div>
       </div>
       <div>
-        <h3 className="text-sm font-semibold text-heading">ニックネーム</h3>
-        <p className="mt-1 text-xs text-muted">空欄で保存すると、アカウントの名前を使用します。</p>
+        <div className="flex items-center gap-1">
+          <h3 className="text-sm font-semibold text-heading">ニックネーム</h3>
+          <InfoHelp label="ニックネームの説明">
+            チームに表示する名前を{NICKNAME_MAX_LENGTH}
+            文字以内で入力します。空欄で保存すると、アカウントの名前を使用します。
+          </InfoHelp>
+        </div>
         <label className="sr-only" htmlFor="nickname">
           ニックネーム
         </label>
@@ -300,10 +321,13 @@ export function AccountSettingsSection({
         {nicknameError && <p className="mt-1 text-xs text-danger">{nicknameError}</p>}
       </div>
       <div>
-        <h3 className="text-sm font-semibold text-heading">表示カラー</h3>
-        <p className="mt-1 text-xs text-muted">
-          家事の担当者や完了した人の目印になります。空欄で既定色に戻せます。
-        </p>
+        <div className="flex items-center gap-1">
+          <h3 className="text-sm font-semibold text-heading">表示カラー</h3>
+          <InfoHelp label="表示カラーの説明">
+            家事の担当者や完了した人の目印になります。色を選ぶか、#RRGGBB
+            形式で入力してください。空欄で保存すると既定色に戻ります。
+          </InfoHelp>
+        </div>
         <label className="sr-only" htmlFor="color-hex">
           表示カラー
         </label>
