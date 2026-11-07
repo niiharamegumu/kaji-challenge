@@ -174,7 +174,7 @@ describe("user-owned page editor", () => {
       mode: "edit",
       draft: { title: "最新" },
       dirty: false,
-      status: "saved",
+      status: "unchanged",
     });
     change(f.session);
     await f.session.save();
@@ -183,6 +183,23 @@ describe("user-owned page editor", () => {
       { title: "未保存の入力", document, expectedVersion: 8 },
       expect.any(Object),
     );
+  });
+
+  it("only marks a reverted draft saved if a write was acknowledged in this edit session", async () => {
+    const f = setup();
+    const original = page();
+    await f.session.begin(original);
+    change(f.session, "書きかけ");
+    change(f.session, original.title);
+    expect(f.session.getSnapshot()).toMatchObject({ dirty: false, status: "unchanged" });
+    expect(f.api.save).not.toHaveBeenCalled();
+
+    change(f.session, "新しいタイトル");
+    await f.session.save();
+    change(f.session, "書きかけ");
+    change(f.session, "新しいタイトル");
+    expect(f.session.getSnapshot()).toMatchObject({ dirty: false, status: "saved" });
+    expect(f.api.save).toHaveBeenCalledTimes(1);
   });
 
   it("does not attach a tab identity when separate screens acquire the same user's page", async () => {

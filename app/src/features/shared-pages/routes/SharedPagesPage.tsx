@@ -5,8 +5,8 @@ import {
   ArrowLeft,
   Check,
   Copy,
+  Eye,
   FileText,
-  ListChevronsUpDown,
   LoaderCircle,
   LockKeyhole,
   Pencil,
@@ -30,7 +30,6 @@ import { Link, useNavigate, useOutletContext } from "../../../shared/router/navi
 import type { RootLayoutOutletContext } from "../../../shared/router/rootLayoutContext";
 import { sharedPageDraftDirtyAtom } from "../../../shared/state/sharedPageDraft";
 import { getReadableTextColor, resolveUserColor } from "../../../shared/utils/userColor";
-import { containsListItems } from "../model/listItems";
 import {
   PageEditSession,
   draftText,
@@ -110,7 +109,6 @@ function SharedPagesContent({
   });
   const state = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
   const [composing, setComposing] = useState(false);
-  const [reorderingEditorKey, setReorderingEditorKey] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [latestRequested, setLatestRequested] = useState(false);
   const [copyFallback, setCopyFallback] = useState<string | null>(null);
@@ -213,21 +211,17 @@ function SharedPagesContent({
   const editing = state.mode === "edit" || state.mode === "new";
   const stopped = state.mode === "lost";
   const draft = state.draft;
-  const canReorder = editing && draft !== null && containsListItems(draft.document.blocks);
-  const reorderMode = canReorder && reorderingEditorKey === state.editorKey;
   // The server decides lease expiry; reconnect/polling refreshes this snapshot.
   const locked = isEditingByAnotherUser(page?.editing, currentUserId);
   const editLabel = state.busy ? "確認中…" : locked ? "編集中" : "編集する";
-  const label =
-    state.status === "saving"
-      ? "保存中…"
-      : state.status === "error"
-        ? "保存失敗"
-        : state.status === "stopped"
-          ? "編集を停止"
-          : state.dirty || newPage
-            ? "未保存"
-            : "保存済み";
+  const label = {
+    unchanged: "変更なし",
+    dirty: newPage ? "未作成" : "未保存",
+    saving: newPage ? "作成中…" : "保存中…",
+    saved: "保存済み",
+    error: "保存失敗",
+    stopped: "編集を停止",
+  }[state.status];
 
   return (
     <section className={detail ? "shared-pages-section md:pb-6" : "shared-pages-section mt-4 pb-8"}>
@@ -300,28 +294,15 @@ function SharedPagesContent({
                 <ArrowLeft size={16} aria-hidden="true" />
               </button>
               <div className="flex-1" />
-              {canReorder && (
-                <button
-                  type="button"
-                  className={`shared-page-icon-button ${reorderMode ? "shared-page-icon-button--primary" : ""}`}
-                  aria-label="リストを並び替え"
-                  aria-pressed={reorderMode}
-                  title="リストを並び替え"
-                  disabled={composing || (newPage && state.busy)}
-                  onClick={() => setReorderingEditorKey(reorderMode ? null : state.editorKey)}
-                >
-                  <ListChevronsUpDown size={16} aria-hidden="true" />
-                </button>
-              )}
               <InfoHelp label={newPage ? "ページ作成の説明" : "ページ編集の説明"}>
                 <p>
                   {newPage
-                    ? "タイトルを入力し、チェックマークで作成します。作成すると、同じチームのメンバーに共有されます。"
-                    : "本文やチェックリストを変更するときは、鉛筆アイコンから編集できます。変更は自動で保存されます。"}
+                    ? "タイトルを入力し、右上の＋で作成します。作成すると、同じチームのメンバーに共有されます。"
+                    : "鉛筆で編集を始めると、変更は自動保存されます。「保存済み」は現在の内容の保存が完了した状態です。目のアイコンで編集を終了して閲覧に戻ると、ほかのメンバーが編集できます。"}
                 </p>
                 <p>
-                  編集中に「リストを並び替え」をオンにすると、項目のハンドルをドラッグできます。
-                  ハンドルを選んで上下の矢印で動かすこともできます。子の項目も一緒に移動します。
+                  編集中は、各項目の左端にあるハンドルをドラッグして順番を変えられます。
+                  ハンドルをタップすると上下の矢印でも移動できます。入れ子の項目は親と一緒に移動します。
                 </p>
               </InfoHelp>
               {page?.editing ? (
@@ -358,14 +339,14 @@ function SharedPagesContent({
                       disabled={state.busy || stopped || composing || !draft?.title.trim()}
                       onClick={() => void savePage()}
                     >
-                      <Check size={16} aria-hidden="true" />
+                      <Plus size={16} aria-hidden="true" />
                     </button>
                   ) : (
                     <button
                       type="button"
-                      className="shared-page-icon-button shared-page-icon-button--success"
-                      aria-label="完了"
-                      title="完了"
+                      className="shared-page-icon-button"
+                      aria-label="編集を終了"
+                      title="編集を終了して閲覧に戻る"
                       aria-busy={state.busy}
                       disabled={state.busy || stopped || composing}
                       onClick={() => {
@@ -374,7 +355,7 @@ function SharedPagesContent({
                         });
                       }}
                     >
-                      <Check size={16} aria-hidden="true" />
+                      <Eye size={16} aria-hidden="true" />
                     </button>
                   )}
                 </>
@@ -512,7 +493,6 @@ function SharedPagesContent({
                     key={draft ? `edit-${state.editorKey}` : `read-${page!.id}-${page!.version}`}
                     document={draft?.document ?? page!.document}
                     editable={editing && !(state.busy && newPage)}
-                    reorderMode={reorderMode}
                     onChange={(document) => {
                       const latest = session.getSnapshot().draft;
                       if (latest) session.change({ ...latest, document });

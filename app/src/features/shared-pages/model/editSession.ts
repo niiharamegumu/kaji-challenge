@@ -13,7 +13,7 @@ export type EditSnapshot = {
   draft: PageDraft | null;
   dirty: boolean;
   busy: boolean;
-  status: "saved" | "dirty" | "saving" | "error" | "stopped";
+  status: "unchanged" | "saved" | "dirty" | "saving" | "error" | "stopped";
   error: string | null;
   editorKey: number;
 };
@@ -37,6 +37,7 @@ export class PageEditSession {
   private snapshot: EditSnapshot;
   private listeners = new Set<() => void>();
   private baseline: string;
+  private baselineStatus: "unchanged" | "saved" = "unchanged";
   private pageId: string | null = null;
   private version = 0;
   private lease: SharedPageLease | null = null;
@@ -58,7 +59,7 @@ export class PageEditSession {
       draft,
       dirty: false,
       busy: false,
-      status: newPage ? "dirty" : "saved",
+      status: newPage ? "dirty" : "unchanged",
       error: null,
       editorKey: 0,
     };
@@ -116,19 +117,17 @@ export class PageEditSession {
   change = (draft: PageDraft) => {
     if (this.snapshot.mode !== "edit" && this.snapshot.mode !== "new") return;
     this.activity();
-    // A failed response may follow a committed write. The acknowledged baseline
-    // no longer proves server equality, even if the user restores that old text.
-    const dirty = this.snapshot.status === "error" || fingerprint(draft) !== this.baseline;
+    const { status, mode } = this.snapshot;
+    // A pending or failed request may have committed a different draft.
+    if (status === "saving" || status === "error") {
+      this.publish({ draft, dirty: true });
+      return;
+    }
+    const dirty = fingerprint(draft) !== this.baseline;
     this.publish({
       draft,
       dirty,
-      status: this.snapshot.busy
-        ? "saving"
-        : this.snapshot.status === "error"
-          ? "error"
-          : dirty
-            ? "dirty"
-            : "saved",
+      status: dirty || mode === "new" ? "dirty" : this.baselineStatus,
     });
   };
   private stop(message: string) {
@@ -180,13 +179,14 @@ export class PageEditSession {
       this.acceptLease(data.lease, started);
       const draft = { title: data.page.title, document: data.page.document };
       this.baseline = fingerprint(draft);
+      this.baselineStatus = "unchanged";
       this.activity();
       this.saved(data.page);
       this.publish({
         mode: "edit",
         draft,
         dirty: false,
-        status: "saved",
+        status: this.baselineStatus,
         editorKey: this.snapshot.editorKey + 1,
       });
       this.tick();
@@ -231,6 +231,7 @@ export class PageEditSession {
       if (this.snapshot.mode === "lost") return null;
       this.version = result.data.version;
       this.baseline = sent;
+      this.baselineStatus = "saved";
       const dirty = this.snapshot.draft != null && fingerprint(this.snapshot.draft) !== sent;
       this.publish({ dirty, status: dirty ? "dirty" : "saved" });
       return result.data;
