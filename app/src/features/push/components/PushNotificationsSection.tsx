@@ -1,5 +1,6 @@
 import { useSetAtom } from "jotai";
 
+import { InfoHelp } from "../../../shared/components/InfoHelp";
 import { statusMessageAtom } from "../../../shared/state/status";
 import { usePushNotifications } from "../hooks/usePushNotifications";
 
@@ -18,21 +19,28 @@ export function PushNotificationsSection() {
   } = usePushNotifications(setStatus);
 
   const switchDisabled = isLoading || !isSupported || !isStandalone || !isConfigured;
-  const helperMessage = !isSupported
-    ? "このブラウザではプッシュ通知を利用できません。"
+  const unavailableReason = !isSupported
+    ? "このブラウザーはプッシュ通知に対応していません。"
     : !isStandalone
-      ? "iPhone の Safari で「ホーム画面に追加」したあとにオンにしてください。"
+      ? "ホーム画面からの起動が必要です。"
       : !isConfigured
-        ? "プッシュ通知設定の反映待ちです。少し待ってから再度お試しください。"
-        : isCurrentDeviceEnabled
-          ? "この端末ではプッシュ通知がオンです。"
-          : "この端末ではプッシュ通知がオフです。";
+        ? "プッシュ通知設定の反映待ちです。"
+        : null;
 
   return (
     <section className="pt-1">
       <div className="flex items-center justify-between gap-4">
-        <div className="min-w-0">
+        <div className="flex min-w-0 items-center gap-1">
           <h3 className="text-sm font-semibold text-heading">プッシュ通知</h3>
+          <InfoHelp label="プッシュ通知の使い方">
+            <p>この端末でチームの未完了タスクをまとめて受け取れます。</p>
+            <p>
+              iPhoneではSafariで「ホーム画面に追加」し、そこからアプリを開いて通知をオンにしてください。
+            </p>
+            {isSupported && isStandalone && !isConfigured && (
+              <p>設定の反映を少し待って、もう一度お試しください。</p>
+            )}
+          </InfoHelp>
         </div>
 
         <div className="shrink-0">
@@ -64,24 +72,10 @@ export function PushNotificationsSection() {
         </div>
       </div>
 
-      <div className="mt-2">
-        <div className="min-w-0">
-          <p className="mt-1 text-xs leading-5 text-secondary">
-            iPhone のホーム画面に追加した PWA で、team の未完了タスクをまとめて受け取れます。
-          </p>
-          <p className="mt-2 text-xs text-muted">
-            {activeCount > 0 ? `購読中 ${activeCount} 台` : "購読中の端末はまだありません"}
-          </p>
-        </div>
-      </div>
-
-      <p
-        className={`mt-3 text-xs ${
-          !isSupported || !isStandalone || !isConfigured ? "text-warning" : "text-muted"
-        }`}
-      >
-        {helperMessage}
+      <p className="mt-2 text-xs text-muted">
+        {activeCount > 0 ? `購読中 ${activeCount} 台` : "購読中の端末はまだありません"}
       </p>
+      {unavailableReason && <p className="mt-2 text-xs text-warning">{unavailableReason}</p>}
 
       <div className="mt-3">
         <button
