@@ -504,6 +504,7 @@ export interface Repository {
   GetSharedPage(id: string): Promise<SharedPage>;
   CreateSharedPage(arg: {
     id: string;
+    requestId?: string;
     teamId: string;
     userId: string;
     title: string;
