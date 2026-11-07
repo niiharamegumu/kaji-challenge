@@ -203,7 +203,20 @@ export function PageEditor({
       onCompositionEnd={() => onCompositionChange?.(false)}
     >
       <div className="shared-page-block-surface" data-editable={editable}>
-        <div ref={editorRoot}>
+        <div
+          ref={editorRoot}
+          onMouseDownCapture={(event) => {
+            // Keep checklist clicks from focusing the editor at its previous caret.
+            // Canceling pointerdown would also suppress the native tap on mobile WebKit.
+            if (
+              editable &&
+              event.button === 0 &&
+              event.target instanceof HTMLInputElement &&
+              event.target.type === "checkbox"
+            )
+              event.preventDefault();
+          }}
+        >
           <BlockNoteView
             editor={editor}
             editable={editable}
