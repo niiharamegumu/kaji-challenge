@@ -17,10 +17,9 @@ import {
   useCreateBlockNote,
 } from "@blocknote/react";
 import { Plus } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { SharedPageBlock, SharedPageDocument } from "../../../contracts/shared-pages";
-import { isListItem } from "../model/listItems";
-import { ListOrderView } from "./ListOrderView";
+import { BlockOrderHandles } from "./BlockOrderHandles";
 import "@blocknote/mantine/style.css";
 import "../shared-pages.css";
 
@@ -87,13 +86,11 @@ function BasicToolbar() {
 export function PageEditor({
   document: content,
   editable,
-  reorderMode = false,
   onChange,
   onCompositionChange,
 }: {
   document: SharedPageDocument;
   editable: boolean;
-  reorderMode?: boolean;
   onChange?: (document: SharedPageDocument) => void;
   onCompositionChange?: (composing: boolean) => void;
 }) {
@@ -101,6 +98,7 @@ export function PageEditor({
   const menuId = useId();
   const menuRef = useRef<HTMLDivElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const editorRoot = useRef<HTMLDivElement>(null);
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const editor = useCreateBlockNote({
     schema,
@@ -164,37 +162,40 @@ export function PageEditor({
     editor.focus();
     setMenuOpen(false);
   };
-  const moveItem = (sourceId: string, targetId: string) => {
-    if (!editable || !reorderMode || sourceId === targetId) return;
-    editor.transact((tr) => {
-      const source = getNodeById(sourceId, tr.doc);
-      const target = getNodeById(targetId, tr.doc);
-      if (!source || !target || !isListItem(editor.getBlock(sourceId)?.type ?? "")) return;
-      const start = source.posBeforeNode;
-      const end = start + source.node.nodeSize;
-      if (!tr.doc.resolve(start).sameParent(tr.doc.resolve(target.posBeforeNode))) return;
+  const moveItem = useCallback(
+    (sourceId: string, targetId: string) => {
+      if (!editable || editor.prosemirrorView.composing || sourceId === targetId) return;
+      editor.transact((tr) => {
+        const source = getNodeById(sourceId, tr.doc);
+        const target = getNodeById(targetId, tr.doc);
+        if (!source || !target) return;
+        const start = source.posBeforeNode;
+        const end = start + source.node.nodeSize;
+        if (!tr.doc.resolve(start).sameParent(tr.doc.resolve(target.posBeforeNode))) return;
 
-      const selection = tr.selection;
-      const insertion =
-        target.posBeforeNode > start
-          ? target.posBeforeNode + target.node.nodeSize - source.node.nodeSize
-          : target.posBeforeNode;
-      const identity = tr.mapping.slice(tr.steps.length);
-      tr.delete(start, end).insert(insertion, source.node);
-      // Positions inside a moved subtree follow the text, including both ends
-      // of a selection. Other positions follow the normal transaction mapping.
-      const mapPoint = (position: number, assoc?: number) =>
-        position >= start && position < end
-          ? identity.mapResult(insertion + position - start, assoc)
-          : tr.mapping.mapResult(position, assoc);
-      tr.setSelection(
-        selection.map(tr.doc, {
-          map: (position, assoc) => mapPoint(position, assoc).pos,
-          mapResult: mapPoint,
-        }),
-      );
-    });
-  };
+        const selection = tr.selection;
+        const insertion =
+          target.posBeforeNode > start
+            ? target.posBeforeNode + target.node.nodeSize - source.node.nodeSize
+            : target.posBeforeNode;
+        const identity = tr.mapping.slice(tr.steps.length);
+        tr.delete(start, end).insert(insertion, source.node);
+        // Positions inside a moved subtree follow the text, including both ends
+        // of a selection. Other positions follow the normal transaction mapping.
+        const mapPoint = (position: number, assoc?: number) =>
+          position >= start && position < end
+            ? identity.mapResult(insertion + position - start, assoc)
+            : tr.mapping.mapResult(position, assoc);
+        tr.setSelection(
+          selection.map(tr.doc, {
+            map: (position, assoc) => mapPoint(position, assoc).pos,
+            mapResult: mapPoint,
+          }),
+        );
+      });
+    },
+    [editable, editor],
+  );
   return (
     <div
       className="shared-page-editor"
@@ -216,30 +217,30 @@ export function PageEditor({
       onCompositionStart={() => onCompositionChange?.(true)}
       onCompositionEnd={() => onCompositionChange?.(false)}
     >
-      {editable && reorderMode ? <ListOrderView blocks={content.blocks} onMove={moveItem} /> : null}
-      <div hidden={editable && reorderMode}>
-        <BlockNoteView
-          editor={editor}
-          editable={editable}
-          theme={theme}
-          formattingToolbar={false}
-          sideMenu={editable && !reorderMode}
-          slashMenu={editable && !reorderMode}
-          onChange={() => {
-            if (editable)
-              onChange?.({
-                format: "blocknote",
-                schemaVersion: 1,
-                blocks: documentBlocks(editor.document),
-              });
-          }}
-        >
-          {editable && !reorderMode ? (
-            <FormattingToolbarController formattingToolbar={BasicToolbar} />
-          ) : null}
-        </BlockNoteView>
+      <div className="shared-page-block-surface" data-editable={editable}>
+        <div ref={editorRoot}>
+          <BlockNoteView
+            editor={editor}
+            editable={editable}
+            theme={theme}
+            formattingToolbar={false}
+            sideMenu={false}
+            slashMenu={editable}
+            onChange={() => {
+              if (editable)
+                onChange?.({
+                  format: "blocknote",
+                  schemaVersion: 1,
+                  blocks: documentBlocks(editor.document),
+                });
+            }}
+          >
+            {editable ? <FormattingToolbarController formattingToolbar={BasicToolbar} /> : null}
+          </BlockNoteView>
+        </div>
+        {editable && <BlockOrderHandles editorRoot={editorRoot} onMove={moveItem} />}
       </div>
-      {editable && !reorderMode ? (
+      {editable ? (
         <div ref={menuRef} className="relative mt-3 px-1">
           <button
             ref={menuButtonRef}
