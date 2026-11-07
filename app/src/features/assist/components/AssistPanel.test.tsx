@@ -1,28 +1,12 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import type { AssistResult } from "../../../contracts/assist";
 import { VoiceSession } from "../model/VoiceSession";
 import { AssistPanel } from "./AssistPanel";
 
-const dialogMethods = Object.getOwnPropertyDescriptors(HTMLDialogElement.prototype);
-beforeEach(() => {
-  for (const method of ["showModal", "close"] as const) {
-    Object.defineProperty(HTMLDialogElement.prototype, method, {
-      configurable: true,
-      value: function (this: HTMLDialogElement) {
-        this.open = method === "showModal";
-      },
-    });
-  }
-});
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
-  for (const method of ["showModal", "close"]) {
-    if (dialogMethods[method])
-      Object.defineProperty(HTMLDialogElement.prototype, method, dialogMethods[method]);
-    else Reflect.deleteProperty(HTMLDialogElement.prototype, method);
-  }
 });
 const items = [
   { id: "milk", name: "牛乳", notes: "低脂肪の1Lを2本\nなければ買わない" },
