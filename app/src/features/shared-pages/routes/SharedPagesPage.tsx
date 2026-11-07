@@ -6,7 +6,6 @@ import {
   Check,
   Copy,
   FileText,
-  ListChevronsUpDown,
   LoaderCircle,
   LockKeyhole,
   Pencil,
@@ -30,7 +29,6 @@ import { Link, useNavigate, useOutletContext } from "../../../shared/router/navi
 import type { RootLayoutOutletContext } from "../../../shared/router/rootLayoutContext";
 import { sharedPageDraftDirtyAtom } from "../../../shared/state/sharedPageDraft";
 import { getReadableTextColor, resolveUserColor } from "../../../shared/utils/userColor";
-import { containsListItems } from "../model/listItems";
 import {
   PageEditSession,
   draftText,
@@ -110,7 +108,6 @@ function SharedPagesContent({
   });
   const state = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
   const [composing, setComposing] = useState(false);
-  const [reorderingEditorKey, setReorderingEditorKey] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [latestRequested, setLatestRequested] = useState(false);
   const [copyFallback, setCopyFallback] = useState<string | null>(null);
@@ -213,8 +210,6 @@ function SharedPagesContent({
   const editing = state.mode === "edit" || state.mode === "new";
   const stopped = state.mode === "lost";
   const draft = state.draft;
-  const canReorder = editing && draft !== null && containsListItems(draft.document.blocks);
-  const reorderMode = canReorder && reorderingEditorKey === state.editorKey;
   // The server decides lease expiry; reconnect/polling refreshes this snapshot.
   const locked = isEditingByAnotherUser(page?.editing, currentUserId);
   const editLabel = state.busy ? "確認中…" : locked ? "編集中" : "編集する";
@@ -300,19 +295,6 @@ function SharedPagesContent({
                 <ArrowLeft size={16} aria-hidden="true" />
               </button>
               <div className="flex-1" />
-              {canReorder && (
-                <button
-                  type="button"
-                  className={`shared-page-icon-button ${reorderMode ? "shared-page-icon-button--primary" : ""}`}
-                  aria-label="リストを並び替え"
-                  aria-pressed={reorderMode}
-                  title="リストを並び替え"
-                  disabled={composing || (newPage && state.busy)}
-                  onClick={() => setReorderingEditorKey(reorderMode ? null : state.editorKey)}
-                >
-                  <ListChevronsUpDown size={16} aria-hidden="true" />
-                </button>
-              )}
               <InfoHelp label={newPage ? "ページ作成の説明" : "ページ編集の説明"}>
                 <p>
                   {newPage
@@ -320,8 +302,8 @@ function SharedPagesContent({
                     : "本文やチェックリストを変更するときは、鉛筆アイコンから編集できます。変更は自動で保存されます。"}
                 </p>
                 <p>
-                  編集中に「リストを並び替え」をオンにすると、項目のハンドルをドラッグできます。
-                  ハンドルを選んで上下の矢印で動かすこともできます。子の項目も一緒に移動します。
+                  編集中は、各項目の左端にあるハンドルをドラッグして順番を変えられます。
+                  ハンドルをタップすると上下の矢印でも移動できます。入れ子の項目は親と一緒に移動します。
                 </p>
               </InfoHelp>
               {page?.editing ? (
@@ -512,7 +494,6 @@ function SharedPagesContent({
                     key={draft ? `edit-${state.editorKey}` : `read-${page!.id}-${page!.version}`}
                     document={draft?.document ?? page!.document}
                     editable={editing && !(state.busy && newPage)}
-                    reorderMode={reorderMode}
                     onChange={(document) => {
                       const latest = session.getSnapshot().draft;
                       if (latest) session.change({ ...latest, document });
