@@ -10,9 +10,15 @@ const scopeLabels: Record<string, string> = {
   offline_access: "旧方式の継続アクセス（現在は自動更新できません）",
 };
 
-function page(title: string, body: string) {
+function page(title: string, body: string, help?: { label: string; paragraphs: string[] }) {
   // Match LoginCard and tailwind.css without loading scripts, fonts or images
   // into the OAuth document. Keep its restrictive CSP and native form behavior.
+  const helpButton = help
+    ? `<button class="info-button" type="button" popovertarget="page-help" aria-haspopup="dialog" aria-label="${escape(help.label)}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 11v5m0-9h.01"/></svg></button>`
+    : "";
+  const helpPanel = help
+    ? `<div id="page-help" popover="auto" role="dialog" aria-labelledby="page-help-title"><div class="help-header"><h2 id="page-help-title">${escape(help.label)}</h2><button type="button" class="info-button" aria-label="閉じる" popovertarget="page-help" popovertargetaction="hide">×</button></div>${help.paragraphs.map((paragraph) => `<p>${escape(paragraph)}</p>`).join("")}</div>`
+    : "";
   return `<!doctype html>
 <html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escape(title)} | KajiChalle</title>
@@ -26,7 +32,9 @@ function page(title: string, body: string) {
   main{background:light-dark(#fff,#232723);border:1px solid light-dark(#e7e5e4,#3d463d);border-radius:24px;padding:32px;box-shadow:0 12px 36px -28px #44403c40}
   h1,h2,p,dl{margin:0}h1{font-size:1.75rem;line-height:1.5;letter-spacing:.01em;color:light-dark(#1c1917,#f3f2ed)}
   h2,legend{font-size:0.9375rem;font-weight:700;color:light-dark(#1c1917,#f3f2ed)}p+p{margin-top:8px}
-  .eyebrow{margin-bottom:8px;color:light-dark(#2f663b,#b0dbb1);font-size:0.75rem;font-weight:700;letter-spacing:.1em}
+  .page-heading,.help-header{display:flex;align-items:center;gap:4px}.help-header{justify-content:space-between;margin-bottom:4px}
+  .info-button{display:inline-grid;place-items:center;flex:none;width:44px;height:44px;min-height:44px;padding:0;border:0;border-radius:50%;font-size:20px;color:light-dark(#57534e,#b9c0b5);background:transparent}
+  #page-help{width:min(24rem,calc(100% - 32px));max-height:80dvh;margin:auto;overflow:auto;padding:12px 16px 16px;border:1px solid light-dark(#d6d3d1,#596455);border-radius:16px;background:light-dark(#fff,#232723);color:inherit;font-size:.875rem;box-shadow:0 8px 30px #0003}
   .intro{margin-top:12px;color:light-dark(#57534e,#b9c0b5)}.section{margin-top:28px}
   .details{display:grid;grid-template-columns:6.5rem minmax(0,1fr);gap:10px 16px;margin-top:14px;padding:18px 20px;border-radius:12px;background:light-dark(#fafaf9,#202420);border:1px solid light-dark(#e7e5e4,#3d463d)}
   dt{font-size:0.8125rem;color:light-dark(#57534e,#b9c0b5)}dd{margin:0;min-width:0;font-weight:600;color:light-dark(#292524,#e5e7df)}
@@ -54,7 +62,7 @@ function page(title: string, body: string) {
   @media(forced-colors:active){.scope:has(input:checked){border-color:Highlight}.primary{border-color:ButtonText}}
 </style></head><body><div class="shell">
 <header class="brand"><span class="brand-name">KajiChalle</span><span class="brand-note">アプリ連携</span></header>
-<main id="main"><p class="eyebrow">いつもの家事を、もっと身近に。</p><h1>${escape(title)}</h1>${body}</main>
+<main id="main"><div class="page-heading"><h1>${escape(title)}</h1>${helpButton}</div>${body}${helpPanel}</main>
 <footer class="footer"><a href="/">KajiChalle に戻る</a></footer>
 </div></body></html>`;
 }
@@ -107,7 +115,11 @@ export function mcpErrorPage(message: string, status: number) {
 export function mcpLoginPage(authorizationUrl: string) {
   return page(
     "KajiChalle にログイン",
-    `<p class="intro">Google で本人を確認したあと、連携先と許可する操作を確認できます。</p><form method="post" action="/api/mcp/oauth/login"><input type="hidden" name="authorizationUrl" value="${escape(authorizationUrl)}"><div class="actions"><button class="primary" type="submit">Google でログイン</button></div></form>`,
+    `<form method="post" action="/api/mcp/oauth/login"><input type="hidden" name="authorizationUrl" value="${escape(authorizationUrl)}"><div class="actions"><button class="primary" type="submit">Google でログイン</button></div></form>`,
+    {
+      label: "ログインの手順",
+      paragraphs: ["Google で本人を確認したあと、連携先と許可する操作を確認できます。"],
+    },
   );
 }
 
@@ -167,12 +179,16 @@ export function mcpConnectionsPage(
           : connection.grantId
             ? "許可済み"
             : "許可済み（交換未確認）";
-      const duration = `<p>保存されている許可期限: ${escape(connection.expiresAt)}</p><p>これはトークンの有効期限や接続状態を示すものではありません。</p>`;
+      const duration = `<p>保存されている許可期限: ${escape(connection.expiresAt)}</p>`;
       return `<article class="connection"><h2>${escape(connection.clientName)}</h2><span class="status">${status}</span><div class="duration">${duration}</div><p class="note">${connection.scopes.map((scope) => escape(scopeLabels[scope] ?? scope)).join("、")}</p><form method="post" action="/api/mcp/connections/revoke"><input type="hidden" name="connectionId" value="${escape(connection.id)}"><input type="hidden" name="handle" value="${escape(handle)}"><button type="submit">${connection.revokedAt ? "トークンの失効を再実行" : "連携を解除"}</button></form></article>`;
     })
     .join("");
-  return page(
-    "MCP 連携の管理",
-    `<p class="intro">ここには過去の許可も表示されます。現在の接続状態を示すものではありません。</p><p class="note">新しい許可は同意から最大7日間で、自動更新されません。以前の15分トークンは延長されません。期限後は連携先から再接続して許可してください。</p><p class="note">解除すると、この連携先からのアクセスを拒否します。ログアウトでは解除されません。</p>${rows || '<p class="empty">連携はありません。</p>'}`,
-  );
+  return page("MCP 連携の管理", rows || '<p class="empty">連携はありません。</p>', {
+    label: "連携の期限と解除について",
+    paragraphs: [
+      "一覧には過去の許可も含まれます。各連携に表示されるのは保存されている許可期限です。これはトークンの有効期限や接続状態を示すものではありません。",
+      "新しい許可は同意から最大7日間で、自動更新されません。以前の15分トークンは延長されません。期限後は連携先から再接続して許可してください。",
+      "解除すると、この連携先からのアクセスを拒否します。ログアウトでは解除されません。",
+    ],
+  });
 }

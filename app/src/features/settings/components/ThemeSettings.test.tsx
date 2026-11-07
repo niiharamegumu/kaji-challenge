@@ -46,9 +46,12 @@ afterEach(() => {
 it("defaults to system without writing storage and follows live OS changes", () => {
   render(settings());
   expect(mode("システム")).toBeChecked();
-  expect(screen.getByRole("group", { name: "表示モード" })).toHaveAccessibleDescription(
-    /端末の設定/,
+  expect(screen.getByRole("group", { name: "表示モード" })).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "表示モードの説明" }));
+  expect(screen.getByRole("dialog", { name: "表示モードの説明" })).toHaveTextContent(
+    /端末の設定.*このブラウザーに保存/,
   );
+  fireEvent.click(screen.getByRole("button", { name: "閉じる" }));
   expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBeNull();
   expect(themeColor()).toBe("#f6f4ef");
   changeSystem(true);

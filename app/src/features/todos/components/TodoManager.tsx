@@ -32,6 +32,7 @@ import { TodoCategoryInput } from "./TodoCategoryInput";
 import { TodoCategorySwipeArea, type TodoCategorySwipeDirection } from "./TodoCategorySwipeArea";
 import { useDelayedActions } from "../../../shared/state/DelayedActionProvider";
 import { ActionCountdown } from "../../../shared/components/ActionCountdown";
+import { InfoHelp } from "../../../shared/components/InfoHelp";
 
 import type { TodoCategoriesQuery } from "../hooks/useTodoCategories";
 import {
@@ -64,8 +65,6 @@ type TodoItemsSectionProps = {
   onDelete: (itemId: string) => void;
   onReorder: (itemIds: string[]) => void;
   onUpdate: (itemId: string, payload: UpdateTodoItemRequest) => Promise<void>;
-  title?: string;
-  description?: string;
   headerContent?: ReactNode;
   showSectionChrome?: boolean;
   articleClassName?: string;
@@ -318,9 +317,16 @@ export function TodoItemForm({
 
   return (
     <div className="grid gap-2">
-      <label className="text-xs text-body sm:text-sm" htmlFor={`${formId}-name`}>
-        名前
-      </label>
+      <div className="flex items-center gap-2">
+        <label className="text-xs text-body sm:text-sm" htmlFor={`${formId}-name`}>
+          名前
+        </label>
+        {onInputKeyDown && (
+          <InfoHelp label="ToDoを続けて追加する方法">
+            「続けて追加」またはEnterで、同じカテゴリーに次のToDoを入力できます。
+          </InfoHelp>
+        )}
+      </div>
       <input
         id={`${formId}-name`}
         ref={nameInputRef}
@@ -360,14 +366,12 @@ export function TodoItemsSection({
   onDelete,
   onReorder,
   onUpdate,
-  title = "現在のToDo",
-  description,
   headerContent,
   showSectionChrome = true,
   articleClassName = `mt-3 rounded-xl px-0 py-3 md:mt-4 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`,
   listClassName = "mt-4",
   emptyClassName = "mx-2 mt-4 rounded-xl border border-dashed border-line-strong bg-surface-subtle/80 px-4 py-8 text-center text-sm text-secondary md:mx-0",
-  emptyMessage = "ToDoはまだありません。やることを追加してください。",
+  emptyMessage = "ToDoはまだありません。",
 }: TodoItemsSectionProps) {
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editState, setEditState] = useTodoItemFormState(categoriesQuery.data);
@@ -452,11 +456,11 @@ export function TodoItemsSection({
       <article className={articleClassName}>
         {showSectionChrome ? (
           <div className="flex items-center justify-between gap-3 px-2 md:px-0">
-            <div>
-              <h3 className="text-base font-semibold text-heading">{title}</h3>
-              {description != null ? (
-                <p className="mt-1 text-sm text-secondary">{description}</p>
-              ) : null}
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-semibold text-heading">ToDo</h2>
+              <InfoHelp label="ToDoの使い方">
+                画面下の追加ボタンから、チームで共有するToDoを作成できます。完了すると削除されます。
+              </InfoHelp>
             </div>
             <div className="flex items-center gap-2">
               {headerContent}
@@ -521,48 +525,16 @@ export function TodoItemsSection({
   );
 }
 
-export function TodoManager({
-  emptyMessage,
-  filters,
-  onCategorySwipe,
-  categoriesQuery,
-  items,
-  isReordering,
-  isUpdating,
-  onDelete,
-  onReorder,
-  onUpdate,
-}: Props) {
+export function TodoManager(props: Props) {
   return (
-    <article
-      className={`animate-enter flex flex-1 flex-col rounded-xl px-0 py-3 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
-    >
-      <div className="flex items-center justify-between gap-3 px-2 md:px-0">
-        <h2 className="text-lg font-semibold text-heading">ToDo</h2>
-      </div>
-      <div className="mt-4 flex flex-1 flex-col border-t border-line pt-4">
-        <TodoItemsSection
-          filters={filters}
-          onCategorySwipe={onCategorySwipe}
-          emptyMessage={emptyMessage}
-          categoriesQuery={categoriesQuery}
-          items={items}
-          isReordering={isReordering}
-          isUpdating={isUpdating}
-          onDelete={onDelete}
-          onReorder={onReorder}
-          onUpdate={onUpdate}
-          articleClassName="flex flex-1 flex-col"
-          headerContent={
-            <span className="rounded-full border border-line bg-surface-subtle px-3 py-1 text-xs text-body">
-              <span className="whitespace-nowrap">{items.length}件</span>
-            </span>
-          }
-        />
-      </div>
-      <p className="mt-4 px-2 text-xs text-muted md:px-0">
-        ToDoをチームで共有します。完了すると削除されます。
-      </p>
-    </article>
+    <TodoItemsSection
+      {...props}
+      articleClassName={`animate-enter flex flex-1 flex-col rounded-xl px-0 py-3 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
+      headerContent={
+        <span className="whitespace-nowrap rounded-full border border-line bg-surface-subtle px-3 py-1 text-xs text-body">
+          {props.items.length}件
+        </span>
+      }
+    />
   );
 }

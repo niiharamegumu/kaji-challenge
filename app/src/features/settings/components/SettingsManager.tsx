@@ -135,14 +135,11 @@ export function SettingsManager({
     <section className="space-y-5 pb-1 md:space-y-6">
       <header>
         <h2 className="text-xl font-semibold tracking-tight text-heading">設定</h2>
-        <p className="mt-1.5 text-sm text-secondary">
-          毎日使いやすい、自分たちの家事チャレンジに。
-        </p>
       </header>
       <div className="grid min-w-0 gap-5 lg:grid-cols-[13.5rem_minmax(0,1fr)] lg:gap-8">
         <SettingsNavigation activeCategory={activeCategory} onSelect={setActiveCategory} />
         <div className="min-w-0">
-          {SETTINGS_CATEGORIES.map(({ id, label, scope }) => (
+          {SETTINGS_CATEGORIES.map(({ id, label }) => (
             <article
               key={id}
               id={`settings-${id}`}
@@ -150,32 +147,24 @@ export function SettingsManager({
               aria-labelledby={`settings-${id}-heading`}
               className="min-w-0 rounded-2xl border border-line bg-surface p-4 sm:p-6"
             >
-              <header className="mb-6 flex flex-wrap items-center justify-between gap-2 border-b border-line pb-4">
+              <header className="mb-4 border-b border-line pb-3">
                 <h2 id={`settings-${id}-heading`} className="text-base font-semibold text-heading">
                   {label}
                 </h2>
-                <span className="rounded-full bg-surface-muted px-2.5 py-1 text-xs text-secondary">
-                  {scope}
-                </span>
               </header>
               {id === "profile" ? (
-                <>
-                  <p className="mb-5 text-sm leading-relaxed text-secondary">
-                    チームに表示する名前と、自分の目印になるカラーを設定します。
-                  </p>
-                  <AccountSettingsSection
-                    nickname={nickname}
-                    colorHex={colorHex}
-                    nicknameError={nicknameError}
-                    colorHexError={colorHexError}
-                    isSavingNickname={isSavingNickname}
-                    isSavingColor={isSavingColor}
-                    onNicknameChange={onNicknameChange}
-                    onColorHexChange={onColorHexChange}
-                    onSaveNickname={onSaveNickname}
-                    onSaveColor={onSaveColor}
-                  />
-                </>
+                <AccountSettingsSection
+                  nickname={nickname}
+                  colorHex={colorHex}
+                  nicknameError={nicknameError}
+                  colorHexError={colorHexError}
+                  isSavingNickname={isSavingNickname}
+                  isSavingColor={isSavingColor}
+                  onNicknameChange={onNicknameChange}
+                  onColorHexChange={onColorHexChange}
+                  onSaveNickname={onSaveNickname}
+                  onSaveColor={onSaveColor}
+                />
               ) : null}
               {id === "appearance" ? <ThemeSettings /> : null}
               {id === "todos" ? (
@@ -214,9 +203,6 @@ export function SettingsManager({
                       チームの参加・切り替え
                     </summary>
                     <div className="space-y-6 pt-3">
-                      <p className="text-xs leading-relaxed text-muted">
-                        参加や離脱をすると、現在のチームから移動します。
-                      </p>
                       <JoinTeamSection
                         joinCode={joinCode}
                         isJoiningTeam={isJoiningTeam}

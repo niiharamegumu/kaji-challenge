@@ -146,12 +146,28 @@ test(
       await page.emulateMedia({ colorScheme });
       await page.goto("/pages");
       await expect(nav).toBeVisible();
+      const listHelp = page.getByRole("button", { name: "共有ページの使い方" });
+      await expect(page.getByText("メモも、計画も、好きな形で。")).toHaveCount(0);
+      await listHelp.click();
+      const help = page.getByRole("dialog", { name: "共有ページの使い方" });
+      await expect(help).toContainText("文章やチェックリスト");
+      await page.screenshot({ path: testInfo.outputPath(`shared-page-info-${colorScheme}.png`) });
+      await help.getByRole("button", { name: "閉じる" }).click();
+      await expect(listHelp).toBeFocused();
       const originalGap = await navBottomGap();
       const canvas = await page.locator("body").evaluate((element) => {
         return getComputedStyle(element).backgroundColor;
       });
       await page.getByRole("link", { name: "ページを作成", exact: true }).click();
       await expect(editor(page)).toBeVisible();
+      const createHelp = page.getByRole("button", { name: "ページ作成の説明" });
+      await expect(page.getByText(/作成すると、同じチームのメンバーに共有/)).toHaveCount(0);
+      await createHelp.click();
+      await expect(page.getByRole("dialog", { name: "ページ作成の説明" })).toContainText(
+        "同じチームのメンバーに共有",
+      );
+      await page.keyboard.press("Escape");
+      await expect(createHelp).toBeFocused();
       const addBlock = page.getByRole("button", { name: "ブロックを追加", exact: true });
       const blockMenu = page.getByRole("group", { name: "追加するブロック", exact: true });
       await addBlock.click();

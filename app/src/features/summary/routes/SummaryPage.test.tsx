@@ -423,7 +423,7 @@ describe("SummaryPage", () => {
     );
   });
 
-  it("allows a closed past month correction with a recalculation warning", async () => {
+  it("allows a closed past month correction and explains recalculation on demand", async () => {
     mockGetPenaltySummaryMonthly.mockResolvedValue({
       data: {
         totalPenalty: 2,
@@ -468,12 +468,15 @@ describe("SummaryPage", () => {
 
     await screen.findByRole("heading", { name: "月次サマリー" });
     await userEvent.click(screen.getByRole("button", { name: "過去日タスクを完了にする" }));
-    expect(await screen.findByText(/操作対象外を含め、現在設定で月全体/)).toBeInTheDocument();
+    expect(screen.getByText("締め済み")).toBeVisible();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "変更を取り消す" })).not.toBeInTheDocument();
     expect(mockPostTaskCompletionToggle).toHaveBeenCalledExactlyOnceWith("daily-past", {
       targetDate: "2026-03-16",
       action: "complete",
     });
+    await userEvent.click(screen.getByRole("button", { name: "締め済み月の再計算について" }));
+    const help = screen.getByRole("dialog", { name: "締め済み月の再計算について" });
+    expect(within(help).getByText(/操作対象外を含め、現在設定で月全体/)).toBeVisible();
   });
 });

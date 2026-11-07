@@ -1,4 +1,5 @@
 import { useId, useState } from "react";
+import { InfoHelp } from "../../../shared/components/InfoHelp";
 import { useTodoCategoriesQuery } from "../hooks/useTodoCategories";
 import { useTodoDefaultCategory } from "../hooks/useTodoDefaultCategory";
 import { ALL_TODO_CATEGORIES, type TodoCategorySelection } from "../model/defaultTodoCategory";
@@ -13,7 +14,6 @@ export function TodoDefaultCategorySettings({ identityKey }: { identityKey: stri
   const [saved, setSaved] = useTodoDefaultCategory(identityKey);
   const [saveFailed, setSaveFailed] = useState(false);
   const inputId = useId();
-  const descriptionId = useId();
   const options = [
     { selection: ALL_TODO_CATEGORIES, label: "すべて" },
     ...(query.data ?? []).map((category) => ({
@@ -28,14 +28,23 @@ export function TodoDefaultCategorySettings({ identityKey }: { identityKey: stri
   const available = options.some((option) => optionValue(option.selection) === value);
   return (
     <div className="grid min-w-0 gap-2">
-      <label htmlFor={inputId} className="text-sm font-medium text-body">
-        最初に表示するToDoカテゴリー
-      </label>
+      <div className="flex items-center gap-2">
+        <label htmlFor={inputId} className="text-sm font-medium text-body">
+          最初に表示するToDoカテゴリー
+        </label>
+        <InfoHelp label="初期カテゴリーの説明">
+          <p>
+            ホームとToDo画面を開いたときに、このカテゴリーが選択されます。タブの並び順は変わりません。
+          </p>
+          <p>
+            設定はこのブラウザーに、ユーザーとチームごとに自動保存されます。選んだカテゴリーが削除された場合は「すべて」で開きます。
+          </p>
+        </InfoHelp>
+      </div>
       <select
         id={inputId}
         value={available ? value : "all"}
         disabled={query.data === undefined || saved === undefined}
-        aria-describedby={descriptionId}
         onChange={(event) => {
           const selected = options.find(
             (option) => optionValue(option.selection) === event.currentTarget.value,
@@ -50,11 +59,6 @@ export function TodoDefaultCategorySettings({ identityKey }: { identityKey: stri
           </option>
         ))}
       </select>
-      <div id={descriptionId} className="space-y-1 text-xs text-muted">
-        <p>ホームとToDo画面を開いたときに選択されます。タブの並び順は変わりません。</p>
-        <p>このブラウザーの、現在のユーザーとチームに自動保存されます。</p>
-        <p>削除されたカテゴリーは「すべて」で開きます。</p>
-      </div>
       <TodoCategoryQueryStatus query={query} />
       {saveFailed ? (
         <p role="alert" className="text-xs text-danger">

@@ -271,13 +271,36 @@ test(
       });
     }
     await page.getByRole("button", { name: "追加", exact: true }).click();
-    await page.getByPlaceholder("例: 牛乳", { exact: true }).fill("検証用の牛乳");
-    await page.getByRole("button", { name: "追加する", exact: true }).click();
+    const todoForm = page.getByRole("dialog", { name: "ToDoを追加", exact: true });
+    const nameField = todoForm.getByRole("textbox", { name: "名前", exact: true });
+    await nameField.fill("検証用の牛乳");
+    const helpLabel = "ToDoを続けて追加する方法";
+    const helpTrigger = todoForm.getByRole("button", { name: helpLabel, exact: true });
+    const help = page.getByRole("dialog", { name: helpLabel, exact: true });
+    if (testInfo.project.name === "mobile") {
+      await helpTrigger.tap();
+    } else {
+      await helpTrigger.focus();
+      await page.keyboard.press("Enter");
+    }
+    await expect(help.getByText(/「続けて追加」またはEnterで/)).toBeVisible();
+    if (testInfo.project.name === "mobile") {
+      await help.getByRole("button", { name: "閉じる", exact: true }).tap();
+    } else {
+      await page.keyboard.press("Escape");
+      await expect(helpTrigger).toBeFocused();
+    }
+    await expect(help).toBeHidden();
+    await expect(nameField).toHaveValue("検証用の牛乳");
+    await expect(page.getByText("検証用の牛乳", { exact: true })).toHaveCount(0);
+    await todoForm.getByRole("button", { name: "追加する", exact: true }).click();
     await expect(page.getByText("検証用の牛乳", { exact: true })).toBeVisible();
     await page.reload();
     await expect(page.getByText("検証用の牛乳", { exact: true })).toBeVisible();
     await page.goto("/calendar");
-    await expect(page.getByText(/今月と来月以降の予定を表示します/)).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "カレンダーの使い方", exact: true }),
+    ).toBeVisible();
     const calendarGrid = page.locator(".reminder-calendar-grid");
     await expect(calendarGrid).toBeVisible();
     await expect(page.getByRole("status", { name: "カレンダーを読み込み中" })).toHaveCount(0);
@@ -521,10 +544,15 @@ test(
     await expect(select).toHaveValue("2000");
     if (testInfo.project.name === "desktop") {
       const initialCategory = page.getByRole("combobox", { name: "最初に表示するToDoカテゴリー" });
+      const initialHelp = page.getByRole("button", { name: "初期カテゴリーの説明" });
       await expect(initialCategory).toBeEnabled();
       await select.focus();
       await page.keyboard.press("Tab");
+      await expect(initialHelp).toBeFocused();
+      await page.keyboard.press("Tab");
       await expect(initialCategory).toBeFocused();
+      await page.keyboard.press("Shift+Tab");
+      await expect(initialHelp).toBeFocused();
       await page.keyboard.press("Shift+Tab");
       await expect(select).toBeFocused();
     }
@@ -534,7 +562,11 @@ test(
     await page.reload();
     await selectSettingsCategory(page, "ToDo");
     await expect(select).toHaveValue("5000");
-    await expect(page.getByText("別の端末やブラウザーには引き継がれません。")).toBeVisible();
+    const delayHelpLabel = "取り消し猶予の説明";
+    await page.getByRole("button", { name: delayHelpLabel }).click();
+    const delayHelp = page.getByRole("dialog", { name: delayHelpLabel });
+    await expect(delayHelp.getByText("別の端末やブラウザーには引き継がれません。")).toBeVisible();
+    await delayHelp.getByRole("button", { name: "閉じる", exact: true }).click();
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true);
@@ -904,7 +936,6 @@ test(
     await page.getByRole("button", { name: "追加する", exact: true }).click();
     expect((await savedReminder).ok()).toBe(true);
     await page.reload();
-    await expect(page.getByText(/今月と来月以降の予定を表示します/)).toBeVisible();
     await expect(page.getByRole("button", { name: "予定の保存確認 を編集" })).toBeVisible();
     await expect(
       page.getByText("忘れずに持参", { exact: true }).filter({ visible: true }),
@@ -1121,9 +1152,14 @@ test(
     const editor = page
       .getByRole("listitem")
       .filter({ has: page.getByLabel("週の必要回数", { exact: true }) });
-    await expect(editor.getByLabel("週の必要回数")).toHaveValue("3");
-    await expect(editor.getByText(/回数の変更は翌週月曜から適用/)).toBeVisible();
-    await editor.getByLabel("週の必要回数").selectOption("1");
+    const weeklyCount = editor.getByLabel("週の必要回数", { exact: true });
+    await expect(weeklyCount).toHaveValue("3");
+    const weeklyHelpLabel = "週の必要回数の変更について";
+    await editor.getByRole("button", { name: weeklyHelpLabel }).click();
+    const weeklyHelp = page.getByRole("dialog", { name: weeklyHelpLabel });
+    await expect(weeklyHelp.getByText(/回数の変更は翌週月曜から適用/)).toBeVisible();
+    await weeklyHelp.getByRole("button", { name: "閉じる", exact: true }).click();
+    await weeklyCount.selectOption("1");
     await page.screenshot({
       path: testInfo.outputPath("weekly-requirement-edit.png"),
       fullPage: true,
@@ -1600,7 +1636,7 @@ test(
       "aria-pressed",
       "true",
     );
-    const headingBox = await page.getByRole("heading", { name: "現在のToDo" }).boundingBox();
+    const headingBox = await page.getByRole("heading", { name: "ToDo", exact: true }).boundingBox();
     const filterBox = await filter.boundingBox();
     expect(headingBox && filterBox && filterBox.y >= headingBox.y + headingBox.height).toBeTruthy();
     if (testInfo.project.name === "mobile") {
@@ -2189,7 +2225,7 @@ test(
       });
     });
     await page.goto("/todos");
-    await expect(page.getByRole("heading", { name: "現在のToDo" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "ToDo", exact: true })).toBeVisible();
     const launcher = page.getByRole("button", { name: "アシスト", exact: true });
     const more = page.getByRole("button", { name: "その他", exact: true });
     const [assistSize, moreSize] = await Promise.all([launcher.boundingBox(), more.boundingBox()]);
@@ -2199,7 +2235,7 @@ test(
     const dialog = page.getByRole("dialog", { name: "音声アシスト" });
     const text = dialog.getByRole("textbox", { name: "送信する内容" });
     const microphone = dialog.getByRole("button", { name: "録音を開始", exact: true });
-    await expect(dialog.getByRole("heading", { name: "何を追加しますか？" })).toBeVisible();
+    await expect(microphone).toBeEnabled();
     await expect(text).toHaveValue("");
     expect(await page.evaluate(() => window.assistFixture.captureRequests)).toBe(0);
     await page.screenshot({ path: testInfo.outputPath("assist-idle.png"), fullPage: true });
@@ -2437,11 +2473,12 @@ test(
     const launcher = page.getByRole("button", { name: "アシスト", exact: true });
     await launcher.click();
     const dialog = page.getByRole("dialog", { name: "音声アシスト" });
-    const helpButton = dialog.getByRole("button", { name: "できること", exact: true });
+    const helpButton = dialog.getByRole("button", { name: "アシストの使い方", exact: true });
     await helpButton.click();
-    const help = dialog.getByRole("region", { name: "アシストでできること" });
+    const help = page.getByRole("dialog", { name: "アシストの使い方", exact: true });
     await expect(help).toBeVisible();
     await expect(help.getByText("「ToDoに牛乳と卵を追加して」")).toBeVisible();
+    await expect(help.getByText(/続きや編集はToDo画面で確認できます/)).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath("assist-help.png"), fullPage: false });
     await page.keyboard.press("Escape");
     await expect(help).toBeHidden();
@@ -2453,16 +2490,14 @@ test(
     expect(bounds.x).toBeGreaterThanOrEqual(0);
     expect(bounds.x + bounds.width).toBeLessThanOrEqual(320);
     expect(bounds.y + bounds.height).toBeLessThanOrEqual(480);
-    await helpButton.click();
+    await help.getByRole("button", { name: "閉じる", exact: true }).click();
     const text = dialog.getByRole("textbox", { name: "送信する内容" });
     const send = dialog.getByRole("button", { name: "送信", exact: true });
     await text.fill("買い物の牛乳を探して");
     await send.click();
     const results = dialog.getByLabel("ToDo 23件", { exact: true });
     await expect(results.getByRole("listitem")).toHaveCount(20);
-    const notice = results.getByText(
-      "全23件のうち先頭20件を表示しています。続きはToDo画面で確認してください。",
-    );
+    const notice = results.getByText("全23件のうち先頭20件を表示しています。", { exact: true });
     await notice.scrollIntoViewIfNeeded();
     await expect(notice).toBeVisible();
     await expect(notice).toBeInViewport({ ratio: 1 });

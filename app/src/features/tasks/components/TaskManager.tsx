@@ -22,6 +22,7 @@ import { useState } from "react";
 
 import type { ReorderTasksRequest, Task, UpdateTaskRequest } from "../../../lib/api/operations";
 import { FormSheet } from "../../../shared/components/FormSheet";
+import { InfoHelp } from "../../../shared/components/InfoHelp";
 import { PAGE_SECTION_CHROMELESS_CLASS_NAME } from "../../../shared/styles/pageSection";
 import {
   restrictToVerticalAxis,
@@ -245,9 +246,15 @@ function SortableTaskItem({
           />
           {isWeekly ? (
             <>
-              <label className="text-xs text-body" htmlFor={`task-edit-weekly-${task.id}`}>
-                週の必要回数
-              </label>
+              <div className="flex items-center gap-1">
+                <label className="text-xs text-body" htmlFor={`task-edit-weekly-${task.id}`}>
+                  週の必要回数
+                </label>
+                <InfoHelp label="週の必要回数の変更について">
+                  回数の変更は翌週月曜から適用されます。今週と過去の完了記録・集計は変わりません。
+                  今週と同じ回数を選ぶと、予定している変更を取り消せます。
+                </InfoHelp>
+              </div>
               <select
                 id={`task-edit-weekly-${task.id}`}
                 className="h-10 rounded-lg border border-line-strong bg-surface px-3 py-2 text-sm sm:h-11"
@@ -258,7 +265,9 @@ function SortableTaskItem({
                     requiredCompletionsPerWeek: event.target.value,
                   })
                 }
-                aria-describedby={`task-edit-weekly-help-${task.id}`}
+                aria-describedby={
+                  task.scheduledWeeklyRequirement ? `task-edit-weekly-plan-${task.id}` : undefined
+                }
               >
                 {[1, 2, 3, 4, 5, 6, 7].map((count) => (
                   <option key={count} value={count}>
@@ -266,12 +275,12 @@ function SortableTaskItem({
                   </option>
                 ))}
               </select>
-              <p id={`task-edit-weekly-help-${task.id}`} className="text-xs text-secondary">
-                回数の変更は翌週月曜から適用されます。今週と過去の完了記録・集計は変わりません。
-                {task.scheduledWeeklyRequirement
-                  ? ` 現在は${task.scheduledWeeklyRequirement.effectiveWeek}から週${task.scheduledWeeklyRequirement.requiredCompletionsPerWeek}回に変更予定です。今週と同じ回数を選ぶと変更を取り消せます。`
-                  : null}
-              </p>
+              {task.scheduledWeeklyRequirement ? (
+                <p id={`task-edit-weekly-plan-${task.id}`} className="text-xs text-secondary">
+                  {task.scheduledWeeklyRequirement.effectiveWeek}から週
+                  {task.scheduledWeeklyRequirement.requiredCompletionsPerWeek}回に変更予定
+                </p>
+              ) : null}
             </>
           ) : null}
           <div className="mt-1 flex flex-wrap gap-2">
@@ -469,14 +478,7 @@ function TaskItemsSection({
         className={`mt-4 rounded-xl px-0 py-3 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
       >
         <div className="flex items-center justify-between gap-3 px-2 md:px-0">
-          <div>
-            <h3 className="text-base font-semibold text-heading">{sectionTitle}</h3>
-            <p className="mt-1 text-sm text-secondary">
-              {taskType === "daily"
-                ? "チームで共有する日間タスクです。ここで並び順を調整できます。"
-                : "チームで共有する週間タスクです。ここで並び順を調整できます。"}
-            </p>
-          </div>
+          <h3 className="text-base font-semibold text-heading">{sectionTitle}</h3>
           <div className="flex items-center gap-2">
             <span className="rounded-full border border-line bg-surface-subtle px-3 py-1 text-xs text-body">
               <span className="whitespace-nowrap">{tasks.length}件</span>
@@ -568,7 +570,12 @@ export function TaskManager({
         className={`animate-enter rounded-xl px-0 py-3 md:rounded-2xl md:p-6 ${PAGE_SECTION_CHROMELESS_CLASS_NAME}`}
       >
         <div className="flex items-center justify-between gap-3 px-2 md:px-0">
-          <h2 className="text-lg font-semibold text-heading">タスク管理</h2>
+          <div className="flex items-center gap-1">
+            <h2 className="text-lg font-semibold text-heading">タスク管理</h2>
+            <InfoHelp label="タスクの共有と並び替えについて">
+              タスク設定はチーム共通です。日間・週間それぞれの並び順は、この管理画面でのみ変更できます。
+            </InfoHelp>
+          </div>
           {showCreateButton ? (
             <button
               type="button"
@@ -580,9 +587,6 @@ export function TaskManager({
             </button>
           ) : null}
         </div>
-        <p className="mt-4 border-t border-line px-2 pt-4 text-xs text-muted md:px-0">
-          タスク設定はチーム共通です。並び替えは管理画面でのみ変更できます。
-        </p>
       </article>
 
       <TaskItemsSection

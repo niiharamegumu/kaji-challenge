@@ -396,7 +396,10 @@ describe("TasksPage", () => {
     const select = screen.getByLabelText("週の必要回数");
     expect(select).toHaveValue("3");
     expect(within(select).getAllByRole("option")).toHaveLength(7);
-    expect(screen.getByText(/回数の変更は翌週月曜から適用/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "週の必要回数の変更について" }));
+    const help = screen.getByRole("dialog", { name: "週の必要回数の変更について" });
+    expect(within(help).getByText(/回数の変更は翌週月曜から適用/)).toBeVisible();
+    await user.click(within(help).getByRole("button", { name: "閉じる" }));
     await user.selectOptions(select, "1");
     await user.click(screen.getByRole("button", { name: "保存" }));
     await waitFor(() => expect(mockPatchTask).toHaveBeenCalledTimes(1));
@@ -412,6 +415,7 @@ describe("TasksPage", () => {
     expect(screen.getByText("必要 3回/週")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "編集" }));
     expect(screen.getByLabelText("週の必要回数")).toHaveValue("1");
+    expect(screen.getByText("2026-09-28から週1回に変更予定")).toBeVisible();
     // A title/notes-only save must not reschedule an unchanged requirement.
     mockPatchTask.mockResolvedValueOnce({ data: scheduled });
     await user.click(screen.getByRole("button", { name: "保存" }));
@@ -577,9 +581,7 @@ describe("TasksPage", () => {
     );
 
     renderPage();
-    expect(
-      await screen.findByText("タスク設定はチーム共通です。並び替えは管理画面でのみ変更できます。"),
-    ).toBeInTheDocument();
+    await screen.findByRole("button", { name: "タスクの共有と並び替えについて" });
 
     if (latestOnDragEnd == null) {
       throw new Error("drag handler was not registered");

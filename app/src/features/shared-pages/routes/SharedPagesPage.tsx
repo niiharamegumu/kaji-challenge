@@ -17,6 +17,7 @@ import type { TeamMember } from "../../../contracts/models";
 import type { SharedPageSummary } from "../../../contracts/shared-pages";
 import { DeleteConfirmModal } from "../../../shared/components/DeleteConfirmModal";
 import { ConfirmModal } from "../../../shared/components/ConfirmModal";
+import { InfoHelp } from "../../../shared/components/InfoHelp";
 import { FormSheet } from "../../../shared/components/FormSheet";
 import {
   sharedPageQueryOptions,
@@ -228,9 +229,13 @@ function SharedPagesContent({
       <header
         className={`mb-5 items-center justify-between gap-3 ${detail ? "hidden md:flex" : "flex"}`}
       >
-        <div>
+        <div className="flex items-center gap-1">
           <h1 className="text-lg font-semibold text-heading">共有ページ</h1>
-          <p className="mt-2 text-sm text-secondary">メモも、計画も、好きな形で。</p>
+          {!detail && (
+            <InfoHelp label="共有ページの使い方">
+              ＋からページを作成できます。ページには文章やチェックリストを書き込めます。作成したページは同じチームのメンバーに共有されます。
+            </InfoHelp>
+          )}
         </div>
         <Link
           to="/pages/new"
@@ -256,13 +261,9 @@ function SharedPagesContent({
             </div>
           ) : null}
           {list.data?.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-line-strong p-8 text-center">
-              <FileText size={28} aria-hidden="true" className="mx-auto text-muted" />
-              <h2 className="mt-4 font-semibold text-heading">最初のページを作ろう</h2>
-              <p className="mt-2 text-sm leading-7 text-secondary">
-                行きたいお店、旅行の計画、暮らしのメモ。好きなことを自由に書きとめられます。
-              </p>
-            </div>
+            <p className="rounded-2xl border border-dashed border-line-strong p-4 text-center text-sm text-secondary">
+              共有ページはまだありません。
+            </p>
           ) : null}
           <div className={detail ? "space-y-1" : "grid gap-3 md:grid-cols-2"}>
             {list.data?.map((item) => (
@@ -294,6 +295,11 @@ function SharedPagesContent({
                 <ArrowLeft size={16} aria-hidden="true" />
               </button>
               <div className="flex-1" />
+              <InfoHelp label={newPage ? "ページ作成の説明" : "ページ編集の説明"}>
+                {newPage
+                  ? "タイトルを入力し、チェックマークで作成します。作成すると、同じチームのメンバーに共有されます。"
+                  : "本文やチェックリストを変更するときは、鉛筆アイコンから編集できます。変更は自動で保存されます。"}
+              </InfoHelp>
               {page?.editing ? (
                 <EditingUserAvatar
                   editing={page.editing}
@@ -489,16 +495,6 @@ function SharedPagesContent({
                     onCompositionChange={setComposing}
                   />
                 </Suspense>
-                {!editing && !stopped ? (
-                  <p className="mt-12 text-xs leading-6 text-muted">
-                    チェックを変えるときは、上の鉛筆アイコンから編集できます。
-                  </p>
-                ) : null}
-                {newPage ? (
-                  <p className="mt-10 border-t border-line pt-4 text-xs leading-6 text-muted">
-                    作成すると、同じチームのメンバーに共有されます。
-                  </p>
-                ) : null}
               </div>
             ) : null}
           </article>

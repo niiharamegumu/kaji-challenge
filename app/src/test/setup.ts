@@ -7,3 +7,15 @@ expect.extend(matchers);
 if (typeof window !== "undefined") {
   Object.defineProperty(window, "scrollTo", { value: () => {}, writable: true });
 }
+
+// jsdom does not implement native dialog modality; Playwright covers the browser behavior.
+for (const method of ["showModal", "close"] as const) {
+  if (!HTMLDialogElement.prototype[method]) {
+    Object.defineProperty(HTMLDialogElement.prototype, method, {
+      configurable: true,
+      value: function (this: HTMLDialogElement) {
+        this.open = method === "showModal";
+      },
+    });
+  }
+}
