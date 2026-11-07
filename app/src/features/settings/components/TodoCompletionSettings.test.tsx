@@ -30,10 +30,11 @@ it("shows the default, five whole-second options and browser-only scope", () => 
     "5秒",
   ]);
   expect(screen.getByRole("option", { selected: true })).toHaveTextContent("3秒");
-  expect(select()).toHaveAccessibleDescription(
-    /1〜5秒.*初期値は3秒.*このブラウザー.*次に完了するToDo/,
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "取り消し猶予の説明" }));
+  expect(screen.getByRole("dialog", { name: "取り消し猶予の説明" })).toHaveTextContent(
+    /1〜5秒.*初期値は3秒.*このブラウザー.*次に完了するToDo.*別の端末やブラウザー/,
   );
-  expect(screen.getByText("別の端末やブラウザーには引き継がれません。")).toBeVisible();
   expect(window.localStorage.getItem(storageKey)).toBeNull();
 });
 
