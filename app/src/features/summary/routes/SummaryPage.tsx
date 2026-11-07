@@ -5,6 +5,7 @@ import { useOutletContext, useSearchParams } from "../../../shared/router/naviga
 import type { RootLayoutOutletContext } from "../../../shared/router/rootLayoutContext";
 import { CompletionSlots } from "../../../shared/components/CompletionSlots";
 import { ConfirmModal } from "../../../shared/components/ConfirmModal";
+import { InfoHelp } from "../../../shared/components/InfoHelp";
 import { TriggeredPenaltiesList } from "../../../shared/components/TriggeredPenaltiesList";
 import {
   monthlyPenaltySummaryQueryOptions,
@@ -272,12 +273,17 @@ export function SummaryPage() {
         </div>
 
         <div className="mt-4 border-t border-line pt-3">
-          <h3 className="px-2 text-base font-semibold md:px-0">日次サマリー</h3>
-          {summaryData.isClosed ? (
-            <p className="mt-2 px-2 text-xs text-secondary md:px-0">
-              締め済み月のタスクを変更すると、操作対象外を含め、現在設定で月全体の合計減点と発動ペナルティを再計算します。
-            </p>
-          ) : null}
+          <div className="flex items-center gap-1 px-2 md:px-0">
+            <h3 className="text-base font-semibold">日次サマリー</h3>
+            {summaryData.isClosed ? (
+              <>
+                <span className="ml-1 text-xs text-secondary">締め済み</span>
+                <InfoHelp label="締め済み月の再計算について">
+                  締め済み月のタスクを変更すると、操作対象外を含め、現在設定で月全体の合計減点と発動ペナルティを再計算します。
+                </InfoHelp>
+              </>
+            ) : null}
+          </div>
 
           {monthlyTaskStatusGroups.length === 0 ? (
             <p className="mt-3 px-2 text-sm text-muted md:px-0">対象月のタスク履歴はありません。</p>
