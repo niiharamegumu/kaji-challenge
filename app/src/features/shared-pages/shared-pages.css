@@ -144,6 +144,12 @@
 .shared-page-editor .bn-inline-content {
   overflow-wrap: anywhere;
 }
+.shared-page-paper > :is(h2, input),
+.shared-page-editor .bn-inline-content {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
 .shared-page-editor
   .bn-block-content[data-content-type="checkListItem"]
   > div
@@ -220,5 +226,14 @@
   }
   .shared-page-editor .bn-block-group .bn-block-group {
     margin-left: 1rem;
+  }
+}
+@media (max-width: 389px) {
+  .shared-page-toolbar {
+    gap: 0;
+    padding-inline: 0.25rem;
+  }
+  .shared-page-toolbar [role="status"] svg {
+    display: none;
   }
 }

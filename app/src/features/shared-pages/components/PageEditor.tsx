@@ -4,6 +4,7 @@ import {
   defaultBlockSpecs,
   defaultInlineContentSpecs,
   defaultStyleSpecs,
+  getNodeById,
 } from "@blocknote/core";
 import { ja } from "@blocknote/core/locales";
 import { BlockNoteView } from "@blocknote/mantine";
@@ -18,6 +19,8 @@ import {
 import { Plus } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import type { SharedPageBlock, SharedPageDocument } from "../../../contracts/shared-pages";
+import { isListItem } from "../model/listItems";
+import { ListOrderView } from "./ListOrderView";
 import "@blocknote/mantine/style.css";
 import "../shared-pages.css";
 
@@ -84,11 +87,13 @@ function BasicToolbar() {
 export function PageEditor({
   document: content,
   editable,
+  reorderMode = false,
   onChange,
   onCompositionChange,
 }: {
   document: SharedPageDocument;
   editable: boolean;
+  reorderMode?: boolean;
   onChange?: (document: SharedPageDocument) => void;
   onCompositionChange?: (composing: boolean) => void;
 }) {
@@ -159,31 +164,82 @@ export function PageEditor({
     editor.focus();
     setMenuOpen(false);
   };
+  const moveItem = (sourceId: string, targetId: string) => {
+    if (!editable || !reorderMode || sourceId === targetId) return;
+    editor.transact((tr) => {
+      const source = getNodeById(sourceId, tr.doc);
+      const target = getNodeById(targetId, tr.doc);
+      if (!source || !target || !isListItem(editor.getBlock(sourceId)?.type ?? "")) return;
+      const start = source.posBeforeNode;
+      const end = start + source.node.nodeSize;
+      if (!tr.doc.resolve(start).sameParent(tr.doc.resolve(target.posBeforeNode))) return;
+
+      const selection = tr.selection;
+      const insertion =
+        target.posBeforeNode > start
+          ? target.posBeforeNode + target.node.nodeSize - source.node.nodeSize
+          : target.posBeforeNode;
+      const identity = tr.mapping.slice(tr.steps.length);
+      tr.delete(start, end).insert(insertion, source.node);
+      // Positions inside a moved subtree follow the text, including both ends
+      // of a selection. Other positions follow the normal transaction mapping.
+      const mapPoint = (position: number, assoc?: number) =>
+        position >= start && position < end
+          ? identity.mapResult(insertion + position - start, assoc)
+          : tr.mapping.mapResult(position, assoc);
+      tr.setSelection(
+        selection.map(tr.doc, {
+          map: (position, assoc) => mapPoint(position, assoc).pos,
+          mapResult: mapPoint,
+        }),
+      );
+    });
+  };
   return (
     <div
       className="shared-page-editor"
+      onCopy={(event) => {
+        // BlockNote writes rich clipboard formats and Markdown during editing.
+        // Plain-text destinations should receive just the selected page text.
+        const selection = window.getSelection();
+        if (
+          event.defaultPrevented &&
+          selection &&
+          !selection.isCollapsed &&
+          event.currentTarget.contains(selection.anchorNode) &&
+          event.currentTarget.contains(selection.focusNode)
+        ) {
+          const text = selection.toString();
+          if (text) event.clipboardData.setData("text/plain", text);
+        }
+      }}
       onCompositionStart={() => onCompositionChange?.(true)}
       onCompositionEnd={() => onCompositionChange?.(false)}
     >
-      <BlockNoteView
-        editor={editor}
-        editable={editable}
-        theme={theme}
-        formattingToolbar={false}
-        sideMenu={editable}
-        slashMenu={editable}
-        onChange={() => {
-          if (editable)
-            onChange?.({
-              format: "blocknote",
-              schemaVersion: 1,
-              blocks: documentBlocks(editor.document),
-            });
-        }}
-      >
-        {editable ? <FormattingToolbarController formattingToolbar={BasicToolbar} /> : null}
-      </BlockNoteView>
-      {editable ? (
+      {editable && reorderMode ? <ListOrderView blocks={content.blocks} onMove={moveItem} /> : null}
+      <div hidden={editable && reorderMode}>
+        <BlockNoteView
+          editor={editor}
+          editable={editable}
+          theme={theme}
+          formattingToolbar={false}
+          sideMenu={editable && !reorderMode}
+          slashMenu={editable && !reorderMode}
+          onChange={() => {
+            if (editable)
+              onChange?.({
+                format: "blocknote",
+                schemaVersion: 1,
+                blocks: documentBlocks(editor.document),
+              });
+          }}
+        >
+          {editable && !reorderMode ? (
+            <FormattingToolbarController formattingToolbar={BasicToolbar} />
+          ) : null}
+        </BlockNoteView>
+      </div>
+      {editable && !reorderMode ? (
         <div ref={menuRef} className="relative mt-3 px-1">
           <button
             ref={menuButtonRef}

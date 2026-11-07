@@ -8,6 +8,7 @@ import {
 } from "@playwright/test";
 import { createHmac } from "node:crypto";
 import { sql } from "drizzle-orm";
+import type { SharedPageBlock } from "../../src/contracts/shared-pages";
 import { createTestDatabase } from "../helpers/d1";
 import { provisionUser } from "../../src/server/application/provision-user";
 
@@ -17,6 +18,21 @@ const owner = { id: crypto.randomUUID(), token: crypto.randomUUID(), name: "ペ�
 const peer = { id: crypto.randomUUID(), token: crypto.randomUUID(), name: "ページの相手" };
 const outsider = { id: crypto.randomUUID(), token: crypto.randomUUID(), name: "ページ別チーム" };
 const secondSessionToken = crypto.randomUUID();
+const listPageId = crypto.randomUUID();
+
+function listItem(
+  type: "bulletListItem" | "numberedListItem" | "checkListItem",
+  name: string,
+  children: SharedPageBlock[] = [],
+): SharedPageBlock {
+  return {
+    id: crypto.randomUUID(),
+    type,
+    props: type === "checkListItem" ? { checked: true } : {},
+    content: [{ type: "text", text: name, styles: {} }],
+    children,
+  };
+}
 
 test.beforeAll(async () => {
   const path = process.env.KAJI_D1_TEST_PATH;
@@ -33,12 +49,34 @@ test.beforeAll(async () => {
       );
     }
     const teamId = (await connection.repository.ListMembershipsByUserID(owner.id))[0].TeamID;
+    const sessionId = crypto.randomUUID();
     await connection.query(
       sql`UPDATE team_members SET team_id=${teamId},role='member' WHERE user_id=${peer.id}`,
     );
     await connection.query(
-      sql`INSERT INTO auth_session(id,token,user_id,expires_at) VALUES (${crypto.randomUUID()},${secondSessionToken},${owner.id},strftime('%Y-%m-%dT%H:%M:%fZ','now','+30 days'))`,
+      sql`INSERT INTO auth_session(id,token,user_id,expires_at) VALUES (${sessionId},${secondSessionToken},${owner.id},strftime('%Y-%m-%dT%H:%M:%fZ','now','+30 days'))`,
     );
+    await connection.repository
+      .forSession(owner.id, sessionId)
+      .forMember(teamId, owner.id)
+      .CreateSharedPage({
+        id: listPageId,
+        teamId,
+        userId: owner.id,
+        title: "旅の持ち物",
+        document: {
+          format: "blocknote",
+          schemaVersion: 1,
+          blocks: [
+            listItem("checkListItem", "荷造り", [
+              listItem("numberedListItem", "着替え", [listItem("bulletListItem", "靴下")]),
+              listItem("bulletListItem", "雨具"),
+            ]),
+            listItem("bulletListItem", "予約"),
+            listItem("numberedListItem", "出発"),
+          ],
+        },
+      });
   } finally {
     // Browser interaction uses only the preview Worker's D1, never a second live emulator.
     await connection.close();
@@ -364,6 +402,159 @@ test(
     await expect(page).toHaveURL(/\/pages\/?$/);
     await page.reload();
     await expect(page.getByText(updatedTitle, { exact: true })).toHaveCount(0);
+  },
+);
+
+test(
+  "list items move with their descendants and keep their checked state after reload",
+  { tag: ["@shared-pages"] },
+  async ({ page, context, isMobile }, testInfo) => {
+    await authenticate(context);
+    if (isMobile) await page.setViewportSize({ width: 320, height: 720 });
+    await page.goto(`/pages/${listPageId}`);
+    const reorder = page.getByRole("button", { name: "リストを並び替え", exact: true });
+    const grip = (name: string) =>
+      page.getByRole("button", { name: `${name} をドラッグして並び替え`, exact: true });
+    const list = editor(page).locator('[data-content-type$="ListItem"] .bn-inline-content');
+    await expect(list).toHaveText(["荷造り", "着替え", "靴下", "雨具", "予約", "出発"]);
+    await expect(reorder).toHaveCount(0);
+    const parent = editor(page)
+      .locator(".bn-block")
+      .filter({ has: page.getByRole("checkbox") });
+    const parentId = await parent.getAttribute("data-id");
+    await beginEditing(page);
+    if (isMobile) {
+      const toolbar = page.locator(".shared-page-toolbar");
+      expect(await toolbar.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
+        true,
+      );
+      await expectUnobscured(toolbar.getByRole("button", { name: "完了", exact: true }));
+    }
+    const activate = (button: Locator) => (isMobile ? button.tap() : button.click());
+    await activate(reorder);
+    const from = (await grip("荷造り").boundingBox())!;
+    const to = (await grip("予約").boundingBox())!;
+    const start = { x: from.x + from.width / 2, y: from.y + from.height / 2 };
+    const end = { x: to.x + to.width / 2, y: to.y + to.height / 2 };
+    const parentMoveSaved = operationResponse(page, "patchSharedPage");
+    if (isMobile) {
+      const cdp = await context.newCDPSession(page);
+      try {
+        await cdp.send("Input.dispatchTouchEvent", {
+          type: "touchStart",
+          touchPoints: [{ ...start, id: 1 }],
+        });
+        await expect(grip("荷造り")).toHaveAttribute("aria-pressed", "true");
+        for (let step = 1; step <= 10; step++) {
+          await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchMove",
+            touchPoints: [{ x: start.x, y: start.y + ((end.y - start.y) * step) / 10, id: 1 }],
+          });
+        }
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+      } finally {
+        await cdp.detach();
+      }
+    } else {
+      await page.mouse.move(start.x, start.y);
+      await page.mouse.down();
+      await page.mouse.move(start.x, start.y + 12, { steps: 5 });
+      await expect(grip("荷造り")).toHaveAttribute("aria-pressed", "true");
+      await page.mouse.move(end.x, end.y, { steps: 15 });
+      await page.mouse.up();
+    }
+    const handles = page.getByRole("button", { name: /をドラッグして並び替え$/ });
+    await expect
+      .poll(() =>
+        handles.evaluateAll((buttons) =>
+          buttons.map((button) => button.getAttribute("aria-label")),
+        ),
+      )
+      .toEqual(
+        ["予約", "荷造り", "着替え", "靴下", "雨具", "出発"].map(
+          (name) => `${name} をドラッグして並び替え`,
+        ),
+      );
+    await saved(parentMoveSaved);
+    await expect(page.getByText("保存済み", { exact: true })).toBeVisible();
+    await activate(grip("雨具"));
+    await expect(page.getByRole("button", { name: "雨具 を上へ移動", exact: true })).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath("shared-page-reorder.png") });
+    await activate(page.getByRole("button", { name: "雨具 を上へ移動", exact: true }));
+    await activate(grip("出発"));
+    await activate(page.getByRole("button", { name: "出発 を上へ移動", exact: true }));
+    await activate(reorder);
+    const expected = ["予約", "出発", "荷造り", "雨具", "着替え", "靴下"];
+    await expect(list).toHaveText(expected);
+    await finishEditing(page);
+    await page.reload();
+    await expect(list).toHaveText(expected);
+    await expect(parent).toHaveAttribute("data-id", parentId!);
+    await expect(parent.getByRole("checkbox")).toBeChecked();
+    const children = parent.locator(":scope > .bn-block-group");
+    await expect(children.locator(".bn-inline-content")).toHaveText(["雨具", "着替え", "靴下"]);
+    await expect(children.locator(".bn-block-group").locator(".bn-inline-content")).toHaveText([
+      "靴下",
+    ]);
+    await expect(reorder).toHaveCount(0);
+  },
+);
+
+test(
+  "native text selection copies only the highlighted part of a shared page in read and edit modes",
+  { tag: ["@shared-pages"] },
+  async ({ page, context }) => {
+    await authenticate(context);
+    await context.grantPermissions(["clipboard-read"], { origin });
+    const body = "週末は京都駅で集合します。";
+    await page.goto("/pages/new");
+    await page.getByRole("textbox", { name: "タイトル", exact: true }).fill("集まる場所");
+    await editor(page).press("ControlOrMeta+b");
+    await page.keyboard.insertText(body);
+    await expect(editor(page).locator("strong")).toHaveText(body);
+    const created = operationResponse(page, "postSharedPage");
+    await page.getByRole("button", { name: "作成する", exact: true }).click();
+    await saved(created);
+    await expect(page.getByRole("button", { name: "編集する", exact: true })).toBeVisible();
+    const writes: string[] = [];
+    page.on("request", (request) => {
+      if (request.postData()?.includes('"patchSharedPage"')) writes.push(request.url());
+    });
+    for (const [index, selected] of ["京都駅", "集合"].entries()) {
+      if (index === 1) await beginEditing(page);
+      const paragraph = editor(page).locator("strong").filter({ hasText: body });
+      await paragraph.scrollIntoViewIfNeeded();
+      // The range only locates the glyphs. The actual selection comes from a pointer drag.
+      const bounds = await paragraph.evaluate((element, value) => {
+        const text = element.firstChild!;
+        const offset = text.textContent!.indexOf(value);
+        const range = document.createRange();
+        range.setStart(text, offset);
+        range.setEnd(text, offset + value.length);
+        const { left, right, top, height } = range.getBoundingClientRect();
+        return { left, right, y: top + height / 2 };
+      }, selected);
+      await page.mouse.move(bounds.left + 1, bounds.y);
+      await page.mouse.down();
+      await page.mouse.move(bounds.right - 1, bounds.y, { steps: 12 });
+      await page.mouse.up();
+      await expect
+        .poll(() => page.evaluate(() => window.getSelection()?.toString()))
+        .toBe(selected);
+      await page.keyboard.press("ControlOrMeta+c");
+      await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(selected);
+      if (index === 1) {
+        const bold = await page.evaluate(async () => {
+          const [item] = await navigator.clipboard.read();
+          const html = await (await item.getType("text/html")).text();
+          return new DOMParser().parseFromString(html, "text/html").querySelector("strong,b")
+            ?.textContent;
+        });
+        expect(bold).toBe(selected);
+      }
+    }
+    await finishEditing(page);
+    expect(writes).toEqual([]);
   },
 );
 
