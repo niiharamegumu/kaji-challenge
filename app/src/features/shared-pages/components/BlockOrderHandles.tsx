@@ -36,6 +36,7 @@ function useBlockRows(editorRoot: RefObject<HTMLDivElement | null>) {
     if (!root) return;
     let frame = 0;
     let observed = new Set<HTMLElement>();
+    let insertionRow: HTMLElement | undefined;
     const schedule = () => {
       if (!frame) frame = requestAnimationFrame(measure);
     };
@@ -54,6 +55,7 @@ function useBlockRows(editorRoot: RefObject<HTMLDivElement | null>) {
       observed = current;
 
       const measured: Row[] = [];
+      insertionRow = undefined;
       const lastSibling = new Map<string | undefined, Row>();
       for (const content of contents) {
         const outer = content.closest<HTMLElement>(".bn-block-outer");
@@ -69,8 +71,10 @@ function useBlockRows(editorRoot: RefObject<HTMLDivElement | null>) {
           !text &&
           content.dataset.contentType === "paragraph" &&
           !content.nextElementSibling
-        )
+        ) {
+          insertionRow = content;
           continue;
+        }
         const rect = content.getBoundingClientRect();
         // Align the grip with the first line of a large or wrapped heading.
         const gripOffset =
@@ -101,7 +105,37 @@ function useBlockRows(editorRoot: RefObject<HTMLDivElement | null>) {
       }
       setRows(measured);
     }
-    const mutations = new MutationObserver(schedule);
+    // Typing normally changes only the grip's accessible name. ResizeObserver
+    // handles line wrapping; a structural change still rebuilds sibling/drop targets.
+    const mutations = new MutationObserver((records) => {
+      if (frame) return;
+      const labels = new Map<string, string>();
+      for (const record of records) {
+        const target =
+          record.target instanceof Element ? record.target : record.target.parentElement;
+        const inline = target?.closest(".bn-inline-content");
+        const content = inline?.closest<HTMLElement>(".bn-block-content");
+        const outer = content?.closest<HTMLElement>(".bn-block-outer");
+        if (!inline || !content || !outer?.dataset.id || content === insertionRow) {
+          schedule();
+          return;
+        }
+        const text = inline.textContent.trim();
+        if (!text && !outer.nextElementSibling && content.dataset.contentType === "paragraph") {
+          // An emptied trailing paragraph may become BlockNote's insertion row.
+          schedule();
+          return;
+        }
+        labels.set(outer.dataset.id, text.slice(0, 80) || "空の項目");
+      }
+      setRows((previous) => {
+        if (!previous.some((row) => labels.has(row.id) && labels.get(row.id) !== row.label))
+          return previous;
+        return previous.map((row) =>
+          labels.has(row.id) ? { ...row, label: labels.get(row.id)! } : row,
+        );
+      });
+    });
     mutations.observe(root, {
       subtree: true,
       childList: true,
