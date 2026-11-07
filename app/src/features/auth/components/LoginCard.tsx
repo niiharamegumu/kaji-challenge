@@ -32,9 +32,6 @@ export function LoginCard({ status, onLogin }: Props) {
               KajiChalle
             </h1>
           </div>
-          <p className="mt-4 text-left text-sm leading-7 text-body md:text-left md:text-base">
-            家事を見える化して、分担と継続をチームで支えるサービスです。日々のタスクを共有し、進捗を確認しながら、無理なく続く家事運用をつくれます。
-          </p>
         </section>
 
         <div className="mt-6 flex justify-center px-2 md:justify-start md:px-0">
