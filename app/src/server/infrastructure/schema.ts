@@ -381,6 +381,21 @@ export const assistUsage = sqliteTable(
   ],
 );
 
+export const sharedPageCreations = sqliteTable(
+  "shared_page_creations",
+  {
+    team_id: text("team_id")
+      .notNull()
+      .references(() => teams.id, { onDelete: "cascade" }),
+    user_id: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    request_id: text("request_id").notNull(),
+    page_id: text("page_id").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.team_id, t.user_id, t.request_id] })],
+);
+
 export const sharedPages = sqliteTable(
   "shared_pages",
   {
