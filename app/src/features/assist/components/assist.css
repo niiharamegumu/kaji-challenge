@@ -43,53 +43,6 @@
   gap: 4px;
   align-items: center;
 }
-.assist-help summary {
-  list-style: none;
-}
-.assist-help summary::-webkit-details-marker {
-  display: none;
-}
-.assist-help-content {
-  position: absolute;
-  top: 54px;
-  right: 0;
-  z-index: 2;
-  width: min(360px, calc(100vw - 32px));
-  max-height: min(440px, calc(var(--assist-height, 100dvh) - 100px));
-  padding: 16px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  border: 1px solid var(--color-line);
-  border-radius: 20px;
-  background: var(--color-surface);
-  box-shadow: 0 12px 36px -12px rgb(52 45 34 / 20%);
-  color: var(--color-secondary);
-  font-size: 13px;
-  line-height: 1.7;
-}
-.assist-help-content h2 {
-  margin: 0;
-  color: var(--color-ink);
-  font-size: 15px;
-  font-weight: 600;
-}
-.assist-help-content h3 {
-  margin-top: 14px;
-  font-size: 14px;
-  font-weight: 600;
-}
-.assist-help-content dt {
-  margin-top: 12px;
-  color: var(--color-ink);
-  font-weight: 600;
-}
-.assist-help-content dd {
-  margin: 2px 0 0;
-}
-.assist-help-content p {
-  margin: 14px 0 0;
-  font-size: 12px;
-}
 .assist-icon-button,
 .assist-send {
   display: grid;
@@ -127,36 +80,6 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
-}
-.assist-welcome {
-  margin: auto 0;
-  padding: 16px 0 24px;
-  text-align: center;
-  animation: assist-appear 180ms ease-out;
-}
-.assist-mark {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  margin: 0 auto 14px;
-  border: 1px solid var(--color-line);
-  border-radius: 14px;
-  color: var(--color-body);
-  background: var(--color-surface);
-  box-shadow: 0 4px 12px -8px rgb(41 37 36 / 15%);
-}
-.assist-welcome h1 {
-  margin: 0;
-  font-size: clamp(20px, 3vw, 24px);
-  line-height: 1.5;
-  font-weight: 550;
-  letter-spacing: -0.04em;
-}
-.assist-welcome p {
-  margin-top: 6px;
-  font-size: 13px;
-  color: var(--color-muted);
 }
 .assist-messages {
   width: 100%;
@@ -366,13 +289,6 @@
   animation-play-state: paused;
   opacity: 0.4;
 }
-.assist-privacy {
-  margin-top: 12px;
-  text-align: center;
-  color: var(--color-muted);
-  font-size: 11px;
-  line-height: 1.6;
-}
 .assist-error {
   margin: 0 6px 12px;
   color: var(--color-danger);
@@ -441,15 +357,6 @@
   }
 }
 @media (max-height: 520px) {
-  .assist-welcome {
-    padding: 8px 0 16px;
-  }
-  .assist-mark {
-    display: none;
-  }
-  .assist-welcome h1 {
-    font-size: 20px;
-  }
   .assist-composer textarea {
     min-height: 56px;
     max-height: 110px;
