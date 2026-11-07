@@ -178,9 +178,7 @@ describe("TodoManager", () => {
       />,
     );
 
-    const currentTodoSection = screen
-      .getByRole("heading", { name: "現在のToDo" })
-      .closest("article");
+    const currentTodoSection = screen.getByRole("heading", { name: "ToDo" }).closest("article");
     if (currentTodoSection == null) {
       throw new Error("current todo section not found");
     }
