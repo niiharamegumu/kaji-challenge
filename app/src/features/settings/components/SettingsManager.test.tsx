@@ -86,7 +86,10 @@ it("shows only the selected settings category and exposes its selected state", (
   expect(screen.getByRole("heading", { name: "プロフィール" })).toBeVisible();
   expect(screen.queryByRole("textbox", { name: "チーム名" })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: /^チーム/ }));
-  expect(screen.getByRole("button", { name: /^チーム/ })).toHaveAttribute("aria-pressed", "true");
+  expect(screen.getByRole("button", { name: "チームの設定" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
   expect(screen.getByRole("textbox", { name: "チーム名" })).toBeVisible();
   expect(screen.queryByRole("textbox", { name: "ニックネーム" })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: /^アプリ/ }));
