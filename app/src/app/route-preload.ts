@@ -3,7 +3,7 @@ import { prefetchHomeData } from "../features/home/preload";
 import { todoCategoriesQueryOptions, todoItemsQueryOptions } from "../shared/query/todoQueries";
 import { teamMembersQueryOptions } from "../shared/query/teamMembersQuery";
 import { tasksQueryOptions } from "../shared/query/taskQueries";
-import { sharedPagesQueryOptions, sharedPageQueryOptions } from "../shared/query/sharedPageQueries";
+import { prefetchSharedPageData } from "../features/shared-pages/preload";
 import { currentInviteQueryOptions } from "../shared/query/currentInviteQuery";
 import {
   reminderCalendarQueryOptions,
@@ -21,19 +21,11 @@ import { dateStringInJST } from "../shared/utils/dates";
 export async function prefetchRouteData(client: QueryClient, destination: string) {
   const url = new URL(destination, "https://kaji.invalid");
   const today = dateStringInJST();
-  if (url.pathname.startsWith("/pages/")) {
-    const pageId = url.pathname.slice("/pages/".length);
-    await Promise.all([
-      client.prefetchQuery(sharedPagesQueryOptions),
-      pageId !== "new" && pageId !== ""
-        ? client.prefetchQuery(sharedPageQueryOptions(pageId))
-        : Promise.resolve(),
-    ]);
-    return;
-  }
+  if (url.pathname.startsWith("/pages/"))
+    return prefetchSharedPageData(client, url.pathname.slice("/pages/".length));
   switch (url.pathname) {
     case "/pages":
-      await client.prefetchQuery(sharedPagesQueryOptions);
+      await prefetchSharedPageData(client, "");
       break;
     case "/":
       await prefetchHomeData(client);
