@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { checkForPWAUpdate } from "../../../app/pwa-register";
+import { InfoHelp } from "../../../shared/components/InfoHelp";
 
 export function AppUpdateSettings() {
   const [checking, setChecking] = useState(false);
@@ -26,10 +27,12 @@ export function AppUpdateSettings() {
 
   return (
     <section className="space-y-3">
-      <h3 className="text-sm font-medium text-body">アプリの更新</h3>
-      <p className="text-sm leading-relaxed text-secondary">
-        最新バージョンを確認して、新しい機能や改善を受け取れます。
-      </p>
+      <div className="flex items-center gap-1">
+        <h3 className="text-sm font-medium text-body">アプリの更新</h3>
+        <InfoHelp label="アプリの更新方法">
+          新しいバージョンが見つかったら、画面上部の「更新する」でこのブラウザーに適用できます。
+        </InfoHelp>
+      </div>
       <button
         type="button"
         disabled={checking}
