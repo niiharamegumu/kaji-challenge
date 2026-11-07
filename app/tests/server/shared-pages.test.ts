@@ -108,6 +108,24 @@ describe("shared page document contract", () => {
     large.blocks[0].content = [{ type: "text", text: "あ".repeat(90_000), styles: {} }];
     expect(SharedPageDocumentSchema.safeParse(large).success).toBe(false);
   });
+  it("accepts an optional creation request UUID only on create", () => {
+    const body = { title: "旅", document: document() };
+    expect(
+      operationSchema.safeParse({
+        operation: "postSharedPage",
+        params: {},
+        body: { ...body, requestId: "" },
+      }).success,
+    ).toBe(false);
+    expect(
+      operationSchema.safeParse({
+        operation: "patchSharedPage",
+        params: { pageId: crypto.randomUUID() },
+        body: { ...body, expectedVersion: 0, requestId: crypto.randomUUID() },
+      }).success,
+    ).toBe(false);
+  });
+
   it("rejects client identities and lease ownership spoofing in all public input shapes", () => {
     expect(
       operationSchema.safeParse({
@@ -259,6 +277,59 @@ describe("shared pages persisted in D1 with expiring editor ownership", () => {
     await expect(run("getSharedPage", undefined, { pageId: page.id })).rejects.toMatchObject({
       status: 404,
     });
+  });
+
+  it("converges concurrent creation retries, keeps identities separate and cannot resurrect a deleted page", async () => {
+    const body = {
+      title: "応答が途切れた作成",
+      document: document(),
+      requestId: crypto.randomUUID(),
+    };
+    const [first, second] = await Promise.all([
+      run("postSharedPage", body),
+      run("postSharedPage", body),
+    ]);
+    const page = SharedPageSchema.parse(first.data);
+    expect(second.data).toEqual(page);
+    expect([first.changedTeams, second.changedTeams]).toContainEqual([]);
+    expect([first.changedTeams, second.changedTeams]).toContainEqual([teamId]);
+    for (const userId of [member, outsider]) {
+      const independent = SharedPageSchema.parse(
+        (await run("postSharedPage", body, {}, userId)).data,
+      );
+      expect(independent.id).not.toBe(page.id);
+    }
+
+    const conflict = { status: 409, code: "page_creation_conflict" };
+    await expect(
+      run("postSharedPage", { ...body, title: "再試行前に入力を変更" }),
+    ).rejects.toMatchObject(conflict);
+    await acquire(page.id);
+    await run(
+      "patchSharedPage",
+      { title: "更新", document: document(true), expectedVersion: 0 },
+      { pageId: page.id },
+    );
+    await expect(run("postSharedPage", body)).rejects.toMatchObject(conflict);
+    await run("deleteSharedPage", { expectedVersion: 1 }, { pageId: page.id });
+    const before = await snapshot();
+    await expect(run("postSharedPage", body)).rejects.toMatchObject(conflict);
+    expect(await snapshot()).toEqual(before);
+  });
+
+  it("rolls back a creation receipt when the page insert fails", async () => {
+    const scoped = repo().forMember(teamId, owner);
+    const existing = await create();
+    const input = {
+      teamId,
+      userId: owner,
+      requestId: crypto.randomUUID(),
+      title: "再試行",
+      document: document(),
+    };
+    await expect(scoped.CreateSharedPage({ ...input, id: existing.id })).rejects.toThrow();
+    const id = crypto.randomUUID();
+    expect((await scoped.CreateSharedPage({ ...input, id })).id).toBe(id);
   });
 
   it("reading does not acquire ownership and lease data contains only its expiry and server time", async () => {
@@ -497,6 +568,7 @@ describe("shared pages persisted in D1 with expiring editor ownership", () => {
         await expect(
           scoped.CreateSharedPage({
             id: crypto.randomUUID(),
+            requestId: crypto.randomUUID(),
             teamId,
             userId: member,
             title: "bad",
