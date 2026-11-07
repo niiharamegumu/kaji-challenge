@@ -154,7 +154,7 @@ describe("user-owned page editor", () => {
     change(f.session, "新しく入力したページ");
     await f.session.save();
     expect(f.api.create).toHaveBeenCalledWith(
-      { title: "新しく入力したページ", document },
+      { title: "新しく入力したページ", document, requestId: expect.any(String) },
       expect.any(Object),
     );
     expect(f.api.save).not.toHaveBeenCalled();
@@ -200,6 +200,17 @@ describe("user-owned page editor", () => {
     change(f.session, "新しいタイトル");
     expect(f.session.getSnapshot()).toMatchObject({ dirty: false, status: "saved" });
     expect(f.api.save).toHaveBeenCalledTimes(1);
+  });
+
+  it("recognizes reverted block content regardless of the order of JSON object properties", async () => {
+    const f = setup();
+    await f.session.begin(page());
+    f.session.changeDocument({ ...document, blocks: [] });
+    const [{ id, type, props, children, content }] = document.blocks;
+    f.session.changeDocument({ ...document, blocks: [{ id, type, props, children, content }] });
+    expect(f.session.getSnapshot()).toMatchObject({ dirty: false, status: "unchanged" });
+    await f.session.finish();
+    expect(f.api.save).not.toHaveBeenCalled();
   });
 
   it("does not attach a tab identity when separate screens acquire the same user's page", async () => {
@@ -514,16 +525,18 @@ describe("user-owned page editor", () => {
     expect(f.api.release).not.toHaveBeenCalled();
   });
 
-  it("does not change a later local edit when an earlier release response arrives", async () => {
+  it("waits for the previous local release before requesting another lease", async () => {
     const f = setup();
     await f.session.begin(page());
     const releasePending = deferred<ApiResult<Record<string, never>>>();
     f.api.release.mockReturnValueOnce(releasePending.promise);
     f.session.discard();
     f.api.acquire.mockResolvedValueOnce(response({ page: page(), lease: lease() }));
-    await f.session.begin(page());
+    const nextEdit = f.session.begin(page());
+    expect(f.api.acquire).toHaveBeenCalledTimes(1);
     releasePending.resolve(response({}));
-    await releasePending.promise;
+    await nextEdit;
+    expect(f.api.acquire).toHaveBeenCalledTimes(2);
     expect(f.session.getSnapshot().mode).toBe("edit");
     expect(f.api.release.mock.calls[0]).toEqual([PAGE_ID]);
     change(f.session);
@@ -582,6 +595,18 @@ describe("user-owned page editor", () => {
     vi.setSystemTime(START + 100_000);
     f.session.tick();
     expect(f.session.getSnapshot().mode).toBe("lost");
+  });
+
+  it("does not start deleting when the read-only screen unmounts during lease acquisition", async () => {
+    const f = setup();
+    const pending = deferred<ApiResult<SharedPageLeaseResponse>>();
+    f.api.acquire.mockReturnValueOnce(pending.promise);
+    const removing = f.session.remove(page());
+    f.session.dispose();
+    pending.resolve(response({ page: page(), lease: lease() }));
+    expect(await removing).toBe(false);
+    expect(f.api.remove).not.toHaveBeenCalled();
+    expect(f.api.release).toHaveBeenCalledWith(PAGE_ID);
   });
 
   it("does not ask the route to navigate after a delayed deletion succeeds on a disposed editor", async () => {
@@ -648,6 +673,14 @@ describe("user-owned page editor", () => {
     pending.resolve(response(page("New", 0)));
     await saving;
     expect(f.saved).toHaveBeenCalledWith(page("New", 0));
+  });
+
+  it("does not release a lease on a page that was successfully deleted", async () => {
+    const f = setup();
+    expect(await f.session.remove(page())).toBe(true);
+    expect(f.api.acquire).toHaveBeenCalledTimes(1);
+    expect(f.api.remove).toHaveBeenCalledTimes(1);
+    expect(f.api.release).not.toHaveBeenCalled();
   });
 
   it("acquires a read-only page before deleting and rejects a stale confirmation", async () => {
