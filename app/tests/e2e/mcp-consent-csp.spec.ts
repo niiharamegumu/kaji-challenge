@@ -138,6 +138,14 @@ for (const destination of [
         return null;
       });
       await page.goto(authorizeUrl);
+      if (destination.login) {
+        const help = page.getByRole("dialog", { name: "ログインの手順" });
+        await expect(help).toBeHidden();
+        await page.getByRole("button", { name: "ログインの手順" }).click();
+        await expect(help.getByText(/Google で本人を確認したあと/)).toBeVisible();
+        await page.keyboard.press("Escape");
+        await expect(help).toBeHidden();
+      }
       await page
         .getByRole("button", { name: destination.login ? "Google でログイン" : "選んだ操作を許可" })
         .click();
@@ -378,21 +386,29 @@ test(
       unexpectedRequests += 1;
       return null;
     });
+    if (testInfo.project.name === "mobile") await page.setViewportSize({ width: 320, height: 568 });
     await page.goto(url);
+    await expect(page.getByText(/保存されている許可期限: 2026-10-17/)).toBeVisible();
     await expect(
       page.getByText(
         "ToDo の追加・更新・完了（内容の上書きやメモ・カテゴリーの解除、完了時の削除）",
         { exact: false },
       ),
     ).toBeVisible();
-    await expect(
-      page.getByText("以前の15分トークンは延長されません", { exact: false }),
-    ).toBeVisible();
-    await expect(
-      page.getByText("これはトークンの有効期限や接続状態を示すものではありません。", {
-        exact: true,
-      }),
-    ).toHaveCount(2);
+    const help = page.getByRole("dialog", { name: "連携の期限と解除について" });
+    const helpButton = page.getByRole("button", { name: "連携の期限と解除について" });
+    const deadlineNote = page.getByText(
+      /これはトークンの有効期限や接続状態を示すものではありません/,
+    );
+    await expect(deadlineNote).toHaveCount(1);
+    await expect(deadlineNote).toBeHidden();
+    await helpButton.click();
+    await expect(deadlineNote).toBeVisible();
+    await expect(help.getByText(/以前の15分トークンは延長されません/)).toBeVisible();
+    await expect(help.getByText(/ログアウトでは解除されません/)).toBeVisible();
+    expect(await help.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    await help.getByRole("button", { name: "閉じる" }).click();
+    await expect(help).toBeHidden();
     await expect(
       page.getByText("旧方式の継続アクセス（現在は自動更新できません）", { exact: false }),
     ).toBeVisible();
