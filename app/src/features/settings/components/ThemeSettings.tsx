@@ -1,6 +1,7 @@
 import { useAtom } from "jotai";
 import { Monitor, Moon, Sun } from "lucide-react";
 import { useId, useState } from "react";
+import { InfoHelp } from "../../../shared/components/InfoHelp";
 import { themePreferenceAtom } from "../../../shared/state/theme";
 
 const options = [
@@ -15,8 +16,15 @@ export function ThemeSettings() {
   const id = useId();
 
   return (
-    <fieldset className="min-w-0" aria-describedby={`${id}-description`}>
-      <legend className="text-sm font-medium text-body">表示モード</legend>
+    <fieldset className="min-w-0" aria-labelledby={`${id}-label`}>
+      <legend className="text-sm font-medium text-body">
+        <span className="inline-flex items-center gap-1">
+          <span id={`${id}-label`}>表示モード</span>
+          <InfoHelp label="表示モードの説明">
+            システムを選ぶと、端末の設定に合わせて自動で切り替わります。選択はこのブラウザーに保存されます。
+          </InfoHelp>
+        </span>
+      </legend>
       <div className="mt-3 grid grid-cols-3 gap-2 sm:gap-3">
         {options.map(({ value, label, Icon }) => (
           <label key={value} className="relative cursor-pointer">
@@ -52,9 +60,6 @@ export function ThemeSettings() {
           </label>
         ))}
       </div>
-      <p id={`${id}-description`} className="mt-2 text-xs leading-relaxed text-muted">
-        システムを選ぶと、端末の設定に合わせて自動で切り替わります。選択はこのブラウザーに保存されます。
-      </p>
       {saveFailed ? (
         <p role="alert" className="mt-2 text-xs text-danger">
           このブラウザーに保存できませんでした。変更は適用されますが、再読み込み後は保持されません。
