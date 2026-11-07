@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   Check,
   Copy,
+  Eye,
   FileText,
   LoaderCircle,
   LockKeyhole,
@@ -213,16 +214,14 @@ function SharedPagesContent({
   // The server decides lease expiry; reconnect/polling refreshes this snapshot.
   const locked = isEditingByAnotherUser(page?.editing, currentUserId);
   const editLabel = state.busy ? "確認中…" : locked ? "編集中" : "編集する";
-  const label =
-    state.status === "saving"
-      ? "保存中…"
-      : state.status === "error"
-        ? "保存失敗"
-        : state.status === "stopped"
-          ? "編集を停止"
-          : state.dirty || newPage
-            ? "未保存"
-            : "保存済み";
+  const label = {
+    unchanged: "変更なし",
+    dirty: newPage ? "未作成" : "未保存",
+    saving: newPage ? "作成中…" : "保存中…",
+    saved: "保存済み",
+    error: "保存失敗",
+    stopped: "編集を停止",
+  }[state.status];
 
   return (
     <section className={detail ? "shared-pages-section md:pb-6" : "shared-pages-section mt-4 pb-8"}>
@@ -298,8 +297,8 @@ function SharedPagesContent({
               <InfoHelp label={newPage ? "ページ作成の説明" : "ページ編集の説明"}>
                 <p>
                   {newPage
-                    ? "タイトルを入力し、チェックマークで作成します。作成すると、同じチームのメンバーに共有されます。"
-                    : "本文やチェックリストを変更するときは、鉛筆アイコンから編集できます。変更は自動で保存されます。"}
+                    ? "タイトルを入力し、右上の＋で作成します。作成すると、同じチームのメンバーに共有されます。"
+                    : "鉛筆で編集を始めると、変更は自動保存されます。「保存済み」は現在の内容の保存が完了した状態です。目のアイコンで編集を終了して閲覧に戻ると、ほかのメンバーが編集できます。"}
                 </p>
                 <p>
                   編集中は、各項目の左端にあるハンドルをドラッグして順番を変えられます。
@@ -340,14 +339,14 @@ function SharedPagesContent({
                       disabled={state.busy || stopped || composing || !draft?.title.trim()}
                       onClick={() => void savePage()}
                     >
-                      <Check size={16} aria-hidden="true" />
+                      <Plus size={16} aria-hidden="true" />
                     </button>
                   ) : (
                     <button
                       type="button"
-                      className="shared-page-icon-button shared-page-icon-button--success"
-                      aria-label="完了"
-                      title="完了"
+                      className="shared-page-icon-button"
+                      aria-label="編集を終了"
+                      title="編集を終了して閲覧に戻る"
                       aria-busy={state.busy}
                       disabled={state.busy || stopped || composing}
                       onClick={() => {
@@ -356,7 +355,7 @@ function SharedPagesContent({
                         });
                       }}
                     >
-                      <Check size={16} aria-hidden="true" />
+                      <Eye size={16} aria-hidden="true" />
                     </button>
                   )}
                 </>
