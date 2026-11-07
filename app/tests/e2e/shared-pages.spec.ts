@@ -150,7 +150,7 @@ async function beginEditing(page: Page) {
 
 async function finishEditing(page: Page) {
   const released = operationResponse(page, "releaseSharedPageLease");
-  await page.getByRole("button", { name: "完了", exact: true }).click();
+  await page.getByRole("button", { name: "編集を終了", exact: true }).click();
   const response = await saved(released);
   await expect(page.getByRole("button", { name: "編集する", exact: true })).toBeVisible();
   return response;
@@ -309,7 +309,7 @@ test(
     await beginEditing(page);
 
     await scrollPage();
-    await expectUnobscured(page.getByRole("button", { name: "完了", exact: true }));
+    await expectUnobscured(page.getByRole("button", { name: "編集を終了", exact: true }));
     await page.screenshot({ path: testInfo.outputPath("shared-page-scrolled-edit.png") });
     await finishEditing(page);
     await expect(page.locator(".bn-editor")).toContainText("64日目の相談。");
@@ -332,20 +332,41 @@ test(
     await page.screenshot({ path: testInfo.outputPath("shared-page-read.png"), fullPage: true });
 
     await beginEditing(page);
-    const checked = operationResponse(page, "patchSharedPage");
-    await checkbox.check();
-    await saved(checked);
-    await expect(page.getByText("保存済み", { exact: true })).toBeVisible();
-    const changed = operationResponse(page, "patchSharedPage");
+    const status = page.locator(".shared-page-toolbar").getByRole("status");
+    await expect(status).toHaveText("変更なし");
+    let writes = 0;
+    let release!: () => void;
+    const firstWrite = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route("**/_serverFn/**", async (route) => {
+      if (route.request().postData()?.includes('"patchSharedPage"')) {
+        writes++;
+        if (writes === 1) await firstWrite;
+      }
+      await route.continue();
+    });
     const updatedTitle = `${title}・更新`;
-    await page.getByRole("textbox", { name: "タイトル", exact: true }).fill(updatedTitle);
-    await saved(changed);
-    await expect(page.getByText("保存済み", { exact: true })).toBeVisible();
+    const checked = operationResponse(page, "patchSharedPage");
+    try {
+      await checkbox.check();
+      await expect(status).toHaveText("未保存");
+      await expect(status).toHaveText("保存中…");
+      await page.getByRole("textbox", { name: "タイトル", exact: true }).fill(updatedTitle);
+    } finally {
+      release();
+    }
+    await saved(checked);
+    // The first acknowledgment only covers the checkbox, not the newer title.
+    await expect(status).toHaveText("未保存");
+    await expect(status).toHaveText("保存済み");
+    expect(writes).toBe(2);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
     await page.screenshot({ path: testInfo.outputPath("shared-page-edit.png"), fullPage: true });
     await finishEditing(page);
+    expect(writes).toBe(2);
     await page.reload();
     await expect(page.getByRole("heading", { name: updatedTitle, exact: true })).toBeVisible();
     await expect(checkbox).toBeChecked();
@@ -449,15 +470,22 @@ test(
       expect(handleBox!.x + handleBox!.width).toBeLessThanOrEqual(contentStart + 1);
       if (isMobile) {
         expect(handleBox!.width).toBeGreaterThanOrEqual(44);
-        expect(handleBox!.height).toBeGreaterThanOrEqual(44);
+        expect(handleBox!.height).toBeGreaterThanOrEqual(38);
       }
     }
+    const [memoBox, nextBox] = await Promise.all([
+      grip("出発前のメモ").boundingBox(),
+      grip("予約").boundingBox(),
+    ]);
+    const rowStep = nextBox!.y - memoBox!.y;
+    expect(rowStep).toBeGreaterThanOrEqual(memoBox!.height - 1);
+    expect(rowStep).toBeLessThan(44);
     if (isMobile) {
       const toolbar = page.locator(".shared-page-toolbar");
       expect(await toolbar.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
         true,
       );
-      await expectUnobscured(toolbar.getByRole("button", { name: "完了", exact: true }));
+      await expectUnobscured(toolbar.getByRole("button", { name: "編集を終了", exact: true }));
     }
     const activate = (button: Locator) => (isMobile ? button.tap() : button.click());
     // Center the row midway through the drag to keep both endpoints clear of the fixed navigation.
@@ -657,7 +685,7 @@ test(
       await finishEditing(sameUserDevice);
       for (const previousEditor of [sameUserTab, page]) {
         const released = operationResponse(previousEditor, "releaseSharedPageLease");
-        await previousEditor.getByRole("button", { name: "完了", exact: true }).click();
+        await previousEditor.getByRole("button", { name: "編集を終了", exact: true }).click();
         // These releases may report a lost lease. Wait for each response before
         // acquiring again: a delayed same-member release could end the next edit.
         await (await released).finished();
@@ -709,18 +737,32 @@ test(
     await page.goto("/pages/new");
     await page.getByRole("textbox", { name: "タイトル", exact: true }).fill(title);
     await editor(page).fill(body);
+    const status = page.locator(".shared-page-toolbar").getByRole("status");
+    await expect(status).toHaveText("未作成");
     let createRequests = 0;
-    await page.route("**/_serverFn/**", (route) => {
+    let fail!: () => void;
+    const firstAttempt = new Promise<void>((resolve) => {
+      fail = resolve;
+    });
+    await page.route("**/_serverFn/**", async (route) => {
       if (route.request().postData()?.includes('"postSharedPage"')) {
         createRequests++;
         // Fail before the Worker receives the write, so only the retry can create a page.
-        if (createRequests === 1) return route.abort("failed");
+        if (createRequests === 1) {
+          await firstAttempt;
+          return route.abort("failed");
+        }
       }
       return route.continue();
     });
 
-    await page.getByRole("button", { name: "作成する", exact: true }).click();
-    await expect(page.getByText("保存失敗", { exact: true })).toBeVisible();
+    try {
+      await page.getByRole("button", { name: "作成する", exact: true }).click();
+      await expect(status).toHaveText("作成中…");
+    } finally {
+      fail();
+    }
+    await expect(status).toHaveText("保存失敗");
     await expect(page).toHaveURL(/\/pages\/new$/);
     await expect(editor(page)).toContainText(body);
     expect(createRequests).toBe(1);
