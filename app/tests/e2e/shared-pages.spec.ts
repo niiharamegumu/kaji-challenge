@@ -262,6 +262,69 @@ test(
 );
 
 test(
+  "erasing the only input on a new page leaves without warning or a recovery draft",
+  { tag: ["@shared-pages"] },
+  async ({ page, context }) => {
+    await authenticate(context);
+    await page.goto("/pages/new");
+    await editor(page).click();
+    await page.keyboard.insertText("字");
+    await page.keyboard.press("Backspace");
+    await expect(editor(page)).toHaveText("");
+    await page.getByRole("button", { name: "共有ページへ戻る" }).click();
+    await expect(page).toHaveURL(/\/pages\/?$/);
+    await page.getByRole("link", { name: "ページを作成", exact: true }).click();
+    await expect(editor(page)).toHaveAttribute("contenteditable", "true");
+    await expect(
+      page.getByText("このタブに未保存の入力が残っています。", { exact: false }),
+    ).toHaveCount(0);
+  },
+);
+
+test(
+  "loads the sidebar only when visible and keeps handles aligned when edited text wraps",
+  { tag: ["@shared-pages"] },
+  async ({ page, context }) => {
+    await authenticate(context);
+    await page.setViewportSize({ width: 390, height: 800 });
+    let listRequests = 0;
+    page.on("request", (request) => {
+      if (request.postData()?.includes('"listSharedPages"')) listRequests++;
+    });
+    await page.goto("/pages/new");
+    await editor(page).fill("先頭");
+    await editor(page).press("End");
+    await editor(page).press("Enter");
+    await page.keyboard.insertText("次の段落");
+    const grip = (name: string) =>
+      page.getByRole("button", { name: name + " をドラッグして並び替え", exact: true });
+    await expect(grip("次の段落")).toBeVisible();
+    expect(listRequests).toBe(0);
+
+    const first = editor(page).getByText("先頭", { exact: true });
+    await first.click();
+    await page.keyboard.press("End");
+    const extended = "先頭" + "折り返す文章".repeat(24);
+    await page.keyboard.insertText(extended.slice(2));
+    await expect(grip(extended.slice(0, 80))).toBeVisible();
+    const next = editor(page).getByText("次の段落", { exact: true });
+    const aligned = async () => {
+      const row = await next.evaluate(
+        (element) => element.closest(".bn-block-content")!.getBoundingClientRect().top,
+      );
+      return Math.abs((await grip("次の段落").boundingBox())!.y - row);
+    };
+    await expect.poll(aligned).toBeLessThan(2);
+    const fetched = operationResponse(page, "listSharedPages");
+    await page.setViewportSize({ width: 1200, height: 800 });
+    await saved(fetched);
+    await expect(page.getByRole("complementary", { name: "共有ページ一覧" })).toBeVisible();
+    await expect.poll(aligned).toBeLessThan(2);
+    await expect(editor(page)).toContainText(extended);
+  },
+);
+
+test(
   "shared page toolbar stays reachable while scrolling a long page in read and edit modes",
   { tag: ["@shared-pages"] },
   async ({ page, context }, testInfo) => {
@@ -727,67 +790,74 @@ test(
   },
 );
 
-test(
-  "shared page creation retry opens the saved page without leaving a duplicate creation form",
-  { tag: ["@shared-pages"] },
-  async ({ page, context }) => {
-    await authenticate(context);
-    const title = `作成の再試行 ${crypto.randomUUID().slice(0, 8)}`;
-    const body = "一度だけ作成されるふたりのメモ。";
-    await page.goto("/pages/new");
-    await page.getByRole("textbox", { name: "タイトル", exact: true }).fill(title);
-    await editor(page).fill(body);
-    const status = page.locator(".shared-page-toolbar").getByRole("status");
-    await expect(status).toHaveText("未作成");
-    let createRequests = 0;
-    let fail!: () => void;
-    const firstAttempt = new Promise<void>((resolve) => {
-      fail = resolve;
-    });
-    await page.route("**/_serverFn/**", async (route) => {
-      if (route.request().postData()?.includes('"postSharedPage"')) {
-        createRequests++;
-        // Fail before the Worker receives the write, so only the retry can create a page.
-        if (createRequests === 1) {
-          await firstAttempt;
-          return route.abort("failed");
+for (const failurePoint of ["before commit", "after commit"]) {
+  test(
+    `shared page creation retry opens exactly one page after failure ${failurePoint}`,
+    { tag: ["@shared-pages"] },
+    async ({ page, context }) => {
+      await authenticate(context);
+      const title = `作成の再試行 ${crypto.randomUUID().slice(0, 8)}`;
+      const body = "一度だけ作成されるふたりのメモ。";
+      await page.goto("/pages/new");
+      await page.getByRole("textbox", { name: "タイトル", exact: true }).fill(title);
+      await editor(page).fill(body);
+      const status = page.locator(".shared-page-toolbar").getByRole("status");
+      await expect(status).toHaveText("未作成");
+      let createRequests = 0;
+      let fail!: () => void;
+      const firstAttempt = new Promise<void>((resolve) => {
+        fail = resolve;
+      });
+      await page.route("**/_serverFn/**", async (route) => {
+        if (route.request().postData()?.includes('"postSharedPage"')) {
+          createRequests++;
+          if (createRequests === 1) {
+            // Commit in D1, then lose the response on its way back to the editor.
+            if (failurePoint === "after commit") {
+              const committed = await route.fetch();
+              expect(committed.ok()).toBe(true);
+              await committed.dispose();
+            }
+            await firstAttempt;
+            return route.abort("failed");
+          }
         }
+        return route.continue();
+      });
+
+      try {
+        await page.getByRole("button", { name: "作成する", exact: true }).click();
+        await expect(status).toHaveText("作成中…");
+      } finally {
+        fail();
       }
-      return route.continue();
-    });
+      await expect(status).toHaveText("保存失敗");
+      await expect(page).toHaveURL(/\/pages\/new$/);
+      await expect(editor(page)).toContainText(body);
+      expect(createRequests).toBe(1);
 
-    try {
-      await page.getByRole("button", { name: "作成する", exact: true }).click();
-      await expect(status).toHaveText("作成中…");
-    } finally {
-      fail();
-    }
-    await expect(status).toHaveText("保存失敗");
-    await expect(page).toHaveURL(/\/pages\/new$/);
-    await expect(editor(page)).toContainText(body);
-    expect(createRequests).toBe(1);
+      const retried = operationResponse(page, "postSharedPage");
+      await page.getByRole("button", { name: "再試行", exact: true }).click();
+      await saved(retried);
+      await expect(page).toHaveURL(/\/pages\/[0-9a-f-]{36}$/);
+      await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
+      await expect(page.getByRole("button", { name: "編集する", exact: true })).toBeVisible();
+      await expect(editor(page)).toHaveAttribute("contenteditable", "false");
+      await expect(editor(page)).toContainText(body);
+      await expect(page.getByRole("button", { name: "作成する", exact: true })).toHaveCount(0);
 
-    const retried = operationResponse(page, "postSharedPage");
-    await page.getByRole("button", { name: "再試行", exact: true }).click();
-    await saved(retried);
-    await expect(page).toHaveURL(/\/pages\/[0-9a-f-]{36}$/);
-    await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "編集する", exact: true })).toBeVisible();
-    await expect(editor(page)).toHaveAttribute("contenteditable", "false");
-    await expect(editor(page)).toContainText(body);
-    await expect(page.getByRole("button", { name: "作成する", exact: true })).toHaveCount(0);
-
-    await page.getByRole("button", { name: "共有ページへ戻る", exact: true }).click();
-    await expect(page).toHaveURL(/\/pages\/?$/);
-    const listed = operationResponse(page, "listSharedPages");
-    await page.reload();
-    await saved(listed);
-    await expect(
-      page.getByRole("link").filter({ has: page.getByText(title, { exact: true }) }),
-    ).toHaveCount(1);
-    expect(createRequests).toBe(2);
-  },
-);
+      await page.getByRole("button", { name: "共有ページへ戻る", exact: true }).click();
+      await expect(page).toHaveURL(/\/pages\/?$/);
+      const listed = operationResponse(page, "listSharedPages");
+      await page.reload();
+      await saved(listed);
+      await expect(
+        page.getByRole("link").filter({ has: page.getByText(title, { exact: true }) }),
+      ).toHaveCount(1);
+      expect(createRequests).toBe(2);
+    },
+  );
+}
 
 test(
   "shared page offline failure retains input and reconnect never automatically resends a save",
