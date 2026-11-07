@@ -59,9 +59,7 @@ export function HomeTodoListPanel({
         articleClassName="mt-2 flex flex-1 flex-col"
         listClassName=""
         emptyMessage={
-          selection.kind === "all"
-            ? "ToDoはまだありません。やることを追加してください。"
-            : "このカテゴリーのToDoはありません。"
+          selection.kind === "all" ? "ToDoはまだありません。" : "このカテゴリーのToDoはありません。"
         }
         emptyClassName="mx-2 rounded-xl border border-dashed border-line-strong bg-surface-subtle/80 px-4 py-8 text-center text-sm text-secondary md:mx-0"
       />
