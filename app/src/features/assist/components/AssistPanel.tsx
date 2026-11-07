@@ -97,7 +97,6 @@ export function AssistPanel({ session, state }: { session: VoiceSession; state: 
     <dialog
       ref={dialog}
       aria-label="音声アシスト"
-      aria-describedby="assist-privacy"
       className="assist-mode"
       data-phase={state.phase}
       onKeyDown={(event) => {
@@ -123,10 +122,10 @@ export function AssistPanel({ session, state }: { session: VoiceSession; state: 
       }}
     >
       <header className="assist-header">
-        <span className="assist-brand">
+        <h1 className="assist-brand">
           <AudioLines size={20} strokeWidth={1.8} aria-hidden="true" />
           アシスト
-        </span>
+        </h1>
         <div className="assist-header-actions">
           <AssistHelp />
           <button
@@ -140,15 +139,7 @@ export function AssistPanel({ session, state }: { session: VoiceSession; state: 
         </div>
       </header>
       <section className="assist-thread" aria-label="会話">
-        {!state.submittedTranscript && !submitting ? (
-          <div className="assist-welcome">
-            <span className="assist-mark" aria-hidden="true">
-              <AudioLines size={26} strokeWidth={1.7} />
-            </span>
-            <h1>何を追加しますか？</h1>
-            <p>話しても、入力しても。</p>
-          </div>
-        ) : (
+        {state.submittedTranscript || submitting ? (
           <div className="assist-messages">
             {submitting ? (
               <div
@@ -181,7 +172,7 @@ export function AssistPanel({ session, state }: { session: VoiceSession; state: 
                         {reply.kind === "listed" && reply.total > reply.items.length ? (
                           <p className="assist-more">
                             全{reply.total}件のうち先頭{reply.items.length}
-                            件を表示しています。続きはToDo画面で確認してください。
+                            件を表示しています。
                           </p>
                         ) : null}
                         <ul>
@@ -207,7 +198,7 @@ export function AssistPanel({ session, state }: { session: VoiceSession; state: 
               </div>
             ) : null}
           </div>
-        )}
+        ) : null}
       </section>
       <div className="assist-input-area">
         {state.message ? (
@@ -303,9 +294,6 @@ export function AssistPanel({ session, state }: { session: VoiceSession; state: 
             </button>
           </div>
         </form>
-        <p id="assist-privacy" className="assist-privacy">
-          音声は文字起こしのために送信されます
-        </p>
       </div>
     </dialog>,
     document.body,
