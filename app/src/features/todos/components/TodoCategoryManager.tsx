@@ -48,17 +48,9 @@ export function TodoCategoryManager({ setStatus }: { setStatus: (message: string
   };
   return (
     <div className="mt-4 rounded-xl border border-line bg-surface p-4 md:p-6">
-      <p className="mt-3 text-xs text-secondary">
-        0件でもカテゴリーは残ります。カテゴリーを削除してもToDoは残り、未分類になります。
-      </p>
-      <p className="mt-2 text-xs text-secondary">
-        右のハンドルをドラッグすると、未分類も含めて表示順を変更できます。スマホでは長押しして動かします。
-      </p>
-      <div className="mt-2">
-        <TodoCategoryQueryStatus query={query} />
-      </div>
+      <TodoCategoryQueryStatus query={query} />
       <form
-        className="mt-3"
+        className="not-first:mt-3"
         onSubmit={async (event) => {
           event.preventDefault();
           if (!name.trim() || pending) return;
