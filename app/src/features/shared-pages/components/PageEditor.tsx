@@ -101,7 +101,7 @@ export function PageEditor({
     schema,
     dictionary: {
       ...ja,
-      placeholders: { ...ja.placeholders, default: "残したいことを書いてみよう。" },
+      placeholders: { ...ja.placeholders, default: "本文を入力" },
     },
     initialContent: content.blocks.length ? content.blocks : undefined,
     domAttributes: {
