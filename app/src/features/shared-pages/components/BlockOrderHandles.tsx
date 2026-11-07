@@ -44,9 +44,9 @@ function useBlockRows(editorRoot: RefObject<HTMLDivElement | null>) {
       if (!root) return;
       frame = 0;
       const origin = root.getBoundingClientRect();
-      const gripWidth = parseFloat(
-        getComputedStyle(root).getPropertyValue("--shared-page-grip-width"),
-      );
+      const style = getComputedStyle(root);
+      const gripWidth = parseFloat(style.getPropertyValue("--shared-page-grip-width"));
+      const gripHeight = parseFloat(style.getPropertyValue("--shared-page-row-height"));
       const contents = root.querySelectorAll<HTMLElement>(".bn-block > .bn-block-content");
       const current = new Set(contents);
       for (const content of observed) if (!current.has(content)) resize.unobserve(content);
@@ -79,7 +79,8 @@ function useBlockRows(editorRoot: RefObject<HTMLDivElement | null>) {
                 0,
                 inline.getBoundingClientRect().top -
                   rect.top +
-                  ((parseFloat(getComputedStyle(inline).lineHeight) || gripWidth) - gripWidth) / 2,
+                  ((parseFloat(getComputedStyle(inline).lineHeight) || gripHeight) - gripHeight) /
+                    2,
               )
             : 0;
         const previous = lastSibling.get(parentId);
