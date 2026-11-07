@@ -31,11 +31,15 @@ vi.mock("../lib/api/operations", async (original) => ({
   listSharedPages: api.pages,
   getSharedPage: api.page,
 }));
-afterEach(() => vi.resetAllMocks());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.resetAllMocks();
+});
 const makeClient = () =>
   new QueryClient({ defaultOptions: { queries: { staleTime: 30_000, retry: false } } });
 
 it("prefetches shared page data without creating a document or acquiring an edit lease", async () => {
+  vi.stubGlobal("matchMedia", () => ({ matches: true }));
   const client = makeClient();
   api.pages.mockResolvedValue({ data: { items: [] } });
   api.page.mockResolvedValue({ data: { id: "page-1" } });
@@ -49,6 +53,20 @@ it("prefetches shared page data without creating a document or acquiring an edit
     expect.objectContaining({ signal: expect.any(AbortSignal) }),
   );
   expect(client.getQueryData([...queryKeys.sharedPages, "page-1"])).toEqual({ id: "page-1" });
+  client.clear();
+});
+
+it("prefetches only the visible shared page on a narrow screen, including direct entry", async () => {
+  vi.stubGlobal("matchMedia", () => ({ matches: false }));
+  api.pages.mockResolvedValue({ data: { items: [] } });
+  api.page.mockResolvedValue({ data: { id: "page-1" } });
+  const client = makeClient();
+  await prefetchRouteData(client, "/pages/new");
+  await prefetchRouteData(client, "/pages/page-1");
+  expect(api.page).toHaveBeenCalledTimes(1);
+  expect(api.pages).not.toHaveBeenCalled();
+  await prefetchRouteData(client, "/pages/");
+  expect(api.pages).toHaveBeenCalledTimes(1);
   client.clear();
 });
 

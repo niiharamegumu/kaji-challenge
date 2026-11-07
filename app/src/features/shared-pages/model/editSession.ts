@@ -1,3 +1,4 @@
+import equal from "fast-deep-equal";
 import {
   CreateSharedPageSchema,
   type SharedPage,
@@ -22,7 +23,8 @@ const emptyDraft = (): PageDraft => ({
   title: "",
   document: { format: "blocknote", schemaVersion: 1, blocks: [] },
 });
-const fingerprint = (draft: PageDraft) => JSON.stringify(draft);
+const sameDraft = (draft: PageDraft, baseline: PageDraft | null) =>
+  baseline !== null && draft.title === baseline.title && equal(draft.document, baseline.document);
 export const editTiming = { heartbeat: 25_000, idle: 5 * 60_000, autosave: 800 } as const;
 
 export function isEditingByAnotherUser(
@@ -36,14 +38,16 @@ export function isEditingByAnotherUser(
 export class PageEditSession {
   private snapshot: EditSnapshot;
   private listeners = new Set<() => void>();
-  private baseline: string;
+  private baseline: PageDraft | null;
   private baselineStatus: "unchanged" | "saved" = "unchanged";
   private pageId: string | null = null;
   private version = 0;
+  private creationRequestId?: string;
   private lease: SharedPageLease | null = null;
   private deadline = 0;
   private lastActivity = Date.now();
   private renewing = false;
+  private pendingRelease?: Promise<void>;
   private alive = true;
   private abort = new AbortController();
 
@@ -53,7 +57,7 @@ export class PageEditSession {
     private api = sharedPagesApi,
   ) {
     const draft = newPage ? emptyDraft() : null;
-    this.baseline = draft ? fingerprint(draft) : "";
+    this.baseline = draft;
     this.snapshot = {
       mode: newPage ? "new" : "read",
       draft,
@@ -67,8 +71,9 @@ export class PageEditSession {
 
   getSnapshot = () => this.snapshot;
   restartNew = () => {
+    this.creationRequestId = undefined;
     const draft = emptyDraft();
-    this.baseline = fingerprint(draft);
+    this.baseline = draft;
     this.publish({
       mode: "new",
       draft,
@@ -114,6 +119,12 @@ export class PageEditSession {
   activity = () => {
     this.lastActivity = Date.now();
   };
+  changeTitle = (title: string) => {
+    if (this.snapshot.draft) this.change({ ...this.snapshot.draft, title });
+  };
+  changeDocument = (document: SharedPageDocument) => {
+    if (this.snapshot.draft) this.change({ ...this.snapshot.draft, document });
+  };
   change = (draft: PageDraft) => {
     if (this.snapshot.mode !== "edit" && this.snapshot.mode !== "new") return;
     this.activity();
@@ -123,7 +134,7 @@ export class PageEditSession {
       this.publish({ draft, dirty: true });
       return;
     }
-    const dirty = fingerprint(draft) !== this.baseline;
+    const dirty = !sameDraft(draft, this.baseline);
     this.publish({
       draft,
       dirty,
@@ -167,8 +178,10 @@ export class PageEditSession {
   begin = async (page: SharedPage) => {
     if (this.snapshot.busy || this.snapshot.mode !== "read") return;
     this.publish({ busy: true, error: null });
-    const started = Date.now();
     try {
+      if (this.pendingRelease) await this.pendingRelease;
+      if (!this.alive) return;
+      const started = Date.now();
       const { data } = await this.api.acquire(page.id, { signal: this.abort.signal });
       if (!this.alive) {
         void this.api.release(page.id).catch(() => {});
@@ -178,7 +191,7 @@ export class PageEditSession {
       this.version = data.page.version;
       this.acceptLease(data.lease, started);
       const draft = { title: data.page.title, document: data.page.document };
-      this.baseline = fingerprint(draft);
+      this.baseline = draft;
       this.baselineStatus = "unchanged";
       this.activity();
       this.saved(data.page);
@@ -215,11 +228,13 @@ export class PageEditSession {
     }
     const isNew = this.snapshot.mode === "new";
     if (!isNew && (!this.lease || !this.pageId)) return null;
-    const sent = fingerprint(draft);
     this.publish({ busy: true, status: "saving", error: null });
     try {
       const result = isNew
-        ? await this.api.create(parsed.data, { signal: this.abort.signal })
+        ? await this.api.create(
+            { ...parsed.data, requestId: (this.creationRequestId ??= crypto.randomUUID()) },
+            { signal: this.abort.signal },
+          )
         : await this.api.save(
             this.pageId!,
             { ...parsed.data, expectedVersion: this.version },
@@ -230,14 +245,18 @@ export class PageEditSession {
       // A late successful reply must not revive an expired lease or replace newer typing.
       if (this.snapshot.mode === "lost") return null;
       this.version = result.data.version;
-      this.baseline = sent;
+      this.baseline = draft;
       this.baselineStatus = "saved";
-      const dirty = this.snapshot.draft != null && fingerprint(this.snapshot.draft) !== sent;
+      const dirty = this.snapshot.draft != null && !sameDraft(this.snapshot.draft, draft);
       this.publish({ dirty, status: dirty ? "dirty" : "saved" });
       return result.data;
     } catch (error) {
       if (!this.alive) return null;
-      if (isApiRequestError(error) && [401, 403, 404, 409].includes(error.status)) {
+      if (isNew && isApiRequestError(error) && error.code === "page_creation_conflict") {
+        this.stop(
+          "先ほど作成したページと現在の入力が一致しないか、ページが更新・削除されています。入力をコピーし、共有ページ一覧を確認してください。",
+        );
+      } else if (isApiRequestError(error) && [401, 403, 404, 409].includes(error.status)) {
         this.stop(
           "編集権またはページの更新を確認できないため、編集を停止しました。入力内容は残っています。コピーしてから最新のページを確認してください。",
         );
@@ -261,7 +280,10 @@ export class PageEditSession {
     if (this.snapshot.dirty || this.snapshot.mode !== "edit") return false;
     this.releaseQuietly();
     this.publish({ mode: "read", draft: null, dirty: false, status: "saved", error: null });
-    return true;
+    // The route refreshes ownership after release has reached the server.
+    await this.pendingRelease;
+    const current = this.getSnapshot();
+    return this.alive && current.mode === "read" && !current.busy;
   };
   discard = () => {
     if (this.snapshot.busy) return;
@@ -276,8 +298,15 @@ export class PageEditSession {
     let acquired: SharedPageLease | null = null;
     try {
       const ownLease = this.snapshot.mode === "edit" ? this.lease : null;
-      if (!ownLease)
+      if (!ownLease) {
+        if (this.pendingRelease) await this.pendingRelease;
+        if (!this.alive) return false;
         acquired = (await this.api.acquire(page.id, { signal: this.abort.signal })).data.lease;
+        if (!this.alive) {
+          void this.api.release(page.id).catch(() => {});
+          return false;
+        }
+      }
       await this.api.remove(
         page.id,
         {
@@ -290,22 +319,25 @@ export class PageEditSession {
       this.publish({ mode: "read", draft: null, dirty: false, status: "saved", error: null });
       return true;
     } catch {
+      if (acquired) this.release(page.id);
       this.publish({
         error:
           "削除できませんでした。ほかの人が編集中か、ページが更新されています。最新の状態を確認してください。",
       });
       return false;
     } finally {
-      if (acquired) void this.api.release(page.id).catch(() => {});
       this.publish({ busy: false });
     }
   };
+  private release(pageId: string) {
+    // A new acquire in this screen must not overtake its earlier release.
+    this.pendingRelease = this.api.release(pageId).then(
+      () => {},
+      () => {}, // The lease expires when release cannot be delivered.
+    );
+  }
   private releaseQuietly() {
-    if (this.lease && this.pageId) {
-      void this.api.release(this.pageId).catch(() => {
-        // The server's short lease expires even when release cannot be delivered.
-      });
-    }
+    if (this.lease && this.pageId) this.release(this.pageId);
     this.lease = null;
   }
   dispose = () => {

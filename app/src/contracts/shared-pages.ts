@@ -141,11 +141,12 @@ export const SharedPageLeaseResponseSchema = z.strictObject({
   page: SharedPageSchema,
   lease: SharedPageLeaseSchema,
 });
-export const CreateSharedPageSchema = z.strictObject({
+const pageDraftSchema = z.strictObject({
   title: titleSchema,
   document: SharedPageDocumentSchema,
 });
-export const UpdateSharedPageSchema = CreateSharedPageSchema.extend({
+export const CreateSharedPageSchema = pageDraftSchema.extend({ requestId: z.uuid().optional() });
+export const UpdateSharedPageSchema = pageDraftSchema.extend({
   expectedVersion: z.number().int().nonnegative(),
 });
 export const DeleteSharedPageSchema = z.strictObject({

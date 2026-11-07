@@ -16,9 +16,11 @@ import {
   FormattingToolbarController,
   useCreateBlockNote,
 } from "@blocknote/react";
+import { useAtomValue } from "jotai";
 import { Plus } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { SharedPageBlock, SharedPageDocument } from "../../../contracts/shared-pages";
+import { themePreferenceAtom } from "../../../shared/state/theme";
 import { BlockOrderHandles } from "./BlockOrderHandles";
 import "@blocknote/mantine/style.css";
 import "../shared-pages.css";
@@ -84,12 +86,12 @@ function BasicToolbar() {
 }
 
 export function PageEditor({
-  document: content,
+  initialDocument,
   editable,
   onChange,
   onCompositionChange,
 }: {
-  document: SharedPageDocument;
+  initialDocument: SharedPageDocument;
   editable: boolean;
   onChange?: (document: SharedPageDocument) => void;
   onCompositionChange?: (composing: boolean) => void;
@@ -99,38 +101,21 @@ export function PageEditor({
   const menuRef = useRef<HTMLDivElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const editorRoot = useRef<HTMLDivElement>(null);
-  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const theme = useAtomValue(themePreferenceAtom);
   const editor = useCreateBlockNote({
     schema,
     dictionary: {
       ...ja,
       placeholders: { ...ja.placeholders, default: "本文を入力" },
     },
-    initialContent: content.blocks.length ? content.blocks : undefined,
+    initialContent: initialDocument.blocks.length ? initialDocument.blocks : undefined,
     domAttributes: {
       editor: { "aria-label": "ページ本文", role: "textbox", "aria-multiline": "true" },
     },
   });
-  useEffect(() => {
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const update = () => {
-      const preference = document.documentElement.dataset.theme;
-      setTheme(
-        preference === "dark" || (preference !== "light" && media.matches) ? "dark" : "light",
-      );
-    };
-    update();
-    const observer = new MutationObserver(update);
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["data-theme"],
-    });
-    media.addEventListener("change", update);
-    return () => {
-      observer.disconnect();
-      media.removeEventListener("change", update);
-    };
-  }, []);
+  // BlockNote adds IDs and default props to the input (and a paragraph for []).
+  // If the user undoes back to that document, return the original saved shape.
+  const [initialNode] = useState(() => editor.prosemirrorState.doc);
   useEffect(() => {
     if (!menuOpen || !editable) return;
     const onPointerDown = (event: PointerEvent) => {
@@ -222,17 +207,21 @@ export function PageEditor({
           <BlockNoteView
             editor={editor}
             editable={editable}
-            theme={theme}
+            theme={theme === "system" ? undefined : theme}
             formattingToolbar={false}
             sideMenu={false}
             slashMenu={editable}
             onChange={() => {
               if (editable)
-                onChange?.({
-                  format: "blocknote",
-                  schemaVersion: 1,
-                  blocks: documentBlocks(editor.document),
-                });
+                onChange?.(
+                  editor.prosemirrorState.doc.eq(initialNode)
+                    ? initialDocument
+                    : {
+                        format: "blocknote",
+                        schemaVersion: 1,
+                        blocks: documentBlocks(editor.document),
+                      },
+                );
             }}
           >
             {editable ? <FormattingToolbarController formattingToolbar={BasicToolbar} /> : null}

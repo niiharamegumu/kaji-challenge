@@ -1,5 +1,5 @@
 import { SharedPageDocumentSchema } from "../../../contracts/shared-pages";
-import { draftText, type PageDraft } from "./editSession";
+import { draftText, type PageDraft, type PageEditSession } from "./editSession";
 
 const maxBackupLength = 2_000_000;
 export function draftBackupKey(userId: string, teamId: string, pageId: string) {
@@ -65,4 +65,48 @@ export function clearDraftBackup(key: string): boolean {
   } catch {
     return false;
   }
+}
+
+// Keep the first unsaved edit immediately. While typing, checkpoint the latest
+// draft at a bounded interval, even if the user never pauses for autosave.
+export function syncDraftBackup(
+  key: string,
+  session: PageEditSession,
+  onPersist: (ok: boolean) => void,
+) {
+  const pending = () => {
+    const { dirty, draft } = session.getSnapshot();
+    return dirty ? draft : null;
+  };
+  let persisted: PageDraft | null | undefined = pending(); // On mount a dirty draft has just been restored from storage.
+  let previousStatus = session.getSnapshot().status;
+  let timer: number | undefined;
+  const flush = () => {
+    window.clearTimeout(timer);
+    timer = undefined;
+    const draft = pending();
+    if (draft === persisted) return;
+    const ok = draft ? writeDraftBackup(key, draft) : clearDraftBackup(key);
+    persisted = ok ? draft : undefined;
+    onPersist(ok);
+  };
+  const unsubscribe = session.subscribe(() => {
+    const draft = pending();
+    const { status } = session.getSnapshot();
+    const justStopped = status !== previousStatus && (status === "stopped" || status === "error");
+    previousStatus = status;
+    if (!draft || persisted === null || justStopped) flush();
+    else if (draft !== persisted && timer === undefined) timer = window.setTimeout(flush, 250);
+  });
+  const onVisibility = () => {
+    if (document.visibilityState === "hidden") flush();
+  };
+  document.addEventListener("visibilitychange", onVisibility);
+  window.addEventListener("pagehide", flush);
+  return () => {
+    unsubscribe();
+    document.removeEventListener("visibilitychange", onVisibility);
+    window.removeEventListener("pagehide", flush);
+    flush();
+  };
 }

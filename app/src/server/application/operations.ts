@@ -62,14 +62,18 @@ export async function executeOperation(
     case "getSharedPage":
       data = await repo.GetSharedPage(input.params.pageId);
       break;
-    case "postSharedPage":
-      data = await repo.CreateSharedPage({
-        id: crypto.randomUUID(),
+    case "postSharedPage": {
+      const id = crypto.randomUUID();
+      const page = await repo.CreateSharedPage({
+        id,
         teamId,
         userId,
         ...input.body,
       });
+      didChange = page.id === id;
+      data = page;
       break;
+    }
     case "postSharedPageLease":
       data = await repo.AcquireSharedPageLease(input.params.pageId);
       break;
