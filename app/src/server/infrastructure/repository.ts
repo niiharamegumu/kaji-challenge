@@ -35,6 +35,8 @@ import { user } from "./auth-schema";
 import {
   teams,
   teamMembers,
+  sharedPageCreations,
+  sharedPages,
   tasks,
   taskWeeklyRequirements,
   taskCompletionDaily,
@@ -178,8 +180,9 @@ const sharedPageLeaseExpiry = sql`strftime('%Y-%m-%dT%H:%M:%fZ','now',${`+${shar
 const liveSharedPageLease = sql`lease_user_id IS NOT NULL AND lease_expires_at>${sharedPageClock}
   AND EXISTS (SELECT 1 FROM team_members WHERE team_id=shared_pages.team_id
     AND user_id=shared_pages.lease_user_id)`;
+const sharedPageUpdater = sql<string>`COALESCE((SELECT COALESCE(NULLIF(nickname,''),name) FROM auth_user WHERE id=shared_pages.updated_by),'メンバー')`;
 const sharedPageSummaryFields = sql`id,title,version,created_at AS createdAt,updated_at AS updatedAt,
-  COALESCE((SELECT COALESCE(NULLIF(nickname,''),name) FROM auth_user WHERE id=shared_pages.updated_by),'メンバー') AS updatedByName,
+  ${sharedPageUpdater} AS updatedByName,
   CASE WHEN ${liveSharedPageLease} THEN lease_user_id ELSE NULL END AS editUserId,
   CASE WHEN ${liveSharedPageLease} THEN (SELECT COALESCE(NULLIF(nickname,''),name,'メンバー') FROM auth_user WHERE id=shared_pages.lease_user_id) ELSE NULL END AS editName,
   CASE WHEN ${liveSharedPageLease} THEN lease_expires_at ELSE NULL END AS editExpiresAt`;
@@ -332,18 +335,44 @@ export class D1Repository implements P.Repository {
     arg: Parameters<P.Repository["CreateSharedPage"]>[0],
   ): Promise<SharedPage> {
     const actor = this.sharedPageActor();
-    const row = await this.db.get<SharedPageRecord>(sql`
-      INSERT INTO shared_pages(id,team_id,title,document_json,preview,version,created_at,updated_at,updated_by)
-      SELECT ${arg.id},${arg.teamId},${arg.title},${JSON.stringify(arg.document)},${sharedPagePreview(arg.document)},
-        0,${sharedPageClock},${sharedPageClock},${actor.userId}
-      WHERE ${this.teamAccess(arg.teamId)} AND ${arg.userId}=${actor.userId}
-      RETURNING ${sharedPageFields}
-    `);
-    if (!row) {
-      await this.assertAccess();
+    if (arg.teamId !== this.member?.teamId || arg.userId !== actor.userId)
       throw new AppError(403, "forbidden", "このチームには作成できません。");
-    }
-    return sharedPage(row);
+    const access = this.teamAccess(arg.teamId);
+    const documentJson = JSON.stringify(arg.document);
+    const receipt = sql`SELECT page_id FROM shared_page_creations WHERE
+      team_id=${arg.teamId} AND user_id=${actor.userId} AND request_id=${arg.requestId}`;
+    const insert = this.db
+      .insert(sharedPages)
+      .select(sql`SELECT ${arg.id},${arg.teamId},${arg.title},${documentJson},${sharedPagePreview(arg.document)},
+        0,${sharedPageClock},${sharedPageClock},${actor.userId},NULL,NULL
+        WHERE ${access} ${arg.requestId ? sql`AND ${arg.id}=(${receipt})` : sql``}`)
+      .returning({
+        id: sharedPages.id,
+        createdAt: sharedPages.created_at,
+        updatedAt: sharedPages.updated_at,
+        updatedByName: sharedPageUpdater,
+      });
+
+    // Only the first request's server-generated page ID can insert a document.
+    const claim = this.db
+      .insert(sharedPageCreations)
+      .select(sql`SELECT ${arg.teamId},${actor.userId},${arg.requestId},${arg.id} WHERE ${access}`)
+      .onConflictDoNothing();
+    const rows = arg.requestId ? (await this.db.batch([claim, insert]))[1] : await insert;
+    const [created] = rows;
+    if (created)
+      return { ...created, title: arg.title, document: arg.document, editing: null, version: 0 };
+    await this.assertAccess();
+    if (!arg.requestId) throw new AppError(403, "forbidden", "このチームには作成できません。");
+    const existing = await this.db.get<SharedPageRecord>(sql`SELECT ${sharedPageFields}
+      FROM shared_pages WHERE id=(${receipt}) AND ${this.teamAccess(sql`team_id`)}
+        AND version=0 AND title=${arg.title} AND document_json=${documentJson}`);
+    if (existing) return sharedPage(existing);
+    throw new AppError(
+      409,
+      "page_creation_conflict",
+      "作成結果が変わりました。共有ページ一覧を確認してください。",
+    );
   }
   async AcquireSharedPageLease(id: string): Promise<SharedPageLeaseResponse> {
     const actor = this.sharedPageActor();
