@@ -191,11 +191,6 @@ describe("ReminderCalendarPage", () => {
       </MemoryRouter>,
     );
 
-    expect(
-      screen.getByText(
-        "今月と来月以降の予定を表示します。過去月は表示しません。日付変更は編集から行えます。",
-      ),
-    ).toBeInTheDocument();
     expect(latestCalendarProps()?.events).toEqual([]);
     expect(screen.getByRole("dialog", { name: "4月2日(木) のリマインダー" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "追加" })).toBeInTheDocument();
@@ -205,6 +200,11 @@ describe("ReminderCalendarPage", () => {
         { name: "追加" },
       ),
     ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "選択日の詳細を閉じる" }));
+    fireEvent.click(screen.getByRole("button", { name: "カレンダーの使い方" }));
+    expect(screen.getByRole("dialog", { name: "カレンダーの使い方" })).toHaveTextContent(
+      "今月と来月以降の予定を表示します。過去月は表示しません。日付変更は編集から行えます。",
+    );
   });
 
   it("keeps the mobile agenda sheet open after creating a reminder", async () => {
@@ -269,11 +269,10 @@ describe("ReminderCalendarPage", () => {
       </MemoryRouter>,
     );
 
-    expect(
-      screen.getByText(
-        "今月と来月以降の予定を表示します。過去月は表示しません。ドラッグで日付を変更できます。",
-      ),
-    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "カレンダーの使い方" }));
+    expect(screen.getByRole("dialog", { name: "カレンダーの使い方" })).toHaveTextContent(
+      "今月と来月以降の予定を表示します。過去月は表示しません。ドラッグで日付を変更できます。",
+    );
     expect(Array.isArray(latestCalendarProps()?.events)).toBe(true);
     expect((latestCalendarProps()?.events as unknown[] | undefined)?.length).toBe(1);
     expect(latestCalendarProps()?.eventDrop).toBeTypeOf("function");
