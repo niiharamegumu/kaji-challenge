@@ -1,7 +1,13 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { PageDraft } from "./editSession";
-import { draftText } from "./editSession";
-import { clearDraftBackup, draftBackupKey, readDraftBackup, writeDraftBackup } from "./draftBackup";
+import { draftText, PageEditSession } from "./editSession";
+import {
+  clearDraftBackup,
+  draftBackupKey,
+  readDraftBackup,
+  syncDraftBackup,
+  writeDraftBackup,
+} from "./draftBackup";
 
 vi.mock("../api/sharedPagesApi", () => ({ sharedPagesApi: {} }));
 
@@ -26,6 +32,7 @@ beforeEach(() => {
   sessionStorage.clear();
 });
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   sessionStorage.clear();
 });
@@ -146,4 +153,63 @@ it("ignores inaccessible or oversized storage and reports an oversized write as 
     throw new Error("Blocked");
   });
   expect(readDraftBackup(key)).toBeNull();
+});
+
+it("keeps the latest typing on pagehide and never restores a discarded pending checkpoint", () => {
+  vi.useFakeTimers();
+  const session = new PageEditSession(true, vi.fn());
+  const stop = syncDraftBackup(key, session, vi.fn());
+  try {
+    session.change(draft());
+    expect(readDraftBackup(key)).toEqual(draft());
+    session.changeTitle("次の一文字");
+    session.changeTitle("画面を閉じる直前の全文");
+    window.dispatchEvent(new Event("pagehide"));
+    expect(readDraftBackup(key)?.title).toBe("画面を閉じる直前の全文");
+
+    session.changeTitle("破棄する変更");
+    session.discard();
+    vi.runAllTimers();
+    expect(readDraftBackup(key)).toBeNull();
+  } finally {
+    stop();
+  }
+});
+
+it("checkpoints continuous typing before autosave and flushes when switching sessions", () => {
+  vi.useFakeTimers();
+  const session = new PageEditSession(true, vi.fn());
+  const stop = syncDraftBackup(key, session, vi.fn());
+  try {
+    session.change(draft());
+    for (let i = 1; i <= 6; i++) {
+      session.changeTitle("連続入力" + i);
+      vi.advanceTimersByTime(50);
+    }
+    expect(readDraftBackup(key)?.title).toMatch(/^連続入力[1-6]$/);
+  } finally {
+    stop();
+  }
+  expect(readDraftBackup(key)?.title).toBe("連続入力6");
+});
+
+it("bounds synchronous retries when storage is full and checkpoints the latest input once it recovers", () => {
+  vi.useFakeTimers();
+  const write = vi.spyOn(Storage.prototype, "setItem").mockImplementationOnce(() => {
+    throw new DOMException("Full", "QuotaExceededError");
+  });
+  const session = new PageEditSession(true, vi.fn());
+  const notify = vi.fn();
+  const stop = syncDraftBackup(key, session, notify);
+  try {
+    session.change(draft());
+    expect(notify).toHaveBeenLastCalledWith(false);
+    for (const title of ["続", "続け", "続けて編集"]) session.changeTitle(title);
+    expect(write).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(250);
+    expect(readDraftBackup(key)?.title).toBe("続けて編集");
+    expect(notify).toHaveBeenLastCalledWith(true);
+  } finally {
+    stop();
+  }
 });
