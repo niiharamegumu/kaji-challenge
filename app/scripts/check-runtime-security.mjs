@@ -1,6 +1,7 @@
 // CVE-2026-111497: verify the decoder itself, including Node.js security backports.
 // Regression vector: https://github.com/nodejs/node/blob/v24.22.1/test/parallel/test-zlib-invalid-input.js
 import assert from "node:assert/strict";
+import { assertSupportedNodeVersion } from "./runtime-security-policy.mjs";
 import { finished } from "node:stream/promises";
 import {
   brotliCompressSync,
@@ -10,7 +11,11 @@ import {
 } from "node:zlib";
 
 const runtime = process.versions.bun ? `Bun ${process.versions.bun}` : `Node.js ${process.version}`;
-const guidance = `${runtime}: CVE-2026-111497 requires patched Brotli. Run mise install and use mise exec -- (Node.js 24.22.1 / Bun 1.4.4 or later supported security releases).`;
+if (!process.versions.bun) {
+  assertSupportedNodeVersion(process.versions.node);
+  console.info(`${runtime}: November 2026 security release version requirement passed.`);
+}
+const guidance = `${runtime}: CVE-2026-111497 requires patched Brotli. Run mise install and use mise exec -- (Node.js >=24.22.3 <25 / Bun >=1.4.4).`;
 // Fail before decoding on an unpatched runtime. The version string alone is insufficient:
 // Node.js 24.22.1 reports Brotli 1.2.0 but includes the security backport.
 assert.equal(constants.BROTLI_DECODER_ERROR_FORMAT_BLOCK_SWITCH, -17, guidance);
