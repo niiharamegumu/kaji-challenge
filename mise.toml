@@ -1,6 +1,6 @@
 [tools]
 bun = "1.4.4"
-node = "24.22.1"
+node = "24.22.3"
 
 [settings]
 # Keep the patched project runtimes ahead of system/Homebrew installations.
