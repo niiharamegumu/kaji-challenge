@@ -104,6 +104,7 @@ try {
     "--test",
     "scripts/verification-plan.test.mjs",
     "scripts/check-architecture.test.mjs",
+    "scripts/runtime-security-policy.test.mjs",
   ]);
   // Exercise CLI-only peer dependencies without credentials or cloud mutations.
   if (plan.alchemy) {
