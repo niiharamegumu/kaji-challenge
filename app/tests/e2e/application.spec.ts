@@ -489,6 +489,7 @@ test(
       const pencil = (await edit.locator("svg").boundingBox())!;
       const check = (await complete.locator("svg").boundingBox())!;
       const grip = (await drag.locator("svg").boundingBox())!;
+      const completeBox = (await complete.boundingBox())!;
       if (tablet && path === "/") {
         expect(category.y).toBeGreaterThanOrEqual(title.y + title.height);
       } else {
@@ -512,11 +513,19 @@ test(
       });
       await complete.click();
       const undo = item.getByRole("button", { name: "取り消す" });
-      await expect(undo.getByText("取り消す", { exact: true })).toBeVisible();
+      await expect(undo.getByText("取り消す", { exact: true })).toHaveCount(0);
+      await expect(undo.getByRole("img", { name: /完了まで/ })).toBeVisible();
+      const completingRow = (await item.boundingBox())!;
+      expect(completingRow.height).toBe(row.height);
       const undoBox = (await undo.boundingBox())!;
-      expect(undoBox.width).toBeGreaterThanOrEqual(44);
+      expect(undoBox.width).toBe(completeBox.width);
+      expect(undoBox.height).toBe(completeBox.height);
+      // The list screenshot can scroll mobile pages; compare positions within the row.
+      expect(undoBox.x - completingRow.x).toBe(completeBox.x - row.x);
+      expect(undoBox.y - completingRow.y).toBe(completeBox.y - row.y);
       expect(undoBox.x + undoBox.width / 2).toBeCloseTo(check.x + check.width / 2, 0);
       await undo.click();
+      expect((await item.boundingBox())!.height).toBe(row.height);
       await edit.click();
       await expect(region.getByLabel("名前", { exact: true })).toHaveValue(singleLineName);
       await region.getByRole("button", { name: "キャンセル" }).click();
@@ -1718,7 +1727,7 @@ test(
     });
     await item.getByRole("button", { name: "完了にする", exact: true }).click();
     await expect(page.getByRole("dialog", { name: "完了にしますか？" })).toHaveCount(0);
-    await expect(item.getByText("完了待ち", { exact: true })).toBeVisible();
+    await expect(item.getByText("完了待ち", { exact: true })).toHaveCount(0);
     await expect(item.getByRole("img", { name: "完了まで3秒" })).toBeVisible();
     await expect(page.getByRole("region", { name: "ToDoの完了待ち" })).toHaveCount(0);
     await page.screenshot({ path: testInfo.outputPath("todo-completion-undo.png") });
