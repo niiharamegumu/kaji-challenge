@@ -511,10 +511,11 @@ describe("ToDo pages", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "ToDoの完了待ち" })).not.toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /取り消す/ })).toHaveLength(1);
-    expect(within(row).getByText("完了待ち")).toBeVisible();
+    expect(within(row).queryByText("完了待ち")).not.toBeInTheDocument();
     expect(within(row).getByRole("button", { name: "編集" })).toBeDisabled();
     expect(within(row).getByRole("button", { name: "牛乳 をドラッグして並び替え" })).toBeDisabled();
     const undo = within(row).getByRole("button", { name: "取り消す" });
+    expect(within(undo).queryByText("取り消す")).not.toBeInTheDocument();
     expect(within(undo).getByRole("img", { name: "完了まで3秒" })).toBeVisible();
     act(() => vi.advanceTimersByTime(1_000));
     expect(within(undo).getByRole("img", { name: "完了まで2秒" })).toBeVisible();

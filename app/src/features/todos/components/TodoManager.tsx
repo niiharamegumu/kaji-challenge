@@ -234,7 +234,6 @@ function SortableTodoItem({
                 {renderNotesWithLinks(item.notes)}
               </div>
             ) : null}
-            {isCompleting ? <span className="text-xs text-secondary">完了待ち</span> : null}
           </div>
           <span
             className="col-start-1 row-start-2 max-w-full justify-self-start truncate rounded bg-surface-muted px-1 py-0.5 text-[11px] leading-tight text-secondary @min-[340px]:col-start-2 @min-[340px]:row-start-1 @min-[340px]:max-w-20 @min-[480px]:max-w-36"
@@ -242,9 +241,7 @@ function SortableTodoItem({
           >
             {categoryLabel}
           </span>
-          <div
-            className={`col-start-2 row-span-2 row-start-1 grid w-24 items-center @min-[340px]:col-start-3 @min-[340px]:row-span-1 ${isCompleting ? "grid-cols-[1fr_2.75rem_1fr]" : "grid-cols-3"}`}
-          >
+          <div className="col-start-2 row-span-2 row-start-1 grid w-24 grid-cols-3 items-center @min-[340px]:col-start-3 @min-[340px]:row-span-1">
             <button
               type="button"
               className="flex h-11 cursor-pointer items-center justify-start rounded-lg pl-2 text-secondary transition-colors hover:bg-surface-muted hover:text-heading focus-visible:outline-2 focus-visible:outline-focus disabled:opacity-50"
@@ -262,18 +259,13 @@ function SortableTodoItem({
               aria-label={completionLabel}
               title={completionLabel}
             >
-              <span
-                className={`inline-flex items-center justify-center rounded-md bg-matcha-50 text-matcha-700 transition-colors group-hover:bg-matcha-100 ${isCompleting ? "w-full flex-col py-0.5 text-[0.6875rem] leading-tight font-medium whitespace-nowrap" : "size-7"}`}
-              >
+              <span className="inline-flex size-7 items-center justify-center rounded-md bg-matcha-50 text-matcha-700 transition-colors group-hover:bg-matcha-100">
                 {pendingCompletion !== undefined ? (
-                  <>
-                    <ActionCountdown
-                      key={pendingCompletion.deadline}
-                      deadline={pendingCompletion.deadline}
-                      durationMs={pendingCompletion.durationMs}
-                    />
-                    <span>{completionLabel}</span>
-                  </>
+                  <ActionCountdown
+                    key={pendingCompletion.deadline}
+                    deadline={pendingCompletion.deadline}
+                    durationMs={pendingCompletion.durationMs}
+                  />
                 ) : (
                   <CircleCheck size={18} aria-hidden="true" />
                 )}

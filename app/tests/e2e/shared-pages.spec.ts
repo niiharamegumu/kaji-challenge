@@ -896,9 +896,7 @@ for (const failurePoint of ["before commit", "after commit"]) {
 
       await page.getByRole("button", { name: "共有ページへ戻る", exact: true }).click();
       await expect(page).toHaveURL(/\/pages\/?$/);
-      const listed = operationResponse(page, "listSharedPages");
       await page.reload();
-      await saved(listed);
       await expect(
         page.getByRole("link").filter({ has: page.getByText(title, { exact: true }) }),
       ).toHaveCount(1);
