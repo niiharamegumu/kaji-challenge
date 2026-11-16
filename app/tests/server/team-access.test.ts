@@ -45,6 +45,7 @@ const tables = [
   "close_runs",
   "push_subscriptions",
   "auth_user",
+  "user_preferences",
 ];
 const snapshot = () =>
   Promise.all(
@@ -274,6 +275,7 @@ const reads: ReadCase[] = [
       r.FindOldestMonthCloseCandidate({ TeamID: f.team, CurrentMonthStart: "2026-10-01" }),
   },
   { name: "GetUserByID", run: (r, f) => r.GetUserByID(f.user) },
+  { name: "GetUserPreferences", run: (r, f) => r.GetUserPreferences(f.user) },
   {
     name: "ListPushSubscriptionsByUserID",
     run: (r, f) => r.ListPushSubscriptionsByUserID(f.user),
@@ -282,6 +284,14 @@ const reads: ReadCase[] = [
 ];
 type WriteCase = { name: string; run: (r: Repository, f: Fixture) => Promise<unknown> };
 const writes: WriteCase[] = [
+  {
+    name: "SaveUserPreferences",
+    run: (r, f) => r.SaveUserPreferences(f.user, { todoCompletionDelayMs: 5000 }),
+  },
+  {
+    name: "InitializeUserPreferences",
+    run: (r, f) => r.SaveUserPreferences(f.user, { todoCompletionDelayMs: 5000 }, true),
+  },
   { name: "UpdateTeamName", run: (r, f) => r.UpdateTeamName({ ID: f.team, Name: "Changed" }) },
   { name: "CreateTask", run: (r, f) => r.CreateTask(task(f)) },
   {

@@ -25,6 +25,11 @@ import {
   type SharedPageLeaseResponse,
 } from "../../contracts/shared-pages";
 import { assistLimits } from "../../contracts/assist";
+import {
+  defaultUserPreferences,
+  type UserPreferences,
+  type UpdateUserPreferences,
+} from "../../contracts/user-preferences";
 import { AppError } from "../domain/errors";
 import { addDays, todayJST, weekStart } from "../domain/dates";
 import type { WeeklyRequirement } from "../domain/task-requirements";
@@ -49,6 +54,7 @@ import {
   monthlyPenaltySummaryTriggeredRules,
   closeRuns,
   pushSubscriptions,
+  userPreferences,
 } from "./schema";
 
 function required<T>(rows: T[], operation: string): T {
@@ -1536,6 +1542,95 @@ export class D1Repository implements P.Repository {
       .returning()
       .then((rows) => rows.length);
   }
+  async GetUserPreferences(userId: string): Promise<UserPreferences | null> {
+    const row = required(
+      await this.db
+        .select({
+          todoCompletionDelayMs: userPreferences.todo_completion_delay_ms,
+          defaultTodoCategory: userPreferences.default_todo_category,
+        })
+        .from(user)
+        .leftJoin(userPreferences, eq(userPreferences.user_id, user.id))
+        .where(and(eq(user.id, userId), this.identityAccess(user.id), this.access())),
+      "GetUserPreferences",
+    );
+    return row.todoCompletionDelayMs === null
+      ? null
+      : {
+          todoCompletionDelayMs: row.todoCompletionDelayMs!,
+          defaultTodoCategory: row.defaultTodoCategory!,
+        };
+  }
+
+  async SaveUserPreferences(
+    userId: string,
+    patch: UpdateUserPreferences,
+    initializeOnly = false,
+  ): Promise<UserPreferences> {
+    const preferences = { ...defaultUserPreferences, ...patch };
+    const selection = preferences.defaultTodoCategory;
+    const categoryExists =
+      selection.kind === "category"
+        ? this.member
+          ? this.todoCategoryExists(this.member.teamId, selection.id)
+          : sql`0`
+        : sql`1`;
+    const allowed = and(
+      eq(user.id, userId),
+      this.identityAccess(user.id),
+      this.access(),
+      initializeOnly ? sql`1` : categoryExists,
+    );
+    const insert = this.db.insert(userPreferences).select(
+      this.db
+        .select({
+          user_id: user.id,
+          todo_completion_delay_ms: sql<
+            UserPreferences["todoCompletionDelayMs"]
+          >`${preferences.todoCompletionDelayMs}`.as("todo_completion_delay_ms"),
+          // An obsolete local category must not prevent the first settings migration.
+          default_todo_category: sql<
+            UserPreferences["defaultTodoCategory"]
+          >`CASE WHEN ${categoryExists} THEN ${JSON.stringify(selection)} ELSE '{"kind":"all"}' END`.as(
+            "default_todo_category",
+          ),
+        })
+        .from(user)
+        .where(allowed),
+    );
+    const fields = {
+      todoCompletionDelayMs: userPreferences.todo_completion_delay_ms,
+      defaultTodoCategory: userPreferences.default_todo_category,
+    };
+    if (initializeOnly) {
+      await insert.onConflictDoNothing({ target: userPreferences.user_id });
+      const stored = await this.GetUserPreferences(userId);
+      if (!stored) throw new AppError(403, "forbidden", "設定を保存できませんでした。");
+      return stored;
+    }
+    const rows = await insert
+      .onConflictDoUpdate({
+        target: userPreferences.user_id,
+        // Only supplied columns change, including when two devices edit different fields.
+        set: {
+          ...(patch.todoCompletionDelayMs === undefined
+            ? {}
+            : { todo_completion_delay_ms: patch.todoCompletionDelayMs }),
+          ...(patch.defaultTodoCategory === undefined
+            ? {}
+            : { default_todo_category: patch.defaultTodoCategory }),
+        },
+      })
+      .returning(fields);
+    if (!rows[0])
+      throw new AppError(
+        409,
+        "conflict",
+        "設定を保存できませんでした。再取得して選び直してください。",
+      );
+    return rows[0];
+  }
+
   async GetUserByID(id: string): Promise<P.GetUserByIDRow> {
     const rows = await this.db
       .select({

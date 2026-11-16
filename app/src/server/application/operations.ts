@@ -56,6 +56,15 @@ export async function executeOperation(
   const repo = repository.forMember(teamId, userId);
   let data: unknown;
   switch (input.operation) {
+    case "getMePreferences":
+      data = await repo.GetUserPreferences(userId);
+      break;
+    case "initializeMePreferences":
+      data = await repo.SaveUserPreferences(userId, input.body, true);
+      break;
+    case "patchMePreferences":
+      data = await repo.SaveUserPreferences(userId, input.body);
+      break;
     case "listSharedPages":
       data = { items: await repo.ListSharedPages(teamId) };
       break;

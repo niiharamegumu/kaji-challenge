@@ -1,18 +1,20 @@
-import { useId, useState } from "react";
+import { useId } from "react";
 import { InfoHelp } from "../../../shared/components/InfoHelp";
 import { useTodoCategoriesQuery } from "../hooks/useTodoCategories";
 import { useTodoDefaultCategory } from "../hooks/useTodoDefaultCategory";
 import { ALL_TODO_CATEGORIES, type TodoCategorySelection } from "../model/defaultTodoCategory";
 import { TodoCategoryQueryStatus } from "./TodoCategoryQueryStatus";
+import { useUserPreferences } from "../../../shared/state/userPreferences";
+import { UserPreferencesStatus } from "../../../shared/components/UserPreferencesStatus";
 
 function optionValue(selection: TodoCategorySelection) {
   return selection.kind === "category" ? `category:${selection.id}` : selection.kind;
 }
 
-export function TodoDefaultCategorySettings({ identityKey }: { identityKey: string }) {
+export function TodoDefaultCategorySettings() {
   const query = useTodoCategoriesQuery();
-  const [saved, setSaved] = useTodoDefaultCategory(identityKey);
-  const [saveFailed, setSaveFailed] = useState(false);
+  const [saved, setSaved] = useTodoDefaultCategory();
+  const { writable } = useUserPreferences();
   const inputId = useId();
   const options = [
     { selection: ALL_TODO_CATEGORIES, label: "すべて" },
@@ -37,19 +39,19 @@ export function TodoDefaultCategorySettings({ identityKey }: { identityKey: stri
             ホームとToDo画面を開いたときに、このカテゴリーが選択されます。タブの並び順は変わりません。
           </p>
           <p>
-            設定はこのブラウザーに、ユーザーとチームごとに自動保存されます。選んだカテゴリーが削除された場合は「すべて」で開きます。
+            設定はアカウントに自動保存され、同じユーザーの端末で共有されます。選んだカテゴリーが現在のチームにない場合は「すべて」で開きます。
           </p>
         </InfoHelp>
       </div>
       <select
         id={inputId}
         value={available ? value : "all"}
-        disabled={query.data === undefined || saved === undefined}
+        disabled={query.data === undefined || saved === undefined || !writable}
         onChange={(event) => {
           const selected = options.find(
             (option) => optionValue(option.selection) === event.currentTarget.value,
           );
-          if (selected) setSaveFailed(!setSaved(selected.selection));
+          if (selected) setSaved(selected.selection);
         }}
         className="min-h-11 min-w-0 rounded-lg border border-line-strong bg-surface px-3 py-2 text-base disabled:opacity-60 sm:text-sm"
       >
@@ -60,11 +62,7 @@ export function TodoDefaultCategorySettings({ identityKey }: { identityKey: stri
         ))}
       </select>
       <TodoCategoryQueryStatus query={query} />
-      {saveFailed ? (
-        <p role="alert" className="text-xs text-danger">
-          このブラウザーに保存できませんでした。もう一度選択してください。
-        </p>
-      ) : null}
+      <UserPreferencesStatus />
     </div>
   );
 }

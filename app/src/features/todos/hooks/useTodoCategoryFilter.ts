@@ -14,25 +14,26 @@ export function useTodoCategoryFilter() {
     context?.currentUserId && context.currentTeamId
       ? `${context.currentUserId}:${context.currentTeamId}`
       : null;
-  const [defaultCategory] = useTodoDefaultCategory(identityKey);
+  const [defaultCategory] = useTodoDefaultCategory();
   const [current, setCurrent] = useState<{
     identityKey: string | null;
     selection: TodoCategorySelection | null;
   }>({ identityKey, selection: null });
   const chosen = current.identityKey === identityKey ? current.selection : null;
-  const selection = chosen ?? defaultCategory ?? ALL_TODO_CATEGORIES;
+  const candidate = chosen ?? defaultCategory ?? ALL_TODO_CATEGORIES;
+  const unavailable =
+    candidate.kind === "category" &&
+    query.data !== undefined &&
+    !query.data.some((category) => category?.id === candidate.id);
+  const selection = unavailable ? ALL_TODO_CATEGORIES : candidate;
   const setSelection = (value: TodoCategorySelection) =>
     setCurrent({ identityKey, selection: value });
-  // Adopt the preference once per page/identity. Refetches and other tabs must not
-  // override a category the user has already chosen on this page.
-  if (current.identityKey !== identityKey || (chosen === null && defaultCategory !== undefined)) {
-    setCurrent({ identityKey, selection: defaultCategory ?? null });
+  // A fresh server preference can replace the startup cache until the user selects a tab.
+  if (current.identityKey !== identityKey) {
+    setCurrent({ identityKey, selection: null });
   }
-  if (
-    selection.kind === "category" &&
-    query.data !== undefined &&
-    !query.data.some((category) => category?.id === selection.id)
-  ) {
+  // A missing cached default is only a display fallback, not a manual selection.
+  if (unavailable && chosen !== null) {
     setSelection({ kind: "all" });
   }
 

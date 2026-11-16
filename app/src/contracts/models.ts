@@ -1,4 +1,5 @@
 import type { z } from "zod";
+export type { UserPreferences, UpdateUserPreferences } from "./user-preferences";
 export type {
   SharedPage,
   SharedPageSummary,

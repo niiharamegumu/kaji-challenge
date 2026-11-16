@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isDate } from "../server/domain/dates";
+import { UserPreferencesSchema, UpdateUserPreferencesSchema } from "./user-preferences";
 import {
   SharedPageSchema,
   SharedPageListSchema,
@@ -350,6 +351,20 @@ export const operationSchema = z.discriminatedUnion("operation", [
     operation: z.literal("getMe"),
     params: z.object({}).default({}),
   }),
+  z.strictObject({
+    operation: z.literal("getMePreferences"),
+    params: z.strictObject({}).default({}),
+  }),
+  z.strictObject({
+    operation: z.literal("initializeMePreferences"),
+    params: z.strictObject({}).default({}),
+    body: UserPreferencesSchema,
+  }),
+  z.strictObject({
+    operation: z.literal("patchMePreferences"),
+    params: z.strictObject({}).default({}),
+    body: UpdateUserPreferencesSchema,
+  }),
   z.object({
     operation: z.literal("patchMeNickname"),
     params: z.object({}).default({}),
@@ -554,6 +569,9 @@ export const responseSchemas = {
   renewSharedPageLease: SharedPageLeaseSchema,
   releaseSharedPageLease: z.strictObject({}),
   getMe: MeResponseSchema,
+  getMePreferences: UserPreferencesSchema.nullable(),
+  initializeMePreferences: UserPreferencesSchema,
+  patchMePreferences: UserPreferencesSchema,
   patchMeNickname: UpdateNicknameResponseSchema,
   patchMeColor: UpdateColorResponseSchema,
   postPushSubscription: PushSubscriptionSchema,
