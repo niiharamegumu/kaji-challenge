@@ -171,7 +171,7 @@ export function SettingsManager({
                 <div className="divide-y divide-line">
                   <TodoCompletionSettings />
                   <div className="mt-6 pt-6">
-                    <TodoDefaultCategorySettings key={identityKey} identityKey={identityKey} />
+                    <TodoDefaultCategorySettings key={identityKey} />
                   </div>
                 </div>
               ) : null}
