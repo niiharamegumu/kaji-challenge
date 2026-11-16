@@ -1,12 +1,14 @@
 type PWAState = {
   needRefresh: boolean;
+  applying: boolean;
 };
 
 type Listener = (state: PWAState) => void;
 
 const listeners = new Set<Listener>();
-let state: PWAState = { needRefresh: false };
+let state: PWAState = { needRefresh: false, applying: false };
 let applyUpdate: null | (() => Promise<void>) = null;
+let updateInFlight: Promise<void> | null = null;
 
 const emit = () => {
   for (const listener of listeners) {
@@ -23,25 +25,35 @@ export const subscribePWAState = (listener: Listener) => {
 };
 
 export const notifyPWARefresh = (updater: () => Promise<void>) => {
-  if (state.needRefresh) {
-    applyUpdate = updater;
-    return;
-  }
   applyUpdate = updater;
-  state = { needRefresh: true };
+  if (state.needRefresh || state.applying) return;
+  state = { needRefresh: true, applying: false };
   emit();
 };
 
 export const dismissPWAUpdate = () => {
-  state = { needRefresh: false };
+  state = { ...state, needRefresh: false };
   emit();
 };
 
-export const applyPWAUpdateNow = async () => {
+export const clearPWARefresh = () => {
+  applyUpdate = null;
+  dismissPWAUpdate();
+};
+
+export const applyPWAUpdateNow = () => {
+  if (updateInFlight) return updateInFlight;
   const updater = applyUpdate;
-  state = { needRefresh: false };
+  if (!updater) return Promise.resolve();
+  updateInFlight = Promise.resolve()
+    .then(updater)
+    .finally(() => {
+      if (applyUpdate === updater) applyUpdate = null;
+      updateInFlight = null;
+      state = { needRefresh: applyUpdate !== null, applying: false };
+      emit();
+    });
+  state = { needRefresh: false, applying: true };
   emit();
-  if (updater != null) {
-    await updater();
-  }
+  return updateInFlight;
 };

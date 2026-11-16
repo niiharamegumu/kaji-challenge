@@ -64,6 +64,13 @@ describe("StatusToast", () => {
     expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps non-dismissible progress visible without offering an inactive close button", () => {
+    render(<StatusToast message="更新を準備しています…" autoDismiss={false} />);
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(60_000));
+    expect(screen.getByRole("status")).toHaveTextContent("更新を準備しています");
+  });
+
   it("does not restart the timer when action props change for the same message", () => {
     const onDismiss = vi.fn();
     const onAction = vi.fn();

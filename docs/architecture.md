@@ -172,6 +172,14 @@ CDは本番Secretsを渡さずbuildし、その後のstepでAlchemy bootstrap �
 
 設定はプロフィール・表示・ToDo・通知・チーム・アプリに分け、PCの左メニューとモバイルの3列メニューで切り替える。設定パネルはhiddenで保持し、切り替えで未保存入力・保存中・エラー状態を失わない。チームの参加・離脱は「チームの参加・切り替え」にまとめる。保存先は各カテゴリー見出しに表示する。
 
+## アプリの更新確認
+
+手動確認はService Workerの更新スクリプトをHTTPキャッシュ経由にせず確認する。背景・フォーカス・手動の同時要求は1つにまとめる。更新は `updatefound` / `installing` の段階で通知し、全静的ファイルのprecache完了をトースト表示の条件にしない。すでに更新を取得中・待機中ならネットワークを待たず案内を再表示する。activeのない初回インストールは更新として通知しない。
+
+「更新する」を選んだ後にインストール完了を待ち、対象workerへSKIP_WAITINGを送り、そのworkerがcontrollerになったことを確認して再読み込みする。準備中は進行表示を維持し、二重適用を抑止する。インストール失敗・適用失敗・timeout時には勝手に再読み込みせず、再確認を案内する。閉じた案内をインストール完了だけで再表示しない。更新スクリプトを取得する通信時間自体は残る。
+
+参照: [updatefound](https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerRegistration/updatefound_event)、[Workboxのライフサイクル](https://developer.chrome.com/docs/workbox/modules/workbox-window)。
+
 ## 表示モード
 
 設定の「表示」でシステム・ダーク・ライトを選べる。初期値はシステムで、`shared/state/theme.ts` のJotai atomが `kaji:theme:v1` に文字列を保存する。ユーザー/チームのDB設定ではなくブラウザー単位で、ログイン前も同じ選択を使う。storageイベントで別タブの変更/削除を反映し、保存不可時は現在の選択を適用して通知する。
