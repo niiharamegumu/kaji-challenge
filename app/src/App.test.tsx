@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import AppShell from "./App";
+import { clearPWARefresh, notifyPWARefresh } from "./app/pwa";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";
 import { lazy, useState } from "react";
@@ -123,6 +124,7 @@ describe("App", () => {
   });
 
   beforeEach(() => {
+    clearPWARefresh();
     window.localStorage.clear();
     window.history.pushState({}, "", "/");
     appQueryClient.clear();
@@ -195,6 +197,31 @@ describe("App", () => {
       expect(screen.getByRole("button", { name: "Googleでログイン" })).toBeInTheDocument();
       expect(screen.queryAllByTestId("boot-screen")).toHaveLength(0);
     });
+  });
+
+  it("shows progress while preparing an update and allows retry after failure", async () => {
+    render(<App />);
+    await screen.findByRole("button", { name: "Googleでログイン" });
+    let fail!: (error: Error) => void;
+    const update = vi.fn(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          fail = reject;
+        }),
+    );
+    act(() => notifyPWARefresh(update));
+    fireEvent.click(screen.getByRole("button", { name: "更新する" }));
+    const progress = screen.getByRole("status");
+    expect(progress).toHaveTextContent("更新を準備しています");
+    expect(within(progress).queryByRole("button")).not.toBeInTheDocument();
+    await waitFor(() => expect(update).toHaveBeenCalledTimes(1));
+    await act(async () => fail(new Error("offline")));
+    expect(screen.getByRole("status")).toHaveTextContent("更新を適用できませんでした");
+    const retry = vi.fn(async () => {});
+    act(() => notifyPWARefresh(retry));
+    fireEvent.click(screen.getByRole("button", { name: "更新する" }));
+    await waitFor(() => expect(retry).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByRole("status")).not.toBeInTheDocument());
   });
 
   it("shows error message when auth start returns 404", async () => {
