@@ -10,6 +10,7 @@ import { BootScreen } from "./shared/components/BootScreen";
 
 function AppShell() {
   const [needRefresh, setNeedRefresh] = useState(false);
+  const [applyingUpdate, setApplyingUpdate] = useState(false);
   const [updateFailed, setUpdateFailed] = useState(false);
   const { isInitialBootPending, markReactMounted } = useBootFlow();
 
@@ -21,6 +22,7 @@ function AppShell() {
   useEffect(() => {
     return subscribePWAState((state) => {
       setNeedRefresh(state.needRefresh);
+      setApplyingUpdate(state.applying);
     });
   }, []);
 
@@ -28,7 +30,12 @@ function AppShell() {
     <>
       <Outlet />
       {isInitialBootPending ? <BootScreen mode="overlay" /> : null}
-      {needRefresh ? (
+      {applyingUpdate ? (
+        <StatusToast
+          message="更新を準備しています…完了すると再読み込みします。"
+          autoDismiss={false}
+        />
+      ) : needRefresh ? (
         <StatusToast
           message="新しいバージョンを利用できます。更新して最新状態にしますか？"
           onDismiss={dismissPWAUpdate}
