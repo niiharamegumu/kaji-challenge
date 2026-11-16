@@ -16,6 +16,7 @@ import {
 import { prefetchHomeData } from "../../features/home/preload";
 import { MonthCloseBanner } from "../../features/month-close";
 import { DelayedActionProvider } from "../../shared/state/DelayedActionProvider";
+import { UserPreferencesProvider } from "../../shared/query/UserPreferencesProvider";
 import { teamMembersQueryOptions } from "../../shared/query/teamMembersQuery";
 import { StatusToast } from "../../features/shell/components/StatusToast";
 import { useAuthGate } from "../../features/shell/hooks/useAuthGate";
@@ -235,9 +236,15 @@ export function RootLayout() {
         </div>
 
         <RootLayoutContext value={outletContext}>
-          <DelayedActionProvider key={`${currentUserId}:${currentTeamId}`}>
-            <Outlet />
-          </DelayedActionProvider>
+          <UserPreferencesProvider
+            key={`${currentUserId}:${currentTeamId}`}
+            userId={currentUserId!}
+            teamId={currentTeamId!}
+          >
+            <DelayedActionProvider key={`${currentUserId}:${currentTeamId}`}>
+              <Outlet />
+            </DelayedActionProvider>
+          </UserPreferencesProvider>
         </RootLayoutContext>
       </div>
 
