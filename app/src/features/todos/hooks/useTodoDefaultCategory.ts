@@ -1,8 +1,10 @@
-import { useAtom } from "jotai";
-import { useMemo } from "react";
-import { createTodoDefaultCategoryAtom } from "../model/defaultTodoCategory";
+import { useUserPreferences } from "../../../shared/state/userPreferences";
+import type { TodoCategorySelection } from "../../../contracts/user-preferences";
 
-export function useTodoDefaultCategory(identityKey: string | null) {
-  const preference = useMemo(() => createTodoDefaultCategoryAtom(identityKey), [identityKey]);
-  return useAtom(preference);
+export function useTodoDefaultCategory() {
+  const { preferences, ready, update } = useUserPreferences();
+  return [
+    ready ? preferences.defaultTodoCategory : undefined,
+    (selection: TodoCategorySelection) => update({ defaultTodoCategory: selection }),
+  ] as const;
 }
