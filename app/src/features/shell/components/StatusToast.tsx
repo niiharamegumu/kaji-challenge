@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 
 type Props = {
   message: string;
-  onDismiss: () => void;
+  onDismiss?: () => void;
   actionLabel?: string;
   onAction?: () => void;
   autoDismiss?: boolean;
@@ -33,7 +33,7 @@ export function StatusToast({
     }
 
     const timer = window.setTimeout(() => {
-      onDismissRef.current();
+      onDismissRef.current?.();
     }, 5000);
 
     return () => {
@@ -70,14 +70,16 @@ export function StatusToast({
             {actionLabel}
           </button>
         ) : null}
-        <button
-          type="button"
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-secondary transition-colors duration-200 hover:bg-surface-subtle"
-          onClick={onDismiss}
-          aria-label="ステータスメッセージを閉じる"
-        >
-          <X size={16} aria-hidden="true" />
-        </button>
+        {onDismiss ? (
+          <button
+            type="button"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-secondary transition-colors duration-200 hover:bg-surface-subtle"
+            onClick={onDismiss}
+            aria-label="ステータスメッセージを閉じる"
+          >
+            <X size={16} aria-hidden="true" />
+          </button>
+        ) : null}
       </div>
     </output>
   );
