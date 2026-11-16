@@ -69,6 +69,14 @@ const sharedPageRequests = [
     body: { expectedVersion: 0 },
   },
 ];
+const preferenceRequests = [
+  { operation: "getMePreferences" },
+  { operation: "patchMePreferences", body: { todoCompletionDelayMs: 5000 } },
+  {
+    operation: "initializeMePreferences",
+    body: { todoCompletionDelayMs: 3000, defaultTodoCategory: { kind: "all" } },
+  },
+];
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -91,6 +99,7 @@ it("rejects malformed inputs before opening the runtime", async () => {
 
 it.each([
   ...sharedPageRequests,
+  ...preferenceRequests,
   { operation: "getMe" },
   { operation: "postTodoCategoriesReorder", body: { categoryIds: [null] } },
   {
@@ -123,7 +132,7 @@ it.each<Record<string, string>>([
   expect(mocks.session).not.toHaveBeenCalled();
 });
 
-it.each(sharedPageRequests)(
+it.each([...sharedPageRequests, ...preferenceRequests])(
   "rejects other-origin shared page operations before authentication: $operation",
   async (data) => {
     mocks.headers = new Headers({ origin: "https://other.example.com" });
