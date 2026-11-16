@@ -53,6 +53,23 @@ export function releaseSharedPageLease(
 export function getMe(options?: CallOptions): Promise<ApiResult<M.MeResponse>> {
   return callOperation("getMe", { params: {} }, 200, options);
 }
+export function getMePreferences(
+  options?: CallOptions,
+): Promise<ApiResult<M.UserPreferences | null>> {
+  return callOperation("getMePreferences", { params: {} }, 200, options);
+}
+export function initializeMePreferences(
+  body: M.UserPreferences,
+  options?: CallOptions,
+): Promise<ApiResult<M.UserPreferences>> {
+  return callOperation("initializeMePreferences", { params: {}, body }, 200, options);
+}
+export function patchMePreferences(
+  body: M.UpdateUserPreferences,
+  options?: CallOptions,
+): Promise<ApiResult<M.UserPreferences>> {
+  return callOperation("patchMePreferences", { params: {}, body }, 200, options);
+}
 export function patchMeNickname(
   body: M.UpdateNicknameRequest,
   options?: CallOptions,
