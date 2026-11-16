@@ -2,7 +2,7 @@
 
 ## 入口
 
-通常の全41 operationは `operations.functions.ts` の共通入口を通る。Zod入力検証、Origin検証、Better Auth認証の後、検証済みuserId/sessionIdだけで `forSession` を作る。Applicationは `ResolveMembershipByUserID` の1つのSQLで処理前の認証・固定済み所属の検査と現在の所属取得を行い、`forMember` で固定する。所属が返らない場合も認証失効と未所属を区別し、401/403で拒否する。userId/teamIdをHTTPヘッダー、params、bodyから認可情報として採用しない。
+通常のoperationは `operations.functions.ts` の共通入口を通る。Zod入力検証、Origin検証、Better Auth認証の後、検証済みuserId/sessionIdだけで `forSession` を作る。Applicationは `ResolveMembershipByUserID` の1つのSQLで処理前の認証・固定済み所属の検査と現在の所属取得を行い、`forMember` で固定する。所属が返らない場合も認証失効と未所属を区別し、401/403で拒否する。userId/teamIdをHTTPヘッダー、params、bodyから認可情報として採用しない。
 
 業務SQLは現在所属・認証と対象行のteamIdを同じ文で照合する。通常セッションは本人・セッションID・DB上の有効期限を確認する。MCPは独立した連携の所有者・grant・scope・期限・失効を確認し、Cookieセッションとは結び付けない。検証済みprincipalのaccess token期限もRepositoryへ渡し、連携期限とともにSQLの実行時時計で確認する。1ユーザー1所属、owner/member以外のrole禁止は既存DB制約に従う。
 
@@ -74,3 +74,8 @@ Applicationは応答前にも認証と期待する所属を再確認し、所属
 検証したのはawait中・batch送信待ち・書込後の応答前の失効であり、本番で長時間実行中のbatchの全statement間に期限を挟む再現ではない。[SQLiteの現在時刻](https://www.sqlite.org/lang_datefunc.html)は同じsqlite3_step内で一定で、batch全体の時計固定を保証する記述ではない。[Workersの時計](https://developers.cloudflare.com/workers/runtime-apis/performance/)にも本番ではI/O後に進む制約がある。したがって認可条件は各SQLが観測した時刻の判定であり、batch完了時刻までの有効性や期限超過による自動rollbackは保証しない。特に複数文の途中で時計が期限を越える場合の部分的な業務変更は未検証であり、厳密な全変更の拒否が必要なら別途設計する。SQLエラーによるbatch全体rollbackは既存テストで検証する。応答前に失効した場合は401を返すが、既に保存済みの変更は残り、自動再送しない。
 
 認証・所属なしのRepositoryはCron/bootstrap/OAuth等のtrusted内部処理用に残す。将来の入口が誤ってこれを業務アクセスへ渡すリスクは型だけでは排除していないため、入口追加時に検証済みidentityを引き継ぐレビューと否定テストを必須とする。
+
+
+## ユーザー設定
+
+getMePreferences / initializeMePreferences / patchMePreferencesは通常のsession/origin/所属検査を通す。params/bodyでuserId/teamIdを受け取らない。GetUserPreferencesとSaveUserPreferencesはuser_idと検証済み本人、セッション有効期限・失効、固定済み所属をSQLで照合する。データはユーザー単位で保持するが、古い所属で開始した処理はチーム変更後に拒否する。明示的な初期カテゴリー変更は現在のチームのIDのみ許可する。検証はuser-preferences.test.ts・team-access.test.ts・operations-functions.test.ts。
