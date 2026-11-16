@@ -23,6 +23,17 @@ async function selectSettingsCategory(page: Page, name: string) {
     .click();
 }
 
+async function savePreferences(page: Page, action: () => Promise<unknown>) {
+  const saved = page.waitForResponse(
+    (response) =>
+      response.url().includes("/_serverFn/") &&
+      (response.request().postData()?.includes("patchMePreferences") ?? false),
+  );
+  await action();
+  expect((await saved).ok()).toBe(true);
+  await expect(page.getByRole("status").filter({ hasText: "設定を保存中" })).toHaveCount(0);
+}
+
 async function expectFocusKeepsFrame(page: Page, control: Locator, surface = control) {
   await expect(control).toBeVisible();
   await page.evaluate(() => {
@@ -345,11 +356,13 @@ test(
     }).toPass({ timeout: 5_000 });
     await page.screenshot({ path: testInfo.outputPath("calendar.png"), fullPage: true });
     await page.goto("/settings");
-    await expect(page.getByText("テストユーザー", { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "設定", exact: true })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "ニックネーム", exact: true })).toBeVisible();
     expect(new URL(page.url()).pathname).toBe("/settings");
     await page.goto("/invites");
     await expect(page).toHaveURL("http://localhost:5194/settings");
-    await expect(page.getByText("テストユーザー", { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "設定", exact: true })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "ニックネーム", exact: true })).toBeVisible();
     await page.goto("/penalties");
     await expect(page.getByRole("heading", { name: /ペナルティ/ }).first()).toBeVisible();
     expect(new URL(page.url()).pathname).toBe("/penalties");
@@ -362,7 +375,7 @@ test(
 test(
   "opens the saved default category on home and ToDo without changing category order",
   { tag: ["@todos", "@home", "@settings"] },
-  async ({ page, context }, testInfo) => {
+  async ({ page, context, browser }, testInfo) => {
     await authenticate(context, todoDefaultToken);
     await page.goto("/todo-categories");
     for (const name of ["仕事", "買い物"]) {
@@ -373,7 +386,40 @@ test(
     await page.goto("/settings");
     await selectSettingsCategory(page, "ToDo");
     const select = page.getByRole("combobox", { name: "最初に表示するToDoカテゴリー" });
-    await select.selectOption({ label: "買い物" });
+    await savePreferences(page, () => select.selectOption({ label: "買い物" }));
+    await savePreferences(page, () =>
+      page.getByLabel("ToDo完了の取り消し猶予").selectOption("5000"),
+    );
+    await selectSettingsCategory(page, "表示");
+    await page.getByText("ダーク", { exact: true }).click();
+    // ToDo preferences follow the user; each browser keeps its own theme.
+    const secondContext = await browser.newContext({ baseURL: "http://localhost:5194" });
+    try {
+      await authenticate(secondContext, todoDefaultToken);
+      const secondPage = await secondContext.newPage();
+      await secondPage.goto("/settings");
+      await selectSettingsCategory(secondPage, "表示");
+      await expect(secondPage.getByRole("radio", { name: "システム", exact: true })).toBeChecked();
+      await secondPage.getByText("ライト", { exact: true }).click();
+      await expect(secondPage.locator("html")).toHaveAttribute("data-theme", "light");
+      await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+      await selectSettingsCategory(secondPage, "ToDo");
+      await expect(secondPage.getByLabel("ToDo完了の取り消し猶予")).toHaveValue("5000");
+      await expect(
+        secondPage.getByLabel("最初に表示するToDoカテゴリー").locator("option:checked"),
+      ).toHaveText("買い物");
+      // Changing accounts in this browser must not reuse the first user's cache.
+      await authenticate(secondContext, outsiderToken);
+      await secondPage.reload();
+      await selectSettingsCategory(secondPage, "ToDo");
+      await expect(secondPage.getByLabel("ToDo完了の取り消し猶予")).toBeEnabled();
+      await expect(secondPage.getByLabel("ToDo完了の取り消し猶予")).toHaveValue("3000");
+      await expect(secondPage.getByLabel("最初に表示するToDoカテゴリー")).toHaveValue("all");
+      await selectSettingsCategory(secondPage, "表示");
+      await expect(secondPage.getByRole("radio", { name: "ライト", exact: true })).toBeChecked();
+    } finally {
+      await secondContext.close();
+    }
     await page.reload();
     await selectSettingsCategory(page, "ToDo");
     await expect(select.locator("option:checked")).toHaveText("買い物");
@@ -413,7 +459,7 @@ test(
     );
     await page.goto("/settings");
     await selectSettingsCategory(page, "ToDo");
-    await select.selectOption({ label: "未分類" });
+    await savePreferences(page, () => select.selectOption({ label: "未分類" }));
     await page.goto("/todos");
     await expect(filter.getByRole("button", { name: "未分類", exact: true })).toHaveAttribute(
       "aria-pressed",
@@ -421,7 +467,7 @@ test(
     );
     await page.goto("/settings");
     await selectSettingsCategory(page, "ToDo");
-    await select.selectOption({ label: "すべて" });
+    await savePreferences(page, () => select.selectOption({ label: "すべて" }));
     await page.goto("/");
     await expect(filter.getByRole("button", { name: "すべて", exact: true })).toHaveAttribute(
       "aria-pressed",
@@ -533,21 +579,24 @@ test(
   },
 );
 test(
-  "persists the browser's ToDo undo delay and uses it on home and ToDo pages",
+  "migrates and synchronizes the user's ToDo undo delay across browsers",
   { tag: ["@todos", "@home", "@settings"] },
   async ({ page, context, browser }, testInfo) => {
+    await page.goto("/");
+    await page.evaluate(() => localStorage.setItem("kaji:todo-completion-delay-ms:v1", "1700"));
     await authenticate(context, todoDelayToken);
     await page.goto("/settings");
     await selectSettingsCategory(page, "ToDo");
     const select = page.getByRole("combobox", { name: "ToDo完了の取り消し猶予" });
     const chooseDelay = async (seconds: number) => {
-      await select.selectOption(String(seconds * 1_000));
+      await savePreferences(page, () => select.selectOption(String(seconds * 1_000)));
       await expect(select).toHaveValue(String(seconds * 1_000));
     };
-    await expect(select).toHaveValue("3000");
+    await expect(select).toBeEnabled();
+    await expect(select).toHaveValue("2000");
     await expect(select.locator("option")).toHaveText(["1秒", "2秒", "3秒", "4秒", "5秒"]);
-    // Existing browser profiles can still hold a fractional-second slider setting.
-    await page.evaluate(() => localStorage.setItem("kaji:todo-completion-delay-ms:v1", "1700"));
+    // A stale legacy value must never overwrite the initialized account setting.
+    await page.evaluate(() => localStorage.setItem("kaji:todo-completion-delay-ms:v1", "1000"));
     await page.reload();
     await selectSettingsCategory(page, "ToDo");
     await expect(select).toHaveValue("2000");
@@ -574,14 +623,16 @@ test(
     const delayHelpLabel = "取り消し猶予の説明";
     await page.getByRole("button", { name: delayHelpLabel }).click();
     const delayHelp = page.getByRole("dialog", { name: delayHelpLabel });
-    await expect(delayHelp.getByText("別の端末やブラウザーには引き継がれません。")).toBeVisible();
+    await expect(
+      delayHelp.getByText("同じユーザーでログインした別の端末やブラウザーでも使えます。"),
+    ).toBeVisible();
     await delayHelp.getByRole("button", { name: "閉じる", exact: true }).click();
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true);
     await page.screenshot({ path: testInfo.outputPath("todo-delay-settings.png"), fullPage: true });
 
-    // A separate browser profile for the same account must keep the default.
+    // A separate browser profile for the same account retrieves the saved delay.
     const otherContext = await browser.newContext({ baseURL: "http://localhost:5194" });
     try {
       await authenticate(otherContext, todoDelayToken);
@@ -589,7 +640,7 @@ test(
       await otherPage.goto("/settings");
       await selectSettingsCategory(otherPage, "ToDo");
       await expect(otherPage.getByRole("combobox", { name: "ToDo完了の取り消し猶予" })).toHaveValue(
-        "3000",
+        "5000",
       );
     } finally {
       await otherContext.close();
