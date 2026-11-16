@@ -7,6 +7,7 @@ type QueryInvalidator = Pick<QueryClient, "invalidateQueries">;
 
 export const teamStateRefreshQueryKeys = [
   queryKeys.me,
+  queryKeys.userPreferences,
   queryKeys.pushSubscriptions,
   queryKeys.teamMembers,
   queryKeys.currentInvite,
@@ -23,6 +24,7 @@ export const teamStateRefreshQueryKeys = [
 ] as const;
 
 const changedQueryKeys = {
+  preferences: [queryKeys.userPreferences],
   profile: [queryKeys.me, queryKeys.teamMembers, queryKeys.home, queryKeys.monthlySummary],
   membership: teamStateRefreshQueryKeys,
   invite: [queryKeys.currentInvite],
