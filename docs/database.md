@@ -4,6 +4,7 @@ Cloudflare D1に22テーブルを持つ。ユーザー情報の正本はBetter A
 
 | 領域 | テーブル | 残す理由 |
 | --- | --- | --- |
+| ユーザー設定 | `user_preferences` | ユーザー単位のToDo取消猶予・初期カテゴリー |
 | ユーザー | `auth_user` | ID・メール・名前・作成日時と、アプリ用nickname/color_hexを一元管理 |
 | Google連携 | `auth_account` | Googleのsubject、暗号化したOAuthトークン。userとは別の外部認証アカウント |
 | セッション | `auth_session` | Cookieに対応するログイン状態、失効・30日・最大5件の制御 |
@@ -80,3 +81,8 @@ ToDoは `todo_items.category_id` でカテゴリーを参照する。未分類�
 連携はauth_userの本人ID・clientId・resource・同意scope・provider grant ID・有効期限・解除日時を持つ。grant IDは最初の認可コード交換時だけ原子的に結合し、同じコードの並行交換を拒否する。同意claimはhandleのSHA-256だけを保存し、本人と現在のauth_session・期限と未消費を条件に単回UPDATEで消費する。ユーザー/セッション削除はFKで反映する。認可コードとbearer/refresh token自体はD1へ保存せず、workers-oauth-providerのKVで管理する。
 
 D1連携解除はKV失効より先に行う。access tokenがKVで一時的に有効でも、Applicationと書き込みSQLのD1検査で拒否する。D1とKVの分散transactionは持たず、失敗時は安全側に拒否して新しい同意か解除の再実行で回復する。放棄された同意claim・期限切れ連携の保持期間と定期削除は、運用量に応じて別途決める。
+
+
+## ユーザー設定
+
+`0013_user_preferences.sql` は `auth_user.id` を参照する `user_preferences` を追加する。主キーはuser_idのみで、チーム列は持たない。ユーザー削除時はCASCADE。todo_completion_delay_msは1000〜5000の1000刻み、default_todo_categoryはall/unclassified/categoryのJSON。入力契約とSQL制約で検証する。未登録は行がない状態として扱い、GETで行を作らない。初回移行は認可済みINSERT SELECTとON CONFLICT DO NOTHINGで既存設定を保護する。通常更新は指定された列だけ更新し、カテゴリーの適用可否は現在のチームで判定する。ニックネーム・表示カラーはauth_userのまま維持する。
