@@ -1,4 +1,5 @@
 import type { WeeklyRequirement } from "../domain/task-requirements";
+import type { UserPreferences, UpdateUserPreferences } from "../../contracts/user-preferences";
 import type {
   SharedPage,
   SharedPageSummary,
@@ -500,6 +501,12 @@ export type TodoAssistActionResult =
   | { kind: "list"; items: TodoItem[] };
 
 export interface Repository {
+  GetUserPreferences(userId: string): Promise<UserPreferences | null>;
+  SaveUserPreferences(
+    userId: string,
+    preferences: UpdateUserPreferences,
+    initializeOnly?: boolean,
+  ): Promise<UserPreferences>;
   ListSharedPages(teamId: string): Promise<SharedPageSummary[]>;
   GetSharedPage(id: string): Promise<SharedPage>;
   CreateSharedPage(arg: {
