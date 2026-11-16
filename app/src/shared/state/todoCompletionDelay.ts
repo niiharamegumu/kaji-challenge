@@ -1,4 +1,5 @@
 import { atom } from "jotai";
+import { activeUserPreferencesAtom } from "./userPreferences";
 
 export const TODO_COMPLETION_DELAY_STORAGE_KEY = "kaji:todo-completion-delay-ms:v1";
 const DEFAULT_TODO_COMPLETION_DELAY_MS = 3_000;
@@ -59,7 +60,7 @@ delayValueAtom.onMount = (setValue) => {
 };
 
 export const todoCompletionDelayAtom = atom(
-  (get) => get(delayValueAtom),
+  (get) => get(activeUserPreferencesAtom)?.todoCompletionDelayMs ?? get(delayValueAtom),
   (_get, set, value: number) => {
     const delayMs = validatedDelay(value);
     set(delayValueAtom, delayMs);
