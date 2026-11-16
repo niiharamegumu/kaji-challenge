@@ -1,23 +1,25 @@
-import { notifyPWARefresh } from "./pwa";
+import { clearPWARefresh, notifyPWARefresh } from "./pwa";
 
 const SW_URL = "/sw.js";
 const REFRESH_EVENT = "controllerchange";
 let registrationScheduled = false;
 let swRegistrationPromise: Promise<ServiceWorkerRegistration> | null = null;
+const updateChecks = new WeakMap<ServiceWorkerRegistration, Promise<void>>();
 
-const activateWaitingWorker = async (
+const activateWorker = async (
   registration: ServiceWorkerRegistration,
+  worker: ServiceWorker,
   options?: { reload?: boolean },
 ) => {
-  const waiting = registration.waiting;
-  if (waiting) {
+  await waitForInstallation(worker);
+  if (navigator.serviceWorker.controller !== worker) {
     await new Promise<void>((resolve, reject) => {
       const cleanup = () => {
         clearTimeout(timer);
         navigator.serviceWorker.removeEventListener(REFRESH_EVENT, onControllerChange);
       };
       const onControllerChange = () => {
-        if (navigator.serviceWorker.controller !== waiting) return;
+        if (navigator.serviceWorker.controller !== worker) return;
         cleanup();
         resolve();
       };
@@ -27,7 +29,9 @@ const activateWaitingWorker = async (
       }, 30_000);
       navigator.serviceWorker.addEventListener(REFRESH_EVENT, onControllerChange);
       try {
-        waiting.postMessage({ type: "SKIP_WAITING" });
+        if (registration.waiting === worker) worker.postMessage({ type: "SKIP_WAITING" });
+        else if (registration.active !== worker) throw new Error("Update is no longer available");
+        onControllerChange();
       } catch (error) {
         cleanup();
         reject(error);
@@ -40,32 +44,59 @@ const activateWaitingWorker = async (
   }
 };
 
-function notifyIfWaiting(registration: ServiceWorkerRegistration) {
-  if (!registration.waiting || !registration.active) return false;
-  notifyPWARefresh(() => activateWaitingWorker(registration));
+function updateCandidate(registration: ServiceWorkerRegistration) {
+  if (!registration.active) return null;
+  return (
+    [registration.installing, registration.waiting].find(
+      (worker) => worker && (worker.state === "installing" || worker.state === "installed"),
+    ) ?? null
+  );
+}
+
+function notifyIfUpdateAvailable(registration: ServiceWorkerRegistration) {
+  const worker = updateCandidate(registration);
+  if (!worker) return false;
+  notifyPWARefresh(() => activateWorker(registration, worker));
   return true;
 }
 
+function updateRegistration(registration: ServiceWorkerRegistration) {
+  let pending = updateChecks.get(registration);
+  if (!pending) {
+    pending = registration
+      .update()
+      .then(() => {})
+      .finally(() => updateChecks.delete(registration));
+    updateChecks.set(registration, pending);
+  }
+  return pending;
+}
+
 const bindRegistrationListeners = (registration: ServiceWorkerRegistration) => {
+  const watchedWorkers = new WeakSet<ServiceWorker>();
   const checkForUpdates = () => {
-    void registration.update().catch(() => {
+    void updateRegistration(registration).catch(() => {
       // Offline or transient network failures are expected here.
     });
   };
 
   const watchInstalling = () => {
     const installing = registration.installing;
-    if (!installing) return;
+    if (!installing || watchedWorkers.has(installing)) return;
+    watchedWorkers.add(installing);
+    // Update discovery precedes precaching. Announce it without waiting for every asset.
+    notifyIfUpdateAvailable(registration);
     const onStateChange = () => {
       if (installing.state === "installing") return;
       installing.removeEventListener("statechange", onStateChange);
-      notifyIfWaiting(registration);
+      if (installing.state === "redundant" && !notifyIfUpdateAvailable(registration))
+        clearPWARefresh();
     };
     installing.addEventListener("statechange", onStateChange);
   };
   registration.addEventListener("updatefound", watchInstalling);
   watchInstalling();
-  notifyIfWaiting(registration);
+  notifyIfUpdateAvailable(registration);
   if (!registration.installing && !registration.waiting) checkForUpdates();
 
   window.addEventListener("focus", checkForUpdates);
@@ -78,7 +109,7 @@ const bindRegistrationListeners = (registration: ServiceWorkerRegistration) => {
 
 function registerOnce() {
   swRegistrationPromise ??= navigator.serviceWorker
-    .register(SW_URL)
+    .register(SW_URL, { updateViaCache: "none" })
     .then((registration) => {
       bindRegistrationListeners(registration);
       return registration;
@@ -115,12 +146,10 @@ function waitForInstallation(worker: ServiceWorker) {
 export async function checkForPWAUpdate(): Promise<"unavailable" | "available" | "current"> {
   if (import.meta.env.DEV || !("serviceWorker" in navigator)) return "unavailable";
   const registration = await registerOnce();
-  if (notifyIfWaiting(registration)) return "available";
+  if (notifyIfUpdateAvailable(registration)) return "available";
   if (!navigator.onLine) throw new Error("Cannot check for updates offline");
-  if (!registration.installing) await registration.update();
-  const installing = registration.installing;
-  if (installing) await waitForInstallation(installing);
-  return notifyIfWaiting(registration) ? "available" : "current";
+  if (!registration.installing) await updateRegistration(registration);
+  return notifyIfUpdateAvailable(registration) ? "available" : "current";
 }
 
 export const initializePWA = () => {
@@ -163,12 +192,12 @@ export const ensureLatestPWARegistration = async () => {
     return null;
   }
   try {
-    await registration.update();
+    await updateRegistration(registration);
   } catch {
     // Offline or transient network failures are expected here.
   }
   if (registration.waiting) {
-    await activateWaitingWorker(registration, { reload: false });
+    await activateWorker(registration, registration.waiting, { reload: false });
     try {
       return await navigator.serviceWorker.ready;
     } catch {
