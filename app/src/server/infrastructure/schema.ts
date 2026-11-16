@@ -11,6 +11,23 @@ import {
 } from "drizzle-orm/sqlite-core";
 import { session, user } from "./auth-schema";
 import type { SharedPageDocument } from "../../contracts/shared-pages";
+import type { UserPreferences } from "../../contracts/user-preferences";
+
+export const userPreferences = sqliteTable(
+  "user_preferences",
+  {
+    user_id: text("user_id").primaryKey().notNull(),
+    todo_completion_delay_ms: integer("todo_completion_delay_ms")
+      .$type<UserPreferences["todoCompletionDelayMs"]>()
+      .notNull()
+      .default(3000),
+    default_todo_category: text("default_todo_category", { mode: "json" })
+      .$type<UserPreferences["defaultTodoCategory"]>()
+      .notNull()
+      .default(sql`'{"kind":"all"}'`),
+  },
+  (t) => [foreignKey({ columns: [t.user_id], foreignColumns: [user.id] }).onDelete("cascade")],
+);
 
 // Runtime mapping of the deployed D1 schema. SQL migrations remain the DDL source of truth.
 export const mcpConnections = sqliteTable(
