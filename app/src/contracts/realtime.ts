@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const teamChangeScopeSchema = z.enum([
   "profile",
+  "preferences",
   "membership",
   "invite",
   "tasks",
