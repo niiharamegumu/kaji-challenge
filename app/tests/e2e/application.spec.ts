@@ -233,18 +233,56 @@ test(
     await check.click();
     await expect(page.getByText("最新バージョンです。")).toBeVisible();
 
-    // A different script URL installs a real waiting worker at the same scope.
-    await page.evaluate(() => navigator.serviceWorker.register("/sw.js?e2e=next").then(() => {}));
-    const toast = page.getByTestId("status-message").filter({ hasText: "新しいバージョン" });
-    await expect(toast).toBeVisible();
-    await toast.getByRole("button", { name: "ステータスメッセージを閉じる" }).click();
-    await expect(toast).toHaveCount(0);
-    await check.click();
-    await expect(toast).toBeVisible();
-    await Promise.all([
-      page.waitForEvent("load"),
-      toast.getByRole("button", { name: "更新する" }).click(),
-    ]);
+    // Keep a real update installing by holding its shell download. Detection must
+    // not depend on this gate being released or all precached assets being ready.
+    let releaseDownload!: () => void;
+    const downloadGate = new Promise<void>((resolve) => {
+      releaseDownload = resolve;
+    });
+    let downloadStarted = false;
+    await context.route("**/_shell.html*", async (route) => {
+      if (route.request().serviceWorker()) {
+        downloadStarted = true;
+        await downloadGate;
+      }
+      await route.continue();
+    });
+    try {
+      await page.evaluate(async () => {
+        for (const name of await caches.keys()) {
+          if (name.includes("precache")) await caches.delete(name);
+        }
+        await navigator.serviceWorker.register("/sw.js?e2e=next");
+      });
+      await expect.poll(() => downloadStarted).toBe(true);
+      const toast = page.getByTestId("status-message").filter({ hasText: "新しいバージョン" });
+      await expect(toast).toBeVisible();
+      await toast.getByRole("button", { name: "ステータスメッセージを閉じる" }).click();
+      await expect(toast).toHaveCount(0);
+      await check.click();
+      await expect(toast).toBeVisible();
+      await expect(check).toBeEnabled();
+      expect(
+        await page.evaluate(
+          async () => (await navigator.serviceWorker.getRegistration())?.installing?.state,
+        ),
+      ).toBe("installing");
+      await toast.getByRole("button", { name: "更新する" }).click();
+      const preparing = page
+        .getByTestId("status-message")
+        .filter({ hasText: "更新を準備しています" });
+      await expect(preparing).toBeVisible();
+      await expect(preparing.getByRole("button")).toHaveCount(0);
+      expect(
+        await page.evaluate(() => navigator.serviceWorker.controller?.scriptURL),
+      ).not.toContain("e2e=next");
+      const reloaded = page.waitForEvent("load");
+      releaseDownload();
+      await reloaded;
+    } finally {
+      releaseDownload();
+      await context.unrouteAll({ behavior: "wait" });
+    }
     await selectSettingsCategory(page, "アプリ");
     await expect(check).toBeVisible();
     expect(await page.evaluate(() => navigator.serviceWorker.controller?.scriptURL)).toContain(
