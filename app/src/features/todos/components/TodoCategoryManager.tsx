@@ -78,18 +78,13 @@ export function TodoCategoryManager({ setStatus }: { setStatus: (message: string
             disabled={!name.trim() || pending}
             className="min-h-10 rounded-lg bg-action px-3 text-sm text-on-action disabled:opacity-50"
           >
-            {createCategory.isPending ? "追加中…" : "カテゴリーを追加"}
+            カテゴリーを追加
           </button>
         </fieldset>
       </form>
       {createCategory.isError || removeCategory.isError || reorderCategories.isError ? (
         <p role="alert" className="mt-2 text-sm text-danger">
           保存に失敗しました。もう一度お試しください。
-        </p>
-      ) : null}
-      {reorderCategories.isPending ? (
-        <p role="status" className="mt-2 text-xs text-muted">
-          並び順を保存中…
         </p>
       ) : null}
       <DndContext
