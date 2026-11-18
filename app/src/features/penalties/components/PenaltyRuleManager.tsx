@@ -169,7 +169,7 @@ export function PenaltyRuleManager({
                           disabled={!canSave || isUpdating}
                           aria-busy={isUpdating}
                         >
-                          <span>{isUpdating ? "保存中…" : "保存"}</span>
+                          <span>保存</span>
                         </button>
                         <button
                           type="button"
