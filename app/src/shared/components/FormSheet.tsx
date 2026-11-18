@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { LoaderCircle } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useFormPresence } from "../state/overlay";
 
@@ -95,16 +94,8 @@ export function FormSheet({
             disabled={submitDisabled || isSubmitting}
             aria-busy={isSubmitting}
           >
-            {isSubmitting ? (
-              <LoaderCircle
-                size={16}
-                className="animate-spin motion-reduce:animate-none"
-                aria-hidden="true"
-              />
-            ) : (
-              submitIcon
-            )}
-            <span>{isSubmitting ? "保存中…" : submitLabel}</span>
+            {submitIcon}
+            <span>{submitLabel}</span>
           </button>
         </div>
       </dialog>

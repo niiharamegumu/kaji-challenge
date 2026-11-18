@@ -219,9 +219,10 @@ describe("SettingsPage", () => {
       await user.type(input, value);
       await user.click(within(field).getByRole("button", { name: "保存" }));
 
-      const saving = within(field).getByRole("button", { name: "保存中..." });
+      const saving = within(field).getByRole("button", { name: "保存" });
       expect(input).toBeDisabled();
       expect(saving).toBeDisabled();
+      expect(screen.queryByText(/保存中/)).not.toBeInTheDocument();
       await user.click(saving);
       expect(mutation).toHaveBeenCalledTimes(1);
 

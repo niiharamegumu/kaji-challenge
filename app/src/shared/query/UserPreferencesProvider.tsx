@@ -12,6 +12,7 @@ import {
   type UpdateUserPreferences,
 } from "../../contracts/user-preferences";
 import { activeUserPreferencesAtom, UserPreferencesContext } from "../state/userPreferences";
+import { statusMessageAtom } from "../state/status";
 import {
   readLegacyUserPreferences,
   readUserPreferencesCache,
@@ -36,6 +37,7 @@ export function UserPreferencesProvider({
   const queryClient = useQueryClient();
   const queryKey = [...queryKeys.userPreferences, userId];
   const setActivePreferences = useSetAtom(activeUserPreferencesAtom);
+  const setStatus = useSetAtom(statusMessageAtom);
   const localAtom = useMemo(() => {
     const value = atom<{ cached: UserPreferences | null; initial: UserPreferences } | null>(null);
     // Storage is an external source: subscribe after mount, never during SSR/hydration.
@@ -67,6 +69,11 @@ export function UserPreferencesProvider({
     },
     onSuccess: (preferences) => {
       queryClient.setQueryData(queryKey, preferences);
+    },
+    onError: (_error, command) => {
+      if (controller.current?.signal.aborted || command.kind !== "patch") return;
+      setStatus("設定を保存できませんでした。もう一度変更してください。");
+      void queryClient.invalidateQueries({ queryKey });
     },
     onSettled: () => {
       submitting.current = false;
@@ -132,11 +139,12 @@ export function UserPreferencesProvider({
         ready,
         writable: query.data != null && !save.isPending,
         saving: save.isPending,
-        error: save.isError
-          ? "設定を保存できませんでした。再取得してから、もう一度変更してください。"
-          : query.isError
-            ? "設定を取得できませんでした。接続を確認して再取得してください。"
-            : null,
+        error:
+          save.isError && save.variables.kind === "initialize"
+            ? "設定を保存できませんでした。再取得してから、もう一度変更してください。"
+            : query.isError
+              ? "設定を取得できませんでした。接続を確認して再取得してください。"
+              : null,
         update: (patch) => {
           if (query.data == null || submitting.current || save.isPending) return;
           submitting.current = true;

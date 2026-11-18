@@ -31,6 +31,7 @@ async function savePreferences(page: Page, action: () => Promise<unknown>) {
   );
   await action();
   expect((await saved).ok()).toBe(true);
+  await expect(page.getByRole("combobox", { name: "ToDo完了の取り消し猶予" })).toBeEnabled();
   await expect(page.getByRole("status").filter({ hasText: "設定を保存中" })).toHaveCount(0);
 }
 

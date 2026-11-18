@@ -73,7 +73,8 @@ it("renames by ID, blocks operations while saving and displays the returned orde
   expect(api.rename).toHaveBeenCalledWith(cid("買い物"), { name: "買い出し" });
   expect(input).toBeDisabled();
   expect(within(dialog).getByRole("button", { name: "閉じる" })).toBeDisabled();
-  expect(within(dialog).getByRole("button", { name: "保存中…" })).toBeDisabled();
+  expect(within(dialog).getByRole("button", { name: "保存" })).toBeDisabled();
+  expect(screen.queryByText(/保存中/)).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "仕事 を編集" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "買い物 を削除" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "買い物 をドラッグして並び替え" })).toBeDisabled();
@@ -136,6 +137,7 @@ it("shows the pending order, blocks mutations during save, then keeps the server
   expect(screen.getByRole("button", { name: "買い物 を削除" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "仕事 をドラッグして並び替え" })).toBeDisabled();
   expect(screen.getByLabelText("新しいカテゴリー")).toBeDisabled();
+  expect(screen.queryByText(/保存中/)).not.toBeInTheDocument();
   await drag(`category:${cid("買い物")}`, "unclassified");
   expect(api.reorder).toHaveBeenCalledTimes(1);
   await act(async () => resolve({ data: { categories: order("買い物", "仕事", null) } }));

@@ -5,7 +5,7 @@ import {
   focusManager,
   onlineManager,
 } from "@tanstack/react-query";
-import { Provider, useAtomValue } from "jotai";
+import { Provider, useAtom, useAtomValue } from "jotai";
 import { StrictMode } from "react";
 import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -22,6 +22,8 @@ import { ThemeSync } from "../../shared/state/ThemeSync";
 import { todoCompletionDelayAtom } from "../../shared/state/todoCompletionDelay";
 import { userPreferencesStorageKey } from "../../shared/state/userPreferencesCache";
 import { UserPreferencesProvider } from "../../shared/query/UserPreferencesProvider";
+import { statusMessageAtom } from "../../shared/state/status";
+import { StatusToast } from "../../features/shell/components/StatusToast";
 
 const api = vi.hoisted(() => ({
   get: vi.fn(),
@@ -42,6 +44,10 @@ const categoryId = crypto.randomUUID();
 function AppliedDelay() {
   return <output data-testid="delay">{useAtomValue(todoCompletionDelayAtom)}</output>;
 }
+function Status() {
+  const [message, setMessage] = useAtom(statusMessageAtom);
+  return message ? <StatusToast message={message} onDismiss={() => setMessage("")} /> : null;
+}
 function Scene({ userId = "user", teamId = "team" }: { userId?: string; teamId?: string }) {
   return (
     <StrictMode>
@@ -53,6 +59,7 @@ function Scene({ userId = "user", teamId = "team" }: { userId?: string; teamId?:
             <TodoCompletionSettings />
             <TodoDefaultCategorySettings />
             <AppliedDelay />
+            <Status />
           </UserPreferencesProvider>
         </Provider>
       </QueryClientProvider>
@@ -168,32 +175,44 @@ it("saves both ToDo fields independently and preserves the server values after r
   expect(category()).toHaveValue("category:" + categoryId);
 });
 
-it("blocks duplicate saves, rolls back failed optimistic values and allows a manual retry", async () => {
-  let reject!: (reason: Error) => void;
-  api.patch.mockImplementationOnce(
-    () =>
-      new Promise((_done, fail) => {
-        reject = fail;
-      }),
-  );
-  render(<Scene />);
-  await ready();
-  fireEvent.change(delay(), { target: { value: "5000" } });
-  await waitFor(() => expect(delay()).toHaveValue("5000"));
-  expect(delay()).toBeDisabled();
-  expect(readCache().todoCompletionDelayMs).toBe(3000);
-  fireEvent.change(delay(), { target: { value: "1000" } });
-  await waitFor(() => expect(api.patch).toHaveBeenCalledTimes(1));
-  await act(async () => reject(new Error("offline")));
-  await ready();
-  expect(delay()).toHaveValue("3000");
-  expect(screen.getAllByRole("alert")[0]).toHaveTextContent("保存できませんでした");
-  expect(api.patch).toHaveBeenCalledTimes(1);
-  fireEvent.change(delay(), { target: { value: "5000" } });
-  await ready();
-  expect(readCache().todoCompletionDelayMs).toBe(5000);
-  expect(screen.queryAllByRole("alert")).toHaveLength(0);
-});
+it.each([
+  { field: delay, value: "5000", confirmed: "3000" },
+  { field: category, value: "category:" + categoryId, confirmed: "all" },
+])(
+  "quietly saves $value, rolls back on failure with one toast and allows retry",
+  async ({ field, value, confirmed }) => {
+    let reject!: (reason: Error) => void;
+    api.patch.mockImplementationOnce(
+      () =>
+        new Promise((_done, fail) => {
+          reject = fail;
+        }),
+    );
+    render(<Scene />);
+    await ready();
+    fireEvent.change(field(), { target: { value } });
+    await waitFor(() => expect(field()).toHaveValue(value));
+    expect(field()).toBeDisabled();
+    expect(screen.queryAllByText(/設定を保存中|設定を読み込み中/)).toHaveLength(0);
+    expect(screen.queryByTestId("status-message")).not.toBeInTheDocument();
+    expect(readCache().todoCompletionDelayMs).toBe(3000);
+    fireEvent.change(delay(), { target: { value: "1000" } });
+    await waitFor(() => expect(api.patch).toHaveBeenCalledTimes(1));
+    await act(async () => reject(new Error("offline")));
+    await ready();
+    expect(field()).toHaveValue(confirmed);
+    expect(screen.getByTestId("status-message")).toHaveTextContent("設定を保存できませんでした");
+    expect(screen.queryAllByRole("alert")).toHaveLength(0);
+    expect(api.patch).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "ステータスメッセージを閉じる" }));
+    fireEvent.change(field(), { target: { value } });
+    await ready();
+    expect(field()).toHaveValue(value);
+    expect(readCache()).toEqual(stored);
+    expect(screen.queryAllByRole("alert")).toHaveLength(0);
+    expect(screen.queryByTestId("status-message")).not.toBeInTheDocument();
+  },
+);
 
 it("saves to D1 when localStorage access is blocked", async () => {
   vi.spyOn(window, "localStorage", "get").mockImplementation(() => {
@@ -206,6 +225,20 @@ it("saves to D1 when localStorage access is blocked", async () => {
   expect(stored?.todoCompletionDelayMs).toBe(5000);
   expect(delay()).toHaveValue("5000");
   expect(screen.queryAllByRole("alert")).toHaveLength(0);
+});
+
+it("keeps an initialization failure actionable without a save toast", async () => {
+  stored = null;
+  api.initialize.mockRejectedValueOnce(new Error("offline"));
+  render(<Scene />);
+  expect(await screen.findByRole("alert")).toHaveTextContent("設定を保存できませんでした");
+  expect(delay()).toBeDisabled();
+  expect(screen.queryByTestId("status-message")).not.toBeInTheDocument();
+  expect(api.initialize).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole("button", { name: "再取得" }));
+  await ready();
+  expect(api.initialize).toHaveBeenCalledTimes(2);
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 });
 
 it("refreshes from D1 on focus, reconnect and this user's cache event", async () => {
@@ -256,6 +289,7 @@ it("discards a previous account's delayed save response and never migrates its b
   expect(delay()).toHaveValue("3000");
   expect(readCache("other")).toEqual(defaultUserPreferences);
   expect(readCache("user")).toEqual(defaultUserPreferences);
+  expect(screen.queryByTestId("status-message")).not.toBeInTheDocument();
 });
 
 it("keeps cached ToDo settings on read failure while local theme stays editable", async () => {

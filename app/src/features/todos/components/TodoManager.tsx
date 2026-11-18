@@ -213,7 +213,7 @@ function SortableTodoItem({
               aria-busy={isSaving}
             >
               <Check size={14} aria-hidden="true" />
-              <span>{isSaving ? "保存中…" : "保存"}</span>
+              <span>保存</span>
             </button>
             <button
               type="button"
@@ -454,13 +454,8 @@ export function TodoItemsSection({
                 画面下の追加ボタンから、チームで共有するToDoを作成できます。完了すると削除されます。
               </InfoHelp>
             </div>
-            <div className="flex items-center gap-2">
-              {headerContent}
-              {isReordering ? <span className="text-xs text-muted">並び順を保存中...</span> : null}
-            </div>
+            <div className="flex items-center gap-2">{headerContent}</div>
           </div>
-        ) : isReordering ? (
-          <div className="px-2 text-right text-xs text-muted md:px-0">並び順を保存中...</div>
         ) : null}
 
         {filters}

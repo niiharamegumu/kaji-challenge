@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { FormSheet } from "./FormSheet";
 
-it("shows saving immediately, blocks duplicate submission, and retains the draft after failure", async () => {
+it("keeps the action label while saving, blocks duplicates, and retains the draft after failure", async () => {
   let reject!: (error: Error) => void;
   const submit = vi
     .fn()
@@ -42,8 +42,11 @@ it("shows saving immediately, blocks duplicate submission, and retains the draft
   );
   const user = userEvent.setup();
   await user.click(screen.getByRole("button", { name: "保存" }));
-  const button = screen.getByRole("button", { name: "保存中…" });
+  const button = screen.getByRole("button", { name: "保存" });
   expect(button).toBeDisabled();
+  expect(button).toHaveAttribute("aria-busy", "true");
+  expect(screen.queryByText(/保存中/)).not.toBeInTheDocument();
+  expect(button.querySelector(".animate-spin")).toBeNull();
   expect(screen.getByRole("textbox", { name: "名前" })).toBeDisabled();
   await user.click(button);
   await user.click(screen.getByRole("button", { name: "閉じる" }));
