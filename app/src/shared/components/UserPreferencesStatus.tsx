@@ -16,10 +16,10 @@ export function UserPreferencesStatus() {
         </button>
       </div>
     );
-  if (!writable || saving)
+  if (!writable && !saving)
     return (
       <p role="status" className="mt-3 text-sm text-secondary">
-        {saving ? "設定を保存中…" : "設定を読み込み中…"}
+        設定を読み込み中…
       </p>
     );
   return null;
