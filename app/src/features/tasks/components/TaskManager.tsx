@@ -292,7 +292,7 @@ function SortableTaskItem({
               aria-busy={isSaving}
             >
               <Check size={14} aria-hidden="true" />
-              <span>{isSaving ? "保存中…" : "保存"}</span>
+              <span>保存</span>
             </button>
             <button
               type="button"
@@ -483,7 +483,6 @@ function TaskItemsSection({
             <span className="rounded-full border border-line bg-surface-subtle px-3 py-1 text-xs text-body">
               <span className="whitespace-nowrap">{tasks.length}件</span>
             </span>
-            {isReordering ? <span className="text-xs text-muted">並び順を保存中...</span> : null}
           </div>
         </div>
 
