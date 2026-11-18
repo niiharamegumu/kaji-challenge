@@ -21,6 +21,30 @@ const normalize = (value: string) => value.normalize("NFKC").trim().toLocaleLowe
 const short = (value: string, max = 28) =>
   value.length > max ? value.slice(0, max - 1) + "…" : value;
 
+function categoryFromAddShorthand(
+  transcript: string,
+  categories: readonly { name: string }[],
+  item: AssistDraft["items"][number],
+): string | null {
+  if (!item.name) return null;
+  const text = normalize(transcript);
+  let prefix = "";
+  for (const category of categories) {
+    const label = normalize(category.name);
+    if (label.length <= prefix.length || !text.startsWith(label)) continue;
+    if (/^\s*[、,]\s*\S/u.test(text.slice(label.length))) prefix = label;
+  }
+  if (!prefix) return null;
+  // Keep a second destination explicitly named in the request, outside the ToDo title.
+  const task = text.slice(prefix.length);
+  if (
+    item.categoryName &&
+    task.replace(normalize(item.name), "").includes(normalize(item.categoryName))
+  )
+    return null;
+  return prefix;
+}
+
 /** Transcription cannot interpret a command or perform a write. */
 export async function transcribeAssistAudio(
   repository: Repository,
@@ -404,13 +428,21 @@ export async function executeAssistTurn(
       total: items.length,
     });
   }
-  const pendingItems = intent.items.map((item) => ({
+  const firstItem = intent.items[0];
+  const shorthandCategory =
+    !draft && intent.items.length === 1
+      ? categoryFromAddShorthand(transcript, categories, firstItem)
+      : null;
+  const requestedItems = shorthandCategory
+    ? [{ ...firstItem, categoryName: shorthandCategory }]
+    : intent.items;
+  const pendingItems = requestedItems.map((item) => ({
     ...item,
     categoryName: resolveCategory(item.categoryName).unknown ? null : item.categoryName,
   }));
   if (pendingItems.some((item) => item.name === null)) return clarify(pendingItems, "name");
   if (
-    intent.items.some((item) => resolveCategory(item.categoryName).unknown) ||
+    requestedItems.some((item) => resolveCategory(item.categoryName).unknown) ||
     (pendingItems.some((item) => item.categoryName === null) && categories.length > 0)
   )
     return clarify(pendingItems, "category");
