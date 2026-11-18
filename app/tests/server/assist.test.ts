@@ -558,6 +558,89 @@ describe("assist with real D1 and fixture AI", () => {
     const categories = await connection.repository.ListTodoCategories(teamId);
     expect((await items())[0].CategoryID).toBe(categories.find((c) => c?.name === "買い物")?.id);
   });
+  it.each([
+    ["週末、牛乳", "週末", null],
+    ["週末， 牛乳を追加して。", "週末", "買い物"],
+    [" ｗｅｅｋｅｎｄ , 牛乳 ", "Weekend", null],
+    ["週末、牛乳を買っておく", "週末", null],
+    ["買い物、食材、牛乳", "買い物、食材", null],
+  ] as const)(
+    "saves %s in the explicitly named category on the first turn",
+    async (transcript, registered, inferred) => {
+      await category("買い物");
+      await category(registered);
+      ai.interpret.mockResolvedValue({
+        intent: "add_todo",
+        items: [{ name: "牛乳", categoryName: inferred }],
+      });
+      const { data } = await request({ transcript });
+      const categories = await connection.repository.ListTodoCategories(teamId);
+      const id = categories.find((c) => c?.name === registered)?.id;
+      expect(id).toEqual(expect.any(String));
+      expect(data).toMatchObject({ kind: "added", items: [{ name: "牛乳", categoryId: id }] });
+      expect(await items()).toMatchObject([{ Name: "牛乳", CategoryID: id }]);
+      expect(ai.interpret).toHaveBeenCalledOnce();
+    },
+  );
+  it.each([
+    ["週、牛乳", null],
+    ["週末用、牛乳", null],
+    ["週末、催事用に牛乳を追加して", "催事用"],
+  ] as const)("keeps an unresolved addition pending for %s", async (transcript, inferred) => {
+    await category("週末");
+    ai.interpret.mockResolvedValue({
+      intent: "add_todo",
+      items: [{ name: "牛乳", categoryName: inferred }],
+    });
+    const { data } = await request({ transcript });
+    expect(data).toMatchObject({ kind: "clarify", pendingDraft: { missing: "category" } });
+    expect(await items()).toHaveLength(0);
+  });
+  it.each(["庭仕事", "やること"])(
+    "resolves the shorthand %s only after the current team registers that name",
+    async (label) => {
+      const otherTeamId = crypto.randomUUID();
+      const otherCategoryId = crypto.randomUUID();
+      await connection.query(
+        sql`INSERT INTO teams(id,name,created_at) VALUES (${otherTeamId},'Other',${new Date().toISOString()})`,
+      );
+      await connection.repository.CreateTodoCategory(otherTeamId, {
+        id: otherCategoryId,
+        name: label,
+      });
+      const name = "鉢植えに水をやる";
+      const transcript = `${label}、${name}`;
+      ai.interpret.mockResolvedValue({
+        intent: "add_todo",
+        items: [{ name, categoryName: label }],
+      });
+      expect((await request({ transcript })).data).toMatchObject({
+        kind: "clarify",
+        pendingDraft: { items: [{ name, categoryName: null }] },
+      });
+      expect(ai.interpret.mock.lastCall?.[3]).toEqual([]);
+      expect(await items()).toHaveLength(0);
+
+      await category(label);
+      ai.interpret.mockResolvedValue({ intent: "add_todo", items: [{ name, categoryName: null }] });
+      expect((await request({ transcript })).data.kind).toBe("added");
+      expect(ai.interpret.mock.lastCall?.[3]).toEqual([label]);
+      const registered = (await connection.repository.ListTodoCategories(teamId)).find(
+        (entry) => entry?.name === label,
+      );
+      expect(registered?.id).toEqual(expect.any(String));
+      expect(registered?.id).not.toBe(otherCategoryId);
+      expect(await items()).toMatchObject([{ Name: name, CategoryID: registered?.id }]);
+      expect(await connection.repository.ListTodoItemsByTeamID(otherTeamId)).toHaveLength(0);
+    },
+  );
+  it("asks for clarification when the shorthand matches two normalized category names", async () => {
+    await category("Weekend");
+    await category("Ｗｅｅｋｅｎｄ");
+    const { data } = await request({ transcript: "weekend、牛乳" });
+    expect(data).toMatchObject({ kind: "clarify", pendingDraft: { missing: "category" } });
+    expect(await items()).toHaveLength(0);
+  });
   it("completes salt and adds lemon from one interpretation without dropping either command", async () => {
     ai.interpret.mockResolvedValue({
       intent: "add_todo",
