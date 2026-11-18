@@ -220,7 +220,7 @@ function SharedPagesContent({
   const label = {
     unchanged: "変更なし",
     dirty: newPage ? "未作成" : "未保存",
-    saving: newPage ? "作成中…" : "保存中…",
+    saving: null,
     saved: "保存済み",
     error: "保存失敗",
     stopped: "編集を停止",
@@ -288,22 +288,18 @@ function SharedPagesContent({
               ) : null}
               {editing || stopped ? (
                 <>
-                  <span
-                    className={`inline-flex items-center gap-1 text-xs ${state.status === "error" ? "text-danger" : stopped ? "text-warning" : "text-secondary"}`}
-                    role="status"
-                    aria-live="polite"
-                  >
-                    {state.status === "saving" ? (
-                      <LoaderCircle
-                        size={14}
-                        className="animate-spin motion-reduce:animate-none"
-                        aria-hidden="true"
-                      />
-                    ) : state.status === "saved" && !state.dirty && !newPage ? (
-                      <Check size={14} aria-hidden="true" className="text-success" />
-                    ) : null}
-                    {label}
-                  </span>
+                  {label ? (
+                    <span
+                      className={`inline-flex items-center gap-1 text-xs ${state.status === "error" ? "text-danger" : stopped ? "text-warning" : "text-secondary"}`}
+                      role="status"
+                      aria-live="polite"
+                    >
+                      {state.status === "saved" && !state.dirty && !newPage ? (
+                        <Check size={14} aria-hidden="true" className="text-success" />
+                      ) : null}
+                      {label}
+                    </span>
+                  ) : null}
                   {newPage ? (
                     <button
                       type="button"
