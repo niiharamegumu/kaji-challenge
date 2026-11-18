@@ -52,7 +52,7 @@ export function TeamNameSection({
             onClick={onSaveTeamName}
             disabled={isSavingTeamName || teamNameError.length > 0}
           >
-            {isSavingTeamName ? "保存中..." : "保存"}
+            保存
           </button>
         </div>
         {teamNameError && <p className="mt-1 text-xs text-danger">{teamNameError}</p>}
@@ -315,7 +315,7 @@ export function AccountSettingsSection({
             onClick={onSaveNickname}
             disabled={isSavingNickname || nicknameError.length > 0}
           >
-            <span>{isSavingNickname ? "保存中..." : "保存"}</span>
+            <span>保存</span>
           </button>
         </div>
         {nicknameError && <p className="mt-1 text-xs text-danger">{nicknameError}</p>}
@@ -355,7 +355,7 @@ export function AccountSettingsSection({
             onClick={onSaveColor}
             disabled={isSavingColor || colorHexError.length > 0}
           >
-            <span>{isSavingColor ? "保存中..." : "保存"}</span>
+            <span>保存</span>
           </button>
         </div>
         {colorHexError && <p className="mt-1 text-xs text-danger">{colorHexError}</p>}
