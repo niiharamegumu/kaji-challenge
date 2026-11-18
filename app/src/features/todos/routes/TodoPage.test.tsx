@@ -250,7 +250,8 @@ describe("ToDo pages", () => {
     );
     await user.type(name, "卵");
     await user.type(notes, "6個入り{Enter}");
-    expect(await within(dialog).findByRole("button", { name: "保存中…" })).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "追加する" })).toBeDisabled();
+    expect(screen.queryByText(/保存中/)).not.toBeInTheDocument();
     expect(name).toBeDisabled();
     expect(notes).toBeDisabled();
     expect(select).toBeDisabled();
@@ -591,8 +592,9 @@ describe("ToDo pages", () => {
     await user.click(await screen.findByRole("button", { name: "編集" }));
     await user.type(screen.getByLabelText("名前"), "追加");
     await user.click(screen.getByRole("button", { name: "保存" }));
-    const saving = screen.getByRole("button", { name: "保存中…" });
+    const saving = screen.getByRole("button", { name: "保存" });
     expect(saving).toBeDisabled();
+    expect(screen.queryByText(/保存中/)).not.toBeInTheDocument();
     await user.click(saving);
     expect(mockPatchTodoItem).toHaveBeenCalledTimes(1);
     await act(async () => {
