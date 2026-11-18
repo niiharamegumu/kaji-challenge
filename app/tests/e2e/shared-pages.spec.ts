@@ -462,7 +462,10 @@ test(
     try {
       await checkbox.check();
       await expect(status).toHaveText("未保存");
-      await expect(status).toHaveText("保存中…");
+      await expect.poll(() => writes).toBe(1);
+      await expect(page.getByRole("button", { name: "編集を終了", exact: true })).toBeDisabled();
+      await expect(status).toHaveCount(0);
+      await expect(page.locator(".shared-page-toolbar .animate-spin")).toHaveCount(0);
       await page.getByRole("textbox", { name: "タイトル", exact: true }).fill(updatedTitle);
     } finally {
       release();
@@ -875,7 +878,9 @@ for (const failurePoint of ["before commit", "after commit"]) {
 
       try {
         await page.getByRole("button", { name: "作成する", exact: true }).click();
-        await expect(status).toHaveText("作成中…");
+        await expect(page.getByRole("button", { name: "作成する", exact: true })).toBeDisabled();
+        await expect(status).toHaveCount(0);
+        await expect(page.locator(".shared-page-toolbar .animate-spin")).toHaveCount(0);
       } finally {
         fail();
       }
