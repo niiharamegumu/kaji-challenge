@@ -1,4 +1,4 @@
-import { closeOutstanding, notifyOutstanding, crons } from "../application/jobs";
+import { closeScheduledPeriods, notifyOutstanding, crons } from "../application/jobs";
 import { createDatabase } from "../infrastructure/database";
 import { createDelivery } from "../infrastructure/push";
 import type { RuntimeBindings } from "./runtime.server";
@@ -11,8 +11,8 @@ export async function scheduled(controller: ScheduledController, bindings: Runti
     (k) => crons[k] === controller.cron,
   );
   if (!key) throw new Error("Unknown cron expression");
-  if (key === "day" || key === "week")
-    await closeOutstanding(connection.repository, key, now, (teamId) =>
+  if (key === "day")
+    await closeScheduledPeriods(connection.repository, now, (teamId) =>
       notifyTeams(bindings, [teamId]),
     );
   else
