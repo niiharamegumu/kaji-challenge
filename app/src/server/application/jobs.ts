@@ -1,10 +1,8 @@
 import type { Repository, ListActivePushSubscriptionsByTeamIDRow } from "./ports";
-import { addDays, todayJST, weekStart } from "../domain/dates";
+import { addDays, todayJST, weekday, weekStart } from "../domain/dates";
 import { requiredForWeek } from "../domain/task-requirements";
 export const crons = {
   day: "5 15 * * *",
-  // Cloudflareの曜日指定はSUN/SATを使い、数字の曜日解釈の違いを避ける。
-  week: "10 15 * * SUN",
   daily_2100: "0 12 * * *",
   weekly_prev_sat_1900: "0 10 * * SAT",
   weekly_due_sun_1000: "0 1 * * SUN",
@@ -84,6 +82,27 @@ export async function closeOutstanding(
   console.info(JSON.stringify({ event: "close_run", scope, periods, failedTeams: [...failures] }));
   if (failures.size) throw new Error(`Closing failed for ${failures.size} teams`);
 }
+
+export async function closeScheduledPeriods(
+  repository: Repository,
+  scheduledTime: Date,
+  notify: (teamId: string) => Promise<void>,
+) {
+  const scopes: ("day" | "week")[] = ["day"];
+  if (weekday(todayJST(scheduledTime)) === 1) scopes.push("week");
+
+  const failures: Error[] = [];
+  for (const scope of scopes) {
+    try {
+      await closeOutstanding(repository, scope, scheduledTime, notify);
+    } catch (cause) {
+      failures.push(new Error(`${scope} close failed`, { cause }));
+    }
+  }
+  if (failures.length)
+    throw new AggregateError(failures, failures.map((error) => error.message).join(", "));
+}
+
 export function pushMessage(slot: PushSlot, tasks: { title: string; remaining: number }[]) {
   const daily = slot === "daily_2100";
   const parts = tasks

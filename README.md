@@ -27,7 +27,7 @@
 - Worker・D1・Docker・GitHubに `TZ` を追加する設定は不要です。アプリが明示的に日本時間を使用します。`ja-JP` は表示言語であり、タイムゾーン指定とは別です。
 - 認証・業務・Push・レート制限の日時はすべてUTCのISO 8601文字列（例: `2026-09-23T06:56:17.439Z`）で保存します。D1 ExplorerでUTCの値が見えるのは正常です。対象日・対象月は `YYYY-MM-DD` / `YYYY-MM` の日付文字列です。
 - カレンダーの予定は日付のみで管理します。FullCalendar内部の日付計算をUTCに固定し、「今日」は日本時間の日付を渡すことで端末時差によるずれを防ぎます。
-- CronはUTCで指定済みです。日次締め00:05 JST、週次締め月曜00:10 JST、通知21:00／土曜19:00／日曜10:00 JSTに対応します。初回は `JOBS_ENABLED=true` にして再配備し、実行を確認してください。
+- CronはUTCで指定済みです。毎日00:05 JSTに日次締めを実行し、月曜は続けて週次締めも実行します。通知は毎日21:00・土曜19:00・日曜10:00 JSTです。初回は `JOBS_ENABLED=true` にして再配備し、実行を確認してください。
 
 ## ローカル起動
 
@@ -148,7 +148,7 @@ Alchemyはビルド済みの `dist/server/index.js` と `dist/client` を、公�
 
 1. **Cloudflareを準備。** 対象アカウント、Activeなドメインのzone、API tokenを用意します。まずWorkers Freeで開始できます。
    - **アカウントの管理 → アカウント API トークン → トークンを作成 → 最初から作成**で、配備専用tokenを作ります。権限ポリシーは2つに分けます。アカウント全体にはWorkers Admin（初回Worker作成用）・D1 Edit・Secrets Store Edit、指定ドメインには公開先zoneのZone Read・Workers Routes Editを設定します。`Account Settings Read` はこの構成の必須権限として指定しません。対象ドメインを含むアカウントだけを使い、実アカウントの権限はbootstrapと初回deployで確認してください（[Workers権限](https://developers.cloudflare.com/workers/authorization/workers/)・[Secrets Store権限](https://developers.cloudflare.com/secrets-store/access-control/)）。
-   - Alchemyの状態保存先はSQLite型Durable Objectを使用し、Freeで利用できます。FreeではWorkerのHTTP・CronともCPU時間10ms、D1クエリは1回の呼び出しにつき50件、Cronはアカウント全体で5本までです。このアプリは有効化時に5本使うため、他のCronがある場合やCPU・D1上限に達した場合はPaidへの変更を検討してください（[Workers制限](https://developers.cloudflare.com/workers/platform/limits/)・[D1制限](https://developers.cloudflare.com/d1/platform/limits/)）。
+   - Alchemyの状態保存先はSQLite型Durable Objectを使用し、Freeで利用できます。FreeではWorkerのHTTP・CronともCPU時間10ms、D1クエリは1回の呼び出しにつき50件、Cronはアカウント全体で5本までです。このアプリは有効化時に4本使うため、他のCronと合わせて上限を超える場合やCPU・D1上限に達した場合はPaidへの変更を検討してください（[Workers制限](https://developers.cloudflare.com/workers/platform/limits/)・[D1制限](https://developers.cloudflare.com/d1/platform/limits/)）。
 2. **Google OAuthを準備。** 本番用のウェブアプリケーションクライアントを作成し、生成元 `https://<本番ホスト>`、redirect URI `https://<本番ホスト>/api/auth/callback/google` を登録します。同意画面の公開範囲も確認します。
 3. **本番の鍵を作成。** `BETTER_AUTH_SECRET` は `openssl rand -hex 32`、VAPID鍵は `app/` で `mise exec -- bun x --no-install web-push generate-vapid-keys` で生成します。安全に保管し、毎回生成し直しません。
 4. **GitHub Environmentを作成。** リポジトリの Settings → Environments → New environment で `production` を作ります。Deployment branches/tagsを選択制限し、branch `main` だけを許可します。完全自動にする場合はRequired reviewersを設定しません。設定する場合、CDはその承認待ちになります。Settings → Rules/Branchesでは、mainへの変更にPRと `cloudflare-quality` の成功を必須にしてください。CDはCIを再確認しないため、直接pushやルールのバイパスでは未検証コードも配備対象になります。
@@ -178,7 +178,7 @@ MCP追加配備前に、公開originのドメイン、新WorkerとOAuth用KVを�
 
 OAuthの標準失効もD1先行にするため、providerの固定versionにBun patchを適用します。`bun install --frozen-lockfile` を使い、依存更新時は [patchの保守手順](docs/mcp-oauth-provider-patch.md) と失効の回帰検証を実施します。access tokenだけを失効した場合も、Kajiでは対応する連携全体を停止します。
 
-6. **初回CDを実行。** 設定を済ませ、CIが成功したPRを `main` へマージするか、Actions → Deploy production → Run workflow → branch `main` を選びます。CDは初回にAlchemyの状態保存用Worker/DO/Secrets Storeを作り、その後アプリ本体と業務D1を配備します。以降は既存の状態保存先を再利用します。ローカルでのbootstrapや `.alchemy` のアップロードは不要です（[AlchemyのCI状態管理](https://alchemy.run/state-store/)）。初回はジョブ無効で配備されます。下記のブラウザー確認後、`JOBS_ENABLED=true` にして同じworkflowを手動実行し、5本のCronを有効にします。
+6. **初回CDを実行。** 設定を済ませ、CIが成功したPRを `main` へマージするか、Actions → Deploy production → Run workflow → branch `main` を選びます。CDは初回にAlchemyの状態保存用Worker/DO/Secrets Storeを作り、その後アプリ本体と業務D1を配備します。以降は既存の状態保存先を再利用します。ローカルでのbootstrapや `.alchemy` のアップロードは不要です（[AlchemyのCI状態管理](https://alchemy.run/state-store/)）。初回はジョブ無効で配備されます。下記のブラウザー確認後、`JOBS_ENABLED=true` にして同じworkflowを手動実行し、4本のCronを有効にします。
 
 ### 毎回のリリース
 
@@ -201,7 +201,7 @@ OAuthの標準失効もD1先行にするため、providerの固定versionにBun 
 
 実際のCloudflare/GitHub設定・配備は初回作業が必要です。ローカル検証はアカウント権限・Google実OAuth・本番D1の復元/性能・実機Pushを代替しません。業務API専用のレート制限と運用監視も配備時に確認します。
 
-日次締め00:05 JST、週次締め月曜00:10 JST、通知は毎日21:00・土曜19:00・日曜10:00 JST。正本は `app/src/server/application/jobs.ts` です。
+締めのCronは毎日00:05 JSTの1本です。予定時刻（`scheduledTime`）がJSTの月曜なら、日次と週次の両方を実行します。通知は毎日21:00・土曜19:00・日曜10:00 JSTです。正本は `app/src/server/application/jobs.ts` です。
 
 ## コードを読む順番
 

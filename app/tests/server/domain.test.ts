@@ -124,7 +124,6 @@ describe("date and task rules", () => {
     });
     expect(crons).toEqual({
       day: "5 15 * * *",
-      week: "10 15 * * SUN",
       daily_2100: "0 12 * * *",
       weekly_prev_sat_1900: "0 10 * * SAT",
       weekly_due_sun_1000: "0 1 * * SUN",

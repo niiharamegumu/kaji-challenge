@@ -79,8 +79,13 @@ describe("Alchemy deployment configuration", () => {
       },
     });
   });
-  it("enables all five schedules only outside maintenance", () => {
-    expect(deploymentResources({ ...config, jobs: "true" }).worker.crons).toHaveLength(5);
+  it("registers one close and three notification schedules only outside maintenance", () => {
+    expect(deploymentResources({ ...config, jobs: "true" }).worker.crons).toEqual([
+      "5 15 * * *",
+      "0 12 * * *",
+      "0 10 * * SAT",
+      "0 1 * * SUN",
+    ]);
     expect(
       deploymentResources({ ...config, jobs: "true", maintenance: "true" }).worker.crons,
     ).toEqual([]);
