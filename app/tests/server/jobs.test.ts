@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   closeOutstanding,
+  closeScheduledPeriods,
   notifyOutstanding,
   type DeliveryPort,
 } from "../../src/server/application/jobs";
@@ -23,6 +24,35 @@ function closingRepository(overrides: Partial<Repository> = {}) {
 }
 
 describe("closing notifications", () => {
+  it.each([
+    { failedScopes: ["day"] },
+    { failedScopes: ["week"] },
+    { failedScopes: ["day", "week"] },
+  ])(
+    "attempts both Monday closes and reports failures for $failedScopes",
+    async ({ failedScopes }) => {
+      const closePeriod = vi.fn(async (_teamId: string, scope: "day" | "week") => {
+        if (failedScopes.includes(scope)) throw new Error(`Failed to close ${scope}`);
+        return true;
+      });
+      const repository = closingRepository({
+        GetLatestCloseRunTargetDate: async ({ Scope }) =>
+          Scope === "close_day" ? "2026-10-24" : "2026-10-12",
+        ClosePeriod: closePeriod,
+      });
+      const notify = vi.fn(async () => {});
+
+      await expect(closeScheduledPeriods(repository, now, notify)).rejects.toMatchObject({
+        name: "AggregateError",
+        errors: failedScopes.map((scope) =>
+          expect.objectContaining({ message: `${scope} close failed` }),
+        ),
+      });
+      expect(closePeriod.mock.calls.map(([, scope]) => scope)).toEqual(["day", "week"]);
+      expect(notify).toHaveBeenCalledTimes(2 - failedScopes.length);
+    },
+  );
+
   it("notifies once for all committed periods and expired reminders in a team", async () => {
     const repository = closingRepository({
       DeleteExpiredOneTimeRemindersByTeam: vi.fn(async () => 2),
