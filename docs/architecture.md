@@ -152,7 +152,7 @@ TanStack Start/Cloudflare公式の `@cloudflare/vite-plugin` で `vp dev` / `vp 
 
 Alchemyは `Cloudflare.Worker("Application", { bundle: false, ... })` でbuild済み生成物を配備する。`Website.Vite` とAlchemy独自Vite pluginは使用しない。stack名・Application/Databaseの論理ID・本番bindingは維持する。ローカルはwrangler.jsonc、本番のリソースと実行時設定はalchemy.run.ts/infra/config.tsが管理する。build出力のローカル用DB IDやvarsを本番へコピーしない。
 
-CDは本番Secretsを渡さずbuildし、その後のstepでAlchemy bootstrap → plan → deployを実行する。CIの再実行はしない。build出力の入口・assetsディレクトリを変えた場合はIaCも更新し、test:localで一致を検証する。
+CDは本番Secretsを渡さずbuildし、その後のstepでAlchemy bootstrap → 状態確認・引き継ぎ → plan → deployを実行する。CIの再実行はしない。build出力の入口・assetsディレクトリを変えた場合はIaCも更新し、test:localで一致を検証する。
 
 公式資料: [CloudflareのTanStack Start構成](https://developers.cloudflare.com/workers/framework-guides/web-apps/tanstack-start/)、[Alchemyのビルド済みWorker配備](https://alchemy.run/providers/cloudflare/workers/worker/#configuration)。
 
