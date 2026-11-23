@@ -19,7 +19,6 @@ function withResponseHeaders(response: Response, path: string): Response {
   if (
     path === "/api" ||
     path.startsWith("/api/") ||
-    path.startsWith("/.well-known/") ||
     path === "/_serverFn" ||
     path.startsWith("/_serverFn/") ||
     ["/health", "/sw.js", "/registerSW.js", "/manifest.webmanifest"].includes(path)

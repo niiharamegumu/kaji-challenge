@@ -11,9 +11,6 @@ export type CallOptions = Pick<RequestInit, "signal">;
 
 // チームを離れた後のレスポンスを旧チームのキャッシュへ反映しない。更新の再送はしない。
 let teamRequests = new AbortController();
-export function teamRequestSignal() {
-  return teamRequests.signal;
-}
 export function cancelTeamRequests() {
   teamRequests.abort();
   teamRequests = new AbortController();

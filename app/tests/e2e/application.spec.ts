@@ -124,12 +124,29 @@ test(
     expect(document.headers()["permissions-policy"]).toBe(
       "camera=(), microphone=(), geolocation=()",
     );
+    const shell = await request.get("/_shell.html");
+    expect(shell.ok()).toBe(true);
+    expect(shell.headers()["content-type"]).toContain("text/html");
+    expect(shell.headers()["permissions-policy"]).toBe("camera=(), microphone=(), geolocation=()");
     const serviceWorker = await request.get("/sw.js");
     expect(serviceWorker.headers()["cache-control"]).toContain("no-store");
     const response = await request.get("/api/auth/get-session");
     expect(response.headers()["cache-control"]).toContain("no-store");
     expect(response.headers()["content-type"]).toContain("application/json");
     expect(await response.json()).toBeNull();
+  },
+);
+test(
+  "retired TODO pages and OAuth discovery return 404",
+  { tag: ["@smoke"] },
+  async ({ request }) => {
+    for (const path of [
+      "/todos",
+      "/todo-categories",
+      "/.well-known/oauth-authorization-server/api/mcp/oauth",
+    ]) {
+      expect((await request.get(path)).status(), path).toBe(404);
+    }
   },
 );
 test(

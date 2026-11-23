@@ -43,7 +43,7 @@ describe("Alchemy deployment configuration", () => {
       observability: { enabled: true, headSamplingRate: 1 },
       assets: {
         directory: "dist/client",
-        runWorkerFirst: ["/api/*", "/_serverFn/*", "/.well-known/*", "/health"],
+        runWorkerFirst: ["/api/*", "/_serverFn/*", "/health"],
       },
     });
   });
