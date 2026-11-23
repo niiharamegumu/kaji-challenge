@@ -142,11 +142,9 @@ Alchemyはビルド済みの `dist/server/index.js` と `dist/client` を、公�
 
 環境は **localとproductionのみ** です。localはWranglerのD1（`kaji-local`）、productionはAlchemy管理のD1（`kaji-production`）を使います。
 
-[Deploy production](.github/workflows/deploy-production.yml) が `main` へのpushで実行されます。**build → 設定検証 → Alchemy状態保存先の確保・引き継ぎ → plan → deploy（未適用SQL・Worker更新）**を自動化しています。CIはPR時に実行し、CDでは再実行しません。CIへ本番Secretsを渡しません。`APP_RELEASE` は対象commit SHAを自動設定します。
+[Deploy production](.github/workflows/deploy-production.yml) が `main` へのpushで実行されます。**build → 設定検証 → Alchemy状態保存先の確保 → plan → deploy（未適用SQL・Worker更新）**を自動化しています。CIはPR時に実行し、CDでは再実行しません。CIへ本番Secretsを渡しません。`APP_RELEASE` は対象commit SHAを自動設定します。
 
-本番の状態保存用Workerは `kaji-challenge-alchemy-state-store` です。切り替え時のCDは `alchemy-state-store` から `kaji-challenge/production` の管理情報を一度だけコピーしてから配備します。旧Workerは他のスタックも利用できるように残します。切り替え後にアプリをロールバックする場合も、新しい保存先の設定を使います。[Alchemyの状態保存先設定](https://alchemy.run/state-store/#more-than-one-store-per-account)
-
-切り替え中に手動配備する場合は、planの前に `bun run infra:bootstrap --no-input` と `bun run infra:prepare-state` を実行します。新しい保存先で本番CDが成功したことを確認した後、別のPRで `infra:prepare-state` の呼び出し、移行コード、移行専用テストを削除し、通常の `bootstrap → plan → deploy` に戻します。
+本番の状態保存用Workerは `kaji-challenge-alchemy-state-store` です。アプリをロールバックする場合も、この保存先の設定を使います。[Alchemyの状態保存先設定](https://alchemy.run/state-store/#more-than-one-store-per-account)
 
 ### 初回だけ行うこと
 
