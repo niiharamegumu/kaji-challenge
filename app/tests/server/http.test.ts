@@ -9,12 +9,6 @@ vi.mock("../../src/server/transport/runtime.server", () => ({
 }));
 vi.mock("../../src/server/transport/scheduled.server", () => ({ scheduled: vi.fn() }));
 vi.mock("../../src/server/transport/realtime.server", () => ({ connectRealtime: mocks.realtime }));
-vi.mock("../../src/server/transport/mcp-entrypoint", () => ({ McpApplication: class {} }));
-vi.mock("../../src/server/transport/mcp-oauth", () => ({
-  isMcpHttpPath: (path: string) => path.startsWith("/api/mcp/") || path.startsWith("/.well-known/"),
-  handleMcpHttp: (...args: unknown[]) => mcpHttp(...args),
-}));
-const mcpHttp = vi.fn();
 const ctx = {} as ExecutionContext;
 import worker from "../../src/server-entry";
 import { MAX_REQUEST_BODY_BYTES } from "../../src/server/transport/request-body";
@@ -35,7 +29,7 @@ it("protects dynamic HTML and preserves response cookies and redirects", async (
   expect(response.headers.getSetCookie()).toHaveLength(2);
   expect(response.headers.get("x-frame-options")).toBe("DENY");
   expect(response.headers.get("permissions-policy")).toBe(
-    "camera=(), microphone=(self), geolocation=()",
+    "camera=(), microphone=(), geolocation=()",
   );
   expect(response.headers.get("x-content-type-options")).toBe("nosniff");
   expect(response.headers.get("referrer-policy")).toBe("strict-origin-when-cross-origin");
@@ -88,24 +82,22 @@ it("preserves the exact WebSocket upgrade response", async () => {
   ).toBe(upgrade);
 });
 
-it("routes OAuth discovery and consent before the SPA and preserves OAuth privacy headers", async () => {
-  for (const path of [
-    "/.well-known/oauth-authorization-server/api/mcp/oauth",
-    "/api/mcp/oauth/authorize",
-  ]) {
-    mcpHttp.mockResolvedValueOnce(
-      new Response("protocol", {
-        headers: { "Referrer-Policy": "no-referrer", "Cache-Control": "no-store" },
-      }),
-    );
-    const request = new Request(`https://app.example${path}`);
-    const bindings = {} as RuntimeBindings;
-    const response = await worker.fetch(request, bindings, ctx);
-    expect(mcpHttp).toHaveBeenLastCalledWith(request, bindings, ctx);
-    expect(response.headers.get("referrer-policy")).toBe("no-referrer");
-    expect(response.headers.get("cache-control")).toContain("no-store");
-  }
+it.each([
+  ["POST", "/api/assist/transcribe"],
+  ["POST", "/api/assist/turn"],
+  ["GET", "/api/mcp/oauth/authorize"],
+  ["GET", "/api/mcp/connections"],
+])("rejects the retired %s %s endpoint", async (method, path) => {
+  const response = await worker.fetch(
+    new Request(`https://app.example${path}`, { method }),
+    {} as RuntimeBindings,
+    ctx,
+  );
+
+  expect(response.status).toBe(404);
+  expect(response.headers.get("cache-control")).toContain("no-store");
   expect(mocks.start).not.toHaveBeenCalled();
+  expect(mocks.createRuntime).not.toHaveBeenCalled();
 });
 
 it.each(["/_serverFn", "/_serverFn/test", "/api/auth/sign-in/social"])(

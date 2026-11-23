@@ -6,7 +6,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useHomePageQueries } from "./useHomeQueries";
 
 const mockGetTaskOverview = vi.fn();
-const mockListTodoItems = vi.fn();
 const mockGetPenaltySummaryMonthly = vi.fn();
 const mockListPenaltyRules = vi.fn();
 
@@ -15,7 +14,6 @@ vi.mock("../../../lib/api/operations", async () => {
   return {
     ...actual,
     getTaskOverview: (...args: unknown[]) => mockGetTaskOverview(...args),
-    listTodoItems: (...args: unknown[]) => mockListTodoItems(...args),
     getPenaltySummaryMonthly: (...args: unknown[]) => mockGetPenaltySummaryMonthly(...args),
     listPenaltyRules: (...args: unknown[]) => mockListPenaltyRules(...args),
   };
@@ -38,19 +36,13 @@ function deferred<T>() {
 }
 
 function QueryProbe({ onRender }: { onRender?: () => void }) {
-  const {
-    homeQuery,
-    todoItemsQuery,
-    previousMonth,
-    previousMonthPenaltySummaryQuery,
-    penaltyRulesQuery,
-  } = useHomePageQueries();
+  const { homeQuery, previousMonth, previousMonthPenaltySummaryQuery, penaltyRulesQuery } =
+    useHomePageQueries();
   onRender?.();
   return (
     <div>
-      {homeQuery.isSuccess ? "home-ready" : "home-pending"}:{todoItemsQuery.data.length}:
-      {previousMonth}:{previousMonthPenaltySummaryQuery.data.totalPenalty}:
-      {penaltyRulesQuery.data?.length ?? 0}
+      {homeQuery.isSuccess ? "home-ready" : "home-pending"}:{previousMonth}:
+      {previousMonthPenaltySummaryQuery.data.totalPenalty}:{penaltyRulesQuery.data?.length ?? 0}
     </div>
   );
 }
@@ -58,18 +50,15 @@ function QueryProbe({ onRender }: { onRender?: () => void }) {
 describe("useHomePageQueries", () => {
   beforeEach(() => {
     mockGetTaskOverview.mockReset();
-    mockListTodoItems.mockReset();
     mockGetPenaltySummaryMonthly.mockReset();
     mockListPenaltyRules.mockReset();
   });
 
   it("starts all home requests in parallel", async () => {
     const home = deferred<{ data: Record<string, never> }>();
-    const todo = deferred<{ data: { items: never[] } }>();
     const summary = deferred<{ data: { totalPenalty: number } }>();
     const rules = deferred<{ data: { items: never[] } }>();
     mockGetTaskOverview.mockReturnValue(home.promise);
-    mockListTodoItems.mockReturnValue(todo.promise);
     mockGetPenaltySummaryMonthly.mockReturnValue(summary.promise);
     mockListPenaltyRules.mockReturnValue(rules.promise);
     const queryClient = new QueryClient({
@@ -86,7 +75,6 @@ describe("useHomePageQueries", () => {
 
     await waitFor(() => {
       expect(mockGetTaskOverview).toHaveBeenCalledOnce();
-      expect(mockListTodoItems).toHaveBeenCalledOnce();
       expect(mockGetPenaltySummaryMonthly).toHaveBeenCalledOnce();
       expect(mockGetPenaltySummaryMonthly).toHaveBeenCalledWith(
         {
@@ -98,15 +86,13 @@ describe("useHomePageQueries", () => {
     });
 
     home.resolve({ data: {} });
-    todo.resolve({ data: { items: [] } });
     summary.resolve({ data: { totalPenalty: 3 } });
     rules.resolve({ data: { items: [] } });
-    expect(await screen.findByText("home-ready:0:2026-07:3:0")).toBeInTheDocument();
+    expect(await screen.findByText("home-ready:2026-07:3:0")).toBeInTheDocument();
   });
 
   it("does not rerender the page when background refetches return unchanged data", async () => {
     mockGetTaskOverview.mockResolvedValue({ data: {} });
-    mockListTodoItems.mockResolvedValue({ data: { items: [] } });
     mockGetPenaltySummaryMonthly.mockResolvedValue({ data: { totalPenalty: 3 } });
     mockListPenaltyRules.mockResolvedValue({ data: { items: [] } });
     const queryClient = new QueryClient({
@@ -120,14 +106,13 @@ describe("useHomePageQueries", () => {
         </Suspense>
       </QueryClientProvider>,
     );
-    expect(await screen.findByText("home-ready:0:2026-07:3:0")).toBeInTheDocument();
+    expect(await screen.findByText("home-ready:2026-07:3:0")).toBeInTheDocument();
     const initialRenders = onRender.mock.calls.length;
     await act(async () => {
       await queryClient.refetchQueries();
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
     expect(mockGetTaskOverview).toHaveBeenCalledTimes(2);
-    expect(mockListTodoItems).toHaveBeenCalledTimes(2);
     expect(onRender).toHaveBeenCalledTimes(initialRenders);
   });
 });

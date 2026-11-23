@@ -138,15 +138,19 @@ it("keeps the initial count before the first setting and denies another team wit
 });
 
 it("materializes reorder ranks once and uses an indexed join for a large list", async () => {
-  const ids = Array.from({ length: 800 }, (_, i) => `performance-todo-${i}`);
-  await c.db.run(sql`INSERT INTO todo_items
-    (id,team_id,name,notes,category_id,sort_key,created_at,updated_at)
-    SELECT value,${teamId},value,NULL,NULL,(CAST(key AS INTEGER)+1)*100,${created},${created}
+  const ids = Array.from({ length: 800 }, (_, i) => `performance-daily-${i}`);
+  await c.db.run(sql`INSERT INTO tasks
+    (id,team_id,title,type,penalty_points,required_completions_per_week,sort_key,created_at,updated_at)
+    SELECT value,${teamId},value,'daily',0,1,(CAST(key AS INTEGER)+1)*100,${created},${created}
     FROM json_each(${JSON.stringify(ids)})`);
+  const dailyTaskOrder = async () =>
+    (await c.repository.ListTasksByTeamID(teamId))
+      .filter((task) => task.Type === "daily")
+      .map((task) => task.ID);
   const observed = observedDatabase();
   await observed.repository.forMember(teamId, userId).Reorder({
     teamId,
-    kind: "todo",
+    type: "daily",
     ids: [...ids].reverse(),
     now: created,
   });
@@ -160,18 +164,14 @@ it("materializes reorder ranks once and uses an indexed join for a large list", 
   expect(details.some((detail) => /SEARCH requested USING AUTOMATIC.*INDEX/.test(detail))).toBe(
     true,
   );
-  expect((await c.repository.ListTodoItemsByTeamID(teamId)).map((item) => item.ID)).toEqual(
-    [...ids].reverse(),
-  );
+  expect(await dailyTaskOrder()).toEqual([...ids].reverse());
   await expect(
     observed.repository.forMember(teamId, userId).Reorder({
       teamId,
-      kind: "todo",
+      type: "daily",
       ids: ids.map(() => ids[0]),
       now: created,
     }),
   ).rejects.toMatchObject({ status: 409 });
-  expect((await c.repository.ListTodoItemsByTeamID(teamId)).map((item) => item.ID)).toEqual(
-    [...ids].reverse(),
-  );
+  expect(await dailyTaskOrder()).toEqual([...ids].reverse());
 });

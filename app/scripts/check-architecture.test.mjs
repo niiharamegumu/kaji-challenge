@@ -17,14 +17,14 @@ test("does not interpret TypeScript generics or assertions as JSX before an impo
     assert.equal(
       violations(
         "features/home/example.ts",
-        `${expression}\nimport { value } from "../todos/utils/value";`,
+        `${expression}\nimport { value } from "../tasks/utils/value";`,
       ).length,
       1,
     );
   assert.equal(
     violations(
       "features/home/example.tsx",
-      'const view = <div />; const load = () => import("../todos/utils/value");',
+      'const view = <div />; const load = () => import("../tasks/utils/value");',
     ).length,
     1,
   );
@@ -75,19 +75,19 @@ for (const layer of [
 ])
   test(`requires another feature's ${layer} to be accessed through its public API`, () => {
     assert.equal(
-      violations("features/home/example.ts", `import { value } from "../todos/${layer}/value";`)
+      violations("features/home/example.ts", `import { value } from "../tasks/${layer}/value";`)
         .length,
       1,
     );
     assert.equal(
-      violations("features/home/example.ts", `export { value } from "../todos/${layer}/value";`)
+      violations("features/home/example.ts", `export { value } from "../tasks/${layer}/value";`)
         .length,
       1,
     );
   });
 
 test("allows feature public APIs and same-feature implementation imports", () => {
-  for (const target of ["../todos", "../todos/index", "../todos/index.ts", "./utils/date"])
+  for (const target of ["../tasks", "../tasks/index", "../tasks/index.ts", "./utils/date"])
     assert.deepEqual(
       violations("features/home/example.ts", `import { value } from "${target}";`),
       [],
@@ -95,7 +95,7 @@ test("allows feature public APIs and same-feature implementation imports", () =>
 });
 
 test("enforces server and shared boundaries through re-exports and dynamic imports", () => {
-  assert.equal(violations("shared/example.ts", 'export * from "../features/todos";').length, 1);
+  assert.equal(violations("shared/example.ts", 'export * from "../features/tasks";').length, 1);
   assert.equal(
     violations(
       "features/home/example.ts",

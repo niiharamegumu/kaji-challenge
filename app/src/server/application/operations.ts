@@ -56,15 +56,6 @@ export async function executeOperation(
   const repo = repository.forMember(teamId, userId);
   let data: unknown;
   switch (input.operation) {
-    case "getMePreferences":
-      data = await repo.GetUserPreferences(userId);
-      break;
-    case "initializeMePreferences":
-      data = await repo.SaveUserPreferences(userId, input.body, true);
-      break;
-    case "patchMePreferences":
-      data = await repo.SaveUserPreferences(userId, input.body);
-      break;
     case "listSharedPages":
       data = { items: await repo.ListSharedPages(teamId) };
       break;
@@ -288,7 +279,6 @@ export async function executeOperation(
       await repo.Reorder({
         teamId,
         ids,
-        kind: "tasks",
         type: firstTask.Type,
         now,
       });
@@ -336,100 +326,6 @@ export async function executeOperation(
         completed: completedCount >= (task.Type === "daily" ? 1 : required),
         weeklyCompletedCount: task.Type === "daily" ? 0 : completedCount,
       };
-      break;
-    }
-    case "listTodoCategories":
-      data = { categories: await repo.ListTodoCategories(teamId) };
-      break;
-    case "postTodoCategory":
-      await repo.CreateTodoCategory(teamId, { id: crypto.randomUUID(), name: input.body.name });
-      data = { categories: await repo.ListTodoCategories(teamId) };
-      break;
-    case "patchTodoCategory":
-      invariant(
-        await repo.RenameTodoCategory(teamId, input.params.categoryId, input.body.name),
-        "同じ名前のカテゴリーがあるか、対象が削除されています。一覧を確認してください。",
-        409,
-      );
-      data = { categories: await repo.ListTodoCategories(teamId) };
-      break;
-    case "deleteTodoCategory":
-      invariant(
-        await repo.DeleteTodoCategory(teamId, input.params.categoryId, now),
-        "category not found",
-        404,
-      );
-      data = {};
-      break;
-    case "postTodoCategoriesReorder":
-      invariant(
-        await repo.ReorderTodoCategories(teamId, input.body.categoryIds),
-        "カテゴリーが変更されました。一覧を確認して並べ替え直してください。",
-        409,
-      );
-      data = { categories: await repo.ListTodoCategories(teamId) };
-      break;
-    case "listTodoItems":
-      data = { items: (await repo.ListTodoItemsByTeamID(teamId)).map(map.todo) };
-      break;
-    case "postTodoItem": {
-      const id = crypto.randomUUID();
-      invariant(
-        await repo.CreateTodoItem({
-          CategoryID: input.body.categoryId ?? null,
-          ID: id,
-          TeamID: teamId,
-          Name: requiredText(input.body.name),
-          Notes: input.body.notes ?? null,
-          SortKey: 100,
-          CreatedAt: now,
-          UpdatedAt: now,
-        }),
-        "カテゴリーが変更されました。一覧を確認してください。",
-        409,
-      );
-      data = map.todo(await repo.GetTodoItemByID(id));
-      break;
-    }
-    case "patchTodoItem": {
-      const item = await repo.GetTodoItemByID(input.params.itemId);
-      invariant(item.TeamID === teamId, "item not found", 404);
-      invariant(
-        await repo.UpdateTodoItem({
-          TeamID: teamId,
-          CategoryID: input.body.categoryId,
-          ID: item.ID,
-          Name: input.body.name !== undefined ? requiredText(input.body.name) : undefined,
-          Notes: input.body.notes === undefined ? undefined : input.body.notes?.trim() || null,
-          UpdatedAt: now,
-        }),
-        "カテゴリーが変更されました。一覧を確認してください。",
-        409,
-      );
-      data = map.todo(await repo.GetTodoItemByID(item.ID));
-      break;
-    }
-    case "deleteTodoItem": {
-      const item = await repo.GetTodoItemByID(input.params.itemId);
-      invariant(item.TeamID === teamId, "item not found", 404);
-      invariant((await repo.DeleteTodoItem(item.ID)) === 1, "item not found", 404);
-      data = {};
-      break;
-    }
-    case "postTodoItemsReorder": {
-      const rows = await repo.ListTodoItemsByTeamID(teamId);
-      const ids = input.body.itemIds;
-      validateReorder(
-        rows.map((item) => item.ID),
-        ids,
-      );
-      await repo.Reorder({
-        teamId,
-        ids,
-        kind: "todo",
-        now,
-      });
-      data = { items: (await repo.ListTodoItemsByTeamID(teamId)).map(map.todo) };
       break;
     }
     case "listPenaltyRules":

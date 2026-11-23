@@ -9,77 +9,14 @@ import {
   uniqueIndex,
   check,
 } from "drizzle-orm/sqlite-core";
-import { session, user } from "./auth-schema";
+import { user } from "./auth-schema";
 import type { SharedPageDocument } from "../../contracts/shared-pages";
-import type { UserPreferences } from "../../contracts/user-preferences";
-
-export const userPreferences = sqliteTable(
-  "user_preferences",
-  {
-    user_id: text("user_id").primaryKey().notNull(),
-    todo_completion_delay_ms: integer("todo_completion_delay_ms")
-      .$type<UserPreferences["todoCompletionDelayMs"]>()
-      .notNull()
-      .default(3000),
-    default_todo_category: text("default_todo_category", { mode: "json" })
-      .$type<UserPreferences["defaultTodoCategory"]>()
-      .notNull()
-      .default(sql`'{"kind":"all"}'`),
-  },
-  (t) => [foreignKey({ columns: [t.user_id], foreignColumns: [user.id] }).onDelete("cascade")],
-);
 
 // Runtime mapping of the deployed D1 schema. SQL migrations remain the DDL source of truth.
-export const mcpConnections = sqliteTable(
-  "mcp_connections",
-  {
-    id: text("id").primaryKey().notNull(),
-    user_id: text("user_id").notNull(),
-    client_id: text("client_id").notNull(),
-    client_name: text("client_name").notNull(),
-    resource: text("resource").notNull(),
-    scopes: text("scopes", { mode: "json" }).$type<string[]>().notNull(),
-    grant_id: text("grant_id"),
-    created_at: text("created_at").notNull(),
-    expires_at: text("expires_at").notNull(),
-    revoked_at: text("revoked_at"),
-  },
-  (t) => [
-    foreignKey({ columns: [t.user_id], foreignColumns: [user.id] }).onDelete("cascade"),
-    index("mcp_connections_user_idx").on(t.user_id, t.created_at),
-    uniqueIndex("mcp_connections_grant_uq").on(t.grant_id),
-    check(
-      "mcp_connections_scopes_check",
-      sql`json_valid(${t.scopes}) AND json_type(${t.scopes}) = 'array'`,
-    ),
-    check("mcp_connections_expiry_check", sql`${t.expires_at} > ${t.created_at}`),
-  ],
-);
-
-export const mcpConsentClaims = sqliteTable(
-  "mcp_consent_claims",
-  {
-    handle_hash: text("handle_hash").primaryKey().notNull(),
-    user_id: text("user_id").notNull(),
-    session_id: text("session_id").notNull(),
-    expires_at: text("expires_at").notNull(),
-    consumed_at: text("consumed_at"),
-  },
-  (t) => [
-    foreignKey({ columns: [t.user_id], foreignColumns: [user.id] }).onDelete("cascade"),
-    foreignKey({ columns: [t.session_id], foreignColumns: [session.id] }).onDelete("cascade"),
-    index("mcp_consent_claims_expiry_idx").on(t.expires_at),
-  ],
-);
-
 export const teams = sqliteTable("teams", {
   id: text("id").primaryKey().notNull(),
   name: text("name").notNull(),
   created_at: text("created_at").notNull(),
-  todo_categories: text("todo_categories", { mode: "json" })
-    .$type<({ id: string; name: string } | null)[]>()
-    .notNull()
-    .default(sql`'[]'`),
 });
 
 export const inviteCodes = sqliteTable(
@@ -93,25 +30,6 @@ export const inviteCodes = sqliteTable(
   (t) => [
     foreignKey({ columns: [t.team_id], foreignColumns: [teams.id] }).onDelete("cascade"),
     index("invite_team_idx").on(t.team_id, t.created_at),
-  ],
-);
-
-export const todoItems = sqliteTable(
-  "todo_items",
-  {
-    id: text("id").primaryKey().notNull(),
-    team_id: text("team_id").notNull(),
-    name: text("name").notNull(),
-    notes: text("notes"),
-    category_id: text("category_id"),
-    sort_key: integer("sort_key").notNull(),
-    created_at: text("created_at").notNull(),
-    updated_at: text("updated_at").notNull(),
-  },
-  (t) => [
-    foreignKey({ columns: [t.team_id], foreignColumns: [teams.id] }).onDelete("cascade"),
-    index("todo_team_sort_idx").on(t.team_id, t.sort_key, t.created_at),
-    check("todo_items_check_1", sql`${t.sort_key}>=1`),
   ],
 );
 
@@ -377,24 +295,6 @@ export const pushDelivery = sqliteTable(
       "push_delivery_check_1",
       sql`${t.slot} IN('daily_2100','weekly_prev_sat_1900','weekly_due_sun_1000')`,
     ),
-  ],
-);
-
-export const assistUsage = sqliteTable(
-  "assist_usage",
-  {
-    id: text("id").primaryKey().notNull(),
-    window_start: integer("window_start").notNull(),
-    window_count: integer("window_count").notNull(),
-    usage_day: text("usage_day").notNull(),
-    daily_count: integer("daily_count").notNull(),
-    total_count: integer("total_count").notNull(),
-  },
-  (t) => [
-    check("assist_usage_id", sql`${t.id} = 'voice'`),
-    check("assist_usage_window", sql`${t.window_count} >= 0`),
-    check("assist_usage_daily", sql`${t.daily_count} >= 0`),
-    check("assist_usage_total", sql`${t.total_count} >= 0`),
   ],
 );
 

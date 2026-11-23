@@ -97,7 +97,6 @@ function setup(home = fixture()) {
     defaultOptions: { queries: { retry: false, staleTime: Infinity }, mutations: { retry: false } },
   });
   client.setQueryData(queryKeys.home, home);
-  client.setQueryData(queryKeys.todoItems, []);
   client.setQueryData([...queryKeys.rules, "withDeleted"], []);
   client.setQueryData(
     [...queryKeys.monthlySummary, previousMonthKey(dateStringInJST().slice(0, 7))],
@@ -406,7 +405,6 @@ it("applies many pending completions with one traversal of the saved task list",
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
   client.setQueryData(queryKeys.home, home);
-  client.setQueryData(queryKeys.todoItems, []);
   client.setQueryData([...queryKeys.rules, "withDeleted"], []);
   client.setQueryData([...queryKeys.monthlySummary, previousMonthKey(home.month)], {
     totalPenalty: 0,

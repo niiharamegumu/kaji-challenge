@@ -8,12 +8,6 @@ it("refreshes all team query groups", async () => {
   );
 });
 
-it("refreshes only ToDos for a ToDo mutation, leaving unrelated caches fresh", async () => {
-  const invalidateQueries = vi.fn().mockResolvedValue(undefined);
-  await refreshTeamState({ invalidateQueries }, ["todos"]);
-  expect(invalidateQueries.mock.calls.map(([arg]) => arg.queryKey)).toEqual([["todo-items"]]);
-});
-
 it("refreshes shared pages without invalidating chores, scores or monthly totals", async () => {
   const invalidateQueries = vi.fn().mockResolvedValue(undefined);
   await refreshTeamState({ invalidateQueries }, ["shared-pages"]);
@@ -22,13 +16,15 @@ it("refreshes shared pages without invalidating chores, scores or monthly totals
 
 it("deduplicates overlapping query groups and fully refreshes membership changes", async () => {
   const invalidateQueries = vi.fn().mockResolvedValue(undefined);
-  await refreshTeamState({ invalidateQueries }, ["todos", "todo-categories", "todos"]);
+  await refreshTeamState({ invalidateQueries }, ["tasks", "task-completions", "tasks"]);
   expect(invalidateQueries.mock.calls.map(([arg]) => arg.queryKey)).toEqual([
-    ["todo-items"],
-    ["todo-categories"],
+    ["tasks"],
+    ["home"],
+    ["monthly-summary"],
+    ["month-close-candidate"],
   ]);
   invalidateQueries.mockClear();
-  await refreshTeamState({ invalidateQueries }, ["membership", "todos"]);
+  await refreshTeamState({ invalidateQueries }, ["membership", "tasks"]);
   expect(invalidateQueries.mock.calls.map(([arg]) => arg.queryKey)).toEqual(
     teamStateRefreshQueryKeys,
   );

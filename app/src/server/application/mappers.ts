@@ -49,18 +49,6 @@ export function reminder(r: P.Reminder): M.Reminder {
     updatedAt: r.UpdatedAt,
   };
 }
-export function todo(r: P.TodoItem): M.TodoItem {
-  return {
-    categoryId: r.CategoryID,
-    id: r.ID,
-    teamId: r.TeamID,
-    name: r.Name,
-    notes: r.Notes,
-    sortKey: r.SortKey,
-    createdAt: r.CreatedAt,
-    updatedAt: r.UpdatedAt,
-  };
-}
 export function penalty(r: P.PenaltyRule): M.PenaltyRule {
   return {
     id: r.ID,

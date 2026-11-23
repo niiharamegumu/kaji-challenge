@@ -10,29 +10,11 @@ import { createHmac } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { createTestDatabase } from "../helpers/d1";
 import { provisionUser } from "../../src/server/application/provision-user";
-import {
-  installAssistEncodingLoad,
-  installAssistMediaFixture,
-  installNativeAssistAudioFixture,
-  readAssistAudioUpload,
-} from "./assist-fixture";
 async function selectSettingsCategory(page: Page, name: string) {
   await page
     .getByRole("navigation", { name: "設定カテゴリー" })
     .getByRole("button", { name: new RegExp(`^${name}`) })
     .click();
-}
-
-async function savePreferences(page: Page, action: () => Promise<unknown>) {
-  const saved = page.waitForResponse(
-    (response) =>
-      response.url().includes("/_serverFn/") &&
-      (response.request().postData()?.includes("patchMePreferences") ?? false),
-  );
-  await action();
-  expect((await saved).ok()).toBe(true);
-  await expect(page.getByRole("combobox", { name: "ToDo完了の取り消し猶予" })).toBeEnabled();
-  await expect(page.getByRole("status").filter({ hasText: "設定を保存中" })).toHaveCount(0);
 }
 
 async function expectFocusKeepsFrame(page: Page, control: Locator, surface = control) {
@@ -65,14 +47,8 @@ const userId = crypto.randomUUID(),
   token = crypto.randomUUID();
 const peerToken = crypto.randomUUID(),
   outsiderToken = crypto.randomUUID(),
-  categoryOrderToken = crypto.randomUUID(),
-  swipeAreaToken = crypto.randomUUID(),
   summaryToken = crypto.randomUUID(),
-  bulkDailyToken = crypto.randomUUID(),
-  todoDelayToken = crypto.randomUUID(),
-  todoLayoutToken = crypto.randomUUID(),
-  todoDefaultToken = crypto.randomUUID(),
-  performanceToken = crypto.randomUUID();
+  bulkDailyToken = crypto.randomUUID();
 test.beforeAll(async () => {
   const path = process.env.KAJI_D1_TEST_PATH;
   if (!path) throw new Error("Run browser tests via bun run test:local for isolated D1 storage");
@@ -92,14 +68,8 @@ test.beforeAll(async () => {
     for (const [name, accessToken] of [
       ["同期メンバー", peerToken],
       ["別チーム", outsiderToken],
-      ["カテゴリー順序", categoryOrderToken],
-      ["スワイプ領域", swipeAreaToken],
       ["サマリー検証", summaryToken],
       ["日間一括検証", bulkDailyToken],
-      ["ToDo猶予検証", todoDelayToken],
-      ["ToDo行の表示検証", todoLayoutToken],
-      ["ToDo初期カテゴリー", todoDefaultToken],
-      ["キャッシュ検証", performanceToken],
     ]) {
       const id = crypto.randomUUID();
       await connection.query(
@@ -152,8 +122,12 @@ test(
     expect(document.headers()["x-frame-options"]).toBe("DENY");
     expect(document.headers()["x-content-type-options"]).toBe("nosniff");
     expect(document.headers()["permissions-policy"]).toBe(
-      "camera=(), microphone=(self), geolocation=()",
+      "camera=(), microphone=(), geolocation=()",
     );
+    const shell = await request.get("/_shell.html");
+    expect(shell.ok()).toBe(true);
+    expect(shell.headers()["content-type"]).toContain("text/html");
+    expect(shell.headers()["permissions-policy"]).toBe("camera=(), microphone=(), geolocation=()");
     const serviceWorker = await request.get("/sw.js");
     expect(serviceWorker.headers()["cache-control"]).toContain("no-store");
     const response = await request.get("/api/auth/get-session");
@@ -163,13 +137,26 @@ test(
   },
 );
 test(
+  "retired TODO pages and OAuth discovery return 404",
+  { tag: ["@smoke"] },
+  async ({ request }) => {
+    for (const path of [
+      "/todos",
+      "/todo-categories",
+      "/.well-known/oauth-authorization-server/api/mcp/oauth",
+    ]) {
+      expect((await request.get(path)).status(), path).toBe(404);
+    }
+  },
+);
+test(
   "settings categories keep drafts and fit narrow screens",
   { tag: ["@settings"] },
   async ({ page, context }, testInfo) => {
     await authenticate(context);
     await page.goto("/settings");
     const navigation = page.getByRole("navigation", { name: "設定カテゴリー" });
-    await expect(navigation.getByRole("button")).toHaveCount(6);
+    await expect(navigation.getByRole("button")).toHaveCount(5);
     await expect(page.getByRole("heading", { name: "プロフィール", exact: true })).toBeVisible();
     const nickname = page.getByRole("textbox", { name: "ニックネーム", exact: true });
     await nickname.fill("入力途中の名前");
@@ -183,7 +170,7 @@ test(
     await expect(page.getByRole("button", { name: "離脱して新しいチームを作成" })).toBeVisible();
     await selectSettingsCategory(page, "プロフィール");
     await expect(nickname).toHaveValue("入力途中の名前");
-    for (const category of ["プロフィール", "表示", "ToDo", "通知", "チーム", "アプリ"]) {
+    for (const category of ["プロフィール", "表示", "通知", "チーム", "アプリ"]) {
       await selectSettingsCategory(page, category);
       await expect(page.getByRole("heading", { name: category, exact: true })).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
@@ -292,7 +279,7 @@ test(
   },
 );
 test(
-  "existing identity loads every route and updates todo through Workers",
+  "existing identity loads the main routes through Workers",
   { tag: ["@smoke", "@penalties"] },
   async ({ page, context }, testInfo) => {
     const errors: string[] = [];
@@ -310,7 +297,6 @@ test(
     for (const [route, heading] of [
       ["/tasks", "タスク管理"],
       ["/summary", "月次サマリー"],
-      ["/todos", "ToDo"],
     ]) {
       await page.goto(route);
       await expect(page.getByRole("heading", { name: heading, exact: true })).toBeVisible();
@@ -320,33 +306,6 @@ test(
         fullPage: true,
       });
     }
-    await page.getByRole("button", { name: "追加", exact: true }).click();
-    const todoForm = page.getByRole("dialog", { name: "ToDoを追加", exact: true });
-    const nameField = todoForm.getByRole("textbox", { name: "名前", exact: true });
-    await nameField.fill("検証用の牛乳");
-    const helpLabel = "ToDoを続けて追加する方法";
-    const helpTrigger = todoForm.getByRole("button", { name: helpLabel, exact: true });
-    const help = page.getByRole("dialog", { name: helpLabel, exact: true });
-    if (testInfo.project.name === "mobile") {
-      await helpTrigger.tap();
-    } else {
-      await helpTrigger.focus();
-      await page.keyboard.press("Enter");
-    }
-    await expect(help.getByText(/「続けて追加」またはEnterで/)).toBeVisible();
-    if (testInfo.project.name === "mobile") {
-      await help.getByRole("button", { name: "閉じる", exact: true }).tap();
-    } else {
-      await page.keyboard.press("Escape");
-      await expect(helpTrigger).toBeFocused();
-    }
-    await expect(help).toBeHidden();
-    await expect(nameField).toHaveValue("検証用の牛乳");
-    await expect(page.getByText("検証用の牛乳", { exact: true })).toHaveCount(0);
-    await todoForm.getByRole("button", { name: "追加する", exact: true }).click();
-    await expect(page.getByText("検証用の牛乳", { exact: true })).toBeVisible();
-    await page.reload();
-    await expect(page.getByText("検証用の牛乳", { exact: true })).toBeVisible();
     await page.goto("/calendar");
     await expect(
       page.getByRole("button", { name: "カレンダーの使い方", exact: true }),
@@ -406,337 +365,11 @@ test(
     await expect(page.getByRole("heading", { name: /ペナルティ/ }).first()).toBeVisible();
     expect(new URL(page.url()).pathname).toBe("/penalties");
     await page.goto("/");
-    await expect(page.getByText("検証用の牛乳", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "日間タスク", exact: true })).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath("home.png"), fullPage: true });
     expect(errors).toEqual([]);
   },
 );
-test(
-  "opens the saved default category on home and ToDo without changing category order",
-  { tag: ["@todos", "@home", "@settings"] },
-  async ({ page, context, browser }, testInfo) => {
-    await authenticate(context, todoDefaultToken);
-    await page.goto("/todo-categories");
-    for (const name of ["仕事", "買い物"]) {
-      await page.getByLabel("新しいカテゴリー").fill(name);
-      await page.getByRole("button", { name: "カテゴリーを追加", exact: true }).click();
-      await expect(page.getByRole("button", { name: `${name} を削除`, exact: true })).toBeVisible();
-    }
-    await page.goto("/settings");
-    await selectSettingsCategory(page, "ToDo");
-    const select = page.getByRole("combobox", { name: "最初に表示するToDoカテゴリー" });
-    await savePreferences(page, () => select.selectOption({ label: "買い物" }));
-    await savePreferences(page, () =>
-      page.getByLabel("ToDo完了の取り消し猶予").selectOption("5000"),
-    );
-    await selectSettingsCategory(page, "表示");
-    await page.getByText("ダーク", { exact: true }).click();
-    // ToDo preferences follow the user; each browser keeps its own theme.
-    const secondContext = await browser.newContext({ baseURL: "http://localhost:5194" });
-    try {
-      await authenticate(secondContext, todoDefaultToken);
-      const secondPage = await secondContext.newPage();
-      await secondPage.goto("/settings");
-      await selectSettingsCategory(secondPage, "表示");
-      await expect(secondPage.getByRole("radio", { name: "システム", exact: true })).toBeChecked();
-      await secondPage.getByText("ライト", { exact: true }).click();
-      await expect(secondPage.locator("html")).toHaveAttribute("data-theme", "light");
-      await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-      await selectSettingsCategory(secondPage, "ToDo");
-      await expect(secondPage.getByLabel("ToDo完了の取り消し猶予")).toHaveValue("5000");
-      await expect(
-        secondPage.getByLabel("最初に表示するToDoカテゴリー").locator("option:checked"),
-      ).toHaveText("買い物");
-      // Changing accounts in this browser must not reuse the first user's cache.
-      await authenticate(secondContext, outsiderToken);
-      await secondPage.reload();
-      await selectSettingsCategory(secondPage, "ToDo");
-      await expect(secondPage.getByLabel("ToDo完了の取り消し猶予")).toBeEnabled();
-      await expect(secondPage.getByLabel("ToDo完了の取り消し猶予")).toHaveValue("3000");
-      await expect(secondPage.getByLabel("最初に表示するToDoカテゴリー")).toHaveValue("all");
-      await selectSettingsCategory(secondPage, "表示");
-      await expect(secondPage.getByRole("radio", { name: "ライト", exact: true })).toBeChecked();
-    } finally {
-      await secondContext.close();
-    }
-    await page.reload();
-    await selectSettingsCategory(page, "ToDo");
-    await expect(select.locator("option:checked")).toHaveText("買い物");
-    await page.screenshot({
-      path: testInfo.outputPath("todo-default-settings.png"),
-      fullPage: true,
-    });
-    const filter = page.getByRole("group", { name: "カテゴリーで絞り込み" });
-    for (const path of ["/", "/todos"]) {
-      await page.goto(path);
-      await expect(filter.getByRole("button", { name: "買い物", exact: true })).toHaveAttribute(
-        "aria-pressed",
-        "true",
-      );
-      await expect(filter.getByRole("button")).toHaveText(["すべて", "未分類", "仕事", "買い物"]);
-      await filter.getByRole("button", { name: "仕事", exact: true }).click();
-      await page.reload();
-      await expect(filter.getByRole("button", { name: "買い物", exact: true })).toHaveAttribute(
-        "aria-pressed",
-        "true",
-      );
-    }
-    await page.screenshot({
-      path: testInfo.outputPath("todo-default-shopping.png"),
-      fullPage: true,
-    });
-    await page.getByRole("button", { name: "ホーム", exact: true }).click();
-    await expect(filter.getByRole("button", { name: "買い物", exact: true })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    await filter.getByRole("button", { name: "すべて", exact: true }).click();
-    await page.getByRole("button", { name: "ToDo", exact: true }).click();
-    await expect(filter.getByRole("button", { name: "買い物", exact: true })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    await page.goto("/settings");
-    await selectSettingsCategory(page, "ToDo");
-    await savePreferences(page, () => select.selectOption({ label: "未分類" }));
-    await page.goto("/todos");
-    await expect(filter.getByRole("button", { name: "未分類", exact: true })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    await page.goto("/settings");
-    await selectSettingsCategory(page, "ToDo");
-    await savePreferences(page, () => select.selectOption({ label: "すべて" }));
-    await page.goto("/");
-    await expect(filter.getByRole("button", { name: "すべて", exact: true })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-  },
-);
-test(
-  "keeps compact ToDo controls aligned and reachable on home and ToDo pages",
-  { tag: ["@todos", "@home"] },
-  async ({ page, context }, testInfo) => {
-    // At tablet width the two-column home panel is narrower than the ToDo page.
-    const tablet = testInfo.project.name === "desktop";
-    if (tablet) await page.setViewportSize({ width: 800, height: 900 });
-    await authenticate(context, todoLayoutToken);
-    await page.goto("/todo-categories");
-    await page.getByLabel("新しいカテゴリー").fill("買い物");
-    await page.getByRole("button", { name: "カテゴリーを追加", exact: true }).click();
-    await expect(page.getByRole("button", { name: "買い物 を削除" })).toBeVisible();
-    await page.goto("/todos");
-    const url = `https://example.test/${"a".repeat(72)}`;
-    const singleLineName = "食器用洗剤の詰め替え";
-    const longName = "交換用フィルターの型番を確認して注文する".padEnd(100, "A");
-    for (const [name, notes] of [
-      [singleLineName, ""],
-      ["黒コショウ", `粒コショウ ${url}`],
-      [longName, ""],
-    ]) {
-      await page.getByRole("button", { name: "追加", exact: true }).click();
-      const form = page.getByRole("dialog", { name: "ToDoを追加" });
-      await form.getByLabel("名前", { exact: true }).fill(name);
-      await form.getByLabel("メモ", { exact: true }).fill(notes);
-      await form.getByLabel("カテゴリー（任意）").selectOption({ label: "買い物" });
-      await form.getByRole("button", { name: "追加する", exact: true }).click();
-      await expect(form).toHaveCount(0);
-    }
-
-    for (const path of ["/", "/todos"]) {
-      await page.goto(path);
-      const region = page.getByRole("region", { name: "ToDo一覧" });
-      const item = region.getByRole("listitem").filter({ hasText: singleLineName });
-      await expect(item.getByText("買い物")).toBeVisible();
-      await expect(region.getByRole("link", { name: url })).toHaveAttribute("href", url);
-      const edit = item.getByRole("button", { name: "編集" });
-      const complete = item.getByRole("button", { name: "完了にする" });
-      const drag = item.getByRole("button", { name: /をドラッグして並び替え/ });
-      await expect(complete).toHaveText("");
-      await item.scrollIntoViewIfNeeded();
-      const row = (await item.boundingBox())!;
-      const title = (await item.getByText(singleLineName, { exact: true }).boundingBox())!;
-      const category = (await item.getByText("買い物").boundingBox())!;
-      const longTitle = region.getByText(longName, { exact: true });
-      const lineHeight = await longTitle.evaluate((el) =>
-        parseFloat(getComputedStyle(el).lineHeight),
-      );
-      expect(title.height).toBeLessThanOrEqual(lineHeight);
-      expect((await longTitle.boundingBox())!.height).toBeGreaterThan(lineHeight);
-      expect(
-        await longTitle.evaluate(
-          (el) => el.scrollHeight <= el.clientHeight && el.scrollWidth <= el.clientWidth,
-        ),
-      ).toBe(true);
-      expect(row.height).toBeLessThanOrEqual(60);
-      expect(row.x + row.width).toBeLessThanOrEqual(page.viewportSize()!.width);
-      const pencil = (await edit.locator("svg").boundingBox())!;
-      const check = (await complete.locator("svg").boundingBox())!;
-      const grip = (await drag.locator("svg").boundingBox())!;
-      const completeBox = (await complete.boundingBox())!;
-      if (tablet && path === "/") {
-        expect(category.y).toBeGreaterThanOrEqual(title.y + title.height);
-      } else {
-        expect(category.x).toBeGreaterThanOrEqual(title.x + title.width);
-        expect(pencil.x - (category.x + category.width)).toBeLessThanOrEqual(9);
-      }
-      expect(check.x - (pencil.x + pencil.width)).toBeLessThanOrEqual(16);
-      expect(grip.x - (check.x + check.width)).toBeLessThanOrEqual(16);
-      let previousRight = title.x + title.width;
-      for (const control of [edit, complete, drag]) {
-        const box = (await control.boundingBox())!;
-        expect(box.width).toBeGreaterThanOrEqual(32);
-        expect(box.height).toBeGreaterThanOrEqual(44);
-        expect(box.x).toBeGreaterThanOrEqual(previousRight);
-        previousRight = box.x + box.width;
-      }
-      expect(previousRight).toBeLessThanOrEqual(row.x + row.width);
-      expect(await region.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
-      await region.getByRole("list").screenshot({
-        path: testInfo.outputPath(path === "/" ? "home-todo-rows.png" : "todo-page-rows.png"),
-      });
-      await complete.click();
-      const undo = item.getByRole("button", { name: "取り消す" });
-      await expect(undo.getByText("取り消す", { exact: true })).toHaveCount(0);
-      await expect(undo.getByRole("img", { name: /完了まで/ })).toBeVisible();
-      const completingRow = (await item.boundingBox())!;
-      expect(completingRow.height).toBe(row.height);
-      const undoBox = (await undo.boundingBox())!;
-      expect(undoBox.width).toBe(completeBox.width);
-      expect(undoBox.height).toBe(completeBox.height);
-      // The list screenshot can scroll mobile pages; compare positions within the row.
-      expect(undoBox.x - completingRow.x).toBe(completeBox.x - row.x);
-      expect(undoBox.y - completingRow.y).toBe(completeBox.y - row.y);
-      expect(undoBox.x + undoBox.width / 2).toBeCloseTo(check.x + check.width / 2, 0);
-      await undo.click();
-      expect((await item.boundingBox())!.height).toBe(row.height);
-      await edit.click();
-      await expect(region.getByLabel("名前", { exact: true })).toHaveValue(singleLineName);
-      await region.getByRole("button", { name: "キャンセル" }).click();
-    }
-  },
-);
-test(
-  "migrates and synchronizes the user's ToDo undo delay across browsers",
-  { tag: ["@todos", "@home", "@settings"] },
-  async ({ page, context, browser }, testInfo) => {
-    await page.goto("/");
-    await page.evaluate(() => localStorage.setItem("kaji:todo-completion-delay-ms:v1", "1700"));
-    await authenticate(context, todoDelayToken);
-    await page.goto("/settings");
-    await selectSettingsCategory(page, "ToDo");
-    const select = page.getByRole("combobox", { name: "ToDo完了の取り消し猶予" });
-    const chooseDelay = async (seconds: number) => {
-      await savePreferences(page, () => select.selectOption(String(seconds * 1_000)));
-      await expect(select).toHaveValue(String(seconds * 1_000));
-    };
-    await expect(select).toBeEnabled();
-    await expect(select).toHaveValue("2000");
-    await expect(select.locator("option")).toHaveText(["1秒", "2秒", "3秒", "4秒", "5秒"]);
-    // A stale legacy value must never overwrite the initialized account setting.
-    await page.evaluate(() => localStorage.setItem("kaji:todo-completion-delay-ms:v1", "1000"));
-    await page.reload();
-    await selectSettingsCategory(page, "ToDo");
-    await expect(select).toHaveValue("2000");
-    if (testInfo.project.name === "desktop") {
-      const initialCategory = page.getByRole("combobox", { name: "最初に表示するToDoカテゴリー" });
-      const initialHelp = page.getByRole("button", { name: "初期カテゴリーの説明" });
-      await expect(initialCategory).toBeEnabled();
-      await select.focus();
-      await page.keyboard.press("Tab");
-      await expect(initialHelp).toBeFocused();
-      await page.keyboard.press("Tab");
-      await expect(initialCategory).toBeFocused();
-      await page.keyboard.press("Shift+Tab");
-      await expect(initialHelp).toBeFocused();
-      await page.keyboard.press("Shift+Tab");
-      await expect(select).toBeFocused();
-    }
-    await chooseDelay(1);
-    await chooseDelay(2);
-    await chooseDelay(5);
-    await page.reload();
-    await selectSettingsCategory(page, "ToDo");
-    await expect(select).toHaveValue("5000");
-    const delayHelpLabel = "取り消し猶予の説明";
-    await page.getByRole("button", { name: delayHelpLabel }).click();
-    const delayHelp = page.getByRole("dialog", { name: delayHelpLabel });
-    await expect(
-      delayHelp.getByText("同じユーザーでログインした別の端末やブラウザーでも使えます。"),
-    ).toBeVisible();
-    await delayHelp.getByRole("button", { name: "閉じる", exact: true }).click();
-    expect(
-      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
-    ).toBe(true);
-    await page.screenshot({ path: testInfo.outputPath("todo-delay-settings.png"), fullPage: true });
-
-    // A separate browser profile for the same account retrieves the saved delay.
-    const otherContext = await browser.newContext({ baseURL: "http://localhost:5194" });
-    try {
-      await authenticate(otherContext, todoDelayToken);
-      const otherPage = await otherContext.newPage();
-      await otherPage.goto("/settings");
-      await selectSettingsCategory(otherPage, "ToDo");
-      await expect(otherPage.getByRole("combobox", { name: "ToDo完了の取り消し猶予" })).toHaveValue(
-        "5000",
-      );
-    } finally {
-      await otherContext.close();
-    }
-
-    await page.getByRole("button", { name: "ToDo", exact: true }).click();
-    for (const name of ["猶予検証ホーム", "猶予検証ToDo"]) {
-      await page.getByRole("button", { name: "追加", exact: true }).click();
-      await page.getByLabel("名前", { exact: true }).fill(name);
-      const saved = page.waitForResponse(
-        (response) =>
-          response.url().includes("/_serverFn/") &&
-          (response.request().postData()?.includes("postTodoItem") ?? false),
-      );
-      await page.getByRole("button", { name: "追加する", exact: true }).click();
-      expect((await saved).ok()).toBe(true);
-    }
-    await page.getByRole("button", { name: "ホーム", exact: true }).click();
-    const homeItem = page.getByRole("listitem").filter({ hasText: "猶予検証ホーム" });
-    let completions = 0;
-    page.on("request", (request) => {
-      if (request.url().includes("/_serverFn/") && request.postData()?.includes("deleteTodoItem"))
-        completions += 1;
-    });
-    await homeItem.getByRole("button", { name: "完了にする", exact: true }).click();
-    await expect(homeItem.getByRole("img", { name: "完了まで5秒" })).toBeVisible();
-    await homeItem.getByRole("button", { name: "取り消す", exact: true }).click();
-    await page.waitForTimeout(5_100);
-    expect(completions).toBe(0);
-    await page.goto("/settings");
-    await selectSettingsCategory(page, "ToDo");
-    await chooseDelay(1);
-    await page.reload();
-    await selectSettingsCategory(page, "ToDo");
-    await expect(select).toHaveValue("1000");
-    for (const [route, name] of [
-      ["ホーム", "猶予検証ホーム"],
-      ["ToDo", "猶予検証ToDo"],
-    ]) {
-      await page.getByRole("button", { name: route, exact: true }).click();
-      const item = page.getByRole("listitem").filter({ hasText: name });
-      const saved = page.waitForResponse(
-        (response) =>
-          response.url().includes("/_serverFn/") &&
-          (response.request().postData()?.includes("deleteTodoItem") ?? false),
-      );
-      await item.getByRole("button", { name: "完了にする", exact: true }).click();
-      await expect(item.getByRole("img", { name: "完了まで1秒" })).toBeVisible();
-      expect((await saved).ok()).toBe(true);
-      await page.reload();
-      await expect(page.getByRole("region", { name: "ToDo一覧", exact: true })).toBeVisible();
-      await expect(page.getByText(name, { exact: true })).toHaveCount(0);
-    }
-    expect(completions).toBe(2);
-  },
-);
-
 test(
   "keeps Japanese dates across browser timezones at the month boundary",
   { tag: ["@home", "@tasks", "@calendar", "@summary"] },
@@ -975,8 +608,8 @@ test(
 );
 
 test(
-  "completed home cards release their animation layer before opening todo",
-  { tag: ["@home", "@tasks", "@todos"] },
+  "completed home cards release their animation layer before opening the summary",
+  { tag: ["@home", "@tasks", "@summary"] },
   async ({ page, context }) => {
     await authenticate(context);
     await page.goto("/tasks");
@@ -995,8 +628,8 @@ test(
       .poll(() => dailyPanel.evaluate((element) => getComputedStyle(element).transform))
       .toBe("none");
 
-    await page.getByRole("button", { name: "ToDo", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "ToDo", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "サマリー", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "月次サマリー", exact: true })).toBeVisible();
     await expect(dailyPanel).toHaveCount(0);
     await expect(page.locator('main [class*="ring-[color:var(--color-matcha-400)]"]')).toHaveCount(
       0,
@@ -1429,7 +1062,7 @@ test(
 
 test(
   "real WebSockets synchronize two users, deduplicate tabs and isolate teams",
-  { tag: ["@realtime", "@tasks", "@todos"] },
+  { tag: ["@realtime", "@tasks"] },
   async ({ browser, page, context }, testInfo) => {
     const peerContext = await browser.newContext({
       baseURL: "http://localhost:5194",
@@ -1480,30 +1113,12 @@ test(
       await extra.close();
       await expect(peerIcon).toBeVisible();
 
-      await page.getByRole("button", { name: "ToDo", exact: true }).click();
-      await peer.getByRole("button", { name: "ToDo", exact: true }).click();
-      await page.getByRole("button", { name: "追加", exact: true }).click();
-      await page.getByPlaceholder("例: 牛乳", { exact: true }).fill("リアルタイムのToDo");
-      await page.getByRole("button", { name: "追加する", exact: true }).click();
-      await expect(peer.getByText("リアルタイムのToDo", { exact: true })).toBeVisible();
-      const item = peer.getByRole("listitem").filter({ hasText: "リアルタイムのToDo" });
-      await item.getByRole("button", { name: "編集", exact: true }).click();
-      await peer.getByLabel("メモ", { exact: true }).fill("共有メモ");
-      await peer.getByRole("button", { name: "保存", exact: true }).click();
-      await expect(page.getByText("共有メモ", { exact: true })).toBeVisible();
-      await item.getByRole("button", { name: "完了にする" }).click();
-      await expect(peer.getByRole("dialog", { name: "完了にしますか？" })).toHaveCount(0);
-      await expect(item.getByRole("button", { name: "取り消す", exact: true })).toBeVisible();
-      await expect(page.getByText("リアルタイムのToDo", { exact: true })).toBeVisible();
-      await expect(page.getByText("リアルタイムのToDo", { exact: true })).toHaveCount(0);
-      expect(connections).toBe(1);
-
-      await page.goto("/tasks");
+      await page.getByRole("button", { name: "その他", exact: true }).click();
+      await page.getByRole("button", { name: "タスク", exact: true }).click();
       await page.getByRole("button", { name: "追加", exact: true }).click();
       await page.getByLabel("タスク名", { exact: true }).fill("リアルタイムの日間");
       await page.getByRole("button", { name: "追加する", exact: true }).click();
       await page.getByRole("button", { name: "ホーム", exact: true }).click();
-      await peer.getByRole("button", { name: "ホーム", exact: true }).click();
       const taskA = page.getByRole("button", { name: /リアルタイムの日間.*日間/ });
       const taskB = peer.getByRole("button", { name: /リアルタイムの日間.*日間/ });
       await taskA.click();
@@ -1511,6 +1126,7 @@ test(
       await taskB.click();
       await expect(taskA.getByRole("img")).toHaveAttribute("aria-label", "1回目: 未完了");
       await expect(outsider.getByText("リアルタイムの日間", { exact: true })).toHaveCount(0);
+      expect(connections).toBe(1);
       await peerContext.close();
       await expect(peerIcon).toHaveCount(0);
       await expect(
@@ -1524,1179 +1140,10 @@ test(
   },
 );
 
-test(
-  "ToDo categories persist, filter and detach without deleting items",
-  { tag: ["@todos", "@home"] },
-  async ({ page, context }, testInfo) => {
-    await authenticate(context);
-    let category = `分類検証-${testInfo.project.name}`;
-    await page.goto("/todo-categories");
-    await page.getByLabel("新しいカテゴリー").fill(category);
-    await page.getByRole("button", { name: "カテゴリーを追加", exact: true }).click();
-    await expect(page.getByRole("button", { name: `${category} を削除` })).toBeVisible();
-    await page.goto("/todos");
-    await expect(page).toHaveURL(/\/todos$/);
-    await page.getByRole("button", { name: "追加", exact: true }).click();
-    const createDialog = page.getByRole("dialog", { name: "ToDoを追加" });
-    const nameInput = createDialog.getByLabel("名前", { exact: true });
-    const notesInput = createDialog.getByLabel("メモ", { exact: true });
-    await expect(nameInput).toBeFocused();
-    for (const [name, value] of [
-      ["分類テストA", category],
-      ["分類テスト未分類", ""],
-      ["分類テストB", category],
-    ]) {
-      await nameInput.fill(name);
-      if (name === "分類テストA") await notesInput.fill("最初のToDoだけのメモ");
-      await page.getByLabel("カテゴリー（任意）").selectOption({ label: value || "未分類" });
-      const selectedCategory = await page.getByLabel("カテゴリー（任意）").inputValue();
-      const saved = page.waitForResponse(
-        (response) =>
-          response.url().includes("/_serverFn/") &&
-          (response.request().postData()?.includes("postTodoItem") ?? false),
-      );
-      if (name === "分類テストA") {
-        await createDialog.getByRole("button", { name: "続けて追加", exact: true }).click();
-      } else if (name === "分類テスト未分類") {
-        await nameInput.press("Enter");
-      } else {
-        await createDialog.getByRole("button", { name: "追加する", exact: true }).click();
-      }
-      expect((await saved).ok()).toBe(true);
-      await expect(page.getByText(name, { exact: true })).toBeVisible();
-      if (name !== "分類テストB") {
-        await expect(createDialog).toBeVisible();
-        await expect(nameInput).toHaveValue("");
-        await expect(nameInput).toBeFocused();
-        await expect(notesInput).toHaveValue("");
-        await expect(page.getByLabel("カテゴリー（任意）")).toHaveValue(selectedCategory);
-        await expect(createDialog.getByRole("status")).toHaveText(`「${name}」を追加しました`);
-        expect(
-          await createDialog.evaluate((element) => element.scrollWidth <= element.clientWidth),
-        ).toBe(true);
-        if (name === "分類テストA") {
-          await page.screenshot({ path: testInfo.outputPath("todos-continuous-add.png") });
-        }
-      }
-    }
-    await expect(createDialog).toHaveCount(0);
-    const filter = page.getByRole("group", { name: "カテゴリーで絞り込み" });
-    const verifyCategorySwipes = async (checkPageScroll = false) => {
-      const cdp = await context.newCDPSession(page);
-      const swipe = async (target: Locator, dx: number, dy = 0) => {
-        await target.evaluate((element) =>
-          element.scrollIntoView({ block: "center", behavior: "instant" }),
-        );
-        const box = (await target.boundingBox())!;
-        const start = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
-        await cdp.send("Input.dispatchTouchEvent", {
-          type: "touchStart",
-          touchPoints: [{ ...start, id: 1 }],
-        });
-        for (let step = 1; step <= 6; step++) {
-          await cdp.send("Input.dispatchTouchEvent", {
-            type: "touchMove",
-            touchPoints: [{ x: start.x + (dx * step) / 6, y: start.y + (dy * step) / 6, id: 1 }],
-          });
-        }
-        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
-      };
-      const content = () => page.getByRole("listitem").filter({ hasText: "分類テスト" }).first();
-      try {
-        await filter.getByRole("button", { name: "すべて", exact: true }).click();
-        const names = await filter.getByRole("button").allTextContents();
-        // The tab row retains native horizontal scrolling, without changing selection.
-        await swipe(filter, -100);
-        await expect
-          .poll(() => filter.evaluate((element) => element.scrollLeft))
-          .toBeGreaterThan(0);
-        await expect(filter.getByRole("button", { name: "すべて", exact: true })).toHaveAttribute(
-          "aria-pressed",
-          "true",
-        );
-        for (let index = 1; index < names.length; index++) {
-          const target =
-            (await content().count()) > 0
-              ? content()
-              : page.getByText("このカテゴリーのToDoはありません。", { exact: true });
-          await swipe(target, -100);
-          const selected = filter.getByRole("button", { name: names[index], exact: true });
-          await expect(selected).toHaveAttribute("aria-pressed", "true");
-          const rowBox = (await filter.boundingBox())!;
-          const selectedBox = (await selected.boundingBox())!;
-          expect(selectedBox.x).toBeGreaterThanOrEqual(rowBox.x - 1);
-          expect(selectedBox.x + selectedBox.width).toBeLessThanOrEqual(
-            rowBox.x + rowBox.width + 1,
-          );
-        }
-        await swipe(page.getByText("このカテゴリーのToDoはありません。", { exact: true }), -100);
-        await expect(
-          filter.getByRole("button", { name: names.at(-1)!, exact: true }),
-        ).toHaveAttribute("aria-pressed", "true");
-        await swipe(page.getByText("このカテゴリーのToDoはありません。", { exact: true }), 100);
-        await expect(
-          filter.getByRole("button", { name: names.at(-2)!, exact: true }),
-        ).toHaveAttribute("aria-pressed", "true");
-        await filter.getByRole("button", { name: "すべて", exact: true }).click();
-        await content().evaluate((element) =>
-          element.scrollIntoView({ block: "center", behavior: "instant" }),
-        );
-        const beforeScroll = await page.evaluate(() => window.scrollY);
-        await swipe(content(), 0, 80);
-        await expect(filter.getByRole("button", { name: "すべて", exact: true })).toHaveAttribute(
-          "aria-pressed",
-          "true",
-        );
-        if (checkPageScroll) {
-          expect(beforeScroll).toBeGreaterThan(0);
-          await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(beforeScroll);
-        }
-      } finally {
-        await cdp.detach();
-      }
-    };
-    await filter.getByRole("button", { name: category, exact: true }).click();
-    await expect(page.getByText("分類テスト未分類", { exact: true })).toHaveCount(0);
-    const reorderFilteredItems = async () => {
-      const handle = page.getByRole("button", { name: "分類テストB をドラッグして並び替え" });
-      // Keep both cards away from the viewport edge so drag auto-scroll does not shift the target.
-      await handle.evaluate((element) =>
-        element.scrollIntoView({ block: "center", behavior: "instant" }),
-      );
-      const from = await handle.boundingBox();
-      const to = await page
-        .getByRole("button", { name: "分類テストA をドラッグして並び替え" })
-        .boundingBox();
-      if (!from || !to) throw new Error("ToDo drag handles are not visible");
-      await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
-      await page.mouse.down();
-      await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2 + 10, { steps: 5 });
-      await expect(handle).toHaveAttribute("aria-pressed", "true");
-      await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 20 });
-      const saved = page.waitForResponse(
-        (response) =>
-          response.url().includes("/_serverFn/") &&
-          (response.request().postData()?.includes("postTodoItemsReorder") ?? false),
-      );
-      await page.mouse.up();
-      expect((await saved).ok()).toBe(true);
-    };
-    await reorderFilteredItems();
-    await page.reload();
-    await expect(
-      page.getByRole("button", { name: /分類テスト.*をドラッグして並び替え/ }),
-    ).toHaveCount(3);
-    expect(
-      await page
-        .getByRole("button", { name: /分類テスト.*をドラッグして並び替え/ })
-        .evaluateAll((elements) => elements.map((element) => element.getAttribute("aria-label"))),
-    ).toEqual([
-      "分類テストA をドラッグして並び替え",
-      "分類テスト未分類 をドラッグして並び替え",
-      "分類テストB をドラッグして並び替え",
-    ]);
-    await page.screenshot({ path: testInfo.outputPath("todos-categories.png"), fullPage: true });
-    await page.getByRole("button", { name: "その他", exact: true }).click();
-    await page.getByRole("button", { name: "カテゴリー", exact: true }).click();
-    await expect(page).toHaveURL(/\/todo-categories$/);
-    await expect(page.getByRole("heading", { name: "カテゴリー管理" })).toBeVisible();
-    await page.getByRole("button", { name: `${category} を編集`, exact: true }).click();
-    category = `名前変更-${testInfo.project.name}`;
-    await page.getByLabel("カテゴリー名", { exact: true }).fill(category);
-    await page.getByRole("button", { name: "保存", exact: true }).click();
-    await expect(page.getByRole("dialog", { name: "カテゴリー名を変更" })).toHaveCount(0);
-    await page.reload();
-    await expect(
-      page.getByRole("button", { name: `${category} を編集`, exact: true }),
-    ).toBeVisible();
-    await page.getByLabel("新しいカテゴリー").fill("0件のカテゴリー");
-    await page.getByRole("button", { name: "カテゴリーを追加", exact: true }).click();
-    await expect(page.getByRole("button", { name: "0件のカテゴリー を削除" })).toBeVisible();
-    const extraCategories = [
-      "買い物リスト",
-      "やることリスト",
-      "家のメンテナンス",
-      "手続き・予約",
-      "週末のお出かけ",
-      "あとで確認すること",
-    ];
-    for (const name of extraCategories) {
-      await page.getByLabel("新しいカテゴリー").fill(name);
-      await page.getByRole("button", { name: "カテゴリーを追加", exact: true }).click();
-      await expect(page.getByRole("button", { name: `${name} を削除` })).toBeVisible();
-    }
-    await page.screenshot({
-      path: testInfo.outputPath("todo-category-management.png"),
-      fullPage: true,
-    });
-    await page.getByRole("button", { name: "ToDo", exact: true }).click();
-    await expect(page.getByLabel("新しいカテゴリー")).toHaveCount(0);
-    await expect(filter.getByRole("button", { name: "すべて", exact: true })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    const headingBox = await page.getByRole("heading", { name: "ToDo", exact: true }).boundingBox();
-    const filterBox = await filter.boundingBox();
-    expect(headingBox && filterBox && filterBox.y >= headingBox.y + headingBox.height).toBeTruthy();
-    if (testInfo.project.name === "mobile") {
-      expect(await filter.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(
-        true,
-      );
-      expect(
-        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
-      ).toBe(true);
-      await filter.evaluate((element) => {
-        element.scrollLeft = element.scrollWidth;
-      });
-      expect(await filter.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
-      await verifyCategorySwipes();
-    }
-    await filter.getByRole("button", { name: "あとで確認すること", exact: true }).click();
-    await expect(page.getByText("このカテゴリーのToDoはありません。")).toBeVisible();
-    await filter.getByRole("button", { name: "すべて", exact: true }).click();
-    await page.screenshot({
-      path: testInfo.outputPath("todos-category-tabs.png"),
-      fullPage: false,
-    });
-    await page.goto("/");
-    await expect(filter.getByRole("button", { name: category, exact: true })).toBeVisible();
-    await filter.getByRole("button", { name: "未分類", exact: true }).click();
-    await expect(page.getByText("分類テスト未分類", { exact: true })).toBeVisible();
-    await expect(page.getByText("分類テストA", { exact: true })).toHaveCount(0);
-    await filter.getByRole("button", { name: "0件のカテゴリー", exact: true }).click();
-    await expect(page.getByText("このカテゴリーのToDoはありません。")).toBeVisible();
-    await filter.getByRole("button", { name: category, exact: true }).click();
-    await expect(page.getByText("分類テストA", { exact: true })).toBeVisible();
-    await expect(page.getByText("分類テストB", { exact: true })).toBeVisible();
-    await expect(page.getByText("分類テスト未分類", { exact: true })).toHaveCount(0);
-    if (testInfo.project.name === "mobile") {
-      expect(await filter.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(
-        true,
-      );
-      expect(
-        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
-      ).toBe(true);
-      await verifyCategorySwipes(true);
-      await filter.getByRole("button", { name: category, exact: true }).click();
-    }
-    await reorderFilteredItems();
-    await page.reload();
-    await expect(
-      page.getByRole("button", { name: /分類テスト.*をドラッグして並び替え/ }),
-    ).toHaveCount(3);
-    expect(
-      await page
-        .getByRole("button", { name: /分類テスト.*をドラッグして並び替え/ })
-        .evaluateAll((elements) => elements.map((element) => element.getAttribute("aria-label"))),
-    ).toEqual([
-      "分類テストB をドラッグして並び替え",
-      "分類テスト未分類 をドラッグして並び替え",
-      "分類テストA をドラッグして並び替え",
-    ]);
-    await filter.scrollIntoViewIfNeeded();
-    await page.screenshot({ path: testInfo.outputPath("home-category-tabs.png"), fullPage: false });
-
-    await page.getByRole("button", { name: "その他", exact: true }).click();
-    await page.getByRole("button", { name: "カテゴリー", exact: true }).click();
-    await page.reload();
-    await expect(page.getByRole("button", { name: "0件のカテゴリー を削除" })).toBeVisible();
-    await page.getByRole("button", { name: `${category} を削除` }).click();
-    await expect(page.getByRole("button", { name: `${category} を削除` })).toHaveCount(0);
-    await page.getByRole("button", { name: "ToDo", exact: true }).click();
-    await filter.getByRole("button", { name: "未分類", exact: true }).click();
-    await expect(page.getByText("分類テストA", { exact: true })).toBeVisible();
-    await expect(page.getByText("分類テストB", { exact: true })).toBeVisible();
-    await page.goto("/");
-    const item = page.getByRole("listitem").filter({ hasText: "分類テストA" });
-    await expect(item.getByText("未分類", { exact: true })).toBeVisible();
-    let completionRequests = 0;
-    page.on("request", (request) => {
-      if (request.url().includes("/_serverFn/") && request.postData()?.includes("deleteTodoItem")) {
-        completionRequests += 1;
-      }
-    });
-    await item.getByRole("button", { name: "完了にする", exact: true }).click();
-    await expect(page.getByRole("dialog", { name: "完了にしますか？" })).toHaveCount(0);
-    await expect(item.getByText("完了待ち", { exact: true })).toHaveCount(0);
-    await expect(item.getByRole("img", { name: "完了まで3秒" })).toBeVisible();
-    await expect(page.getByRole("region", { name: "ToDoの完了待ち" })).toHaveCount(0);
-    await page.screenshot({ path: testInfo.outputPath("todo-completion-undo.png") });
-    await item.getByRole("button", { name: "取り消す", exact: true }).click();
-    // Wait beyond the undo window to prove the cancelled timer sends no request.
-    await page.waitForTimeout(3_100);
-    expect(completionRequests).toBe(0);
-    await expect(item.getByRole("button", { name: "完了にする", exact: true })).toBeEnabled();
-    await page.reload();
-    await expect(item.getByText("分類テストA", { exact: true })).toBeVisible();
-    const completed = page.waitForResponse(
-      (response) =>
-        response.url().includes("/_serverFn/") &&
-        (response.request().postData()?.includes("deleteTodoItem") ?? false),
-    );
-    await item.getByRole("button", { name: "完了にする", exact: true }).click();
-    await page.getByRole("button", { name: "ToDo", exact: true }).click();
-    await expect(item.getByRole("button", { name: "取り消す", exact: true })).toBeVisible();
-    expect((await completed).ok()).toBe(true);
-    expect(completionRequests).toBe(1);
-    await expect(page.getByText("ToDoを完了しました", { exact: true })).toBeVisible();
-    await page.reload();
-    await expect(page.getByText("分類テストA", { exact: true })).toHaveCount(0);
-    await expect(page.getByText("分類テストB", { exact: true })).toBeVisible();
-  },
-);
-
-test.describe("ToDo swipe hit area", () => {
-  test.use({ hasTouch: true });
-
-  test(
-    "switches categories from blank space with one or zero ToDos",
-    { tag: ["@todos", "@home"] },
-    async ({ page, context }, testInfo) => {
-      await authenticate(context, swipeAreaToken);
-      await page.goto("/todo-categories");
-      for (const category of ["スワイプ用", "空のカテゴリー"]) {
-        await page.getByLabel("新しいカテゴリー").fill(category);
-        await page.getByRole("button", { name: "カテゴリーを追加", exact: true }).click();
-        await expect(page.getByRole("button", { name: `${category} を削除` })).toBeVisible();
-      }
-      await page.goto("/todos");
-      await page.getByRole("button", { name: "追加", exact: true }).click();
-      await page.getByLabel("名前", { exact: true }).fill("1件のToDo");
-      await page.getByLabel("カテゴリー（任意）").selectOption({ label: "スワイプ用" });
-      await page.getByRole("button", { name: "追加する", exact: true }).click();
-      await expect(page.getByText("1件のToDo", { exact: true })).toBeVisible();
-
-      const filter = page.getByRole("group", { name: "カテゴリーで絞り込み" });
-      const region = page.getByRole("region", { name: "ToDo一覧", exact: true });
-      const cdp = await context.newCDPSession(page);
-      const blankPoint = async (content: Locator, fillViewport = false) => {
-        await content.evaluate((element) =>
-          element.scrollIntoView({ block: "center", behavior: "instant" }),
-        );
-        const contentBox = (await content.boundingBox())!;
-        const regionBox = (await region.boundingBox())!;
-        // Start well below the rendered item/empty message, on the visible blank background.
-        const point = {
-          x: regionBox.x + regionBox.width / 2,
-          y: contentBox.y + contentBox.height + 80,
-        };
-        if (fillViewport) {
-          const addButtonBox = (await page
-            .getByRole("button", { name: "追加", exact: true })
-            .boundingBox())!;
-          point.y = Math.max(point.y, addButtonBox.y - 80);
-        }
-        expect(regionBox.y + regionBox.height).toBeGreaterThan(point.y);
-        expect(
-          await region.evaluate(
-            (element, { x, y }) => document.elementFromPoint(x, y) === element,
-            point,
-          ),
-        ).toBe(true);
-        return point;
-      };
-      const swipe = async (start: { x: number; y: number }, dx: number, dy = 0) => {
-        await cdp.send("Input.dispatchTouchEvent", {
-          type: "touchStart",
-          touchPoints: [{ ...start, id: 1 }],
-        });
-        for (let step = 1; step <= 6; step++) {
-          await cdp.send("Input.dispatchTouchEvent", {
-            type: "touchMove",
-            touchPoints: [{ x: start.x + (dx * step) / 6, y: start.y + (dy * step) / 6, id: 1 }],
-          });
-        }
-        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
-      };
-      try {
-        for (const route of ["/todos", "/"]) {
-          await page.goto(route);
-          await filter.getByRole("button", { name: "スワイプ用", exact: true }).click();
-          const item = region.getByRole("listitem");
-          await expect(item).toHaveCount(1);
-          await expect(item.getByText("1件のToDo", { exact: true })).toBeVisible();
-          const start = await blankPoint(item, route === "/todos");
-          await page.screenshot({
-            path: testInfo.outputPath(route === "/" ? "home-one-todo.png" : "todos-one-todo.png"),
-          });
-          await swipe(start, -100);
-          await expect(
-            filter.getByRole("button", { name: "空のカテゴリー", exact: true }),
-          ).toHaveAttribute("aria-pressed", "true");
-          await expect(item).toHaveCount(0);
-          const empty = region.getByText("このカテゴリーのToDoはありません。", { exact: true });
-          await expect(empty).toBeVisible();
-          await swipe(await blankPoint(empty, route === "/todos"), 100);
-          await expect(
-            filter.getByRole("button", { name: "スワイプ用", exact: true }),
-          ).toHaveAttribute("aria-pressed", "true");
-          await expect(item.getByText("1件のToDo", { exact: true })).toBeVisible();
-          if (route === "/") {
-            const scrollStart = await blankPoint(item);
-            const { before, maximum } = await page.evaluate(() => ({
-              before: window.scrollY,
-              maximum: document.documentElement.scrollHeight - window.innerHeight,
-            }));
-            await swipe(scrollStart, 0, before > 0 ? 80 : -80);
-            if (maximum > 0) {
-              if (before > 0) {
-                await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(before);
-              } else {
-                await expect
-                  .poll(() => page.evaluate(() => window.scrollY))
-                  .toBeGreaterThan(before);
-              }
-            }
-            await expect(
-              filter.getByRole("button", { name: "スワイプ用", exact: true }),
-            ).toHaveAttribute("aria-pressed", "true");
-          }
-        }
-      } finally {
-        await cdp.detach();
-      }
-    },
-  );
-});
-
-test(
-  "persists category order including unclassified with mouse, touch and keyboard",
-  { tag: ["@todos", "@home"] },
-  async ({ page, context, isMobile }, testInfo) => {
-    await authenticate(context, categoryOrderToken);
-    await page.goto("/todo-categories");
-    const order = page.getByRole("list", { name: "カテゴリーの表示順" });
-    for (const category of ["仕事", "買い物"]) {
-      await page.getByLabel("新しいカテゴリー").fill(category);
-      await page.getByRole("button", { name: "カテゴリーを追加" }).click();
-      await expect(order.getByRole("button", { name: `${category} を削除` })).toBeVisible();
-    }
-    const dragHandle = (name: string) =>
-      order.getByRole("button", { name: `${name} をドラッグして並び替え`, exact: true });
-    const expectOrder = async (names: string[]) => {
-      await expect
-        .poll(async () =>
-          order
-            .getByRole("button", { name: /をドラッグして並び替え/ })
-            .evaluateAll((buttons) => buttons.map((button) => button.getAttribute("aria-label"))),
-        )
-        .toEqual(names.map((name) => `${name} をドラッグして並び替え`));
-    };
-    const waitForSave = () =>
-      page.waitForResponse(
-        (response) =>
-          response.url().includes("/_serverFn/") &&
-          (response.request().postData()?.includes("postTodoCategoriesReorder") ?? false),
-      );
-    await expectOrder(["未分類", "仕事", "買い物"]);
-    await order.scrollIntoViewIfNeeded();
-    const from = (await dragHandle("未分類").boundingBox())!;
-    const to = (await dragHandle("買い物").boundingBox())!;
-    const start = { x: from.x + from.width / 2, y: from.y + from.height / 2 };
-    const end = { x: to.x + to.width / 2, y: to.y + to.height / 2 };
-    if (isMobile) {
-      const cdp = await context.newCDPSession(page);
-      try {
-        await cdp.send("Input.dispatchTouchEvent", {
-          type: "touchStart",
-          touchPoints: [{ ...start, id: 1 }],
-        });
-        await expect(dragHandle("未分類")).toHaveAttribute("aria-pressed", "true");
-        for (let step = 1; step <= 10; step++) {
-          await cdp.send("Input.dispatchTouchEvent", {
-            type: "touchMove",
-            touchPoints: [{ x: start.x, y: start.y + ((end.y - start.y) * step) / 10, id: 1 }],
-          });
-        }
-        const saved = waitForSave();
-        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
-        expect((await saved).ok()).toBe(true);
-      } finally {
-        await cdp.detach();
-      }
-    } else {
-      await page.mouse.move(start.x, start.y);
-      await page.mouse.down();
-      await page.mouse.move(start.x, start.y + 10, { steps: 5 });
-      await expect(dragHandle("未分類")).toHaveAttribute("aria-pressed", "true");
-      await page.mouse.move(end.x, end.y, { steps: 15 });
-      const saved = waitForSave();
-      await page.mouse.up();
-      expect((await saved).ok()).toBe(true);
-    }
-    await expectOrder(["仕事", "買い物", "未分類"]);
-    await page.reload();
-    await expectOrder(["仕事", "買い物", "未分類"]);
-    // Keyboard moves a named category as well as the virtual row.
-    await dragHandle("買い物").focus();
-    await page.keyboard.press("Space", { delay: 100 });
-    await expect(dragHandle("買い物")).toHaveAttribute("aria-pressed", "true");
-    await page.keyboard.press("ArrowUp");
-    await expect
-      .poll(async () => {
-        const shopping = await dragHandle("買い物").boundingBox();
-        const work = await dragHandle("仕事").boundingBox();
-        return shopping !== null && work !== null && shopping.y < work.y;
-      })
-      .toBe(true);
-    const keyboardSaved = waitForSave();
-    await page.keyboard.press("Space");
-    expect((await keyboardSaved).ok()).toBe(true);
-    await expectOrder(["買い物", "仕事", "未分類"]);
-    await page.screenshot({ path: testInfo.outputPath("todo-category-order.png"), fullPage: true });
-
-    for (const path of ["/", "/todos"]) {
-      await page.goto(path);
-      const tabs = page.getByRole("group", { name: "カテゴリーで絞り込み" });
-      await expect(tabs.getByRole("button")).toHaveText(["すべて", "買い物", "仕事", "未分類"]);
-    }
-    await page.getByRole("button", { name: "追加", exact: true }).click();
-    const select = page.getByRole("combobox", { name: "カテゴリー（任意）" });
-    await expect(select.locator("option")).toHaveText(["買い物", "仕事", "未分類"]);
-    await expect(select).toHaveValue("");
-    await page.getByLabel("名前", { exact: true }).fill("順序変更後の未分類ToDo");
-    await page.getByRole("button", { name: "追加する", exact: true }).click();
-    await expect(page.getByRole("dialog")).toHaveCount(0);
-    await page.reload();
-    await page
-      .getByRole("group", { name: "カテゴリーで絞り込み" })
-      .getByRole("button", { name: "未分類", exact: true })
-      .click();
-    await expect(page.getByText("順序変更後の未分類ToDo", { exact: true })).toBeVisible();
-  },
-);
-
-test(
-  "shares optimistic ToDo order across navigation, rolls back failure, and persists a retry",
-  { tag: ["@todos", "@home"] },
-  async ({ page, context }, testInfo) => {
-    await authenticate(context, performanceToken);
-    await page.goto("/todos");
-    for (const name of ["順序検証A", "順序検証B"]) {
-      await page.getByRole("button", { name: "追加", exact: true }).click();
-      await page.getByPlaceholder("例: 牛乳", { exact: true }).fill(name);
-      const saved = page.waitForResponse(
-        (response) => response.request().postData()?.includes('"postTodoItem"') ?? false,
-      );
-      await page.getByRole("button", { name: "追加する", exact: true }).click();
-      expect((await saved).ok()).toBe(true);
-      await expect(page.getByText(name, { exact: true })).toBeVisible();
-    }
-    const handles = page.getByRole("button", { name: /順序検証.*をドラッグして並び替え/ });
-    const order = () =>
-      handles.evaluateAll((elements) =>
-        elements.map((element) => element.getAttribute("aria-label")),
-      );
-    const firstOrder = ["順序検証B をドラッグして並び替え", "順序検証A をドラッグして並び替え"];
-    const nextOrder = [...firstOrder].reverse();
-    const moveAFirst = async () => {
-      const handle = page.getByRole("button", { name: "順序検証A をドラッグして並び替え" });
-      await handle.focus();
-      await page.keyboard.press("Space", { delay: 100 });
-      await expect(handle).toHaveAttribute("aria-pressed", "true");
-      await page.keyboard.press("ArrowUp");
-      // Animated coordinates can move before the actual drop target is updated.
-      // Wait for the accessible announcement to confirm a different target before dropping.
-      await expect
-        .poll(async () => {
-          const announcements = await page.getByRole("status").allTextContents();
-          return announcements.some((message) => {
-            const match = /^Draggable item (\S+) was moved over droppable area (\S+)\.$/.exec(
-              message,
-            );
-            return match !== null && match[1] !== match[2];
-          });
-        })
-        .toBe(true);
-      await page.keyboard.press("Space");
-    };
-    await expect.poll(order).toEqual(firstOrder);
-    let release!: () => void;
-    const held = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    let requests = 0;
-    await page.route("**/_serverFn/**", async (route) => {
-      if (!route.request().postData()?.includes("postTodoItemsReorder")) return route.continue();
-      requests++;
-      await held;
-      await route.abort("failed");
-    });
-    try {
-      await moveAFirst();
-      await expect.poll(() => requests).toBe(1);
-      await expect.poll(order).toEqual(nextOrder);
-      await page.getByRole("button", { name: "ホーム", exact: true }).click();
-      await expect.poll(order).toEqual(nextOrder);
-      await expect(handles.first()).toBeDisabled();
-      await page.screenshot({
-        path: testInfo.outputPath("todo-shared-optimistic-order.png"),
-        fullPage: true,
-      });
-    } finally {
-      release();
-    }
-    await expect.poll(order).toEqual(firstOrder);
-    await expect(handles.first()).toBeEnabled();
-    await page.unrouteAll({ behavior: "wait" });
-    const saved = page.waitForResponse(
-      (response) => response.request().postData()?.includes("postTodoItemsReorder") ?? false,
-    );
-    await moveAFirst();
-    expect((await saved).ok()).toBe(true);
-    await expect.poll(order).toEqual(nextOrder);
-    await page.reload();
-    await expect.poll(order).toEqual(nextOrder);
-  },
-);
-
-test(
-  "paints submission feedback during CPU-heavy audio encoding before immediate AI responses",
-  { tag: ["@assist"] },
-  async ({ page, context }) => {
-    await authenticate(context, token);
-    await installAssistMediaFixture(page);
-    await installAssistEncodingLoad(page);
-    let transcriptions = 0,
-      turns = 0;
-    await page.route("**/api/assist/transcribe", async (route) => {
-      transcriptions++;
-      expect((await readAssistAudioUpload(route.request())).wav.length).toBeGreaterThan(1000);
-      await route.fulfill({ json: { transcript: "粒マスタードを追加して" } });
-    });
-    await page.route("**/api/assist/turn", async (route) => {
-      turns++;
-      await route.fulfill({
-        json: {
-          kind: "listed",
-          transcript: "粒マスタードを追加して",
-          replyText: "応答が完了しました。",
-          items: [],
-          total: 0,
-        },
-      });
-    });
-    await page.goto("/todos");
-    await page.getByRole("button", { name: "アシスト", exact: true }).click();
-    const dialog = page.getByRole("dialog", { name: "音声アシスト" });
-    await dialog.getByRole("button", { name: "録音を開始", exact: true }).click();
-    await expect(dialog.getByRole("status")).toHaveText("録音中");
-    await page.evaluate(() => window.assistFixture.emit());
-    await dialog.getByRole("button", { name: "停止して送信", exact: true }).click();
-    await expect(dialog.getByText("応答が完了しました。")).toBeVisible();
-    const observed = await page.evaluate(() => window.assistPaintFixture);
-    console.log(JSON.stringify({ encodingFeedback: observed }));
-    expect(observed.framesBeforeTranscribe).toBeGreaterThanOrEqual(3);
-    expect(observed.workers).toBe(1);
-    expect(transcriptions).toBe(1);
-    expect(turns).toBe(1);
-    expect(await page.evaluate(() => window.assistFixture.activeTracks)).toBe(0);
-  },
-);
-
-test(
-  "native audio worklet sends the complete beginning middle and end and preserves the full transcript",
-  { tag: ["@assist"] },
-  async ({ page, context }) => {
-    await authenticate(context, token);
-    await installNativeAssistAudioFixture(page);
-    const transcript = "粒マスタードを追加して。レモンと牛乳も追加して。";
-    let transcribed = 0,
-      submitted = 0;
-    await page.route("**/api/assist/transcribe", async (route) => {
-      const { wav } = await readAssistAudioUpload(route.request());
-      expect(wav.toString("ascii", 0, 4)).toBe("RIFF");
-      expect(wav.readUInt16LE(22)).toBe(1);
-      expect(wav.readUInt32LE(24)).toBe(16000);
-      expect((wav.length - 44) / 32000).toBeGreaterThan(3.6);
-      const labels: number[] = [];
-      const count = (wav.length - 44) / 2;
-      for (let start = 0; start + 1600 <= count; start += 1600) {
-        const energies = [220, 440, 880].map((frequency) => {
-          let real = 0,
-            imaginary = 0;
-          for (let index = 0; index < 1600; index++) {
-            const sample = wav.readInt16LE(44 + (start + index) * 2) / 32768;
-            const angle = (2 * Math.PI * frequency * index) / 16000;
-            real += sample * Math.cos(angle);
-            imaginary += sample * Math.sin(angle);
-          }
-          return Math.hypot(real, imaginary) / 1600;
-        });
-        const strongest = Math.max(...energies);
-        if (strongest < 0.04) continue;
-        const label = [220, 440, 880][energies.indexOf(strongest)];
-        if (labels.at(-1) !== label) labels.push(label);
-      }
-      expect(labels).toEqual([220, 440, 880]);
-      transcribed++;
-      await route.fulfill({ json: { transcript } });
-    });
-    await page.route("**/api/assist/turn", async (route) => {
-      expect(route.request().postDataJSON().transcript).toBe(transcript);
-      submitted++;
-      await route.fulfill({
-        json: {
-          kind: "listed",
-          transcript,
-          replyText: "ToDoは今ありません。",
-          items: [],
-          total: 0,
-        },
-      });
-    });
-    await page.goto("/todos");
-    await page.getByRole("button", { name: "アシスト", exact: true }).click();
-    const dialog = page.getByRole("dialog", { name: "音声アシスト" });
-    await dialog.getByRole("button", { name: "録音を開始", exact: true }).click();
-    await expect(dialog.getByRole("status")).toHaveText("録音中");
-    await page.evaluate(() => window.assistNativeFixture.play());
-    await dialog.getByRole("button", { name: "録音を停止", exact: true }).click();
-    const input = dialog.getByRole("textbox", { name: "送信する内容" });
-    await expect(input).toHaveValue(transcript);
-    expect(transcribed).toBe(1);
-    expect(submitted).toBe(0);
-    expect(await page.evaluate(() => window.assistNativeFixture.stopped)).toBe(1);
-    await dialog.getByRole("button", { name: "送信", exact: true }).click();
-    await expect(dialog.getByText("ToDoは今ありません。")).toBeVisible();
-    expect(submitted).toBe(1);
-  },
-);
-
-test(
-  "assist stops on request, reviews text and supports stop-and-send across repeated opens",
-  { tag: ["@assist"] },
-  async ({ page, context }, testInfo) => {
-    await page.emulateMedia({ reducedMotion: "reduce" });
-    await authenticate(context, token);
-    await installAssistMediaFixture(page);
-    let recordings = 0,
-      requests = 0;
-    let releaseTranscription!: () => void;
-    let transcriptionGate = Promise.resolve();
-    let releaseTurn!: () => void;
-    let turnGate = Promise.resolve();
-    let failTranscription = false;
-    await page.route("**/api/assist/transcribe", async (route) => {
-      recordings++;
-      expect((await readAssistAudioUpload(route.request())).wav.length).toBeGreaterThan(1000);
-      await transcriptionGate;
-      if (failTranscription) {
-        await route.abort("failed");
-        return;
-      }
-      await route.fulfill({
-        json: { transcript: recordings === 1 ? "買い物にナットを追加して" : "やることを教えて" },
-      });
-    });
-    await page.route("**/api/assist/turn", async (route) => {
-      requests++;
-      const input = route.request().postDataJSON();
-      expect(input.audioBase64).toBeUndefined();
-      expect(input.transcript).toBe(requests === 1 ? "買い物に納豆を追加して" : "やることを教えて");
-      await turnGate;
-      const item = {
-        id: "22222222-2222-4222-8222-222222222222",
-        teamId: input.expectedTeamId,
-        name: "音声確認の納豆",
-        notes: null,
-        categoryId: null,
-        sortKey: 100,
-        createdAt: "2026-10-23T00:00:00.000Z",
-        updatedAt: "2026-10-23T00:00:00.000Z",
-      };
-      await route.fulfill({
-        json:
-          requests === 1
-            ? {
-                kind: "added",
-                transcript: input.transcript,
-                replyText: "買い物に納豆を追加しました。",
-                items: [item],
-              }
-            : {
-                kind: "listed",
-                transcript: input.transcript,
-                replyText: "ToDoは1件です。納豆です。",
-                total: 1,
-                items: [item],
-              },
-      });
-    });
-    await page.goto("/todos");
-    await expect(page.getByRole("heading", { name: "ToDo", exact: true })).toBeVisible();
-    const launcher = page.getByRole("button", { name: "アシスト", exact: true });
-    const more = page.getByRole("button", { name: "その他", exact: true });
-    const [assistSize, moreSize] = await Promise.all([launcher.boundingBox(), more.boundingBox()]);
-    expect(assistSize!.width).toBe(62);
-    expect(assistSize!.height).toBe(moreSize!.height);
-    await launcher.click();
-    const dialog = page.getByRole("dialog", { name: "音声アシスト" });
-    const text = dialog.getByRole("textbox", { name: "送信する内容" });
-    const microphone = dialog.getByRole("button", { name: "録音を開始", exact: true });
-    await expect(microphone).toBeEnabled();
-    await expect(text).toHaveValue("");
-    expect(await page.evaluate(() => window.assistFixture.captureRequests)).toBe(0);
-    await page.screenshot({ path: testInfo.outputPath("assist-idle.png"), fullPage: true });
-    await page.evaluate(() => {
-      window.assistFixture.holdPermission = true;
-    });
-    await microphone.click();
-    const startingButton = dialog.getByRole("button", { name: "マイクを準備中", exact: true });
-    await expect(startingButton).toBeDisabled();
-    await expect(startingButton).toHaveAttribute("aria-busy", "true");
-    await expect(startingButton.locator(".assist-spinner")).toBeVisible();
-    await expect(dialog.getByRole("status")).toHaveText("マイクを準備しています");
-    // Loading does not wait for the permission decision, and the UI already acknowledges the tap.
-    await expect.poll(() => page.evaluate(() => window.assistFixture.workletLoaded)).toBe(true);
-    expect(await page.evaluate(() => window.assistFixture.activeTracks)).toBe(0);
-    await page.screenshot({ path: testInfo.outputPath("assist-starting.png"), fullPage: true });
-    await page.evaluate(() => window.assistFixture.allowMicrophone());
-    await expect(dialog.getByRole("status")).toHaveText("録音中");
-    await page.evaluate(() => window.assistFixture.emit());
-    await expect(dialog.getByRole("status")).toHaveText("録音中");
-    expect(recordings).toBe(0);
-    expect(requests).toBe(0);
-    expect(await page.evaluate(() => window.assistFixture.activeTracks)).toBe(1);
-    await page.screenshot({ path: testInfo.outputPath("assist-recording.png"), fullPage: true });
-    transcriptionGate = new Promise<void>((resolve) => {
-      releaseTranscription = resolve;
-    });
-    await dialog.getByRole("button", { name: "録音を停止", exact: true }).click();
-    const transcriptionIcon = dialog.locator(".assist-transcribing .assist-spinner");
-    await expect(transcriptionIcon).toBeVisible();
-    await expect(dialog.locator("form")).toHaveAttribute("aria-busy", "true");
-    await expect(dialog.getByRole("status")).toHaveText("文字にしています");
-    await expect(dialog.getByRole("status")).toHaveClass("assist-sr-only");
-    await expect(dialog.getByRole("button", { name: "送信", exact: true })).toBeDisabled();
-    await expect(transcriptionIcon).toHaveCSS("animation-name", "none");
-    await page.emulateMedia({ reducedMotion: "no-preference" });
-    await expect(transcriptionIcon).toHaveCSS("animation-name", "assist-spin");
-    await page.emulateMedia({ reducedMotion: "reduce" });
-    await page.screenshot({
-      path: testInfo.outputPath("assist-transcribing.png"),
-      fullPage: false,
-    });
-    releaseTranscription();
-    await expect(text).toHaveValue("買い物にナットを追加して");
-    await expect(transcriptionIcon).toHaveCount(0);
-    await expect(text).toBeFocused();
-    expect(await page.evaluate(() => window.assistFixture.activeTracks)).toBe(0);
-    expect(requests).toBe(0);
-    await text.fill(" ");
-    await expect(dialog.getByRole("button", { name: "送信", exact: true })).toBeDisabled();
-    await text.fill("買い物に納豆を追加して");
-    await page.screenshot({ path: testInfo.outputPath("assist-review.png"), fullPage: true });
-    expect(requests).toBe(0);
-    await dialog.getByRole("button", { name: "送信", exact: true }).click();
-    await expect(dialog.getByText("買い物に納豆を追加しました。")).toBeVisible();
-    await expect(text).toHaveValue("");
-    expect(requests).toBe(1);
-    await microphone.click();
-    await expect(dialog.getByRole("status")).toHaveText("録音中");
-    await page.evaluate(() => window.assistFixture.emit());
-    expect(requests).toBe(1);
-    transcriptionGate = new Promise<void>((resolve) => {
-      releaseTranscription = resolve;
-    });
-    turnGate = new Promise<void>((resolve) => {
-      releaseTurn = resolve;
-    });
-    await dialog.getByRole("button", { name: "停止して送信", exact: true }).click();
-    const pendingAudio = dialog.getByRole("group", { name: "送信を準備している音声" });
-    await expect(pendingAudio).toBeVisible();
-    await expect(dialog.locator(".assist-thinking")).toBeVisible();
-    await expect(dialog.getByText("買い物に納豆を追加しました。")).toHaveCount(0);
-    const submittingButton = dialog.getByRole("button", { name: "送信を準備中", exact: true });
-    await expect(submittingButton).toBeDisabled();
-    await expect(submittingButton.locator(".assist-spinner")).toBeVisible();
-    await expect(dialog.getByRole("status")).toHaveText(
-      "音声を受け付けました。文字起こし後に送信します",
-    );
-    await expect(transcriptionIcon).toHaveCount(0);
-    expect(requests).toBe(1);
-    await page.screenshot({
-      path: testInfo.outputPath("assist-submitting-audio.png"),
-      fullPage: true,
-    });
-    releaseTranscription();
-    await expect(dialog.locator(".assist-user-message")).toHaveText("やることを教えて");
-    await expect(pendingAudio).toHaveCount(0);
-    const processingButton = dialog.getByRole("button", { name: "処理中", exact: true });
-    await expect(processingButton.locator(".assist-spinner")).toBeVisible();
-    await expect(dialog.locator(".assist-thinking")).toBeVisible();
-    releaseTurn();
-    await expect(dialog.getByText("音声確認の納豆", { exact: true })).toBeVisible();
-    await expect(transcriptionIcon).toHaveCount(0);
-    await expect(text).toHaveValue("");
-    expect(recordings).toBe(2);
-    expect(requests).toBe(2);
-    expect(await page.evaluate(() => window.assistFixture.flushes)).toBe(2);
-    expect(await page.evaluate(() => window.assistFixture.spoken)).toEqual([]);
-    await page.screenshot({ path: testInfo.outputPath("assist-result.png"), fullPage: true });
-    await page.keyboard.press("Escape");
-    await expect(dialog).toHaveCount(0);
-    await expect(launcher).toBeFocused();
-    await launcher.click();
-    await expect(text).toHaveValue("");
-    expect(await page.evaluate(() => window.assistFixture.captureRequests)).toBe(2);
-    await microphone.click();
-    await expect(dialog.getByRole("status")).toHaveText("録音中");
-    await page.evaluate(() => window.assistFixture.emit());
-    await dialog.getByRole("button", { name: "録音を停止", exact: true }).click();
-    await expect(text).toHaveValue("やることを教えて");
-    for (let i = 0; i < 6; i++) {
-      await page.keyboard.press(i % 2 === 0 ? "Tab" : "Shift+Tab");
-      expect(await dialog.evaluate((el) => el.contains(document.activeElement))).toBe(true);
-    }
-    await page.keyboard.press("Escape");
-    await expect(dialog).toHaveCount(0);
-    expect(requests).toBe(2);
-    await launcher.click();
-    await microphone.click();
-    await expect(dialog.getByRole("status")).toHaveText("録音中");
-    expect(await page.evaluate(() => window.assistFixture.captureRequests)).toBe(4);
-    await page.evaluate(() => {
-      Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
-      document.dispatchEvent(new Event("visibilitychange"));
-    });
-    await expect(dialog).toHaveCount(0);
-    await page.evaluate(() => {
-      Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
-      document.dispatchEvent(new Event("visibilitychange"));
-    });
-    await expect(dialog).toHaveCount(0);
-    expect(await page.evaluate(() => window.assistFixture.activeTracks)).toBe(0);
-    expect(new URL(page.url()).pathname).toBe("/todos");
-    // A failed transcription clears the optimistic message, retains the draft and never runs a turn.
-    failTranscription = true;
-    transcriptionGate = new Promise<void>((resolve) => {
-      releaseTranscription = resolve;
-    });
-    await launcher.click();
-    await text.fill("残す下書き");
-    await microphone.click();
-    await expect(dialog.getByRole("status")).toHaveText("録音中");
-    await page.evaluate(() => window.assistFixture.emit());
-    await dialog.getByRole("button", { name: "停止して送信", exact: true }).click();
-    await expect(pendingAudio).toBeVisible();
-    releaseTranscription();
-    await expect(dialog.getByRole("alert")).toContainText("文字にできませんでした");
-    await expect(pendingAudio).toHaveCount(0);
-    await expect(dialog.locator(".assist-thinking")).toHaveCount(0);
-    await expect(text).toHaveValue("残す下書き");
-    expect(requests).toBe(2);
-    await page.keyboard.press("Escape");
-    await page.getByRole("button", { name: "追加", exact: true }).click();
-    await page.getByPlaceholder("例: 牛乳", { exact: true }).fill("入力途中");
-    await expect(launcher).toBeDisabled();
-    await expect(page.getByPlaceholder("例: 牛乳", { exact: true })).toHaveValue("入力途中");
-  },
-);
-
-test(
-  "assist help explains ToDo commands, bounded searches and completed results in a compact layout",
-  { tag: ["@assist"] },
-  async ({ page, context }, testInfo) => {
-    await authenticate(context, token);
-    await installAssistMediaFixture(page);
-    await page.route("**/api/assist/turn", async (route) => {
-      const input = route.request().postDataJSON();
-      if (input.transcript === "買い物の牛乳を探して") {
-        await route.fulfill({
-          json: {
-            kind: "listed",
-            transcript: input.transcript,
-            replyText: "買い物の検索結果は23件です。",
-            total: 23,
-            items: Array.from({ length: 20 }, (_, index) => ({
-              id: crypto.randomUUID(),
-              teamId: input.expectedTeamId,
-              name: `牛乳${index + 1}`,
-              categoryId: null,
-              notes: null,
-              sortKey: index + 1,
-              createdAt: "2026-10-25T00:00:00.000Z",
-              updatedAt: "2026-10-25T00:00:00.000Z",
-            })),
-          },
-        });
-      } else if (input.transcript === "塩は購入した、レモンを追加して") {
-        await route.fulfill({
-          json: {
-            kind: "batch",
-            transcript: input.transcript,
-            replyText: "2件完了しました。1件追加しました。",
-            results: [
-              {
-                kind: "removed",
-                action: "complete",
-                count: 2,
-                transcript: input.transcript,
-                replyText: "2件完了しました。",
-              },
-              {
-                kind: "added",
-                transcript: input.transcript,
-                replyText: "1件追加しました。",
-                items: [
-                  {
-                    id: crypto.randomUUID(),
-                    teamId: input.expectedTeamId,
-                    name: "レモン",
-                    categoryId: null,
-                    notes: null,
-                    sortKey: 100,
-                    createdAt: "2026-10-25T00:00:00.000Z",
-                    updatedAt: "2026-10-25T00:00:00.000Z",
-                  },
-                ],
-              },
-            ],
-          },
-        });
-      } else {
-        expect(input.transcript).toBe("牛乳を買った");
-        await route.fulfill({
-          json: {
-            kind: "removed",
-            action: "complete",
-            count: 2,
-            transcript: input.transcript,
-            replyText: "2件完了しました。同じ名前のToDoをすべて対象にしました。",
-          },
-        });
-      }
-    });
-    await page.goto("/todos");
-    const launcher = page.getByRole("button", { name: "アシスト", exact: true });
-    await launcher.click();
-    const dialog = page.getByRole("dialog", { name: "音声アシスト" });
-    const helpButton = dialog.getByRole("button", { name: "アシストの使い方", exact: true });
-    await helpButton.click();
-    const help = page.getByRole("dialog", { name: "アシストの使い方", exact: true });
-    await expect(help).toBeVisible();
-    await expect(help.getByText("「ToDoに牛乳と卵を追加して」")).toBeVisible();
-    await expect(help.getByText(/続きや編集はToDo画面で確認できます/)).toBeVisible();
-    await page.screenshot({ path: testInfo.outputPath("assist-help.png"), fullPage: false });
-    await page.keyboard.press("Escape");
-    await expect(help).toBeHidden();
-    await expect(dialog).toBeVisible();
-    await expect(helpButton).toBeFocused();
-    await page.setViewportSize({ width: 320, height: 480 });
-    await helpButton.click();
-    const bounds = (await help.boundingBox())!;
-    expect(bounds.x).toBeGreaterThanOrEqual(0);
-    expect(bounds.x + bounds.width).toBeLessThanOrEqual(320);
-    expect(bounds.y + bounds.height).toBeLessThanOrEqual(480);
-    await help.getByRole("button", { name: "閉じる", exact: true }).click();
-    const text = dialog.getByRole("textbox", { name: "送信する内容" });
-    const send = dialog.getByRole("button", { name: "送信", exact: true });
-    await text.fill("買い物の牛乳を探して");
-    await send.click();
-    const results = dialog.getByLabel("ToDo 23件", { exact: true });
-    await expect(results.getByRole("listitem")).toHaveCount(20);
-    const notice = results.getByText("全23件のうち先頭20件を表示しています。", { exact: true });
-    await notice.scrollIntoViewIfNeeded();
-    await expect(notice).toBeVisible();
-    await expect(notice).toBeInViewport({ ratio: 1 });
-    await page.screenshot({ path: testInfo.outputPath("assist-search.png"), fullPage: false });
-    await text.fill("牛乳を買った");
-    await send.click();
-    await expect(
-      dialog.getByText("2件完了しました。同じ名前のToDoをすべて対象にしました。"),
-    ).toBeVisible();
-    await text.fill("塩は購入した、レモンを追加して");
-    await send.click();
-    await expect(dialog.getByText("2件完了しました。", { exact: true })).toBeVisible();
-    await expect(dialog.getByText("1件追加しました。", { exact: true })).toBeVisible();
-    await page.screenshot({ path: testInfo.outputPath("assist-mixed.png"), fullPage: false });
-    expect(await page.evaluate(() => window.assistFixture.captureRequests)).toBe(0);
-    await dialog.getByRole("button", { name: "アシストを閉じる" }).click();
-    await launcher.click();
-    await expect(help).toBeHidden();
-  },
-);
-
-test(
-  "assist typed input needs no microphone and fits a compact viewport",
-  { tag: ["@assist"] },
-  async ({ page, context }, testInfo) => {
-    await page.emulateMedia({ reducedMotion: "reduce" });
-    await authenticate(context, token);
-    await installAssistMediaFixture(page);
-    let requests = 0;
-    await page.route("**/api/assist/turn", async (route) => {
-      requests++;
-      expect(route.request().postDataJSON().transcript).toBe("やることを教えて");
-      await route.fulfill({
-        json: {
-          kind: "listed",
-          transcript: "やることを教えて",
-          replyText: "ToDoは今ありません。",
-          items: [],
-          total: 0,
-        },
-      });
-    });
-    await page.setViewportSize({ width: 320, height: 480 });
-    await page.goto("/todos");
-    await page.getByRole("button", { name: "アシスト", exact: true }).click();
-    const dialog = page.getByRole("dialog", { name: "音声アシスト" });
-    const text = dialog.getByRole("textbox", { name: "送信する内容" });
-    await text.fill("長い入力".repeat(200));
-    for (const control of [
-      text,
-      dialog.getByRole("button", { name: "送信", exact: true }),
-      dialog.getByRole("button", { name: "アシストを閉じる" }),
-    ]) {
-      const box = await control.boundingBox();
-      expect(box).not.toBeNull();
-      expect(box!.y).toBeGreaterThanOrEqual(0);
-      expect(box!.y + box!.height).toBeLessThanOrEqual(480);
-      expect(box!.x + box!.width).toBeLessThanOrEqual(320);
-    }
-    await text.fill("やることを教えて");
-    await dialog.getByRole("button", { name: "送信", exact: true }).click();
-    await expect(dialog.getByText("ToDoは今ありません。")).toBeVisible();
-    expect(requests).toBe(1);
-    expect(await page.evaluate(() => window.assistFixture.captureRequests)).toBe(0);
-    await page.screenshot({ path: testInfo.outputPath("assist-compact.png"), fullPage: false });
-  },
-);
-
-test(
-  "disabled assist releases recording and allows an explicit retry or exit",
-  { tag: ["@assist"] },
-  async ({ page, context, request }) => {
-    await authenticate(context, token);
-    await installAssistMediaFixture(page);
-    const response = await request.post("/api/assist/turn", {
-      headers: { origin: "http://localhost:5194" },
-      data: {},
-    });
-    expect(response.status()).toBe(503);
-    expect(response.headers()["cache-control"]).toContain("no-store");
-    expect(await response.json()).toMatchObject({ code: "assist_disabled" });
-    await page.goto("/");
-    await page.getByRole("button", { name: "アシスト", exact: true }).click();
-    const dialog = page.getByRole("dialog", { name: "音声アシスト" });
-    await dialog.getByRole("button", { name: "録音を開始", exact: true }).click();
-    await expect(dialog.getByRole("status")).toHaveText("録音中");
-    await page.evaluate(() => window.assistFixture.emit());
-    await dialog.getByRole("button", { name: "録音を停止", exact: true }).click();
-    await expect(dialog.getByRole("button", { name: "録音を開始", exact: true })).toBeEnabled();
-    await expect(dialog.getByRole("checkbox")).toHaveCount(0);
-    await expect(dialog.getByRole("alert")).toHaveText("音声アシストはまだ有効になっていません。");
-    await expect(dialog.getByRole("status")).toHaveText("入力を確認してください");
-    expect(await page.evaluate(() => window.assistFixture.stopped)).toBeGreaterThan(0);
-  },
-);
-
 for (const colorScheme of ["light", "dark"] as const) {
   test(
     `focus keeps normal borders and shadows without adding a frame in ${colorScheme} mode`,
-    { tag: ["@theme", "@settings", "@auth", "@assist", "@pages"] },
+    { tag: ["@theme", "@settings", "@auth", "@pages"] },
     async ({ page, context }, testInfo) => {
       await page.emulateMedia({ colorScheme });
       await page.goto("/");
@@ -2729,25 +1176,6 @@ for (const colorScheme of ["light", "dark"] as const) {
       );
       await expectFocusKeepsFrame(page, selected, selectedSurface);
       await expect(selected).toBeChecked();
-      await selectSettingsCategory(page, "ToDo");
-      await expectFocusKeepsFrame(page, page.getByLabel("ToDo完了の取り消し猶予"));
-
-      const assistButton = page.getByRole("button", { name: "アシスト", exact: true });
-      await expectFocusKeepsFrame(page, assistButton);
-      expect(
-        await assistButton.evaluate((element) => getComputedStyle(element).boxShadow),
-      ).not.toBe("none");
-      await assistButton.press("Enter");
-      const assist = page.getByRole("dialog", { name: "音声アシスト" });
-      const composer = assist.locator(".assist-composer");
-      await expectFocusKeepsFrame(
-        page,
-        assist.getByRole("textbox", { name: "送信する内容" }),
-        composer,
-      );
-      await expect(composer).toHaveCSS("border-top-width", "1px");
-      await assist.getByRole("button", { name: "アシストを閉じる" }).click();
-
       await page.goto("/pages/new");
       const editor = page.getByRole("textbox", { name: "ページ本文", exact: true });
       await expect(editor).toBeVisible();
@@ -2771,7 +1199,7 @@ for (const colorScheme of ["light", "dark"] as const) {
 }
 
 test(
-  "theme follows system, persists explicit choices and colors every screen",
+  "theme follows system, persists explicit choices and colors the main screens",
   { tag: ["@settings", "@theme"] },
   async ({ page, context }, testInfo) => {
     test.setTimeout(90_000);
@@ -2803,10 +1231,6 @@ test(
     await expect(page.locator("body")).toHaveCSS("background-color", "rgb(246, 244, 239)");
     await page.getByText("ダーク", { exact: true }).click();
     await expect(page.locator("body")).toHaveCSS("background-color", "rgb(25, 27, 25)");
-    await expect(page.getByLabel("ToDo完了の取り消し猶予")).toHaveCSS(
-      "background-color",
-      "rgb(35, 39, 35)",
-    );
     await page.reload();
     await selectSettingsCategory(page, "表示");
     await expect(page.getByRole("radio", { name: "ダーク", exact: true })).toBeChecked();
@@ -2815,15 +1239,7 @@ test(
       animations: "disabled",
       fullPage: true,
     });
-    for (const route of [
-      "/",
-      "/todos",
-      "/tasks",
-      "/summary",
-      "/penalties",
-      "/calendar",
-      "/todo-categories",
-    ]) {
+    for (const route of ["/", "/tasks", "/summary", "/penalties", "/calendar"]) {
       await page.goto(route);
       await expect(page.getByTestId("boot-screen")).toHaveCount(0);
       await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
@@ -2845,10 +1261,11 @@ test(
         fullPage: true,
       });
     }
-    await page.goto("/todos");
+    await page.goto("/tasks");
     await page.getByRole("button", { name: "追加", exact: true }).click();
-    await expect(page.getByRole("dialog")).toBeVisible();
-    await expect(page.getByPlaceholder("例: 牛乳", { exact: true })).toHaveCSS(
+    const taskForm = page.getByRole("dialog", { name: "タスクを追加" });
+    await expect(taskForm).toBeVisible();
+    await expect(taskForm.getByLabel("タスク名", { exact: true })).toHaveCSS(
       "background-color",
       "rgb(35, 39, 35)",
     );
@@ -2857,20 +1274,7 @@ test(
       animations: "disabled",
       fullPage: true,
     });
-    await page.getByRole("button", { name: "閉じる", exact: true }).click();
-    await page.getByRole("button", { name: "アシスト", exact: true }).click();
-    const assist = page.getByRole("dialog", { name: "音声アシスト" });
-    await expect(assist).toHaveCSS("background-color", "rgb(25, 27, 25)");
-    await expect(assist.locator(".assist-composer")).toHaveCSS(
-      "background-color",
-      "rgb(35, 39, 35)",
-    );
-    await page.screenshot({
-      path: testInfo.outputPath("theme-assist-dark.png"),
-      animations: "disabled",
-      fullPage: true,
-    });
-    await assist.getByRole("button", { name: "アシストを閉じる" }).click();
+    await taskForm.getByRole("button", { name: "閉じる", exact: true }).click();
     await page.goto("/settings");
     await selectSettingsCategory(page, "表示");
     await page.emulateMedia({ colorScheme: "dark" });

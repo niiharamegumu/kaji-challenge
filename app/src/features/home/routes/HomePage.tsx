@@ -3,9 +3,7 @@ import { useSetAtom } from "jotai";
 import { statusMessageAtom } from "../../../shared/state/status";
 import { useOutletContext } from "../../../shared/router/navigation";
 import type { RootLayoutOutletContext } from "../../../shared/router/rootLayoutContext";
-import { useTodoItemMutations } from "../../todos";
 import { DailyTasksPanel } from "../components/DailyTasksPanel";
-import { HomeTodoListPanel } from "../components/HomeTodoListPanel";
 import { HOME_PANEL_SKELETON_CLASS_NAME } from "../components/panelStyles";
 import { TriggeredPenaltiesPanel } from "../components/TriggeredPenaltiesPanel";
 import { WeeklyRemindersPanel } from "../components/WeeklyRemindersPanel";
@@ -39,25 +37,18 @@ export function HomePageSkeleton() {
         ))}
       </section>
 
-      <section className="grid gap-2 md:grid-cols-2 md:gap-4">
-        {["reminders", "todo"].map((panel) => (
-          <article key={panel} className={HOME_PANEL_SKELETON_CLASS_NAME}>
-            <div className="mx-2 h-6 w-28 rounded bg-surface-active md:mx-0" />
-            <div className="mx-2 mt-3 space-y-2 md:mx-0">
-              {[0, 1, 2].map((row) => (
-                <div
-                  key={`${panel}-${row}`}
-                  className="rounded-xl border border-line-subtle bg-surface-subtle p-3"
-                >
-                  <div className="h-4 w-2/5 rounded bg-surface-active" />
-                  <div className="mt-2 h-3 w-4/5 rounded bg-surface-muted" />
-                  <div className="mt-3 h-3 w-3/5 rounded bg-surface-muted" />
-                </div>
-              ))}
+      <article className={HOME_PANEL_SKELETON_CLASS_NAME}>
+        <div className="mx-2 h-6 w-28 rounded bg-surface-active md:mx-0" />
+        <div className="mx-2 mt-3 space-y-2 md:mx-0">
+          {[0, 1, 2].map((row) => (
+            <div key={row} className="rounded-xl border border-line-subtle bg-surface-subtle p-3">
+              <div className="h-4 w-2/5 rounded bg-surface-active" />
+              <div className="mt-2 h-3 w-4/5 rounded bg-surface-muted" />
+              <div className="mt-3 h-3 w-3/5 rounded bg-surface-muted" />
             </div>
-          </article>
-        ))}
-      </section>
+          ))}
+        </div>
+      </article>
 
       <article className={HOME_PANEL_SKELETON_CLASS_NAME}>
         <div className="mx-2 h-6 w-48 rounded bg-surface-active md:mx-0" />
@@ -76,22 +67,15 @@ export function HomePageSkeleton() {
 
 export function HomePage() {
   const setStatus = useSetAtom(statusMessageAtom);
-  const {
-    homeQuery,
-    todoItemsQuery,
-    previousMonth,
-    previousMonthPenaltySummaryQuery,
-    penaltyRulesQuery,
-  } = useHomePageQueries();
+  const { homeQuery, previousMonth, previousMonthPenaltySummaryQuery, penaltyRulesQuery } =
+    useHomePageQueries();
   const { currentUserId, displayName, colorHex } = useOutletContext<RootLayoutOutletContext>();
   const toggleMutation = useToggleCompletionMutation(
     setStatus,
     currentUserId ? { userId: currentUserId, effectiveName: displayName, colorHex } : undefined,
   );
-  const { updateItem, removeItem, reorderItems } = useTodoItemMutations(setStatus);
 
   const home = homeQuery.data;
-  const todoItems = todoItemsQuery.data;
   const previousMonthPenaltySummary = previousMonthPenaltySummaryQuery.data;
 
   const weeklyProgress =
@@ -127,23 +111,7 @@ export function HomePage() {
         />
       </section>
 
-      <section className="grid gap-2 md:grid-cols-2 md:gap-4">
-        <WeeklyRemindersPanel items={home.weeklyReminders} />
-        <HomeTodoListPanel
-          items={todoItems}
-          isReordering={reorderItems.isPending}
-          isUpdating={updateItem.isPending}
-          onDelete={(itemId) => {
-            removeItem.mutate(itemId);
-          }}
-          onReorder={(itemIds) => {
-            reorderItems.mutate({ itemIds });
-          }}
-          onUpdate={async (itemId, payload) => {
-            await updateItem.mutateAsync({ itemId, payload });
-          }}
-        />
-      </section>
+      <WeeklyRemindersPanel items={home.weeklyReminders} />
 
       <TriggeredPenaltiesPanel
         triggeredPenaltyRuleIds={previousMonthPenaltySummary.triggeredPenaltyRuleIds}

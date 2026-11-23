@@ -68,9 +68,6 @@ jobs:
           APP_RELEASE: ${{ github.sha }}
           JOBS_ENABLED: ${{ vars.JOBS_ENABLED || 'false' }}
           MAINTENANCE_MODE: ${{ vars.MAINTENANCE_MODE || 'false' }}
-          ASSIST_ENABLED: ${{ vars.ASSIST_ENABLED || 'false' }}
-          MCP_ENABLED: ${{ vars.MCP_ENABLED || 'false' }}
-          MCP_ORIGIN: ${{ vars.MCP_ORIGIN || '' }}
           BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
           GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
@@ -80,15 +77,57 @@ jobs:
           VAPID_SUBJECT: ${{ vars.VAPID_SUBJECT }}
           ALCHEMY_TELEMETRY_DISABLED: '1'
         run: |
-          bun -e '
-            import { deploymentSchema } from "./infra/config";
+          database_name=$(bun -e '
+            import { deploymentSchema, deploymentResources } from "./infra/config";
             const required = ["CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_TOKEN", "APP_ORIGIN", "APP_RELEASE", "BETTER_AUTH_SECRET", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "SIGNUP_ALLOWED_EMAILS", "VAPID_PUBLIC_KEY", "VAPID_PRIVATE_KEY", "VAPID_SUBJECT"];
             const missing = required.filter((key) => !process.env[key]?.trim());
             if (missing.length) throw new Error("Missing production settings: " + missing.join(", "));
             if (process.env.BETTER_AUTH_SECRET.length < 32) throw new Error("BETTER_AUTH_SECRET must contain at least 32 characters");
-            const result = deploymentSchema.safeParse({ stage: "production", origin: process.env.APP_ORIGIN, release: process.env.APP_RELEASE, jobs: process.env.JOBS_ENABLED, maintenance: process.env.MAINTENANCE_MODE, assistEnabled: process.env.ASSIST_ENABLED, mcpEnabled: process.env.MCP_ENABLED, mcpOrigin: process.env.MCP_ORIGIN });
+            const result = deploymentSchema.safeParse({ stage: "production", origin: process.env.APP_ORIGIN, release: process.env.APP_RELEASE, jobs: process.env.JOBS_ENABLED, maintenance: process.env.MAINTENANCE_MODE });
             if (!result.success) throw new Error("Invalid production origin, release, or boolean setting");
-          '
+            console.log(deploymentResources(result.data).database.name);
+          ')
+
+          export WRANGLER_SEND_METRICS=false
+          databases=$(bunx --no-install wrangler d1 list --json)
+          database_exists=$(bun -e '
+            const databases = await Bun.stdin.json();
+            if (!Array.isArray(databases) || databases.some(db => typeof db?.name !== "string")) throw new Error("Unexpected D1 list response");
+            console.log(databases.some(db => db.name === process.argv[1]));
+          ' "$database_name" <<< "$databases")
+          cutover_required=false
+          if [ "$database_exists" = "true" ]; then
+            columns=$(bunx --no-install wrangler d1 execute "$database_name" --remote --json --command 'PRAGMA table_info(teams)')
+            cutover_required=$(bun -e '
+              const [query] = await Bun.stdin.json();
+              if (query?.success !== true || !Array.isArray(query.results) || query.results.some(column => typeof column?.name !== "string")) throw new Error("Unexpected D1 schema response");
+              console.log(query.results.some(column => column.name === "todo_categories"));
+            ' <<< "$columns")
+          fi
+
           bun run infra:bootstrap --no-input
+          if [ "$cutover_required" = "true" ]; then
+            # Deploy a schema-compatible Worker before 0014 drops columns used by the old Worker.
+            migration_prefix=$(mktemp -d)
+            trap 'rm -rf -- "$migration_prefix"' EXIT
+            for migration in migrations/*.sql; do
+              if [[ "${migration##*/}" < "0014_" ]]; then
+                cp -- "$migration" "$migration_prefix/"
+              fi
+            done
+            D1_MIGRATIONS_DIR="$migration_prefix" bun run infra:plan --stage production --no-input
+            D1_MIGRATIONS_DIR="$migration_prefix" bun run deploy --stage production --yes --no-input
+            for attempt in {1..12}; do
+              if health=$(curl --fail --silent --show-error --max-time 5 "${APP_ORIGIN%/}/health") &&
+                bun -e 'const health = await Bun.stdin.json(); if (health?.status !== "ok" || health.release !== process.env.APP_RELEASE) process.exit(1)' <<< "$health"; then
+                break
+              fi
+              if [ "$attempt" -eq 12 ]; then
+                echo 'The new Worker did not become live. D1 cleanup was not run.' >&2
+                exit 1
+              fi
+              sleep 5
+            done
+          fi
           bun run infra:plan --stage production --no-input
           bun run deploy --stage production --yes --no-input

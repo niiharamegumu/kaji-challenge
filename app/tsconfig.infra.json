@@ -17,7 +17,6 @@
     "tests/server",
     "tests/e2e",
     "tests/dev",
-    "worker-configuration.d.ts",
-    "mcp-worker-configuration.d.ts"
+    "worker-configuration.d.ts"
   ]
 }

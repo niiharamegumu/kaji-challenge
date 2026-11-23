@@ -37,14 +37,12 @@ const mockGetMe = vi.fn();
 const mockGetTeamCurrentMembers = vi.fn();
 const mockGetTeamCurrentInvite = vi.fn();
 const mockPostTeamInvite = vi.fn();
-const mockListTodoItems = vi.fn();
 const mockPrefetchHomeData = vi.fn();
 const mockPreloadTasksPageChunk = vi.fn();
 const mockPreloadPenaltiesPageChunk = vi.fn();
 const mockPreloadSettingsPageChunk = vi.fn();
 const mockPreloadSummaryPageChunk = vi.fn();
 const mockPreloadReminderCalendarPageChunk = vi.fn();
-const mockPreloadTodoPageChunk = vi.fn();
 const mockTasksPage = vi.fn();
 
 vi.mock("./lib/api/operations", () => ({
@@ -62,8 +60,6 @@ vi.mock("./lib/api/operations", () => ({
   getMe: (...args: unknown[]) => mockGetMe(...args),
   getTeamCurrentMembers: (...args: unknown[]) => mockGetTeamCurrentMembers(...args),
   getTeamCurrentInvite: (...args: unknown[]) => mockGetTeamCurrentInvite(...args),
-  listTodoCategories: vi.fn().mockResolvedValue({ data: { categories: [] } }),
-  listTodoItems: (...args: unknown[]) => mockListTodoItems(...args),
   listSharedPages: vi.fn().mockResolvedValue({ data: { items: [] } }),
   getSharedPage: vi.fn(),
   listReminders: vi.fn(),
@@ -71,10 +67,6 @@ vi.mock("./lib/api/operations", () => ({
   postReminder: vi.fn(),
   patchReminder: vi.fn(),
   deleteReminder: vi.fn(),
-  postTodoItem: vi.fn(),
-  patchTodoItem: vi.fn(),
-  deleteTodoItem: vi.fn(),
-  postTodoItemsReorder: vi.fn(),
   postTasksReorder: vi.fn(),
   postTask: vi.fn(),
   postTaskCompletion: vi.fn(),
@@ -97,8 +89,6 @@ vi.mock("./app/route-chunks", () => ({
   SettingsPage: () => <div>settings page</div>,
   SummaryPage: () => <div>summary page</div>,
   ReminderCalendarPage: () => <div>calendar page</div>,
-  TodoPage: () => <div>todo page</div>,
-  TodoCategoriesPage: () => <div>todo categories page</div>,
   SharedPagesPage: function SharedPagesMock() {
     const setDirty = useSetAtom(sharedPageDraftDirtyAtom);
     return (
@@ -108,14 +98,12 @@ vi.mock("./app/route-chunks", () => ({
     );
   },
   preloadSharedPagesPageChunk: vi.fn(),
-  preloadTodoCategoriesPageChunk: vi.fn(),
   preloadTasksPageChunk: (...args: unknown[]) => mockPreloadTasksPageChunk(...args),
   preloadPenaltiesPageChunk: (...args: unknown[]) => mockPreloadPenaltiesPageChunk(...args),
   preloadSettingsPageChunk: (...args: unknown[]) => mockPreloadSettingsPageChunk(...args),
   preloadSummaryPageChunk: (...args: unknown[]) => mockPreloadSummaryPageChunk(...args),
   preloadReminderCalendarPageChunk: (...args: unknown[]) =>
     mockPreloadReminderCalendarPageChunk(...args),
-  preloadTodoPageChunk: (...args: unknown[]) => mockPreloadTodoPageChunk(...args),
 }));
 
 describe("App", () => {
@@ -139,14 +127,12 @@ describe("App", () => {
     mockGetTeamCurrentMembers.mockReset();
     mockGetTeamCurrentInvite.mockReset();
     mockPostTeamInvite.mockReset();
-    mockListTodoItems.mockReset();
     mockPrefetchHomeData.mockReset();
     mockPreloadTasksPageChunk.mockReset();
     mockPreloadPenaltiesPageChunk.mockReset();
     mockPreloadSettingsPageChunk.mockReset();
     mockPreloadSummaryPageChunk.mockReset();
     mockPreloadReminderCalendarPageChunk.mockReset();
-    mockPreloadTodoPageChunk.mockReset();
     mockTasksPage.mockReset();
     mockTasksPage.mockImplementation(() => <div>tasks page</div>);
 
@@ -166,7 +152,6 @@ describe("App", () => {
     mockSummary.mockResolvedValue({ data: { totalPenalty: 0 } });
     mockGetTeamCurrentMembers.mockResolvedValue({ data: { items: [] } });
     mockGetTeamCurrentInvite.mockResolvedValue({ data: null });
-    mockListTodoItems.mockResolvedValue({ data: { items: [] } });
     mockPostTeamInvite.mockResolvedValue({
       data: {
         code: "NEWCODE",
@@ -180,7 +165,6 @@ describe("App", () => {
     mockPreloadSettingsPageChunk.mockResolvedValue(undefined);
     mockPreloadSummaryPageChunk.mockResolvedValue(undefined);
     mockPreloadReminderCalendarPageChunk.mockResolvedValue(undefined);
-    mockPreloadTodoPageChunk.mockResolvedValue(undefined);
     mockGetMe.mockRejectedValue(new Error("request failed: 401"));
   });
 
@@ -197,6 +181,24 @@ describe("App", () => {
       expect(screen.getByRole("button", { name: "Googleでログイン" })).toBeInTheDocument();
       expect(screen.queryAllByTestId("boot-screen")).toHaveLength(0);
     });
+  });
+
+  it("removes retired preferences from browser storage while preserving the theme", async () => {
+    const retiredKeys = [
+      "kaji:todo-completion-delay-ms:v1",
+      "kaji:legacy-preferences-owner:v1",
+      "kaji:todo-default-category:v1:user-1:team-1",
+      "kaji:user-preferences:v1:user-1",
+      "kaji:user-preferences:v1:user-2",
+    ];
+    for (const key of retiredKeys) window.localStorage.setItem(key, "legacy");
+    window.localStorage.setItem("kaji:theme:v1", "dark");
+
+    render(<App />);
+    await screen.findByRole("button", { name: "Googleでログイン" });
+
+    for (const key of retiredKeys) expect(window.localStorage.getItem(key)).toBeNull();
+    expect(window.localStorage.getItem("kaji:theme:v1")).toBe("dark");
   });
 
   it("shows progress while preparing an update and allows retry after failure", async () => {
@@ -251,9 +253,9 @@ describe("App", () => {
 
     await waitFor(() => {
       expect(primaryNav.getByRole("button", { name: "ホーム" })).toBeInTheDocument();
-      expect(primaryNav.getByRole("button", { name: "ToDo" })).toBeInTheDocument();
+      expect(primaryNav.getAllByRole("button")).toHaveLength(2);
       expect(primaryNav.queryByRole("button", { name: "カレンダー" })).not.toBeInTheDocument();
-      expect(floatingNav.getByRole("button", { name: "アシスト" })).toBeInTheDocument();
+      expect(floatingNav.queryByRole("button", { name: "アシスト" })).not.toBeInTheDocument();
       expect(primaryNav.getByRole("button", { name: "サマリー" })).toBeInTheDocument();
       expect(floatingNav.getByRole("button", { name: "その他" })).toBeInTheDocument();
       expect(screen.queryAllByTestId("boot-screen")).toHaveLength(0);
@@ -273,7 +275,6 @@ describe("App", () => {
     ["タスク", "/tasks", "tasks page"],
     ["ペナルティ", "/penalties", "penalties page"],
     ["設定", "/settings", "settings page"],
-    ["カテゴリー", "/todo-categories", "todo categories page"],
     ["共有ページ", "/pages", "shared pages page"],
   ])("navigates from %s to %s", async (label, path, page) => {
     mockGetMe.mockResolvedValue({
@@ -328,7 +329,7 @@ describe("App", () => {
     });
   });
 
-  it("shows todo list panel on home after authentication", async () => {
+  it("shows weekly reminders on home after authentication", async () => {
     mockGetMe.mockResolvedValue({
       data: { user: { id: "u1", displayName: "Owner" }, memberships: [] },
     });
@@ -336,7 +337,7 @@ describe("App", () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "ToDo" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "今週のリマインダー" })).toBeInTheDocument();
     });
   });
 
@@ -433,7 +434,6 @@ describe("App", () => {
     expect(loadPage).toHaveBeenCalledTimes(1);
     expect(screen.queryByText("loaded tasks: 0")).not.toBeInTheDocument();
     expect(mockPreloadTasksPageChunk).not.toHaveBeenCalled();
-    expect(mockListTodoItems).not.toHaveBeenCalled();
     expect(mockPrefetchHomeData).not.toHaveBeenCalled();
     await act(async () => finishPageLoad({ default: LoadedTasksPage }));
     expect(await screen.findByText("loaded tasks: 0")).toBeInTheDocument();
@@ -538,7 +538,6 @@ describe("App", () => {
         expect(mockPreloadPenaltiesPageChunk).not.toHaveBeenCalled();
         expect(mockPreloadSettingsPageChunk).not.toHaveBeenCalled();
         expect(mockPreloadReminderCalendarPageChunk).not.toHaveBeenCalled();
-        expect(mockPreloadTodoPageChunk).not.toHaveBeenCalled();
         expect(globalThis.requestIdleCallback).not.toHaveBeenCalled();
       } finally {
         globalThis.requestIdleCallback = originalRequestIdleCallback;
@@ -602,14 +601,10 @@ describe("App", () => {
 
     const primaryNav = within(await screen.findByTestId("floating-nav-primary"));
     const floatingNav = within(await screen.findByTestId("floating-nav"));
-    const todoButton = primaryNav.getByRole("button", {
-      name: "ToDo",
-    });
     const summaryButton = primaryNav.getByRole("button", { name: "サマリー" });
     const moreButton = floatingNav.getByRole("button", { name: "その他" });
 
-    fireEvent.touchStart(todoButton);
-    fireEvent.pointerEnter(summaryButton, { pointerType: "mouse" });
+    fireEvent.touchStart(summaryButton);
     await user.click(moreButton);
     fireEvent.mouseEnter(screen.getByRole("button", { name: "カレンダー" }));
 
@@ -619,26 +614,25 @@ describe("App", () => {
     expect(mockPreloadTasksPageChunk).toHaveBeenCalledTimes(1);
     expect(mockPreloadReminderCalendarPageChunk).toHaveBeenCalledTimes(1);
     expect(mockPreloadSummaryPageChunk).toHaveBeenCalledTimes(1);
-    expect(mockPreloadTodoPageChunk).toHaveBeenCalledTimes(1);
   });
 
   it("retries failed chunk preloads on the next intent and still navigates", async () => {
     mockGetMe.mockResolvedValue({
       data: { user: { id: "u1", displayName: "Owner" }, memberships: [] },
     });
-    mockPreloadTodoPageChunk.mockRejectedValueOnce(new Error("offline"));
+    mockPreloadSummaryPageChunk.mockRejectedValueOnce(new Error("offline"));
     render(<App />);
 
     const primaryNav = within(await screen.findByTestId("floating-nav-primary"));
-    const todoButton = primaryNav.getByRole("button", { name: "ToDo" });
-    fireEvent.touchStart(todoButton);
-    await waitFor(() => expect(mockPreloadTodoPageChunk).toHaveBeenCalledTimes(1));
+    const summaryButton = primaryNav.getByRole("button", { name: "サマリー" });
+    fireEvent.touchStart(summaryButton);
+    await waitFor(() => expect(mockPreloadSummaryPageChunk).toHaveBeenCalledTimes(1));
 
-    fireEvent.pointerEnter(todoButton, { pointerType: "mouse" });
-    expect(mockPreloadTodoPageChunk).toHaveBeenCalledTimes(2);
-    fireEvent.click(todoButton);
+    fireEvent.pointerEnter(summaryButton, { pointerType: "mouse" });
+    expect(mockPreloadSummaryPageChunk).toHaveBeenCalledTimes(2);
+    fireEvent.click(summaryButton);
 
-    expect(await screen.findByText("todo page")).toBeInTheDocument();
-    expect(window.location.pathname).toBe("/todos");
+    expect(await screen.findByText("summary page")).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/summary");
   });
 });

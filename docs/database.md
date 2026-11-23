@@ -1,10 +1,9 @@
 # データベースの責務
 
-Cloudflare D1に22テーブルを持つ。ユーザー情報の正本はBetter Authの `auth_user`。旧アプリ用 `users` は削除し、メール・表示名・作成日時の二重保存と同期処理をなくした。
+Cloudflare D1に21テーブルを持つ。ユーザー情報の正本はBetter Authの `auth_user`。旧アプリ用 `users` は削除し、メール・表示名・作成日時の二重保存と同期処理をなくした。
 
 | 領域 | テーブル | 残す理由 |
 | --- | --- | --- |
-| ユーザー設定 | `user_preferences` | ユーザー単位のToDo取消猶予・初期カテゴリー |
 | ユーザー | `auth_user` | ID・メール・名前・作成日時と、アプリ用nickname/color_hexを一元管理 |
 | Google連携 | `auth_account` | Googleのsubject、暗号化したOAuthトークン。userとは別の外部認証アカウント |
 | セッション | `auth_session` | Cookieに対応するログイン状態、失効・30日・最大5件の制御 |
@@ -15,7 +14,8 @@ Cloudflare D1に22テーブルを持つ。ユーザー情報の正本はBetter A
 | 週間必要回数 | `task_weekly_requirements` | 翌週からの回数変更と適用週の履歴。初期回数はtasksに保持し、過去の集計と完了上限を再現 |
 | 日次完了 | `task_completion_daily` | 1家事・1日に最大1件という制約 |
 | 週次完了 | `task_completion_weekly_entries` | 1週間に複数回の完了・実行者・取り消す順番。日次と制約が異なる |
-| ToDo・予定 | `todo_items`・`reminders` | チーム共有のToDoと予定。カテゴリーは`teams.todo_categories`に保持 |
+| 予定 | `reminders` | チーム共有の単発・繰り返し予定 |
+| 共有ページ | `shared_pages`・`shared_page_creations` | チーム共有文書と作成リクエストの重複防止 |
 | ペナルティ | `penalty_rules` | 適用条件と論理削除 |
 | 月次確定 | `monthly_penalty_summaries`・`monthly_penalty_summary_triggered_rules` | 月次合計・締め状態・締め時点の発動ルールID。現在の定義だけからは確定状態を再現できない |
 | 締め台帳 | `close_runs` | 日次/週次の処理済み期間を記録し、補完・再実行時の二重計上を防止 |
@@ -39,11 +39,11 @@ Better Authの追加項目と入力制御は [公式Databaseガイド](https://b
 
 ## Drizzleによるアクセス
 
-`app/src/server/infrastructure/schema.ts` が業務17テーブル、`auth-schema.ts` が認証5テーブルの実行時定義です。`database.ts` でリクエスト単位のDB handleを作り、Repository・Better Auth・Pushへ渡します。通常のCRUDはquery builder、再帰CTE等はパラメーター化したDrizzle `sql` を使用します。
+`app/src/server/infrastructure/schema.ts` が業務16テーブル、`auth-schema.ts` が認証5テーブルの実行時定義です。`database.ts` でリクエスト単位のDB handleを作り、Repository・Better Auth・Pushへ渡します。通常のCRUDはquery builder、再帰CTE等はパラメーター化したDrizzle `sql` を使用します。
 
 SQL migrationがDDLの正本です。schemaの変更だけではDBは更新されないため、今後の列・制約の変更では新しいmigrationとDrizzle定義を一緒に更新し、`drizzle-schema.test.ts` で照合してください。
 
-今後追加するmigrationはテーブル・カラム・インデックス・制約などのスキーマ変更に限定します。業務データの補正・カテゴリー設定は含めません。適用済みの過去migrationは変更しません。
+今後追加するmigrationはテーブル・カラム・インデックス・制約などのスキーマ変更に限定します。業務データの補正は含めません。適用済みの過去migrationは変更しません。
 
 ## 日時の保存形式
 
@@ -61,28 +61,6 @@ SQL migrationがDDLの正本です。schemaの変更だけではDBは更新さ�
 
 旧Workerはこの列を参照するため、旧版をメンテナンス・Cron無効にして実行中の更新が終わってから適用する。SQL適用後は旧Workerへコードだけrollbackしない。新Workerを同じ停止設定で配備・確認し、再開する。詳しい手順はlocal-notes/operations/deployment-guide.mdを参照。
 
-## ToDoとカテゴリー
+## ToDo廃止時のデータ移行
 
-`0005_todos.sql`は`shopping_items`を`todo_items`へ改名し、カテゴリー用カラムとインデックスを定義する。ID・チーム・名前・メモ・順序・日時は保持し、テーブル数は増やさない。既存項目は`category = NULL`の未分類で引き継ぎ、カテゴリー一覧は空配列で開始する。カテゴリーの自動設定や手動補正SQLは用意せず、必要になった時点で画面から設定する。完了操作は項目を物理削除する。
-
-カテゴリー一覧は `teams.todo_categories` のJSON配列で管理する。各要素は固定UUIDを持つ `{ id, name }`、未分類は `null`。配列順が表示順となり、カテゴリー専用テーブルや未分類の位置カラムは持たない。0件でもカテゴリーは明示的に削除するまで残る。名前は前後空白を除いて1〜50文字、チーム内で同一名を重複登録しない。新しいカテゴリーは末尾へ追加する。新規チームでは `[null]` を保存し、SQL既定値の空配列は「未登録・先頭に未分類」と解釈する。
-
-ToDoは `todo_items.category_id` でカテゴリーを参照する。未分類はSQLのNULL。追加・編集・絞り込み・削除・DnDの識別はIDで行い、名前は表示専用。名前変更で参照や順番が変わらない構造だが、名前変更UIは今回追加しない。ToDo保存でカテゴリーを自動登録せず、書き込み時に同じチームの登録済みIDかをSQLで検査する。カテゴリー削除は配列からの除去と該当ToDoの未分類化を同じD1 batchに含める。同名で作り直しても新しいIDになり、以前のToDoは未分類のまま。
-
-並べ替えリクエストは固定IDとnullを含む `categoryIds` 配列。nullちょうど1件とID重複なしを契約で検証し、チーム所属と保存済みID集合の一致を単一UPDATEで検査する。保存時にIDから現在のカテゴリーオブジェクトを取得するため、並べ替え前後で名前が変わっても古い名前で上書きしない。途中で追加・削除された古い一覧は409で拒否し、同じ集合の並べ替え同士は最後に保存した順序を採用する。
-
-`0006_todo_category_order.sql` は過去の位置カラム追加SQLとして保持する。`0007_todo_category_ids.sql` は `category` → `category_id` の改名と `todo_unclassified_sort_key` の削除だけ。カテゴリー名からIDへの業務データ変換はmigrationに含めず、独立した手動スクリプトで行う。**既存DBは0007の適用前に、旧Workerの書き込みを停止して変換する必要がある。** 手順と再実行・復旧条件は [カテゴリーID変換手順](todo-category-id-conversion.md) を参照。
-
-
-## MCPの認可状態
-
-`0008_mcp_connections.sql` は既存のToDo・カテゴリーを変更せず、連携状態用の `mcp_connections` と単回同意用の `mcp_consent_claims` を追加する。買い物/ToDoの重複テーブルは作らない。
-
-連携はauth_userの本人ID・clientId・resource・同意scope・provider grant ID・有効期限・解除日時を持つ。grant IDは最初の認可コード交換時だけ原子的に結合し、同じコードの並行交換を拒否する。同意claimはhandleのSHA-256だけを保存し、本人と現在のauth_session・期限と未消費を条件に単回UPDATEで消費する。ユーザー/セッション削除はFKで反映する。認可コードとbearer/refresh token自体はD1へ保存せず、workers-oauth-providerのKVで管理する。
-
-D1連携解除はKV失効より先に行う。access tokenがKVで一時的に有効でも、Applicationと書き込みSQLのD1検査で拒否する。D1とKVの分散transactionは持たず、失敗時は安全側に拒否して新しい同意か解除の再実行で回復する。放棄された同意claim・期限切れ連携の保持期間と定期削除は、運用量に応じて別途決める。
-
-
-## ユーザー設定
-
-`0013_user_preferences.sql` は `auth_user.id` を参照する `user_preferences` を追加する。主キーはuser_idのみで、チーム列は持たない。ユーザー削除時はCASCADE。todo_completion_delay_msは1000〜5000の1000刻み、default_todo_categoryはall/unclassified/categoryのJSON。入力契約とSQL制約で検証する。未登録は行がない状態として扱い、GETで行を作らない。初回移行は認可済みINSERT SELECTとON CONFLICT DO NOTHINGで既存設定を保護する。通常更新は指定された列だけ更新し、カテゴリーの適用可否は現在のチームで判定する。ニックネーム・表示カラーはauth_userのまま維持する。
+`0014_remove_todos.sql` は `todo_items`、`user_preferences`、`mcp_connections`、`mcp_consent_claims`、`assist_usage` と `teams.todo_categories` を削除する。適用済みのmigrationは保持する。既存D1への適用は新Workerへの切り替え後に行う。旧Workerのチーム作成SQLは削除対象の列を参照するため、適用後の復旧には新しいDBスキーマに対応したWorkerを使う。

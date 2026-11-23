@@ -1,7 +1,6 @@
 import { execFileSync } from "node:child_process";
 
 const features = new Set([
-  "assist",
   "home",
   "penalties",
   "reminders",
@@ -9,17 +8,6 @@ const features = new Set([
   "shared-pages",
   "summary",
   "tasks",
-  "todos",
-]);
-const assistFiles = new Set([
-  "app/src/contracts/assist.ts",
-  "app/src/server/application/assist-operations.ts",
-  "app/src/server/application/assist-ports.ts",
-  "app/src/server/infrastructure/assist-ai.ts",
-  "app/src/server/infrastructure/assist-budget.ts",
-  "app/src/server/transport/assist.server.ts",
-  "app/src/server/transport/assist-audio.ts",
-  "app/tests/e2e/assist-fixture.ts",
 ]);
 const toolingFiles = new Set([
   "Makefile",
@@ -37,7 +25,6 @@ const toolingFiles = new Set([
   "app/playwright.config.ts",
   "app/playwright.dev.config.ts",
   "app/wrangler.jsonc",
-  "app/wrangler.mcp.jsonc",
   "app/Dockerfile.dev",
 ]);
 
@@ -70,10 +57,6 @@ export function verificationPlan(paths) {
     if (path.startsWith("app/tests/server/")) continue;
     if (path.startsWith("app/tests/dev/")) {
       development = true;
-      continue;
-    }
-    if (assistFiles.has(path)) {
-      tags.add("@assist");
       continue;
     }
     const feature = /^app\/src\/features\/([^/]+)\//.exec(path)?.[1];

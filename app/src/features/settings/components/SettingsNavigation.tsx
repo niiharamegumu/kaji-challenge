@@ -1,4 +1,4 @@
-import { Bell, Check, CircleCheck, Monitor, Palette, UserRound, UsersRound } from "lucide-react";
+import { Bell, Check, Monitor, Palette, UserRound, UsersRound } from "lucide-react";
 
 export const SETTINGS_CATEGORIES = [
   {
@@ -10,11 +10,6 @@ export const SETTINGS_CATEGORIES = [
     id: "appearance",
     label: "表示",
     Icon: Palette,
-  },
-  {
-    id: "todos",
-    label: "ToDo",
-    Icon: CircleCheck,
   },
   {
     id: "notifications",

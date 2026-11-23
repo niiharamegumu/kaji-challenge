@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { useFormPresence } from "../state/overlay";
 
 type Props = {
   isOpen: boolean;
@@ -29,7 +28,6 @@ export function FormSheet({
   onClose,
   onSubmit,
 }: Props) {
-  useFormPresence(isOpen);
   const submit = async () => {
     if (isSubmitting || submitDisabled) return;
     try {

@@ -24,12 +24,6 @@ import {
   type SharedPageLease,
   type SharedPageLeaseResponse,
 } from "../../contracts/shared-pages";
-import { assistLimits } from "../../contracts/assist";
-import {
-  defaultUserPreferences,
-  type UserPreferences,
-  type UpdateUserPreferences,
-} from "../../contracts/user-preferences";
 import { AppError } from "../domain/errors";
 import { addDays, todayJST, weekStart } from "../domain/dates";
 import type { WeeklyRequirement } from "../domain/task-requirements";
@@ -47,14 +41,12 @@ import {
   taskCompletionDaily,
   taskCompletionWeeklyEntries,
   inviteCodes,
-  todoItems,
   reminders,
   penaltyRules,
   monthlyPenaltySummaries,
   monthlyPenaltySummaryTriggeredRules,
   closeRuns,
   pushSubscriptions,
-  userPreferences,
 } from "./schema";
 
 function required<T>(rows: T[], operation: string): T {
@@ -147,16 +139,6 @@ const pushFields = {
   CreatedAt: iso(pushSubscriptions.created_at),
   UpdatedAt: iso(pushSubscriptions.updated_at),
 };
-const todoFields = {
-  CategoryID: todoItems.category_id,
-  ID: todoItems.id,
-  TeamID: todoItems.team_id,
-  Name: todoItems.name,
-  Notes: todoItems.notes,
-  SortKey: todoItems.sort_key,
-  CreatedAt: iso(todoItems.created_at),
-  UpdatedAt: iso(todoItems.updated_at),
-};
 const reminderFields = {
   ID: reminders.id,
   TeamID: reminders.team_id,
@@ -242,15 +224,7 @@ export class D1Repository implements P.Repository {
   constructor(
     private readonly db: Database,
     private readonly member?: { teamId: string; userId: string },
-    private readonly authorization?:
-      | { sessionId: string; userId: string }
-      | {
-          connectionId: string;
-          userId: string;
-          scope: string;
-          // UTC ISO expiry from the provider-verified principal, never request input.
-          tokenExpiresAt: string;
-        },
+    private readonly authorization?: { sessionId: string; userId: string },
   ) {}
   forSession(userId: string, sessionId: string): P.Repository {
     if (this.member || this.authorization) throw new AppError(403, "forbidden", "Already scoped");
@@ -270,19 +244,9 @@ export class D1Repository implements P.Repository {
     if (!this.authorization) return sql`1`;
     const authorization = this.authorization;
     const actor = this.member ? sql`${this.member.userId}=${authorization.userId}` : sql`1`;
-    if ("sessionId" in authorization)
-      return sql`(${actor}) AND EXISTS (
-        SELECT 1 FROM auth_session WHERE id=${authorization.sessionId} AND user_id=${authorization.userId}
-          AND expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now')
-      )`;
     return sql`(${actor}) AND EXISTS (
-      SELECT 1 FROM mcp_connections AS mcp
-      WHERE mcp.id=${authorization.connectionId} AND mcp.user_id=${authorization.userId}
-        AND mcp.grant_id IS NOT NULL AND length(mcp.grant_id)>0
-        AND mcp.revoked_at IS NULL AND mcp.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now')
-        AND ${authorization.tokenExpiresAt}>strftime('%Y-%m-%dT%H:%M:%fZ','now')
-        AND EXISTS (SELECT 1 FROM json_each(mcp.scopes)
-          WHERE type='text' AND value=${authorization.scope})
+      SELECT 1 FROM auth_session WHERE id=${authorization.sessionId} AND user_id=${authorization.userId}
+        AND expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now')
     )`;
   }
   private access() {
@@ -305,7 +269,7 @@ export class D1Repository implements P.Repository {
       throw new AppError(403, "forbidden", "System operation required");
   }
   private sharedPageActor() {
-    if (!this.member || !this.authorization || !("sessionId" in this.authorization))
+    if (!this.member || !this.authorization)
       throw new AppError(403, "forbidden", "認証済みのチームメンバーとして操作してください。");
     return { userId: this.member.userId };
   }
@@ -977,340 +941,6 @@ export class D1Repository implements P.Repository {
     );
   }
 
-  async CreateTodoCategory(teamId: string, category: P.TodoCategory): Promise<void> {
-    // An empty registry defaults to unclassified first. New teams store [null] explicitly.
-    // Preserve the existing ID when the same name is submitted twice.
-    await this.db
-      .update(teams)
-      .set({
-        todo_categories: sql`json_insert(
-        CASE WHEN json_array_length(${teams.todo_categories})=0 THEN '[null]' ELSE ${teams.todo_categories} END,
-        '$[#]', json(${JSON.stringify(category)})
-      )`,
-      })
-      .where(
-        and(
-          eq(teams.id, teamId),
-          this.teamAccess(teams.id),
-          sql`NOT EXISTS (SELECT 1 FROM json_each(${teams.todo_categories}) WHERE json_extract(value, '$.name')=${category.name})`,
-        ),
-      );
-  }
-  async RenameTodoCategory(teamId: string, categoryId: string, name: string): Promise<boolean> {
-    // Resolve the current array position and check uniqueness in the same write.
-    const rows = await this.db
-      .update(teams)
-      .set({
-        todo_categories: sql`json_set(${teams.todo_categories},
-          (SELECT '$[' || key || '].name' FROM json_each(${teams.todo_categories})
-            WHERE json_extract(value, '$.id')=${categoryId}), ${name})`,
-      })
-      .where(
-        and(
-          eq(teams.id, teamId),
-          this.teamAccess(teams.id),
-          sql`EXISTS (SELECT 1 FROM json_each(${teams.todo_categories})
-            WHERE json_extract(value, '$.id')=${categoryId})`,
-          sql`NOT EXISTS (SELECT 1 FROM json_each(${teams.todo_categories})
-            WHERE json_extract(value, '$.id')<>${categoryId}
-              AND json_extract(value, '$.name')=${name})`,
-        ),
-      )
-      .returning({ id: teams.id });
-    return rows.length === 1;
-  }
-  async ListTodoCategories(teamId: string): Promise<(P.TodoCategory | null)[]> {
-    const rows = await this.db
-      .select({ categories: teams.todo_categories })
-      .from(teams)
-      .where(and(eq(teams.id, teamId), this.teamAccess(teams.id)));
-    const { categories } = required(rows, "ListTodoCategories");
-    return categories.length === 0 ? [null] : categories;
-  }
-  async ReorderTodoCategories(teamId: string, categoryIds: (string | null)[]): Promise<boolean> {
-    const ids = categoryIds.filter((id) => id !== null);
-    // Join by ID to preserve the current name, including renames made during a drag.
-    // Compare the complete ID set in the same statement to reject stale add/delete lists.
-    const rows = await this.db
-      .update(teams)
-      .set({
-        todo_categories: sql`(SELECT json_group_array(json(value)) FROM (
-        SELECT current.value FROM json_each(${JSON.stringify(categoryIds)}) AS requested
-        LEFT JOIN json_each(${teams.todo_categories}) AS current
-          ON requested.value = json_extract(current.value, '$.id')
-        ORDER BY requested.key
-      ))`,
-      })
-      .where(
-        and(
-          eq(teams.id, teamId),
-          this.teamAccess(teams.id),
-          sql`(SELECT COUNT(*) FROM json_each(${teams.todo_categories}) WHERE type <> 'null') = ${ids.length}`,
-          sql`NOT EXISTS (
-        SELECT 1 FROM json_each(${teams.todo_categories}) AS current WHERE current.type <> 'null'
-        AND NOT EXISTS (SELECT 1 FROM json_each(${JSON.stringify(ids)}) AS requested
-          WHERE requested.value = json_extract(current.value, '$.id'))
-      )`,
-        ),
-      )
-      .returning({ id: teams.id });
-    return rows.length === 1;
-  }
-  async DeleteTodoCategory(teamId: string, categoryId: string, now: string): Promise<boolean> {
-    const allowed = and(this.teamAccess(teamId), this.todoCategoryExists(teamId, categoryId))!;
-    const [, deleted] = await this.db.batch([
-      this.db
-        .update(todoItems)
-        .set({ category_id: null, updated_at: now })
-        .where(and(eq(todoItems.team_id, teamId), eq(todoItems.category_id, categoryId), allowed)),
-      this.db
-        .update(teams)
-        .set({
-          todo_categories: sql`(SELECT json_group_array(json(value)) FROM (
-          SELECT value FROM json_each(${teams.todo_categories})
-          WHERE json_extract(value, '$.id') IS NOT ${categoryId} ORDER BY key
-        ))`,
-        })
-        .where(and(eq(teams.id, teamId), allowed))
-        .returning({ id: teams.id }),
-    ]);
-    return deleted.length === 1;
-  }
-
-  private todoCategoryExists(teamId: string, categoryId: string | null | undefined) {
-    return categoryId == null
-      ? sql`1`
-      : sql`EXISTS (
-      SELECT 1 FROM ${teams}, json_each(${teams.todo_categories}) AS category
-      WHERE ${teams.id}=${teamId} AND json_extract(category.value, '$.id')=${categoryId}
-    )`;
-  }
-
-  async CreateTodoItem(arg: P.CreateTodoItemParams): Promise<boolean> {
-    const allowed = and(
-      this.teamAccess(arg.TeamID),
-      this.todoCategoryExists(arg.TeamID, arg.CategoryID),
-    );
-    const [, inserted] = await this.db.batch([
-      this.db
-        .update(todoItems)
-        .set({ sort_key: sql`${todoItems.sort_key}+100` })
-        .where(and(eq(todoItems.team_id, arg.TeamID), allowed)),
-      this.db
-        .insert(todoItems)
-        .select(
-          sql`SELECT ${arg.ID},${arg.TeamID},${arg.Name},${arg.Notes},${arg.CategoryID},100,${arg.CreatedAt},${arg.UpdatedAt} WHERE ${allowed}`,
-        )
-        .returning({ id: todoItems.id }),
-    ]);
-    return inserted.length === 1;
-  }
-
-  async CreateTodoItemsAtomic(items: P.CreateTodoItemParams[]): Promise<P.TodoItem[]> {
-    const teamId = items[0]?.TeamID;
-    if (
-      !teamId ||
-      items.length > assistLimits.items ||
-      items.some((item) => item.TeamID !== teamId)
-    )
-      return [];
-    // Every category must still exist before either statement can change data. The INSERT
-    // adds the entire list in one statement; a duplicate ID or other error rolls back the batch.
-    const allowed = and(
-      this.teamAccess(teamId),
-      // One JSON parameter keeps 50 distinct categories below D1's bind limit.
-      sql`NOT EXISTS (
-        SELECT 1 FROM json_each(${JSON.stringify([...new Set(items.map((item) => item.CategoryID).filter((id) => id !== null))])}) AS requested
-        WHERE NOT EXISTS (
-          SELECT 1 FROM ${teams}, json_each(${teams.todo_categories}) AS category
-          WHERE ${teams.id}=${teamId} AND json_extract(category.value, '$.id')=requested.value
-        )
-      )`,
-    );
-    const [, inserted] = await this.db.batch([
-      this.db
-        .update(todoItems)
-        .set({ sort_key: sql`${todoItems.sort_key}+${items.length * 100}` })
-        .where(and(eq(todoItems.team_id, teamId), allowed)),
-      this.db
-        .insert(todoItems)
-        .select(sql`SELECT
-          json_extract(value,'$.ID'), ${teamId}, json_extract(value,'$.Name'),
-          json_extract(value,'$.Notes'), json_extract(value,'$.CategoryID'),
-          (CAST(key AS INTEGER)+1)*100, json_extract(value,'$.CreatedAt'),
-          json_extract(value,'$.UpdatedAt')
-          FROM json_each(${JSON.stringify(items)}) WHERE ${allowed}`)
-        .returning(todoFields),
-    ]);
-    return inserted.sort((a, b) => a.SortKey - b.SortKey);
-  }
-
-  async DeleteTodoItem(id: string): Promise<number> {
-    return this.db
-      .delete(todoItems)
-      .where(and(eq(todoItems.id, id), this.teamAccess(todoItems.team_id)))
-      .returning()
-      .then((rows) => rows.length);
-  }
-  async ApplyTodoAssistActionsAtomic(
-    teamId: string,
-    actions: P.TodoAssistAction[],
-  ): Promise<P.TodoAssistActionResult[]> {
-    const additions = actions.flatMap((action) => (action.kind === "add" ? action.items : []));
-    if (
-      !actions.length ||
-      actions.length > assistLimits.actions ||
-      additions.length > assistLimits.items ||
-      additions.some((item) => item.TeamID !== teamId) ||
-      actions.some((action) => action.kind === "add" && !action.items.length)
-    )
-      return [];
-    const categoryIds = [
-      ...new Set(
-        actions
-          .flatMap((action) =>
-            action.kind === "add"
-              ? action.items.map((item) => item.CategoryID)
-              : action.categoryId !== undefined
-                ? [action.categoryId]
-                : [],
-          )
-          .filter((id) => id !== null),
-      ),
-    ];
-    // Every statement uses the same preconditions. Neither categories nor access are
-    // changed by this batch, so an invalid later category cannot leave an earlier write.
-    const allowed = and(
-      this.teamAccess(teamId),
-      sql`NOT EXISTS (
-      SELECT 1 FROM json_each(${JSON.stringify(categoryIds)}) AS requested
-      WHERE NOT EXISTS (SELECT 1 FROM ${teams}, json_each(${teams.todo_categories}) AS category
-        WHERE ${teams.id}=${teamId} AND json_extract(category.value, '$.id')=requested.value)
-    )`,
-    );
-    const queries = actions
-      .map((action) => {
-        if (action.kind === "add")
-          return [
-            this.db
-              .update(todoItems)
-              .set({ sort_key: sql`${todoItems.sort_key}+${action.items.length * 100}` })
-              .where(and(eq(todoItems.team_id, teamId), allowed)),
-            this.db
-              .insert(todoItems)
-              .select(sql`SELECT
-          json_extract(value,'$.ID'), ${teamId}, json_extract(value,'$.Name'),
-          json_extract(value,'$.Notes'), json_extract(value,'$.CategoryID'),
-          (CAST(key AS INTEGER)+1)*100, json_extract(value,'$.CreatedAt'), json_extract(value,'$.UpdatedAt')
-          FROM json_each(${JSON.stringify(action.items)}) WHERE ${allowed}`)
-              .returning(todoFields),
-          ];
-        if (action.kind === "remove")
-          return [
-            this.db
-              .delete(todoItems)
-              .where(
-                and(
-                  eq(todoItems.team_id, teamId),
-                  allowed,
-                  sql`${todoItems.name} IN (SELECT value FROM json_each(${JSON.stringify(action.names)}))`,
-                  action.categoryId === undefined
-                    ? undefined
-                    : action.categoryId === null
-                      ? isNull(todoItems.category_id)
-                      : eq(todoItems.category_id, action.categoryId),
-                ),
-              )
-              .returning(todoFields),
-          ];
-        return [
-          this.db
-            .select(todoFields)
-            .from(todoItems)
-            .where(and(eq(todoItems.team_id, teamId), allowed))
-            .orderBy(todoItems.sort_key, todoItems.created_at, todoItems.id),
-        ];
-      })
-      .flat();
-    const [first, ...rest] = queries;
-    if (!first) return [];
-    const results = await this.db.batch([first, ...rest]);
-    let index = 0;
-    return actions.map((action): P.TodoAssistActionResult => {
-      if (action.kind === "add") index++; // The sort shift has no returned rows.
-      const rows = results[index++];
-      if (!Array.isArray(rows))
-        throw new AppError(
-          503,
-          "invalid_batch_result",
-          "結果を確認できません。ToDo一覧を確認してください。",
-        );
-      if (action.kind === "remove") return { kind: "remove", count: rows.length };
-      return {
-        kind: action.kind,
-        items: action.kind === "add" ? rows.sort((a, b) => a.SortKey - b.SortKey) : rows,
-      };
-    });
-  }
-  async GetTodoItemByID(id: string): Promise<P.TodoItem> {
-    const rows = await this.db
-      .select(todoFields)
-      .from(todoItems)
-      .where(and(eq(todoItems.id, id), this.teamAccess(todoItems.team_id)));
-    return required(rows, "GetTodoItemByID");
-  }
-  async DeleteTodoItemsByNames(
-    teamId: string,
-    names: string[],
-    categoryId?: string | null,
-  ): Promise<number> {
-    if (names.length === 0) return 0;
-    // One DELETE applies the entire name set and current session/team checks together.
-    // Names are bound as JSON, including large duplicate groups without per-item binds.
-    return this.db
-      .delete(todoItems)
-      .where(
-        and(
-          eq(todoItems.team_id, teamId),
-          this.teamAccess(teamId),
-          sql`${todoItems.name} IN (SELECT value FROM json_each(${JSON.stringify(names)}))`,
-          categoryId === undefined
-            ? undefined
-            : categoryId === null
-              ? isNull(todoItems.category_id)
-              : eq(todoItems.category_id, categoryId),
-        ),
-      )
-      .returning({ id: todoItems.id })
-      .then((rows) => rows.length);
-  }
-  async ListTodoItemsByTeamID(teamID: string): Promise<P.TodoItem[]> {
-    return this.db
-      .select(todoFields)
-      .from(todoItems)
-      .where(and(eq(todoItems.team_id, teamID), this.teamAccess(todoItems.team_id)))
-      .orderBy(todoItems.sort_key, todoItems.created_at, todoItems.id);
-  }
-  async UpdateTodoItem(arg: P.UpdateTodoItemParams): Promise<boolean> {
-    const rows = await this.db
-      .update(todoItems)
-      .set({
-        name: arg.Name,
-        notes: arg.Notes,
-        category_id: arg.CategoryID,
-        updated_at: arg.UpdatedAt,
-      })
-      .where(
-        and(
-          eq(todoItems.id, arg.ID),
-          eq(todoItems.team_id, arg.TeamID),
-          this.teamAccess(todoItems.team_id),
-          this.todoCategoryExists(arg.TeamID, arg.CategoryID),
-        ),
-      )
-      .returning({ id: todoItems.id });
-    return rows.length === 1;
-  }
   async FindOldestMonthCloseCandidate(
     arg: P.FindOldestMonthCloseCandidateParams,
   ): Promise<P.FindOldestMonthCloseCandidateRow> {
@@ -1542,95 +1172,6 @@ export class D1Repository implements P.Repository {
       .returning()
       .then((rows) => rows.length);
   }
-  async GetUserPreferences(userId: string): Promise<UserPreferences | null> {
-    const row = required(
-      await this.db
-        .select({
-          todoCompletionDelayMs: userPreferences.todo_completion_delay_ms,
-          defaultTodoCategory: userPreferences.default_todo_category,
-        })
-        .from(user)
-        .leftJoin(userPreferences, eq(userPreferences.user_id, user.id))
-        .where(and(eq(user.id, userId), this.identityAccess(user.id), this.access())),
-      "GetUserPreferences",
-    );
-    return row.todoCompletionDelayMs === null
-      ? null
-      : {
-          todoCompletionDelayMs: row.todoCompletionDelayMs!,
-          defaultTodoCategory: row.defaultTodoCategory!,
-        };
-  }
-
-  async SaveUserPreferences(
-    userId: string,
-    patch: UpdateUserPreferences,
-    initializeOnly = false,
-  ): Promise<UserPreferences> {
-    const preferences = { ...defaultUserPreferences, ...patch };
-    const selection = preferences.defaultTodoCategory;
-    const categoryExists =
-      selection.kind === "category"
-        ? this.member
-          ? this.todoCategoryExists(this.member.teamId, selection.id)
-          : sql`0`
-        : sql`1`;
-    const allowed = and(
-      eq(user.id, userId),
-      this.identityAccess(user.id),
-      this.access(),
-      initializeOnly ? sql`1` : categoryExists,
-    );
-    const insert = this.db.insert(userPreferences).select(
-      this.db
-        .select({
-          user_id: user.id,
-          todo_completion_delay_ms: sql<
-            UserPreferences["todoCompletionDelayMs"]
-          >`${preferences.todoCompletionDelayMs}`.as("todo_completion_delay_ms"),
-          // An obsolete local category must not prevent the first settings migration.
-          default_todo_category: sql<
-            UserPreferences["defaultTodoCategory"]
-          >`CASE WHEN ${categoryExists} THEN ${JSON.stringify(selection)} ELSE '{"kind":"all"}' END`.as(
-            "default_todo_category",
-          ),
-        })
-        .from(user)
-        .where(allowed),
-    );
-    const fields = {
-      todoCompletionDelayMs: userPreferences.todo_completion_delay_ms,
-      defaultTodoCategory: userPreferences.default_todo_category,
-    };
-    if (initializeOnly) {
-      await insert.onConflictDoNothing({ target: userPreferences.user_id });
-      const stored = await this.GetUserPreferences(userId);
-      if (!stored) throw new AppError(403, "forbidden", "設定を保存できませんでした。");
-      return stored;
-    }
-    const rows = await insert
-      .onConflictDoUpdate({
-        target: userPreferences.user_id,
-        // Only supplied columns change, including when two devices edit different fields.
-        set: {
-          ...(patch.todoCompletionDelayMs === undefined
-            ? {}
-            : { todo_completion_delay_ms: patch.todoCompletionDelayMs }),
-          ...(patch.defaultTodoCategory === undefined
-            ? {}
-            : { default_todo_category: patch.defaultTodoCategory }),
-        },
-      })
-      .returning(fields);
-    if (!rows[0])
-      throw new AppError(
-        409,
-        "conflict",
-        "設定を保存できませんでした。再取得して選び直してください。",
-      );
-    return rows[0];
-  }
-
   async GetUserByID(id: string): Promise<P.GetUserByIDRow> {
     const rows = await this.db
       .select({
@@ -1670,7 +1211,7 @@ export class D1Repository implements P.Repository {
   async ProvisionUser(userId: string, teamId: string, name: string, now: string): Promise<void> {
     this.requireSystemAccess();
     await this.db.batch([
-      this.db.insert(teams).select(sql`SELECT ${teamId},${name},${now},'[null]'
+      this.db.insert(teams).select(sql`SELECT ${teamId},${name},${now}
         WHERE NOT EXISTS(SELECT 1 FROM team_members WHERE user_id=${userId})`),
       this.db.insert(teamMembers).select(sql`SELECT ${teamId},${userId},'owner',${now}
         WHERE EXISTS(SELECT 1 FROM teams WHERE id=${teamId}) AND NOT EXISTS(SELECT 1 FROM team_members WHERE user_id=${userId})`),
@@ -1695,7 +1236,7 @@ export class D1Repository implements P.Repository {
       this.db
         .insert(teams)
         .select(
-          sql`SELECT ${arg.toTeamId},${arg.newTeamName ?? ""},${arg.now},'[null]' WHERE ${!arg.inviteCode} AND ${valid}`,
+          sql`SELECT ${arg.toTeamId},${arg.newTeamName ?? ""},${arg.now} WHERE ${!arg.inviteCode} AND ${valid}`,
         ),
       this.db
         .update(tasks)
@@ -1764,24 +1305,24 @@ export class D1Repository implements P.Repository {
   }
   async Reorder(arg: P.ReorderParams): Promise<void> {
     if (!arg.ids.length) return;
-    const table = arg.kind === "tasks" ? tasks : todoItems;
     const ids = JSON.stringify(arg.ids);
     const scope = and(
-      eq(table.team_id, arg.teamId),
-      arg.kind === "tasks" ? and(eq(tasks.type, arg.type), isNull(tasks.deleted_at)) : undefined,
+      eq(tasks.team_id, arg.teamId),
+      eq(tasks.type, arg.type),
+      isNull(tasks.deleted_at),
     );
     // 件数・対象IDが保存時点でも一致するときだけ全行を更新する。
-    const valid = sql`(SELECT COUNT(*) FROM ${table} WHERE ${scope})=${arg.ids.length}
-      AND (SELECT COUNT(*) FROM ${table} WHERE ${scope} AND ${table.id} IN (SELECT id FROM requested))=${arg.ids.length}`;
+    const valid = sql`(SELECT COUNT(*) FROM ${tasks} WHERE ${scope})=${arg.ids.length}
+      AND (SELECT COUNT(*) FROM ${tasks} WHERE ${scope} AND ${tasks.id} IN (SELECT id FROM requested))=${arg.ids.length}`;
     // Materialize once so SQLite can index the requested IDs. A correlated JSON
     // lookup (or a direct json_each join) rescans the full list for every row.
     const rows = await this.db.all<{ id: string }>(sql`
       WITH requested AS MATERIALIZED (
         SELECT value AS id, (CAST(key AS INTEGER)+1)*100 AS rank FROM json_each(${ids})
       )
-      UPDATE ${table} SET sort_key=requested.rank, updated_at=${arg.now}
+      UPDATE ${tasks} SET sort_key=requested.rank, updated_at=${arg.now}
       FROM requested
-      WHERE ${table.id}=requested.id AND ${scope} AND ${this.teamAccess(table.team_id)} AND ${valid}
+      WHERE ${tasks.id}=requested.id AND ${scope} AND ${this.teamAccess(tasks.team_id)} AND ${valid}
       RETURNING id
     `);
     if (rows.length !== arg.ids.length)

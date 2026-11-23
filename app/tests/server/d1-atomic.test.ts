@@ -191,7 +191,6 @@ it("does not partially reorder a list that gained an item after it was read", as
   await expect(
     connection.repository.forMember(teamId, userId).Reorder({
       teamId,
-      kind: "tasks",
       type: "daily",
       ids: ["removed-id"],
       now: now.toISOString(),

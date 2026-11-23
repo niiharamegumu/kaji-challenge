@@ -15,8 +15,6 @@ import {
 } from "../../features/auth";
 import { prefetchHomeData } from "../../features/home/preload";
 import { MonthCloseBanner } from "../../features/month-close";
-import { DelayedActionProvider } from "../../shared/state/DelayedActionProvider";
-import { UserPreferencesProvider } from "../../shared/query/UserPreferencesProvider";
 import { teamMembersQueryOptions } from "../../shared/query/teamMembersQuery";
 import { StatusToast } from "../../features/shell/components/StatusToast";
 import { useAuthGate } from "../../features/shell/hooks/useAuthGate";
@@ -33,15 +31,12 @@ import { sharedPageDraftDirtyAtom } from "../../shared/state/sharedPageDraft";
 import { isLoggedInAtom, sessionAtom } from "../../state/session";
 import { useBootFlow } from "../boot";
 import { AppHeader } from "./AppHeader";
-import { AssistHost } from "../../features/assist";
 import {
   preloadSettingsPageChunk,
   preloadPenaltiesPageChunk,
   preloadSummaryPageChunk,
   preloadTasksPageChunk,
   preloadReminderCalendarPageChunk,
-  preloadTodoPageChunk,
-  preloadTodoCategoriesPageChunk,
   preloadSharedPagesPageChunk,
 } from "../route-chunks";
 
@@ -56,8 +51,6 @@ const routePreloaders: Record<string, () => Promise<unknown>> = {
   "/penalties": preloadPenaltiesPageChunk,
   "/settings": preloadSettingsPageChunk,
   "/calendar": preloadReminderCalendarPageChunk,
-  "/todo-categories": preloadTodoCategoriesPageChunk,
-  "/todos": preloadTodoPageChunk,
   "/pages": preloadSharedPagesPageChunk,
 };
 
@@ -83,6 +76,7 @@ export function RootLayout() {
   const { currentUserId, currentTeamName, currentUserName, currentUserColorHex } =
     useCurrentUserProfile(meQuery.data, cachedMembersQuery.data);
   const currentTeamId = meQuery.data?.memberships[0]?.teamId ?? null;
+  const userTeamKey = `${currentUserId}:${currentTeamId}`;
   const { isAuthChecking, isAuthenticated, refetchAfterLogin } = useAuthGate({
     loggedIn,
     meData: meQuery.data,
@@ -236,49 +230,33 @@ export function RootLayout() {
         </div>
 
         <RootLayoutContext value={outletContext}>
-          <UserPreferencesProvider
-            key={`${currentUserId}:${currentTeamId}`}
-            userId={currentUserId!}
-            teamId={currentTeamId!}
-          >
-            <DelayedActionProvider key={`${currentUserId}:${currentTeamId}`}>
-              <Outlet />
-            </DelayedActionProvider>
-          </UserPreferencesProvider>
+          <Outlet key={userTeamKey} />
         </RootLayoutContext>
       </div>
 
       {!isInitialBootPending ? (
         <div className="contents" data-shared-page-shell>
           <Suspense fallback={null}>
-            <AssistHost key={`${currentUserId}:${currentTeamId}`} teamId={currentTeamId}>
-              {(assist) => (
-                <FloatingNav
-                  currentUserName={currentUserName}
-                  currentUserColorHex={currentUserColorHex}
-                  isRefreshing={isRefreshing}
-                  onRouteIntent={handleRouteIntent}
-                  onLogout={() => {
-                    if (
-                      hasUnsavedPage &&
-                      !window.confirm(
-                        "保存していない変更があります。変更を破棄してログアウトしますか？",
-                      )
-                    )
-                      return;
-                    assist.close();
-                    void logoutAction();
-                  }}
-                  onRefresh={() => {
-                    assist.close();
-                    void refreshTeamState();
-                  }}
-                  onAssist={assist.open}
-                  assistOpen={assist.isOpen}
-                  assistDisabled={assist.disabled}
-                />
-              )}
-            </AssistHost>
+            <FloatingNav
+              key={userTeamKey}
+              currentUserName={currentUserName}
+              currentUserColorHex={currentUserColorHex}
+              isRefreshing={isRefreshing}
+              onRouteIntent={handleRouteIntent}
+              onLogout={() => {
+                if (
+                  hasUnsavedPage &&
+                  !window.confirm(
+                    "保存していない変更があります。変更を破棄してログアウトしますか？",
+                  )
+                )
+                  return;
+                void logoutAction();
+              }}
+              onRefresh={() => {
+                void refreshTeamState();
+              }}
+            />
           </Suspense>
         </div>
       ) : null}

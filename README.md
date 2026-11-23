@@ -1,8 +1,6 @@
 # KajiChalle
 
-家事をチームで分担し、毎日・毎週の達成状況を記録するPWAです。カテゴリー付きToDo、カレンダーの予定、月次ペナルティ集計、Push通知をまとめて利用できます。
-
-常駐アシストは、どの画面からでも音声でToDoをまとめて追加・一覧確認するための試作です。カレンダーは「その他」から引き続き利用できます。音声の実推論は既定で無効です。有効化・費用・iPhoneでの実機確認は [音声アシスト](docs/voice-assist.md) を参照してください。
+家事をチームで分担し、毎日・毎週の達成状況を記録するPWAです。カレンダーの予定、月次ペナルティ集計、共有ページ、Push通知をまとめて利用できます。
 
 ## 構成
 
@@ -170,15 +168,8 @@ Alchemyはビルド済みの `dist/server/index.js` と `dist/client` を、公�
 | Variable | `VAPID_SUBJECT` | `mailto:` 連絡先またはHTTPS URL |
 | Variable | `JOBS_ENABLED` | 初回は `false`、初回動作確認後 `true` |
 | Variable | `MAINTENANCE_MODE` | 通常 `false`、停止時のみ `true` |
-| Variable | `ASSIST_ENABLED` | 未設定は `false`。`true` で音声AIと専用Gatewayを有効化。時間単位・日次・試用累計の上限は [音声アシスト](docs/voice-assist.md) を参照 |
-| Variable | `MCP_ORIGIN` | 未設定ならMCPリソースを作成しない。設定時はOAuth用KVを保持する。`APP_ORIGIN` と異なるHTTPS origin。パス・ポートなし。停止中も維持する |
-| Variable | `MCP_ENABLED` | 未設定は `false`。`true` のときだけMCP Workerを配備し、MCP/OAuthの受付を有効にする |
 
 `APP_RELEASE` の登録は不要です。Cloudflare tokenには、CDが状態保存先の資格情報を取得するためのSecrets Store Editも必要です。権限不足を解消するために全権限tokenへ置き換えるのではなく、失敗したAPIとscopeを確認します。
-
-MCP追加配備前に、公開originのドメイン、新WorkerとOAuth用KVを作成できる配備権限、接続先ChatGPTのプラン・管理者設定、OAuth同意と検証用ToDoを確認します。`MCP_ORIGIN` の設定でKVを追加して既存Applicationに接続し、`MCP_ENABLED=true` でMCP Workerも追加します。MCP Workerは既存Applicationへの専用Service Bindingを使い、D1やGoogleの秘密値は持ちません。ToDoの完了は物理削除なので、書き込み確認には削除できる検証データを使います。
-
-OAuthの標準失効もD1先行にするため、providerの固定versionにBun patchを適用します。`bun install --frozen-lockfile` を使い、依存更新時は [patchの保守手順](docs/mcp-oauth-provider-patch.md) と失効の回帰検証を実施します。access tokenだけを失効した場合も、Kajiでは対応する連携全体を停止します。
 
 6. **初回CDを実行。** 設定を済ませ、CIが成功したPRを `main` へマージするか、Actions → Deploy production → Run workflow → branch `main` を選びます。CDは初回にAlchemyの状態保存用Worker/DO/Secrets Storeを作り、その後アプリ本体と業務D1を配備します。以降は既存の状態保存先を再利用します。ローカルでのbootstrapや `.alchemy` のアップロードは不要です（[AlchemyのCI状態管理](https://alchemy.run/state-store/)）。初回はジョブ無効で配備されます。下記のブラウザー確認後、`JOBS_ENABLED=true` にして同じworkflowを手動実行し、4本のCronを有効にします。
 
@@ -186,7 +177,7 @@ OAuthの標準失効もD1先行にするため、providerの固定versionにBun 
 
 1. PRのCI成功を確認して `main` へマージします。CIが失敗しているPRはマージしません。
 2. Actionsの **Deploy production** を開き、`deploy` の成功を確認します。planはログに出力され、その後deployを自動実行します。**plan確認の手動停止はありません。** SQLやIaCの意図しない変更はPRで確認してください。
-3. ブラウザーでログイン、家事・ToDo・予定の保存と再読込、ログアウトを確認します。認証/PWA/Push変更時は新規登録許可・拒否、PWA更新、iPhone実機Pushも確認します。CDは配備後のHTTP疎通・release一致を検証しません。
+3. ブラウザーでログイン、家事・予定の保存と再読込、ログアウトを確認します。認証/PWA/Push変更時は新規登録許可・拒否、PWA更新、iPhone実機Pushも確認します。
 4. CloudflareのWorkerログでエラー・締め・通知結果を確認します。通常の更新では鍵の再作成・手動bootstrap・ジョブ無効化は不要です。
 
 同時に配備しないようworkflow全体を直列化し、開始済みの処理は新しいpushで中断しません。待機中の古いrunは新しいrunに置き換わる場合があります。配備job開始時、mainに新しいcommitがあるrunは配備をスキップします。手動再実行も最新mainを対象にしてください。
@@ -194,8 +185,6 @@ OAuthの標準失効もD1先行にするため、providerの固定versionにBun 
 ### 設定変更・障害時
 
 - **設定/Secret更新**：GitHub Environment `production` の値を変更し、ActionsからmainのDeploy productionを手動実行します。設定変更だけでは自動起動しません。
-- **MCP停止**：GitHub Environment `production` の `MCP_ENABLED=false` で再配備します。専用MCP WorkerとそのCustom Domain・Service Bindingは削除され、既存ApplicationのOAuth・discovery・連携管理・named RPCは拒否します。配備前に専用Workerへ実際に紐付いているドメインとplanの削除対象を確認してください。CDはplan後に自動でdeployするため、確認待ちにはなりません。`MCP_ORIGIN` は維持し、OAuth用KVの宣言・retain・管理状態とD1のテーブル・データを残します。originを消すとKVがAlchemyの管理状態から外れるため、停止手段には使いません。
-- **MCP再開**：`MCP_ORIGIN` を維持したまま `MCP_ENABLED=true` で再配備します。MCPコード・build・schema・依存patchは停止中も保持します。停止自体は認可データを失効・削除しないため、残っている有効な連携は再開後に再利用できます。MCP専用データの消去は対象と不可逆性を確認した別操作とし、通常の停止配備やmigrationには含めません。
 - **schema変更**：新しい番号（現在は `app/migrations/0004_*.sql` 以降）のSQLを追加し、CIで検証してからマージ。Alchemyが未適用SQLを適用します。適用済みSQLを編集せず、本番へWranglerで重ねて適用しません。`db:migrate` はローカル専用です。 既存DBへの `0003_iso_timestamps.sql` 適用は旧コードと日時形式が非互換のため、この変更のマージ前に現行mainをメンテナンス状態で配備し、SQLと新Workerの配備完了後に解除します。詳細は [日時の保存形式](docs/database.md#日時の保存形式) を参照してください。
 - **停止が必要な作業**：Environmentの `MAINTENANCE_MODE=true` に変更してCD実行。受付停止とCron解除を確認して作業し、falseへ戻してCD実行・復帰確認します。
 - **配備失敗**：エラーログを確認して修正後、最新mainで再実行。health失敗では自動rollbackしません。SQL適用後にWorker更新だけ失敗する場合もあるため、古いコードへ戻す前にDB互換性を確認します。復元は別の操作です。
@@ -204,6 +193,12 @@ OAuthの標準失効もD1先行にするため、providerの固定versionにBun 
 実際のCloudflare/GitHub設定・配備は初回作業が必要です。ローカル検証はアカウント権限・Google実OAuth・本番D1の復元/性能・実機Pushを代替しません。業務API専用のレート制限と運用監視も配備時に確認します。
 
 締めのCronは毎日00:05 JSTの1本です。予定時刻（`scheduledTime`）がJSTの月曜なら、日次と週次の両方を実行します。通知は毎日21:00・土曜19:00・日曜10:00 JSTです。正本は `app/src/server/application/jobs.ts` です。
+
+### ToDo廃止時の本番リソース撤去
+
+旧カテゴリー列がある環境ではCDが新Workerを先に配備し、`/health` のreleaseが一致してから `0014_remove_todos.sql` を適用します。この移行にはCDを使います。適用後は旧Workerへ戻すとチーム作成に失敗します。MCP専用WorkerとCustom Domainは、Alchemyで管理されていれば配備時に削除されます。
+
+旧構成で保持指定していたOAuth用KV `kaji-production-mcp-oauth` とAI Gateway `kaji-voice` は、残っていれば新Workerの配備後に対象アカウントで削除します。GitHub Environment `production` の旧変数 `MCP_ENABLED`、`MCP_ORIGIN`、`ASSIST_ENABLED` も削除します。[KVの削除](https://developers.cloudflare.com/kv/reference/kv-commands/#kv-namespace-delete)、[AI Gatewayの削除](https://developers.cloudflare.com/api/resources/ai_gateway/methods/delete/)
 
 ## コードを読む順番
 

@@ -12,7 +12,6 @@ const tooling = {
     ignorePatterns: [
       "src/routeTree.gen.ts",
       "worker-configuration.d.ts",
-      "mcp-worker-configuration.d.ts",
       "dist/**",
       "node_modules/**",
     ],
@@ -23,7 +22,6 @@ const tooling = {
     ignorePatterns: [
       "src/routeTree.gen.ts",
       "worker-configuration.d.ts",
-      "mcp-worker-configuration.d.ts",
       "dist/**",
       "node_modules/**",
       "bun.lock",
@@ -42,21 +40,10 @@ export default defineConfig(({ mode }) => {
     plugins: [
       cloudflare({
         viteEnvironment: { name: "ssr" },
-        // AI has no local emulator. Production bindings come from alchemy.run.ts.
         remoteBindings: false,
         config: (config) => {
-          delete config.ai;
           if (testD1Path || mode === "development-test") config.vars.APP_ORIGIN = testOrigin;
         },
-        auxiliaryWorkers: [
-          {
-            configPath: "wrangler.mcp.jsonc",
-            viteEnvironment: { name: "mcp" },
-            ...(testD1Path || mode === "development-test"
-              ? { config: { vars: { APP_ORIGIN: testOrigin } } }
-              : {}),
-          },
-        ],
         ...(testD1Path ? { persistState: { path: testD1Path } } : {}),
       }),
       tanstackStart({ router: { enableRouteGeneration: true }, spa: { enabled: true } }),

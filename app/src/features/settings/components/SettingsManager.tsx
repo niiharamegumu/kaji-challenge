@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 
 import type { TeamMember } from "../../../lib/api/operations";
 import { PushNotificationsSection } from "../../push";
-import { TodoDefaultCategorySettings } from "../../todos";
 import { COPY_FEEDBACK_TIMEOUT_MS } from "../constants/invite";
 import type { InviteState } from "../model/invite";
 import {
@@ -14,7 +13,6 @@ import {
   TeamNameSection,
 } from "./SettingsSections";
 import { getColorHexError, getNicknameError, getTeamNameError } from "./settingsUtils";
-import { TodoCompletionSettings } from "./TodoCompletionSettings";
 import { ThemeSettings } from "./ThemeSettings";
 import { AppUpdateSettings } from "./AppUpdateSettings";
 import {
@@ -167,14 +165,6 @@ export function SettingsManager({
                 />
               ) : null}
               {id === "appearance" ? <ThemeSettings /> : null}
-              {id === "todos" ? (
-                <div className="divide-y divide-line">
-                  <TodoCompletionSettings />
-                  <div className="mt-6 pt-6">
-                    <TodoDefaultCategorySettings key={identityKey} />
-                  </div>
-                </div>
-              ) : null}
               {id === "notifications" ? <PushNotificationsSection key={identityKey} /> : null}
               {id === "team" ? (
                 <div className="space-y-6">

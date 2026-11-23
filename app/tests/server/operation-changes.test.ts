@@ -12,7 +12,6 @@ it("classifies every write for notifications and leaves reads without notificati
   expect(operationChanges.postTeamJoin).toEqual(["membership"]);
   expect(operationChanges.postTeamLeave).toEqual(["membership"]);
   expect(operationChanges.postTaskCompletion).toEqual(["task-completions"]);
-  expect(operationChanges.deleteTodoItem).toEqual(["todos"]);
   expect(operationChanges.patchSharedPage).toEqual(["shared-pages"]);
   expect(operationChanges.postSharedPageLease).toEqual(["shared-pages"]);
   expect(operationChanges.renewSharedPageLease).toEqual([]);

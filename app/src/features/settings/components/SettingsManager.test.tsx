@@ -4,8 +4,6 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { SettingsManager } from "./SettingsManager";
 
 vi.mock("../../push", () => ({ PushNotificationsSection: () => null }));
-vi.mock("./TodoCompletionSettings", () => ({ TodoCompletionSettings: () => null }));
-vi.mock("../../todos", () => ({ TodoDefaultCategorySettings: () => null }));
 
 const props: ComponentProps<typeof SettingsManager> = {
   identityKey: "user:team",
