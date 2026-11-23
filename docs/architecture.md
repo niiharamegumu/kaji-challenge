@@ -4,20 +4,6 @@
 
 チーム共通の文書は `features/shared-pages` と専用D1テーブルで管理する。保存形式・認可・期限付き編集権・ページ固有の版比較・TeamRealtime通知・ライセンスは [shared-pages.md](shared-pages.md) を参照する。家事の実績・得点・月次集計へ接続しない。
 
-## 常駐音声アシスト
-
-1回の指示に含まれる複数のToDo操作は順序付きplanとして扱う。推論は単独操作も配列で返し、`assistInferenceIntentSchema`で検証後に単独操作の既存契約へ変換するか、`batch_todos`として全件処理する。最大10操作・指定項目合計50件。全操作の不足情報とカテゴリーを確認し、必要なら完了/削除を含むplan全体をdraftに保持して何も実行せず聞き返す。`ApplyTodoAssistActionsAtomic`が全体の認証・チーム・カテゴリー条件を各SQLに適用し、追加/削除/検索を単一D1 batchで順に処理する。SQL失敗は全体を戻し、各操作の実結果を順序通り返して画面にもすべて表示する。推論・予算予約・変更通知は1送信につき1回とし、自動再送しない。
-
-`features/assist` の公開APIをRootLayoutが組み立て、shellへ起動callbackと状態だけを渡す。新しいページは追加せず、カレンダーを「その他」に残す。共通ダイアログは `shared/state/overlay` で競合を避ける。
-
-ブラウザーの録音終了では、AudioWorkletから受信したPCMの総数を照合してマイクを解放する。WAV化は同featureのDedicated WorkerへPCMの所有権を転送して実施し、画面描画のスレッドを占有しない。Workerから受け取るWAV BlobをFormDataでアプリへ送り、端末ではbase64化しない。transportが上限付きmultipart解析と実WAV検証後に、Workers AI向けのbase64へ変換する。旧PWAのJSON/base64入力も既存の上限・検証で受け付ける。送信表示の更新後は直ちにWorkerへ変換を渡す。処理完了のawait中にブラウザーが描画できる構成とし、frame数や固定時間による描画待ちを挟まない。終了・中断・変換エラーではWorkerも破棄し、同期変換へ戻すfallbackは持たない。
-
-音声は `contracts/assist.ts` → `transport/assist.server.ts` → `application/assist-operations.ts` → 既存 `executeOperation` / Repositoryで扱う。Applicationの `AssistAi` portを `infrastructure/assist-ai.ts` が実装する。音声認識・意図解析は既存アプリWorkerからのみ呼び、LLMの出力をDB命令として実行しない。WAV検証・本人/所属の固定・再送抑止と運用手順は [voice-assist.md](voice-assist.md) を参照する。
-
-`AssistBudget` portを `infrastructure/assist-budget.ts` が実装し、AIの前に永続カウンターを条件付きUPDATEで予約する。複数ToDoは全件を検証後、Repositoryの単一D1 batchで保存する。どちらも並行リクエストで上限超過や部分保存が起きないことを実D1で検証する。
-
-アシストのintentはToDoの追加・一覧/検索・完了・削除を区別し、編集や他機能はunsupportedとする。「ToDoに〜」の明示的な指示と自然な買い物表現を同じ契約に解釈する。登録済みカテゴリー名だけをAIへ渡し、追加先を意味から推測させる。不明/存在しないカテゴリーは聞き返す。表示初期カテゴリーは追加先として固定しない。検索はカテゴリーと正規化した名前の部分一致を組み合わせ、保存順の先頭20件と総数を返す。完了・削除は名前の完全一致で全同名を対象にし、カテゴリーの明示指定時はその中に限定する。`DeleteTodoItemsByNames` がJSONでbindした名前集合と現在の認証・チーム・カテゴリー条件を単一DELETE内で検証する。完了は既存の物理削除と同じで、履歴を新設しない。結果は削除件数から生成し、変更時だけ既存のToDo通知を送る。
-
 ## 既存アプリの構成
 
 現在の実装は `app/` 内のTanStack Start SPAと、同じWorkerのServer Functions・認証HTTP入口・scheduled入口で構成する。画面は既存のFeature-Based Architectureを維持する。
@@ -34,28 +20,6 @@
 
 境界検査はTypeScriptの構文木からimport・再export・動的importを読み取り、`.ts`と`.tsx`を区別する。他featureの`api`・`model`・`utils`を含む内部ファイルへの参照も禁止し、feature直下の`index.ts`だけを公開入口とする。複数featureが利用する日付表示は`shared/utils/dates.ts`に置き、`Intl.DateTimeFormat`を行ごとに作らず共有する。
 
-## MCP連携
-
-`src/server/transport/mcp-worker.ts` は独立したCloudflare Workerで、Agents SDKのstateless `createMcpHandler` とStreamable HTTPを使う。公開操作は `contracts/mcp.ts` の `list_todos`・`add_todo`・`update_todo`・`complete_todo` のみ。userId/teamIdをツール引数として受け取らず、ToDoの返却DTOにもteamIdを含めない。更新は既存の `patchTodoItem` を再利用し、itemIdとname・notes・categoryIdだけを受け付ける。省略は保持、notes/categoryIdのnullは解除、未知キー・空更新は拒否する。更新は上書き、完了は既存の物理削除を再利用する操作として、破壊的操作のannotationを付ける。
-
-サーバーアイコンは標準のserverInfo `icons` に設定する。既存の `public/icons/pwa-192x192.png` をbundleし、MCP originの `/icons/kajichalle-192.png` で認証不要のGET/HEADとして返す。追加のasset binding・外部画像取得・CORS許可は不要で、ツールの認証境界は維持する。OAuth画面は本体の配色に合わせた静的HTML/CSSとテキストのブランド名を使い、画像・外部フォント・scriptを読み込まず、既存CSPを維持する。クライアントがアイコンを表示するかどうかはクライアント側の実装とmetadata更新に依存する。
-
-既存アプリの `mcp-oauth.ts` がworkers-oauth-providerのOAuthAuthorizationServerを `/api/mcp/oauth` に配置し、同じoriginのBetter Authセッションで同意者を確認する。既存Google callback・セッション・trustedOriginsは変更しない。S256 PKCE、正確なresource、許可したscopeを要求する。認可コード・access token・クライアント登録はproviderのOAUTH_KVへ保存する。同意はproviderのnonceに加え、D1の一回限りのclaimを本人・現在のセッション・表示した期間のpolicyに結び付ける。Google tokenやログインCookieをMCP tokenとして流用しない。
-
-MCP WorkerはOAuthResourceServerとして、片方向の `KAJI_APPLICATION` Service Bindingから既存Workerのnamed entrypoint `McpApplication` を呼ぶ。通常HTTP入口にRPCは公開しない。KVを持つ既存Workerでtokenを検証し、検証済みuserId/clientId/audience/scope/expiryとconnectionIdだけを内部RPCで渡す。任意のHTTPヘッダーによる本人指定はない。このbindingを付与できる配備権限は信頼境界に含む。MCP WorkerにはDB・KV・Google/Better Authの秘密情報をbindしない。
-
-Applicationの `mcp-operations.ts` は毎回、連携の所有者・grant・期限・失効・実tokenのscopeと現在の所属1件・roleを検査する。追加/更新/完了は既存 `executeOperation` を使い、入口で確定した本人・チームのRepositoryを引き継ぐ。所属を再解決する途中に移動しても別チームへ更新先を切り替えない。ToDo SQLでも対象teamIdと現在の所属、連携状態、許可scope、変更先カテゴリーが同チームにあることを検査し、他チームの項目IDや検証後の解除を拒否する。保存後は既存のToDo変更通知を再利用し、応答不明の書き込みは自動再送しない。
-
-新しい連携は同意から最大7日、access tokenのTTLは最大604800秒でD1の残期限にも制限する。SDK標準の `refreshTokenTTL: 0` と既存callbackでrefresh発行・交換を止める。新規の要求・広告は `todos:read` / `todos:write` のみとし、`offline_access` は付与しない。自動更新せず、期限後は再接続・再同意が必要となる。ログアウトでは解除されない。古い同意画面・未交換コードは新policyを持たないため拒否し、発行済み15分tokenは元の期限を保つ。旧tokenに含まれるoffline_accessは旧token検証に限って許容し、操作権限や更新権限にはしない。D1の旧30日許可記録も書き換えず、管理画面ではtokenの有効期限・接続状態と区別する。
-
-SDKは相対TTLをtoken保存前に加算するため、KV待機によってproviderのexpiryがD1期限を越える場合がある。McpApplicationがRSへ渡す検証結果のexpiryもD1期限で制限し、Application・業務SQLは毎回元のtoken期限とD1期限を検査する。SDK単体の秒単位の期限判定に依存せず、期限と同時刻でアプリのアクセスを拒否する。
-
-`/api/mcp/connections` で本人が解除するとD1を先に失効させ、続いてproviderのgrantを失効させる。標準RFC 7009失効も、providerがclient認証・token真正性・所有者を確認した後、管理patchのcallbackでD1を先に失効させる。新access・旧refreshのどちらでも対応する連携全体を止める。KV削除失敗や切替前から進行中の発行でtokenが残っても、D1で業務操作を拒否する。D1更新に失敗した失効要求は503とし、成功扱いしない。依存patchの範囲と更新手順は [mcp-oauth-provider-patch.md](mcp-oauth-provider-patch.md) に従う。チーム移動後は現在所属するチームが対象となり、この挙動を同意画面に表示する。
-
-AlchemyではMCP_ORIGIN設定時にOAuth KVを宣言し、MCP_ENABLED=trueのときだけ専用MCP Workerを追加する。falseでの配備は専用WorkerとそのCustom Domain・Service Bindingを除去する。専用Workerのローカル実行でもfalseならhealth・アイコン・discoveryを含む全HTTP入口を404にし、既存ApplicationのOAuth・連携管理・named RPCも拒否する。通常認証・ToDo・Realtimeはこのflagに依存しない。
-
-停止中もMCP_ORIGIN、KV宣言とretain、D1テーブル・データ、MCPコード・build・named export・依存patchを保持する。MCP_ORIGINの削除はKVがAlchemy管理から外れるため停止手段として使わない。再開はtrueで再配備する。無効化は認可データの削除・失効ではなく、再開後は残存する有効な連携を利用できる。専用データ消去は別途承認された操作として扱う。
-
 ## Server Functions
 
 入口と全業務SQLの認可条件、Cron/初回所属/本人操作の区別、テスト対応表は [authorization.md](authorization.md) を参照する。通常セッションは検証済みuserId/sessionIdをRepositoryへ引き継ぎ、SQLでも失効・現在所属・対象チームを照合する。
@@ -66,7 +30,7 @@ feature adapter → 共通client → Server Function → Application → Reposit
 
 共通Server FunctionはPOST。読み取りoperationはD1を更新しない。予定の発生日取得では、既存のチーム/開始日indexを使い、対象期間に重ならない定義と期限切れ単発予定をD1で除外してから発生日を展開する。期限切れ単発予定は表示時に除外し、日次ジョブで削除する。集計の保存は締め・過去の完了修正時だけ行う。Startのredirectを返さず既存のエラー処理を使うため、共通clientから静的importした関数を直接呼ぶ。`useServerFn` はredirect等をRouterと連携するときに検討する。Server Function応答はWorker入口でno-storeにする。
 
-認証HTTP・Server Functions・OAuth providerに渡す本文は、frameworkのJSON/form解析前に実ストリームのバイト数を数え、1 MiB超過で413を返す。Content-Lengthの欠落や過少申告にも同じ上限を適用する。MCPツールの128 KiB、ブラウザー同意フォームの16 KiBという既存の小さい上限も保持する。予定の発生日取得は開始日から終了日まで両端を含め366日以内に制限し、契約とApplicationの両方で、DB取得・繰り返し展開・今日への期間補正より前に検査する。
+認証HTTPとServer Functionsに渡す本文は、frameworkのJSON/form解析前に実ストリームのバイト数を数え、1 MiB超過で413を返す。Content-Lengthの欠落や過少申告にも同じ上限を適用する。予定の発生日取得は開始日から終了日まで両端を含め366日以内に制限し、契約とApplicationの両方で、DB取得・繰り返し展開・今日への期間補正より前に検査する。
 
 日付計算は年0001〜9999の4桁形式を対象とし、加減算が範囲外になる場合は400で拒否する。月次集計・締めは翌月境界を必要とするため、入力で0000年と9999年12月も拒否する。繰り返し予定は終了日を処理した時点で停止し、9999年12月31日の翌日へ進めない。
 
@@ -86,15 +50,11 @@ feature adapter → 共通client → Server Function → Application → Reposit
 
 ### 操作のフィードバック
 
-ToDo完了は確認モーダルを表示せず、取消猶予中は完了待ちとして一覧に残し、各項目内のボタンから取り消せる。猶予は初期3秒で、設定画面の「ToDo」から1〜5秒を選ぶ。D1のユーザー設定を `shared/state/todoCompletionDelay` のJotai atom経由で共用し、予約開始時の設定を使用する。設定変更で既存予約の期限を変えない。
-
-ボタン内には残り時間を秒単位で切り上げ（初期値では3→2→1）て示す円形プログレスを表示し、画面下部に取り消しバナーは表示しない。認証済みRootLayout内の `shared/state/DelayedActionProvider` が項目ごとのタイマーを管理し、予約時にJotai storeの現在値を読み取って猶予と期限を固定する。設定の購読による再描画が遅れても直前の設定を使う。設定変更は次の予約から適用し、進行中の期限や円の長さは変えない。カテゴリーや画面を切り替えても待機を継続し、再表示した項目は元の期限から残り時間を計算する。ユーザー/チーム変更・ログアウトでproviderを破棄すると未実行の操作を取り消す。待機中はAPIや保存済みキャッシュを変更せず、猶予後に既存の削除mutationを1回実行する。ブラウザーの再読み込みや終了をまたいで未確定操作を保存・再送しない。
-
 サマリーの過去の日間/終了済み週間タスクは、確認モーダル・待機時間なしで送信し、完了状態と操作したユーザーのアイコンを即時表示する。`features/summary/hooks/usePastTaskCompletion` が未完了mutationを対象月・日付・タスクごとの取得結果に重ねる。成功応答では保存済みキャッシュへ反映し、失敗した操作の表示だけを戻す。週複数回の成功応答は差分として反映し、応答の到着順が逆転しても古い絶対件数で後続の加算を上書きしない。項目横の「保存中…」は表示せず、合計減点やペナルティは最後の保存後のバックグラウンド再取得で同期する。対象月・画面を移動しても送信時点の月・日付を更新する。締め済み月の再計算案内と月次締め自体の確認モーダルは維持する。
 
-ToDo追加とサマリー更新は、送信直前にもQueryキャッシュのpending mutationを確認する。サマリーの日間・週1回は同じ対象の重複操作を防ぎ、週複数回は楽観表示の上限・下限内で連続タップを受け付ける。別日付・別タスクは独立して操作できる。保存中も操作ボタンを保持し、日間・週1回の抑止にはaria-disabledとイベント側のガードを使ってフォーカスを維持する。
+サマリー更新は、送信直前にもQueryキャッシュのpending mutationを確認する。サマリーの日間・週1回は同じ対象の重複操作を防ぎ、週複数回は楽観表示の上限・下限内で連続タップを受け付ける。別日付・別タスクは独立して操作できる。保存中も操作ボタンを保持し、日間・週1回の抑止にはaria-disabledとイベント側のガードを使ってフォーカスを維持する。
 
-家事の完了・ToDo完了/編集/並べ替えは、TanStack Queryの未完了mutationの入力を取得結果に重ねて即時表示する。ToDoはホームと専用画面で同じhookから楽観表示を導出し、コンポーネント内に順序stateを複製しない。並べ替え保存中は画面を移動しても重複操作を抑止する。保存済みキャッシュは成功応答で更新し、失敗時はそのmutationの表示だけが消える。他の操作やメンバーの完了を一括rollbackしない。日間・週1回の保存中の連打は抑止する。週複数回は連続タップを受け付け、increment/decrementを送り、D1内の件数条件で上限・下限を守る。追加・編集フォームはPromiseを返し、共通FormSheetとインライン編集は呼出元mutationの `isPending` / `isError` を表示に使う。別のref/stateへ保存状態を複製せず、保存中の入力・閉じる操作・重複送信を抑止する。失敗時は入力を保持し、再表示時にmutationをresetする。全体共通の保存中スピナーは表示せず、楽観的に更新した完了状態・件数・一覧を操作結果のフィードバックとする。mutationのpending状態・重複操作抑止・失敗時の復元は維持する。
+家事の完了と並べ替えは、TanStack Queryの未完了mutationの入力を取得結果に重ねて即時表示する。並べ替え保存中は画面を移動しても重複操作を抑止する。保存済みキャッシュは成功応答で更新し、失敗時はそのmutationの表示だけが消える。他の操作やメンバーの完了を一括rollbackしない。日間・週1回の保存中の連打は抑止する。週複数回は連続タップを受け付け、increment/decrementを送り、D1内の件数条件で上限・下限を守る。追加・編集フォームはPromiseを返し、共通FormSheetとインライン編集は呼出元mutationの `isPending` / `isError` を表示に使う。別のref/stateへ保存状態を複製せず、保存中の入力・閉じる操作・重複送信を抑止する。失敗時は入力を保持し、再表示時にmutationをresetする。全体共通の保存中スピナーは表示せず、楽観的に更新した完了状態・件数・一覧を操作結果のフィードバックとする。mutationのpending状態・重複操作抑止・失敗時の復元は維持する。
 
 家事の並べ替えもpending mutationから順序を導出し、保存失敗後や新しい取得結果に過去のローカル順序を残さない。完了操作は日付・タスクごとにまとめて一覧を1回走査し、同じ項目への増減は元の順序で適用する。無関係な項目・日付グループの参照を保持する。
 
@@ -114,7 +74,7 @@ API応答の実行時検証は共通clientの出力schemaで行う。feature hoo
 
 D1は対話的transactionを提供しない。複合操作は `repository.ts` の用途別コマンドが `db.batch()` で原子的に実行する。チーム移動・初期登録・担当解除・owner引継ぎは1つのbatch。完了回数はDBのCOUNTを条件に更新し、締め・過去の修正は `summary-statements.ts` の集計queryを同じbatchへ含める。batch内のSQL失敗は全体をrollbackする。認可や回数など変化する条件もSQLで検査し、外部通信はbatchへ含めない。read-modify-writeをJavaScriptで疑似transactionにしない。
 
-家事・ToDoの並べ替えは要求IDをMATERIALIZED CTEで一度展開し、索引付きの結合で順序を更新する。各行からJSON配列全体を検索しない。保存時点の対象件数・ID集合・所属の検査は同じUPDATE内で行う。
+家事の並べ替えは要求IDをMATERIALIZED CTEで一度展開し、索引付きの結合で順序を更新する。各行からJSON配列全体を検索しない。保存時点の対象件数・ID集合・所属の検査は同じUPDATE内で行う。
 
 定期締めの追いつき処理は期間順に保存し、保存済みの変更があるチームへ最後に1回通知する。後続期間の失敗時も、それ以前に保存した変更を通知する。Pushは購読ごとのclaim・送信・完了記録を最大4件で並行実行し、失敗は購読単位で集計する。
 
@@ -156,21 +116,9 @@ CDは本番Secretsを渡さずbuildし、その後のstepでAlchemy bootstrap �
 
 公式資料: [CloudflareのTanStack Start構成](https://developers.cloudflare.com/workers/framework-guides/web-apps/tanstack-start/)、[Alchemyのビルド済みWorker配備](https://alchemy.run/providers/cloudflare/workers/worker/#configuration)。
 
-## ToDo
-
-ホームとToDo画面で最初に選択するカテゴリーは、設定画面の「ToDo」から指定する。表示順とは独立し、「すべて」は先頭固定。初期カテゴリーはチーム別ではなくユーザーごとにD1へ1つ保存し、「すべて」「未分類」「カテゴリーID」を区別する。名前変更・並べ替えではIDを維持する。現在のチームに存在しないIDは表示時に「すべて」へ戻すが、保存値は消さない。取得待ちでは削除扱いにしない。各画面で手動選択するまではキャッシュとサーバーの設定を反映し、手動選択後は再取得や他端末の変更で選択を上書きしない。
-
-ホームとToDoページの一覧（空表示と一覧下の余白を含む）は共通の `TodoCategorySwipeArea` で横スワイプを受け付け、`useTodoCategoryFilter` で保存されたタブ順に1つ切り替える。ToDoページはRootLayoutから一覧までのflexで画面内の残りの高さを割り当て、ホームはToDoパネル内に最低16remの一覧領域を確保する。項目数によってスワイプ範囲を縮めず、多数の項目では内容に合わせて高さを伸ばす。左で次、右で前へ移り、先頭/末尾で止まる。タブ列自体は横スクロールを維持し、選択したタブが隠れている場合は列内だけをスクロールする。縦スクロール・ピンチズームを許可し、短い移動、縦方向、中断、複数指、操作ボタン・リンク・編集フォームからの操作は切り替え対象にしない。
-
-`features/todos`を公開境界とし、専用ページは`/todos`。ホームも同じToDo query/mutationを使う。カテゴリー管理は「その他」から開く`/todo-categories`へ分離する。追加・編集フォームのカテゴリーは「未分類」と登録済みカテゴリーから選択する。初回取得中・失敗は登録0件と区別し、取得が完了するまで選択と保存を無効にする。失敗時は再試行でき、既存の候補キャッシュがあれば再取得失敗時も維持する。フォーム表示中に選択済みカテゴリーが候補から消えたら、その選択だけ未分類へ戻し、名前・メモを保持する。ホームと専用ページの「ToDo」見出しの下に「すべて」を先頭固定し、その後に保存されたカテゴリー順（未分類を含む）の切り替えボタンを置き、1行の横スクロールで表示する。絞り込み中の並び替えは表示対象の位置だけを置き換え、全体のID順をAPIへ送る。カテゴリー候補のqueryもチーム変更・リアルタイム通知で再取得する。
-
-カテゴリー管理では未分類を含む一覧をドラッグ（スマホは長押し）またはキーボードで並べ替える。APIのカテゴリー配列は登録カテゴリーを固定UUID付きの`{ id, name }`、未分類を`null`で表現し、全カテゴリーの表示順を返す。ToDoの関連・選択・フィルター・削除・DnDはIDを使用し、並べ替えはIDとnullの配列`categoryIds`だけを送る。管理画面・ホーム/ToDoのタブ・追加/編集の選択欄はこの順序を共用する。保存中はmutationの入力を管理画面へ重ね、追加・削除・再ドラッグを抑止する。失敗時は保存済み表示へ戻し、一覧を再取得する。実体のない未分類は削除不可で、同じ名前の登録カテゴリーと区別する。
-
-登録済みカテゴリーの名前は管理画面の編集から変更する。固定IDを指定し、SQL内で現在の配列位置・所属・他カテゴリーとの名前重複を検査して名前だけ更新する。ID・表示順・ToDoの参照は保持する。未分類は編集不可。名前は前後空白除去後1〜50文字で、同じチームの他カテゴリーと同名にはできない。編集モーダルは共通FormSheetを使い、保存中の操作抑止と失敗時の入力保持を行う。保存応答のカテゴリー一覧をqueryキャッシュに反映する。
-
 ## 設定画面
 
-設定はプロフィール・表示・ToDo・通知・チーム・アプリに分け、PCの左メニューとモバイルの3列メニューで切り替える。設定パネルはhiddenで保持し、切り替えで未保存入力・保存中・エラー状態を失わない。チームの参加・離脱は「チームの参加・切り替え」にまとめる。保存先は各カテゴリー見出しに表示する。
+設定はプロフィール・表示・通知・チーム・アプリに分け、PCの左メニューとモバイルの3列メニューで切り替える。設定パネルはhiddenで保持し、切り替えで未保存入力・保存中・エラー状態を失わない。チームの参加・離脱は「チームの参加・切り替え」にまとめる。保存先は各カテゴリー見出しに表示する。
 
 設定を含む全画面で、保存中のメッセージ・保存用スピナーは表示しない。保存ボタンは元のラベル・アイコンを保ち、pendingによる重複送信・入力・閉じる操作の抑止とaria-busyは維持する。並び替えや設定の楽観表示、失敗時の復元・入力保持と通知を操作結果のフィードバックとする。共有ページの保存中ラベルも出さず、未保存・保存済み・失敗と復旧手段を維持する。
 
@@ -186,12 +134,4 @@ CDは本番Secretsを渡さずbuildし、その後のstepでAlchemy bootstrap �
 
 設定の「表示」でシステム・ダーク・ライトを選べる。初期値はシステムで、`shared/state/theme.ts` のJotai atomが `kaji:theme:v1` に文字列を保存する。ユーザー/チームのDB設定ではなくブラウザー単位で、ログイン前も同じ選択を使う。storageイベントで別タブの変更/削除を反映し、保存不可時は現在の選択を適用して通知する。
 
-Documentのhead内の固定スクリプトがCSS・本文の描画前にhtmlの `data-theme` を設定する。`color-scheme` と用途別の `light-dark()` トークンで全画面・ポータル・ネイティブ入力を切り替える。システムではCSSがOS変更に追従し、常時mountする `ThemeSync` がブラウザーのtheme-colorも同期する。アプリのJavaScriptが未読込でも初期配色を保持する。外部連携の独立したOAuth HTMLはスクリプト禁止のCSPを維持し、OSの配色へ追従する。
-
-## ユーザー設定の同期
-
-ToDo取消猶予・初期カテゴリーは `user_preferences` のユーザーIDを主キーとしてD1に保存する。`contracts/user-preferences.ts` が入出力の正本。`getMePreferences` は読み取りのみ、`initializeMePreferences` は未登録の場合だけINSERT、`patchMePreferences` は指定された項目だけをupsertする。初期化競合で既存値を上書きせず、異なる項目の並行更新を保持する。本人・セッション失効・固定済み所属とカテゴリーの存在はSQLでも検査する。カテゴリーIDの明示変更は現在のチームにあるものだけ許可し、旧設定の初回移行で削除済みIDがあれば「すべて」を保存する。
-
-`shared/query/UserPreferencesProvider` を認証済みレイアウトに置き、ユーザー・チーム切替で旧処理を破棄する。QueryとlocalStorageキャッシュのキーはユーザーID単位。ログイン・画面復帰・再接続・preferences通知で再取得し、mount後にキャッシュを表示する。サーバーを確認するまでは設定変更を無効化する。変更中は入力を抑止して楽観表示し、失敗時は確認済みの値へ戻して再取得し、共通トーストで手動変更を案内する。初期取得・初期化の失敗は再取得ボタン付きで表示する。ユーザー・チーム切替後の旧処理からは失敗トーストも出さない。更新の自動再送は行わない。storageが利用できなくてもD1保存は成功する。
-
-キャッシュは `kaji:user-preferences:v1:<userId>` に確認済み値だけを保存する。D1未登録時だけ、既存ユーザーキャッシュまたは旧localStorage設定を初期値として送る。旧取消猶予はブラウザー共通のため最初のユーザーに一度だけ帰属させ、旧カテゴリーは本人・現在のチームのキーから読む。旧100ms刻みの猶予は最寄りの1〜5秒へ正規化する。表示モードはこの同期・移行に含めず、ブラウザー単位のlocalStorageで保持する。既存D1設定を別端末の古い値で上書きしない。設定の変更通知には値やユーザーIDを含めず、受信者は自身の設定だけを再取得する。
+Documentのhead内の固定スクリプトがCSS・本文の描画前にhtmlの `data-theme` を設定する。`color-scheme` と用途別の `light-dark()` トークンで全画面・ポータル・ネイティブ入力を切り替える。システムではCSSがOS変更に追従し、常時mountする `ThemeSync` がブラウザーのtheme-colorも同期する。アプリのJavaScriptが未読込でも初期配色を保持する。
