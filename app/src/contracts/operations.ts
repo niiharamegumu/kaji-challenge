@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { isDate } from "../server/domain/dates";
-import { UserPreferencesSchema, UpdateUserPreferencesSchema } from "./user-preferences";
 import {
   SharedPageSchema,
   SharedPageListSchema,
@@ -206,47 +205,6 @@ export const UpdatePenaltyRuleRequestSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   description: z.string().max(500).optional(),
 });
-export const TodoCategoryNameSchema = z.string().trim().min(1).max(50);
-export const TodoCategorySchema = z.object({ id: z.uuid(), name: TodoCategoryNameSchema });
-// null denotes the virtual unclassified category; names are display-only.
-export const TodoCategoryOrderSchema = z
-  .array(TodoCategorySchema.nullable())
-  .min(1)
-  .refine(
-    (categories) =>
-      categories.includes(null) &&
-      new Set(categories.map((category) => category?.id ?? null)).size === categories.length,
-  );
-export const TodoCategoriesResponseSchema = z.object({ categories: TodoCategoryOrderSchema });
-export const ReorderTodoCategoriesRequestSchema = z.object({
-  categoryIds: z
-    .array(z.uuid().nullable())
-    .min(1)
-    .refine((ids) => ids.includes(null) && new Set(ids).size === ids.length),
-});
-export const TodoItemSchema = z.object({
-  id: z.string(),
-  teamId: z.string(),
-  name: z.string(),
-  notes: z.string().nullable().optional(),
-  categoryId: z.uuid().nullable(),
-  sortKey: z.number().int().min(1),
-  createdAt: z.iso.datetime({ offset: true }),
-  updatedAt: z.iso.datetime({ offset: true }),
-});
-export const CreateTodoItemRequestSchema = z.object({
-  categoryId: z.uuid().nullable().optional(),
-  name: z.string().min(1).max(100),
-  notes: z.string().max(500).optional(),
-});
-export const UpdateTodoItemRequestSchema = z.object({
-  categoryId: z.uuid().nullable().optional(),
-  name: z.string().min(1).max(100).optional(),
-  notes: z.string().max(500).nullable().optional(),
-});
-export const ReorderTodoItemsRequestSchema = z.object({
-  itemIds: z.array(z.string()).min(1),
-});
 export const TaskOverviewDailyTaskSchema = z.object({
   task: TaskSchema,
   completedToday: z.boolean(),
@@ -350,20 +308,6 @@ export const operationSchema = z.discriminatedUnion("operation", [
   z.object({
     operation: z.literal("getMe"),
     params: z.object({}).default({}),
-  }),
-  z.strictObject({
-    operation: z.literal("getMePreferences"),
-    params: z.strictObject({}).default({}),
-  }),
-  z.strictObject({
-    operation: z.literal("initializeMePreferences"),
-    params: z.strictObject({}).default({}),
-    body: UserPreferencesSchema,
-  }),
-  z.strictObject({
-    operation: z.literal("patchMePreferences"),
-    params: z.strictObject({}).default({}),
-    body: UpdateUserPreferencesSchema,
   }),
   z.object({
     operation: z.literal("patchMeNickname"),
@@ -492,52 +436,6 @@ export const operationSchema = z.discriminatedUnion("operation", [
     params: z.object({ ruleId: z.string() }),
   }),
   z.object({
-    operation: z.literal("listTodoCategories"),
-    params: z.object({}).default({}),
-  }),
-  z.object({
-    operation: z.literal("postTodoCategory"),
-    params: z.object({}).default({}),
-    body: z.object({ name: TodoCategoryNameSchema }),
-  }),
-  z.object({
-    operation: z.literal("patchTodoCategory"),
-    params: z.object({ categoryId: z.uuid() }),
-    body: z.object({ name: TodoCategoryNameSchema }),
-  }),
-  z.object({
-    operation: z.literal("deleteTodoCategory"),
-    params: z.object({ categoryId: z.uuid() }),
-  }),
-  z.object({
-    operation: z.literal("postTodoCategoriesReorder"),
-    params: z.object({}).default({}),
-    body: ReorderTodoCategoriesRequestSchema,
-  }),
-  z.object({
-    operation: z.literal("listTodoItems"),
-    params: z.object({}).default({}),
-  }),
-  z.object({
-    operation: z.literal("postTodoItem"),
-    params: z.object({}).default({}),
-    body: CreateTodoItemRequestSchema,
-  }),
-  z.object({
-    operation: z.literal("patchTodoItem"),
-    params: z.object({ itemId: z.string() }),
-    body: UpdateTodoItemRequestSchema,
-  }),
-  z.object({
-    operation: z.literal("deleteTodoItem"),
-    params: z.object({ itemId: z.string() }),
-  }),
-  z.object({
-    operation: z.literal("postTodoItemsReorder"),
-    params: z.object({}).default({}),
-    body: ReorderTodoItemsRequestSchema,
-  }),
-  z.object({
     operation: z.literal("getTaskOverview"),
     params: z.object({}).default({}),
   }),
@@ -569,9 +467,6 @@ export const responseSchemas = {
   renewSharedPageLease: SharedPageLeaseSchema,
   releaseSharedPageLease: z.strictObject({}),
   getMe: MeResponseSchema,
-  getMePreferences: UserPreferencesSchema.nullable(),
-  initializeMePreferences: UserPreferencesSchema,
-  patchMePreferences: UserPreferencesSchema,
   patchMeNickname: UpdateNicknameResponseSchema,
   patchMeColor: UpdateColorResponseSchema,
   postPushSubscription: PushSubscriptionSchema,
@@ -598,16 +493,6 @@ export const responseSchemas = {
   postPenaltyRule: PenaltyRuleSchema,
   patchPenaltyRule: PenaltyRuleSchema,
   deletePenaltyRule: z.object({}),
-  listTodoCategories: TodoCategoriesResponseSchema,
-  postTodoCategory: TodoCategoriesResponseSchema,
-  patchTodoCategory: TodoCategoriesResponseSchema,
-  postTodoCategoriesReorder: TodoCategoriesResponseSchema,
-  deleteTodoCategory: z.object({}),
-  listTodoItems: z.object({ items: z.array(TodoItemSchema) }),
-  postTodoItem: TodoItemSchema,
-  patchTodoItem: TodoItemSchema,
-  deleteTodoItem: z.object({}),
-  postTodoItemsReorder: z.object({ items: z.array(TodoItemSchema) }),
   getTaskOverview: TaskOverviewResponseSchema,
   getPenaltySummaryMonthly: MonthlyPenaltySummarySchema,
   getMonthCloseCandidate: MonthCloseCandidateResponseSchema,

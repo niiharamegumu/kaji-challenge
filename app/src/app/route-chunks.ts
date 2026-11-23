@@ -5,8 +5,6 @@ const loadPenaltiesPage = () => import("../features/penalties/routes/PenaltiesPa
 const loadSettingsPage = () => import("../features/settings/routes/SettingsPage");
 const loadSummaryPage = () => import("../features/summary/routes/SummaryPage");
 const loadReminderCalendarPage = () => import("../features/reminders/routes/ReminderCalendarPage");
-const loadTodoCategoriesPage = () => import("../features/todos/routes/TodoCategoriesPage");
-const loadTodoPage = () => import("../features/todos/routes/TodoPage");
 const loadSharedPagesPage = () => import("../features/shared-pages/routes/SharedPagesPage");
 
 // import自体がmoduleをキャッシュする。失敗したPromiseを独自に保持して再試行を妨げない。
@@ -15,8 +13,6 @@ export const preloadPenaltiesPageChunk = loadPenaltiesPage;
 export const preloadSettingsPageChunk = loadSettingsPage;
 export const preloadSummaryPageChunk = loadSummaryPage;
 export const preloadReminderCalendarPageChunk = loadReminderCalendarPage;
-export const preloadTodoCategoriesPageChunk = loadTodoCategoriesPage;
-export const preloadTodoPageChunk = loadTodoPage;
 export const preloadSharedPagesPageChunk = loadSharedPagesPage;
 
 export const SharedPagesPage = lazy(async () => {
@@ -47,14 +43,4 @@ export const SummaryPage = lazy(async () => {
 export const ReminderCalendarPage = lazy(async () => {
   const module = await preloadReminderCalendarPageChunk();
   return { default: module.ReminderCalendarPage };
-});
-
-export const TodoPage = lazy(async () => {
-  const module = await preloadTodoPageChunk();
-  return { default: module.TodoPage };
-});
-
-export const TodoCategoriesPage = lazy(async () => {
-  const module = await preloadTodoCategoriesPageChunk();
-  return { default: module.TodoCategoriesPage };
 });

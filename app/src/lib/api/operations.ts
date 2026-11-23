@@ -53,23 +53,6 @@ export function releaseSharedPageLease(
 export function getMe(options?: CallOptions): Promise<ApiResult<M.MeResponse>> {
   return callOperation("getMe", { params: {} }, 200, options);
 }
-export function getMePreferences(
-  options?: CallOptions,
-): Promise<ApiResult<M.UserPreferences | null>> {
-  return callOperation("getMePreferences", { params: {} }, 200, options);
-}
-export function initializeMePreferences(
-  body: M.UserPreferences,
-  options?: CallOptions,
-): Promise<ApiResult<M.UserPreferences>> {
-  return callOperation("initializeMePreferences", { params: {}, body }, 200, options);
-}
-export function patchMePreferences(
-  body: M.UpdateUserPreferences,
-  options?: CallOptions,
-): Promise<ApiResult<M.UserPreferences>> {
-  return callOperation("patchMePreferences", { params: {}, body }, 200, options);
-}
 export function patchMeNickname(
   body: M.UpdateNicknameRequest,
   options?: CallOptions,
@@ -222,64 +205,6 @@ export function deletePenaltyRule(
   options?: CallOptions,
 ): Promise<ApiResult<Record<string, never>>> {
   return callOperation("deletePenaltyRule", { params: { ruleId } }, 204, options);
-}
-export function listTodoCategories(
-  options?: CallOptions,
-): Promise<ApiResult<M.TodoCategoriesResponse>> {
-  return callOperation("listTodoCategories", { params: {} }, 200, options);
-}
-export function postTodoCategory(
-  body: { name: string },
-  options?: CallOptions,
-): Promise<ApiResult<M.TodoCategoriesResponse>> {
-  return callOperation("postTodoCategory", { params: {}, body }, 201, options);
-}
-export function patchTodoCategory(
-  categoryId: string,
-  body: { name: string },
-  options?: CallOptions,
-): Promise<ApiResult<M.TodoCategoriesResponse>> {
-  return callOperation("patchTodoCategory", { params: { categoryId }, body }, 200, options);
-}
-export function deleteTodoCategory(
-  categoryId: string,
-  options?: CallOptions,
-): Promise<ApiResult<Record<string, never>>> {
-  return callOperation("deleteTodoCategory", { params: { categoryId } }, 204, options);
-}
-export function postTodoCategoriesReorder(
-  body: M.ReorderTodoCategoriesRequest,
-  options?: CallOptions,
-): Promise<ApiResult<M.TodoCategoriesResponse>> {
-  return callOperation("postTodoCategoriesReorder", { params: {}, body }, 200, options);
-}
-export function listTodoItems(options?: CallOptions): Promise<ApiResult<{ items: M.TodoItem[] }>> {
-  return callOperation("listTodoItems", { params: {} }, 200, options);
-}
-export function postTodoItem(
-  body: M.CreateTodoItemRequest,
-  options?: CallOptions,
-): Promise<ApiResult<M.TodoItem>> {
-  return callOperation("postTodoItem", { params: {}, body }, 201, options);
-}
-export function patchTodoItem(
-  itemId: string,
-  body: M.UpdateTodoItemRequest,
-  options?: CallOptions,
-): Promise<ApiResult<M.TodoItem>> {
-  return callOperation("patchTodoItem", { params: { itemId }, body }, 200, options);
-}
-export function deleteTodoItem(
-  itemId: string,
-  options?: CallOptions,
-): Promise<ApiResult<Record<string, never>>> {
-  return callOperation("deleteTodoItem", { params: { itemId } }, 204, options);
-}
-export function postTodoItemsReorder(
-  body: M.ReorderTodoItemsRequest,
-  options?: CallOptions,
-): Promise<ApiResult<{ items: M.TodoItem[] }>> {
-  return callOperation("postTodoItemsReorder", { params: {}, body }, 200, options);
 }
 export function getTaskOverview(options?: CallOptions): Promise<ApiResult<M.TaskOverviewResponse>> {
   return callOperation("getTaskOverview", { params: {} }, 200, options);

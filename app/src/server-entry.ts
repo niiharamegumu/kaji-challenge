@@ -3,23 +3,21 @@ import { createRuntime, type RuntimeBindings } from "./server/transport/runtime.
 import { scheduled } from "./server/transport/scheduled.server";
 import { AppError } from "./server/domain/errors";
 import { connectRealtime } from "./server/transport/realtime.server";
-import { handleMcpHttp, isMcpHttpPath } from "./server/transport/mcp-oauth";
 import { boundRequestBody } from "./server/transport/request-body";
-import { handleAssistTurn, handleAssistTranscription } from "./server/transport/assist.server";
 
 export { TeamRealtime } from "./server/infrastructure/team-realtime";
-export { McpApplication } from "./server/transport/mcp-entrypoint";
 
 function withResponseHeaders(response: Response, path: string): Response {
   // WebSocketを保持したUpgrade応答は通常のHTTP Responseとして作り直さない。
   if (response.status === 101) return response;
   const headers = new Headers(response.headers);
-  headers.set("Permissions-Policy", "camera=(), microphone=(self), geolocation=()");
+  headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
   if (!headers.has("Referrer-Policy"))
     headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   headers.set("X-Content-Type-Options", "nosniff");
   headers.set("X-Frame-Options", "DENY");
   if (
+    path === "/api" ||
     path.startsWith("/api/") ||
     path.startsWith("/.well-known/") ||
     path === "/_serverFn" ||
@@ -34,11 +32,8 @@ function withResponseHeaders(response: Response, path: string): Response {
   });
 }
 
-async function handleRequest(request: Request, bindings: RuntimeBindings, ctx: ExecutionContext) {
+async function handleRequest(request: Request, bindings: RuntimeBindings) {
   const path = new URL(request.url).pathname;
-  if (path === "/api/assist/turn") return handleAssistTurn(request, bindings);
-  if (path === "/api/assist/transcribe") return handleAssistTranscription(request, bindings);
-  if (isMcpHttpPath(path)) return handleMcpHttp(request, bindings, ctx);
   if (path === "/api/realtime") {
     try {
       return await connectRealtime(request, bindings);
@@ -77,14 +72,16 @@ async function handleRequest(request: Request, bindings: RuntimeBindings, ctx: E
     if (bounded instanceof Response) return bounded;
     return start.fetch(bounded);
   }
+  if (path === "/api" || path.startsWith("/api/"))
+    return new Response("Not found", { status: 404 });
   return start.fetch(request);
 }
 
 export default {
   scheduled,
-  async fetch(request: Request, bindings: RuntimeBindings, ctx: ExecutionContext) {
+  async fetch(request: Request, bindings: RuntimeBindings, _ctx: ExecutionContext) {
     return withResponseHeaders(
-      await handleRequest(request, bindings, ctx),
+      await handleRequest(request, bindings),
       new URL(request.url).pathname,
     );
   },

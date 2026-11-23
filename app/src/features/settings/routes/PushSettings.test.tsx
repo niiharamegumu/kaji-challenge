@@ -53,7 +53,6 @@ vi.mock("../../../lib/api/operations", async () => {
   const actual = await vi.importActual<object>("../../../lib/api/operations");
   return {
     ...actual,
-    listTodoCategories: vi.fn().mockResolvedValue({ data: { categories: [null] } }),
     getMe: (...args: unknown[]) => mockGetMe(...args),
     getTeamCurrentMembers: (...args: unknown[]) => mockGetTeamCurrentMembers(...args),
     getTeamCurrentInvite: (...args: unknown[]) => mockGetTeamCurrentInvite(...args),

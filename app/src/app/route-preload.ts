@@ -1,6 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { prefetchHomeData } from "../features/home/preload";
-import { todoCategoriesQueryOptions, todoItemsQueryOptions } from "../shared/query/todoQueries";
 import { teamMembersQueryOptions } from "../shared/query/teamMembersQuery";
 import { tasksQueryOptions } from "../shared/query/taskQueries";
 import { prefetchSharedPageData } from "../features/shared-pages/preload";
@@ -29,15 +28,6 @@ export async function prefetchRouteData(client: QueryClient, destination: string
       break;
     case "/":
       await prefetchHomeData(client);
-      break;
-    case "/todos":
-      await Promise.all([
-        client.prefetchQuery(todoItemsQueryOptions),
-        client.prefetchQuery(todoCategoriesQueryOptions),
-      ]);
-      break;
-    case "/todo-categories":
-      await client.prefetchQuery(todoCategoriesQueryOptions);
       break;
     case "/tasks": {
       await client.prefetchQuery(tasksQueryOptions);

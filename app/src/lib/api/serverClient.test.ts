@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { cancelTeamRequests } from "./serverClient";
-import { deleteTask, getPenaltySummaryMonthly, listTodoItems, patchMeNickname } from "./operations";
+import { deleteTask, getPenaltySummaryMonthly, listTasks, patchMeNickname } from "./operations";
 const invoke = vi.hoisted(() => vi.fn());
 vi.mock("../../server/transport/operations.functions", () => ({ invokeOperation: invoke }));
 
@@ -43,7 +43,7 @@ describe("Server Function adapters", () => {
   });
   it.each(["invalid", { items: [{ id: false }] }])("rejects malformed DTOs: %s", async (data) => {
     invoke.mockResolvedValue({ ok: true, data });
-    await expect(listTodoItems()).rejects.toThrow();
+    await expect(listTasks()).rejects.toThrow();
   });
   it.each(["taskStatusByDate", "triggeredPenaltyRuleIds"])(
     "rejects null %s before rendering the summary",
@@ -74,11 +74,11 @@ describe("Server Function adapters", () => {
           resolve = r;
         }),
     );
-    const request = listTodoItems({ signal: controller.signal });
+    const request = listTasks(undefined, { signal: controller.signal });
     controller.abort();
     resolve({ ok: true, data: { items: [] } });
     await expect(request).rejects.toMatchObject({ name: "AbortError" });
-    await expect(listTodoItems({ signal: controller.signal })).rejects.toMatchObject({
+    await expect(listTasks(undefined, { signal: controller.signal })).rejects.toMatchObject({
       name: "AbortError",
     });
     expect(invoke).toHaveBeenCalledTimes(1);

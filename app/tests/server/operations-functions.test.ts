@@ -69,15 +69,6 @@ const sharedPageRequests = [
     body: { expectedVersion: 0 },
   },
 ];
-const preferenceRequests = [
-  { operation: "getMePreferences" },
-  { operation: "patchMePreferences", body: { todoCompletionDelayMs: 5000 } },
-  {
-    operation: "initializeMePreferences",
-    body: { todoCompletionDelayMs: 3000, defaultTodoCategory: { kind: "all" } },
-  },
-];
-
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.headers = new Headers({ origin: "https://app.example.com" });
@@ -90,31 +81,33 @@ beforeEach(() => {
   );
 });
 
-it("rejects malformed inputs before opening the runtime", async () => {
-  expect(
-    await mocks.handler({ data: { operation: "postTask", body: { title: 42 } } }),
-  ).toMatchObject({ ok: false, error: { status: 400, code: "invalid_request" } });
-  expect(mocks.runtime).not.toHaveBeenCalled();
-});
-
 it.each([
-  ...sharedPageRequests,
-  ...preferenceRequests,
-  { operation: "getMe" },
-  { operation: "postTodoCategoriesReorder", body: { categoryIds: [null] } },
-  {
-    operation: "patchTodoCategory",
-    params: { categoryId: crypto.randomUUID() },
-    body: { name: "Name" },
+  { operation: "postTask", body: { title: 42 } },
+  { operation: "listTodoItems", params: {} },
+  { operation: "postTodoCategory", body: { name: "Shopping" } },
+  { operation: "getMePreferences" },
+])(
+  "rejects malformed inputs and retired operations before opening the runtime: $operation",
+  async (data) => {
+    expect(await mocks.handler({ data })).toMatchObject({
+      ok: false,
+      error: { status: 400, code: "invalid_request" },
+    });
+    expect(mocks.runtime).not.toHaveBeenCalled();
   },
-])("rejects absent sessions before any business transaction: %j", async (data) => {
-  mocks.session.mockResolvedValue(null);
-  expect(await mocks.handler({ data })).toMatchObject({
-    ok: false,
-    error: { status: 401, code: "unauthorized" },
-  });
-  expect(mocks.session).toHaveBeenCalledWith({ headers: mocks.headers });
-});
+);
+
+it.each([...sharedPageRequests, { operation: "getMe" }])(
+  "rejects absent sessions before any business transaction: %j",
+  async (data) => {
+    mocks.session.mockResolvedValue(null);
+    expect(await mocks.handler({ data })).toMatchObject({
+      ok: false,
+      error: { status: 401, code: "unauthorized" },
+    });
+    expect(mocks.session).toHaveBeenCalledWith({ headers: mocks.headers });
+  },
+);
 
 it.each<Record<string, string>>([
   { origin: "https://other.example.com" },
@@ -123,7 +116,7 @@ it.each<Record<string, string>>([
   mocks.headers = new Headers(headers);
   expect(
     await mocks.handler({
-      data: { operation: "postTodoCategoriesReorder", body: { categoryIds: [null] } },
+      data: { operation: "postTasksReorder", body: { taskIds: [crypto.randomUUID()] } },
     }),
   ).toMatchObject({
     ok: false,
@@ -132,7 +125,7 @@ it.each<Record<string, string>>([
   expect(mocks.session).not.toHaveBeenCalled();
 });
 
-it.each([...sharedPageRequests, ...preferenceRequests])(
+it.each(sharedPageRequests)(
   "rejects other-origin shared page operations before authentication: $operation",
   async (data) => {
     mocks.headers = new Headers({ origin: "https://other.example.com" });
@@ -164,8 +157,6 @@ describe("transport transaction with D1", () => {
     foreign.team = (await connection.repository.ListMembershipsByUserID(otherId))[0].TeamID;
     for (const [key, operation, body] of [
       ["task", "postTask", { title: "Other task", type: "daily", penaltyPoints: 1 }],
-      ["todo", "postTodoItem", { name: "Other todo" }],
-      ["category", "postTodoCategory", { name: "Other category" }],
       [
         "reminder",
         "postReminder",
@@ -187,12 +178,7 @@ describe("transport transaction with D1", () => {
         operationSchema.parse({ operation, body }),
         { userId: otherId, now: new Date(), vapidPublicKey: "" },
       );
-      foreign[key] =
-        key === "category"
-          ? (await connection.repository.ListTodoCategories(foreign.team)).find(
-              (category) => category !== null,
-            )!.id
-          : (result.data as { id: string }).id;
+      foreign[key] = (result.data as { id: string }).id;
     }
   });
   beforeEach(async () => {
@@ -247,23 +233,6 @@ describe("transport transaction with D1", () => {
     },
     { operation: "postTasksReorder", body: () => ({ taskIds: [foreign.task] }) },
     {
-      operation: "patchTodoItem",
-      params: () => ({ itemId: foreign.todo }),
-      body: { name: "Denied" },
-    },
-    { operation: "deleteTodoItem", params: () => ({ itemId: foreign.todo }) },
-    { operation: "postTodoItemsReorder", body: () => ({ itemIds: [foreign.todo] }) },
-    {
-      operation: "patchTodoCategory",
-      params: () => ({ categoryId: foreign.category }),
-      body: { name: "Denied" },
-    },
-    { operation: "deleteTodoCategory", params: () => ({ categoryId: foreign.category }) },
-    {
-      operation: "postTodoCategoriesReorder",
-      body: () => ({ categoryIds: [null, foreign.category] }),
-    },
-    {
       operation: "patchReminder",
       params: () => ({ reminderId: foreign.reminder }),
       body: { title: "Denied" },
@@ -280,8 +249,6 @@ describe("transport transaction with D1", () => {
     const state = () =>
       Promise.all([
         connection.repository.ListTasksByTeamID(foreign.team),
-        connection.repository.ListTodoItemsByTeamID(foreign.team),
-        connection.repository.ListTodoCategories(foreign.team),
         connection.repository.ListRemindersByTeamID(foreign.team),
         connection.repository.ListPenaltyRulesByTeamID(foreign.team),
         connection.repository.ListPushSubscriptionsByUserID(otherId),
@@ -308,8 +275,6 @@ describe("transport transaction with D1", () => {
 
   it.each([
     { operation: "postTask", body: { title: "Own new task", type: "daily", penaltyPoints: 1 } },
-    { operation: "postTodoItem", body: { name: "Own new item" } },
-    { operation: "postTodoCategory", body: { name: "Own new category" } },
     {
       operation: "postReminder",
       body: { title: "Own new reminder", kind: "one_time", startDate: "2099-01-01" },
@@ -339,19 +304,7 @@ describe("transport transaction with D1", () => {
         },
       },
     });
-    if (test.operation === "postTodoCategory") {
-      expect(created).toMatchObject({
-        ok: true,
-        data: {
-          categories: expect.arrayContaining([
-            expect.objectContaining({ name: "Own new category" }),
-          ]),
-        },
-      });
-      expect(await connection.repository.ListTodoCategories(foreign.team)).not.toEqual(
-        expect.arrayContaining([expect.objectContaining({ name: "Own new category" })]),
-      );
-    } else expect(created).toMatchObject({ ok: true, data: { teamId } });
+    expect(created).toMatchObject({ ok: true, data: { teamId } });
     const listed = await mocks.handler({
       data: { operation: "listTasks", params: { teamId: foreign.team } },
     });

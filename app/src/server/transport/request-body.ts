@@ -2,7 +2,7 @@
 export const MAX_REQUEST_BODY_BYTES = 1024 * 1024;
 
 /** Bound bytes before framework/provider parsers allocate JSON or form objects. */
-export async function readBoundedBody(
+async function readBoundedBody(
   request: Request,
   maxBytes: number,
 ): Promise<Uint8Array<ArrayBuffer> | null> {

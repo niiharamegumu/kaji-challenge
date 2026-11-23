@@ -7,16 +7,13 @@ type QueryInvalidator = Pick<QueryClient, "invalidateQueries">;
 
 export const teamStateRefreshQueryKeys = [
   queryKeys.me,
-  queryKeys.userPreferences,
   queryKeys.pushSubscriptions,
   queryKeys.teamMembers,
   queryKeys.currentInvite,
   queryKeys.home,
   queryKeys.tasks,
   queryKeys.rules,
-  queryKeys.todoItems,
   queryKeys.sharedPages,
-  queryKeys.todoCategories,
   queryKeys.reminders,
   queryKeys.reminderDefinitions,
   queryKeys.monthlySummary,
@@ -24,15 +21,12 @@ export const teamStateRefreshQueryKeys = [
 ] as const;
 
 const changedQueryKeys = {
-  preferences: [queryKeys.userPreferences],
   profile: [queryKeys.me, queryKeys.teamMembers, queryKeys.home, queryKeys.monthlySummary],
   membership: teamStateRefreshQueryKeys,
   invite: [queryKeys.currentInvite],
   tasks: [queryKeys.tasks, queryKeys.home, queryKeys.monthlySummary, queryKeys.monthCloseCandidate],
   "task-completions": [queryKeys.home, queryKeys.monthlySummary],
-  todos: [queryKeys.todoItems],
   "shared-pages": [queryKeys.sharedPages],
-  "todo-categories": [queryKeys.todoCategories, queryKeys.todoItems],
   reminders: [queryKeys.reminders, queryKeys.reminderDefinitions, queryKeys.home],
   "penalty-rules": [queryKeys.rules, queryKeys.monthlySummary],
   "month-close": [queryKeys.home, queryKeys.monthlySummary, queryKeys.monthCloseCandidate],

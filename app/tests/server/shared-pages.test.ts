@@ -641,11 +641,10 @@ describe("shared pages persisted in D1 with expiring editor ownership", () => {
     }
   });
 
-  it("page operations and checklist changes do not mutate chores, ToDos, scores or month-close state", async () => {
+  it("page operations and checklist changes do not mutate chores, scores or month-close state", async () => {
     const business = async () => {
       const tables = [
         "tasks",
-        "todo_items",
         "task_completion_daily",
         "task_completion_weekly_entries",
         "penalty_rules",
@@ -657,7 +656,6 @@ describe("shared pages persisted in D1 with expiring editor ownership", () => {
         tables.map((table) => c.query(sql`SELECT * FROM ${sql.identifier(table)}`)),
       );
     };
-    await run("postTodoItem", { name: "既存の買い物" });
     const daily = responseSchemas.postTask.parse(
       (await run("postTask", { title: "毎日の家事", type: "daily", penaltyPoints: 3 })).data,
     );

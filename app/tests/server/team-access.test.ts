@@ -9,17 +9,16 @@ type Fixture = {
   team: string;
   daily: string;
   weekly: string;
-  todo: string;
-  category: string;
   reminder: string;
   penalty: string;
   push: string;
 };
 const fixture = (): Fixture =>
   Object.fromEntries(
-    ["user", "team", "daily", "weekly", "todo", "category", "reminder", "penalty", "push"].map(
-      (key) => [key, crypto.randomUUID()],
-    ),
+    ["user", "team", "daily", "weekly", "reminder", "penalty", "push"].map((key) => [
+      key,
+      crypto.randomUUID(),
+    ]),
   ) as Fixture;
 const own = fixture(),
   other = fixture();
@@ -34,7 +33,6 @@ const tables = [
   "team_members",
   "tasks",
   "task_weekly_requirements",
-  "todo_items",
   "reminders",
   "penalty_rules",
   "invite_codes",
@@ -45,7 +43,6 @@ const tables = [
   "close_runs",
   "push_subscriptions",
   "auth_user",
-  "user_preferences",
 ];
 const snapshot = () =>
   Promise.all(
@@ -94,17 +91,6 @@ beforeAll(async () => {
         Type: type,
         CreatedAt: "2026-09-01T00:00:00.000Z",
       });
-    await c.repository.CreateTodoCategory(f.team, { id: f.category, name: "Private category" });
-    await c.repository.CreateTodoItem({
-      ID: f.todo,
-      TeamID: f.team,
-      Name: "Private item",
-      Notes: null,
-      CategoryID: f.category,
-      SortKey: 100,
-      CreatedAt: now,
-      UpdatedAt: now,
-    });
     await c.repository.CreateReminder({
       ID: f.reminder,
       TeamID: f.team,
@@ -234,9 +220,6 @@ const reads: ReadCase[] = [
   },
   { name: "ListTeamMembersByTeamID", run: (r, f) => r.ListTeamMembersByTeamID(f.team), denied: [] },
   { name: "GetLatestInviteCodeByTeamID", run: (r, f) => r.GetLatestInviteCodeByTeamID(f.team) },
-  { name: "ListTodoCategories", run: (r, f) => r.ListTodoCategories(f.team) },
-  { name: "GetTodoItemByID", run: (r, f) => r.GetTodoItemByID(f.todo) },
-  { name: "ListTodoItemsByTeamID", run: (r, f) => r.ListTodoItemsByTeamID(f.team), denied: [] },
   { name: "GetReminderByID", run: (r, f) => r.GetReminderByID(f.reminder) },
   { name: "ListRemindersByTeamID", run: (r, f) => r.ListRemindersByTeamID(f.team), denied: [] },
   { name: "GetUndeletedPenaltyRuleByID", run: (r, f) => r.GetUndeletedPenaltyRuleByID(f.penalty) },
@@ -275,7 +258,6 @@ const reads: ReadCase[] = [
       r.FindOldestMonthCloseCandidate({ TeamID: f.team, CurrentMonthStart: "2026-10-01" }),
   },
   { name: "GetUserByID", run: (r, f) => r.GetUserByID(f.user) },
-  { name: "GetUserPreferences", run: (r, f) => r.GetUserPreferences(f.user) },
   {
     name: "ListPushSubscriptionsByUserID",
     run: (r, f) => r.ListPushSubscriptionsByUserID(f.user),
@@ -284,14 +266,6 @@ const reads: ReadCase[] = [
 ];
 type WriteCase = { name: string; run: (r: Repository, f: Fixture) => Promise<unknown> };
 const writes: WriteCase[] = [
-  {
-    name: "SaveUserPreferences",
-    run: (r, f) => r.SaveUserPreferences(f.user, { todoCompletionDelayMs: 5000 }),
-  },
-  {
-    name: "InitializeUserPreferences",
-    run: (r, f) => r.SaveUserPreferences(f.user, { todoCompletionDelayMs: 5000 }, true),
-  },
   { name: "UpdateTeamName", run: (r, f) => r.UpdateTeamName({ ID: f.team, Name: "Changed" }) },
   { name: "CreateTask", run: (r, f) => r.CreateTask(task(f)) },
   {
@@ -310,33 +284,14 @@ const writes: WriteCase[] = [
   },
   { name: "DeleteTask", run: (r, f) => r.DeleteTask(f.daily) },
   {
-    name: "CreateTodoCategory",
-    run: (r, f) => r.CreateTodoCategory(f.team, { id: crypto.randomUUID(), name: "Changed" }),
-  },
-  {
-    name: "RenameTodoCategory",
-    run: (r, f) => r.RenameTodoCategory(f.team, f.category, "Changed"),
-  },
-  {
-    name: "ReorderTodoCategories",
-    run: (r, f) => r.ReorderTodoCategories(f.team, [f.category, null]),
-  },
-  { name: "DeleteTodoCategory", run: (r, f) => r.DeleteTodoCategory(f.team, f.category, now) },
-  {
     name: "Reorder tasks",
     run: (r, f) =>
       r.Reorder({
         teamId: f.team,
-        kind: "tasks",
         type: "daily",
         ids: [f.daily],
         now: "2026-09-26T00:00:00.000Z",
       }),
-  },
-  {
-    name: "Reorder todos",
-    run: (r, f) =>
-      r.Reorder({ teamId: f.team, kind: "todo", ids: [f.todo], now: "2026-09-26T00:00:00.000Z" }),
   },
   {
     name: "CreateReminder",
@@ -408,52 +363,6 @@ const writes: WriteCase[] = [
     name: "DeactivatePushSubscriptionByIDAndUser",
     run: (r, f) =>
       r.DeactivatePushSubscriptionByIDAndUser({ ID: f.push, UserID: f.user, UpdatedAt: now }),
-  },
-  {
-    name: "CreateTodoItem",
-    run: (r, f) =>
-      r.CreateTodoItem({
-        ID: crypto.randomUUID(),
-        TeamID: f.team,
-        Name: "Changed",
-        Notes: null,
-        CategoryID: f.category,
-        SortKey: 100,
-        CreatedAt: now,
-        UpdatedAt: now,
-      }),
-  },
-  {
-    name: "UpdateTodoItem",
-    run: (r, f) =>
-      r.UpdateTodoItem({ ID: f.todo, TeamID: f.team, Name: "Changed", UpdatedAt: now }),
-  },
-  { name: "DeleteTodoItem", run: (r, f) => r.DeleteTodoItem(f.todo) },
-  {
-    name: "ApplyTodoAssistActionsAtomic",
-    run: (r, f) =>
-      r.ApplyTodoAssistActionsAtomic(f.team, [
-        { kind: "remove", names: ["Private item"] },
-        {
-          kind: "add",
-          items: [
-            {
-              ID: crypto.randomUUID(),
-              TeamID: f.team,
-              Name: "Denied",
-              Notes: null,
-              CategoryID: f.category,
-              SortKey: 100,
-              CreatedAt: now,
-              UpdatedAt: now,
-            },
-          ],
-        },
-      ]),
-  },
-  {
-    name: "DeleteTodoItemsByNames",
-    run: (r, f) => r.DeleteTodoItemsByNames(f.team, ["Private item"]),
   },
   {
     name: "UpsertPushSubscription",

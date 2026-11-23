@@ -10,9 +10,6 @@ import {
   Settings,
   Shield,
   ShieldAlert,
-  ListTodo,
-  AudioLines,
-  Tags,
   UserCircle2,
 } from "lucide-react";
 import type { FocusEvent as ReactFocusEvent, PointerEvent as ReactPointerEvent } from "react";
@@ -28,13 +25,10 @@ type Props = {
   onRouteIntent: (path: string) => void;
   onRefresh: () => void;
   onLogout: () => void;
-  onAssist?: () => void;
-  assistOpen?: boolean;
-  assistDisabled?: boolean;
 };
 
 type PrimaryNavItem = {
-  id: "home" | "todo" | "summary";
+  id: "home" | "summary";
   label: string;
   icon: LucideIcon;
   path?: string;
@@ -69,13 +63,6 @@ const primaryItems: PrimaryNavItem[] = [
     intentPath: "/",
   },
   {
-    id: "todo",
-    label: "ToDo",
-    icon: ListTodo,
-    path: "/todos",
-    intentPath: "/todos",
-  },
-  {
     id: "summary",
     label: "サマリー",
     icon: ChartColumn,
@@ -95,11 +82,8 @@ function getPrimaryIndex(pathname: string) {
   if (pathname === "/") {
     return 0;
   }
-  if (pathname.startsWith("/todos")) {
-    return 1;
-  }
   if (pathname.startsWith("/summary")) {
-    return 2;
+    return 1;
   }
   return null;
 }
@@ -111,9 +95,6 @@ export function FloatingNav({
   onRouteIntent,
   onRefresh,
   onLogout,
-  onAssist,
-  assistOpen = false,
-  assistDisabled = false,
 }: Props) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -151,13 +132,6 @@ export function FloatingNav({
       icon: CalendarDays,
       path: "/calendar",
       intentPath: "/calendar",
-    },
-    {
-      id: "todo-categories",
-      label: "カテゴリー",
-      icon: Tags,
-      path: "/todo-categories",
-      intentPath: "/todo-categories",
     },
     {
       id: "tasks",
@@ -583,7 +557,7 @@ export function FloatingNav({
           <div
             ref={navRef}
             data-testid="floating-nav-primary"
-            className="relative min-w-0 flex-1 grid grid-cols-3 gap-0.5 overflow-hidden rounded-[2rem] border border-glass-edge/34 p-1 shadow-glass"
+            className="relative min-w-0 flex-1 grid grid-cols-2 gap-0.5 overflow-hidden rounded-[2rem] border border-glass-edge/34 p-1 shadow-glass"
             style={{
               background: "var(--glass-background)",
               backdropFilter: "blur(30px) saturate(220%) brightness(0.94) contrast(1.08)",
@@ -711,32 +685,6 @@ export function FloatingNav({
             })}
           </div>
 
-          {onAssist ? (
-            <button
-              type="button"
-              onClick={() => {
-                setMenuOpen(false);
-                onAssist();
-              }}
-              disabled={assistDisabled}
-              aria-label="アシスト"
-              aria-haspopup="dialog"
-              aria-expanded={assistOpen}
-              title="アシストに話しかける"
-              style={navGlassStyle}
-              className="relative z-[55] flex size-[62px] shrink-0 cursor-pointer flex-col items-center justify-center gap-1 overflow-hidden rounded-full border border-glass-edge/34 text-body shadow-glass transition-colors duration-200 hover:text-heading focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-focus disabled:cursor-default disabled:opacity-40 motion-reduce:transition-none"
-            >
-              <span
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-0 opacity-90"
-                style={{
-                  background: "var(--glass-decoration)",
-                }}
-              />
-              <AudioLines size={20} strokeWidth={2.1} aria-hidden="true" className="relative" />
-              <span className="relative text-[10.5px] leading-none">アシスト</span>
-            </button>
-          ) : null}
           <button
             type="button"
             className={`relative z-[55] flex h-[62px] w-[62px] shrink-0 flex-col items-center justify-center gap-1 overflow-hidden rounded-full border text-center transition-all duration-200 motion-reduce:transition-none focus-visible:outline-none ${

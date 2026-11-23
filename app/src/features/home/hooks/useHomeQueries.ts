@@ -1,4 +1,3 @@
-import { todoItemsQueryOptions } from "../../../shared/query/todoQueries";
 import {
   queryOptions,
   useMutation,
@@ -22,7 +21,6 @@ import { queryKeys } from "../../../shared/query/queryKeys";
 import { dateStringInJST } from "../../../shared/utils/dates";
 import { formatError } from "../../../shared/utils/errors";
 import { previousMonthKey } from "../utils/month";
-import { useOptimisticTodoItems } from "../../todos";
 
 type CompletionAction = TaskCompletionRequest["action"];
 type CompletionIntent = { taskId: string; action?: "toggle" | "increment" | "decrement" };
@@ -149,33 +147,24 @@ export const homeQueryOptions = queryOptions({
   queryFn: async ({ signal }) => (await getTaskOverview({ signal })).data,
 });
 
-export const homeTodoItemsQueryOptions = todoItemsQueryOptions;
-
 export const previousMonthPenaltySummaryQueryOptions = () =>
   monthlyPenaltySummaryQueryOptions(previousMonthKey(dateStringInJST().slice(0, 7)));
 
 export function useHomePageQueries() {
   const pendingCompletions = usePendingCompletions();
   const previousMonth = previousMonthKey(dateStringInJST().slice(0, 7));
-  const [homeQuery, todoItemsQuery, previousMonthPenaltySummaryQuery, penaltyRulesQuery] =
-    useSuspenseQueries({
-      queries: [
-        homeQueryOptions,
-        homeTodoItemsQueryOptions,
-        monthlyPenaltySummaryQueryOptions(previousMonth),
-        penaltyRulesWithDeletedQueryOptions,
-      ],
-    });
-
-  const todoItems = useOptimisticTodoItems(todoItemsQuery.data);
+  const [homeQuery, previousMonthPenaltySummaryQuery, penaltyRulesQuery] = useSuspenseQueries({
+    queries: [
+      homeQueryOptions,
+      monthlyPenaltySummaryQueryOptions(previousMonth),
+      penaltyRulesWithDeletedQueryOptions,
+    ],
+  });
 
   return {
     homeQuery: {
       data: applyChanges(homeQuery.data, pendingCompletions),
       isSuccess: homeQuery.isSuccess,
-    },
-    todoItemsQuery: {
-      data: todoItems,
     },
     previousMonth,
     previousMonthPenaltySummaryQuery,

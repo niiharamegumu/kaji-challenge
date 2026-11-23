@@ -1,5 +1,4 @@
 import type { WeeklyRequirement } from "../domain/task-requirements";
-import type { UserPreferences, UpdateUserPreferences } from "../../contracts/user-preferences";
 import type {
   SharedPage,
   SharedPageSummary,
@@ -8,10 +7,6 @@ import type {
   SharedPageLeaseResponse,
 } from "../../contracts/shared-pages";
 
-export interface TodoCategory {
-  id: string;
-  name: string;
-}
 export interface ListTaskCompletionDailyByMonthAndTeamParams {
   TeamID: string;
   TargetDate: string;
@@ -279,26 +274,6 @@ export interface UpsertPushSubscriptionRow {
   UpdatedAt: string;
 }
 
-export interface CreateTodoItemParams {
-  CategoryID: string | null;
-  ID: string;
-  TeamID: string;
-  Name: string;
-  Notes: string | null;
-  SortKey: number;
-  CreatedAt: string;
-  UpdatedAt: string;
-}
-
-export interface UpdateTodoItemParams {
-  TeamID: string;
-  CategoryID?: string | null;
-  ID: string;
-  Name?: string;
-  Notes?: string | null;
-  UpdatedAt: string;
-}
-
 export interface FindOldestMonthCloseCandidateParams {
   TeamID: string;
   CurrentMonthStart: string;
@@ -445,17 +420,6 @@ export interface Reminder {
   UpdatedAt: string;
 }
 
-export interface TodoItem {
-  CategoryID: string | null;
-  ID: string;
-  TeamID: string;
-  Name: string;
-  Notes: string | null;
-  SortKey: number;
-  CreatedAt: string;
-  UpdatedAt: string;
-}
-
 export interface MoveMemberParams {
   userId: string;
   fromTeamId: string;
@@ -465,11 +429,12 @@ export interface MoveMemberParams {
   newTeamName?: string;
 }
 
-export type ReorderParams = {
+export interface ReorderParams {
   teamId: string;
   ids: string[];
   now: string;
-} & ({ kind: "tasks"; type: string } | { kind: "todo" });
+  type: string;
+}
 
 export interface SetCompletionParams {
   teamId: string;
@@ -491,22 +456,7 @@ export interface RecalculateMonthParams {
   closeMonth?: boolean;
 }
 
-export type TodoAssistAction =
-  | { kind: "add"; items: CreateTodoItemParams[] }
-  | { kind: "remove"; names: string[]; categoryId?: string | null }
-  | { kind: "list"; categoryId?: string | null };
-export type TodoAssistActionResult =
-  | { kind: "add"; items: TodoItem[] }
-  | { kind: "remove"; count: number }
-  | { kind: "list"; items: TodoItem[] };
-
 export interface Repository {
-  GetUserPreferences(userId: string): Promise<UserPreferences | null>;
-  SaveUserPreferences(
-    userId: string,
-    preferences: UpdateUserPreferences,
-    initializeOnly?: boolean,
-  ): Promise<UserPreferences>;
   ListSharedPages(teamId: string): Promise<SharedPageSummary[]>;
   GetSharedPage(id: string): Promise<SharedPage>;
   CreateSharedPage(arg: {
@@ -587,26 +537,6 @@ export interface Repository {
   ListPushSubscriptionsByUserID(userID: string): Promise<ListPushSubscriptionsByUserIDRow[]>;
   ListTeamIDsForPush(): Promise<string[]>;
   UpsertPushSubscription(arg: UpsertPushSubscriptionParams): Promise<UpsertPushSubscriptionRow>;
-  ListTodoCategories(teamId: string): Promise<(TodoCategory | null)[]>;
-  ReorderTodoCategories(teamId: string, categoryIds: (string | null)[]): Promise<boolean>;
-  CreateTodoCategory(teamId: string, category: TodoCategory): Promise<void>;
-  RenameTodoCategory(teamId: string, categoryId: string, name: string): Promise<boolean>;
-  DeleteTodoCategory(teamId: string, categoryId: string, now: string): Promise<boolean>;
-  CreateTodoItem(arg: CreateTodoItemParams): Promise<boolean>;
-  CreateTodoItemsAtomic(items: CreateTodoItemParams[]): Promise<TodoItem[]>;
-  ApplyTodoAssistActionsAtomic(
-    teamId: string,
-    actions: TodoAssistAction[],
-  ): Promise<TodoAssistActionResult[]>;
-  DeleteTodoItem(id: string): Promise<number>;
-  DeleteTodoItemsByNames(
-    teamId: string,
-    names: string[],
-    categoryId?: string | null,
-  ): Promise<number>;
-  GetTodoItemByID(id: string): Promise<TodoItem>;
-  ListTodoItemsByTeamID(teamID: string): Promise<TodoItem[]>;
-  UpdateTodoItem(arg: UpdateTodoItemParams): Promise<boolean>;
   FindOldestMonthCloseCandidate(
     arg: FindOldestMonthCloseCandidateParams,
   ): Promise<FindOldestMonthCloseCandidateRow>;
