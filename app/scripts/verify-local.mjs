@@ -108,7 +108,7 @@ try {
   ]);
   // Exercise CLI-only peer dependencies without credentials or cloud mutations.
   if (plan.alchemy) {
-    for (const args of [["provider", "cloudflare", "bootstrap"], ["plan"], ["deploy"]]) {
+    for (const args of [["state", "bootstrap"], ["plan"], ["deploy"]]) {
       await run(`Alchemy ${args.at(-1)} CLI`, "node_modules/.bin/alchemy", [...args, "--help"]);
     }
   } else notSelected("Alchemy CLI", "No runtime, dependency or infrastructure tooling changes");

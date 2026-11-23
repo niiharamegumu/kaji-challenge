@@ -1,15 +1,16 @@
 import * as Alchemy from "alchemy";
-import * as Cloudflare from "alchemy/Cloudflare";
+import * as Cloudflare from "@alchemy.run/cloudflare";
 import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
 import { deploymentResources } from "./infra/config";
+import { productionState, stateStoreWorkerName } from "./infra/state-store";
 import type { McpApplication } from "./src/server/transport/mcp-entrypoint";
 
 export default Alchemy.Stack(
-  "kaji-challenge",
+  productionState.stack,
   {
     providers: Cloudflare.providers(),
-    state: Cloudflare.state(),
+    state: Cloudflare.state({ workerName: stateStoreWorkerName }),
   },
   Effect.gen(function* () {
     const origin = yield* Config.String("APP_ORIGIN");

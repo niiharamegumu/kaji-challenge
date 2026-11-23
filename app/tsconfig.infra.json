@@ -11,6 +11,7 @@
   },
   "include": [
     "alchemy.run.ts",
+    "scripts/prepare-alchemy-state.ts",
     "vitest.server.config.ts",
     "playwright.config.ts",
     "playwright.dev.config.ts",
