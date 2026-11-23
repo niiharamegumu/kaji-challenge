@@ -20,37 +20,22 @@ test("manual verification and unavailable diffs run every optional check", () =>
   }
 });
 test("documentation and server-test-only changes retain smoke checks", () => {
-  for (const paths of [
-    [],
-    ["README.md", "docs/testing.md"],
-    ["app/tests/server/assist-ai.test.ts"],
-  ]) {
+  for (const paths of [[], ["README.md", "docs/testing.md"], ["app/tests/server/push.test.ts"]]) {
     const plan = verificationPlan(paths);
     assert.deepEqual(plan.browserTags, ["@smoke"]);
     assert.equal(plan.alchemy, false);
     assert.equal(plan.development, false);
   }
 });
-test("assist changes include model, contract and media fixture coverage", () => {
-  assert.deepEqual(
-    selected([
-      "app/src/features/assist/lib/capture.ts",
-      "app/src/server/infrastructure/assist-ai.ts",
-      "app/src/contracts/assist.ts",
-      "app/tests/e2e/assist-fixture.ts",
-    ]),
-    ["@smoke", "@assist"],
-  );
-});
 test("multiple feature changes select their union, without duplicate tags", () => {
   assert.deepEqual(
     selected([
-      "app/src/features/todos/hooks/useTodos.ts",
+      "app/src/features/tasks/api/tasksApi.ts",
       "app/src/features/summary/components/SummaryPage.tsx",
-      "app/src/features/todos/components/TodoPage.tsx",
+      "app/src/features/tasks/routes/TasksPage.tsx",
       "docs/architecture.md",
     ]),
-    ["@smoke", "@summary", "@todos"],
+    ["@smoke", "@summary", "@tasks"],
   );
   assert.deepEqual(selected(["app/src/features/reminders/components/ReminderCalendarPage.tsx"]), [
     "@smoke",
@@ -66,7 +51,7 @@ test("shared page UI changes retain smoke and the shared-page browser suite", ()
 for (const path of [
   "app/src/features/auth/components/LoginPage.tsx",
   "app/src/features/shell/components/FloatingNav.tsx",
-  "app/src/shared/query/todoQueries.ts",
+  "app/src/shared/query/queryKeys.ts",
   "app/src/server/infrastructure/auth.ts",
   "app/src/contracts/operations.ts",
   "app/migrations/0011_example.sql",
@@ -116,7 +101,7 @@ test("unrecognized paths and new features fail closed to full verification", () 
 });
 test("a deleted shared file still widens coverage when moved into a feature", () => {
   assert.equal(
-    selected(["app/src/shared/example.ts", "app/src/features/assist/lib/example.ts"]),
+    selected(["app/src/shared/example.ts", "app/src/features/settings/lib/example.ts"]),
     null,
   );
 });
@@ -131,11 +116,11 @@ test("invalid or missing base commits cannot produce an empty successful diff", 
   }
 });
 test("browser grep matches complete tags and retains smoke across both projects", () => {
-  const args = browserArguments(verificationPlan(["app/src/features/assist/index.ts"]));
+  const args = browserArguments(verificationPlan(["app/src/features/settings/index.ts"]));
   assert.deepEqual(args.slice(0, 2), ["test", "--grep"]);
   const pattern = new RegExp(args[2]);
   assert.equal(pattern.test("desktop startup @smoke @auth"), true);
-  assert.equal(pattern.test("mobile assist @assist"), true);
-  assert.equal(pattern.test("other @assistant"), false);
+  assert.equal(pattern.test("mobile settings @settings"), true);
+  assert.equal(pattern.test("other @settings-extra"), false);
   assert.equal(pattern.test("calendar @calendar"), false);
 });

@@ -3,7 +3,6 @@ import * as Cloudflare from "@alchemy.run/cloudflare";
 import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
 import { deploymentResources } from "./infra/config";
-import type { McpApplication } from "./src/server/transport/mcp-entrypoint";
 
 export default Alchemy.Stack(
   "kaji-challenge",
@@ -20,39 +19,21 @@ export default Alchemy.Stack(
       jobs,
       maintenance: yield* Config.String("MAINTENANCE_MODE").pipe(Config.withDefault("false")),
       release: yield* Config.String("APP_RELEASE"),
-      assistEnabled: yield* Config.String("ASSIST_ENABLED").pipe(Config.withDefault("false")),
-      mcpEnabled: yield* Config.String("MCP_ENABLED").pipe(Config.withDefault("false")),
-      mcpOrigin: yield* Config.String("MCP_ORIGIN").pipe(Config.withDefault("")),
+      migrationsDir: yield* Config.String("D1_MIGRATIONS_DIR").pipe(
+        Config.withDefault("./migrations"),
+      ),
     });
     const database = yield* Cloudflare.D1.Database("Database", resources.database);
     const realtime = Cloudflare.DurableObject("TeamRealtime", { className: "TeamRealtime" });
-    // No Gateway resource is created until Assist is explicitly enabled.
-    if (resources.settings.assistEnabled === "true") {
-      yield* Cloudflare.AI.Gateway("AssistGateway", resources.assist.gateway).pipe(
-        Alchemy.RemovalPolicy.retain(),
-      );
-    }
-    const oauthKv = resources.mcp
-      ? yield* Cloudflare.KV.Namespace("McpOAuthKV", resources.mcp.oauthKv).pipe(
-          Alchemy.RemovalPolicy.retain(),
-        )
-      : undefined;
     const worker = yield* Cloudflare.Worker("Application", {
       ...resources.worker,
       env: {
         DB: database,
         TEAM_REALTIME: realtime,
-        AI: Cloudflare.Workers.AI(),
-        ASSIST_LIMITER: Cloudflare.Workers.RateLimit("ASSIST_LIMITER", resources.assist.limiter),
-        ASSIST_ENABLED: resources.settings.assistEnabled,
-        ASSIST_GATEWAY_ID: resources.assist.gateway.id,
         APP_ORIGIN: origin,
         APP_RELEASE: resources.settings.release,
         JOBS_ENABLED: jobs,
         MAINTENANCE_MODE: resources.settings.maintenance,
-        MCP_ENABLED: resources.settings.mcpEnabled,
-        MCP_ORIGIN: resources.settings.mcpOrigin,
-        ...(oauthKv ? { OAUTH_KV: oauthKv } : {}),
         SIGNUP_ALLOWED_EMAILS: Config.Redacted("SIGNUP_ALLOWED_EMAILS"),
         BETTER_AUTH_SECRET: Config.Redacted("BETTER_AUTH_SECRET"),
         GOOGLE_CLIENT_ID: Config.Redacted("GOOGLE_CLIENT_ID"),
@@ -62,20 +43,6 @@ export default Alchemy.Stack(
         VAPID_SUBJECT: yield* Config.String("VAPID_SUBJECT"),
       },
     });
-    if (resources.mcp?.worker) {
-      const mcp = yield* Cloudflare.Worker("Mcp", {
-        ...resources.mcp.worker,
-        env: {
-          KAJI_APPLICATION: Cloudflare.WorkerEntrypoint<McpApplication>(worker, "McpApplication"),
-          APP_ORIGIN: new URL(resources.settings.origin).origin,
-          APP_RELEASE: resources.settings.release,
-          MCP_ENABLED: resources.settings.mcpEnabled,
-          MCP_ORIGIN: resources.settings.mcpOrigin,
-          MAINTENANCE_MODE: resources.settings.maintenance,
-        },
-      });
-      return { url: worker.url, databaseId: database.databaseId, mcpUrl: mcp.url };
-    }
     return { url: worker.url, databaseId: database.databaseId };
   }),
 );

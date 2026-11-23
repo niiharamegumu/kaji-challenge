@@ -8,7 +8,7 @@
     "security": "bun run security:runtime && bun audit --audit-level moderate",
     "preinstall": "bun run security:runtime",
     "dev": "bun run security:runtime && vp dev",
-    "build": "bun run security:runtime && node scripts/check-oauth-provider-patch.mjs && vp build && tsc -b && tsc -p tsconfig.infra.json",
+    "build": "bun run security:runtime && vp build && tsc -b && tsc -p tsconfig.infra.json",
     "preview": "bun run security:runtime && vp preview",
     "lint": "vp lint --ignore-path .prettierignore",
     "lint:compiler": "eslint \"src/**/*.{ts,tsx}\"",
@@ -30,25 +30,22 @@
     "infra:bootstrap": "bun run security:runtime && alchemy state bootstrap",
     "db:migrate": "wrangler d1 migrations apply DB --local",
     "db:studio": "open http://localhost:5174/cdn-cgi/local/explorer",
-    "types:bindings": "wrangler types --env-interface Env --include-runtime false && node scripts/generate-mcp-bindings.mjs"
+    "types:bindings": "wrangler types --env-interface Env --include-runtime false"
   },
   "dependencies": {
     "@better-auth/drizzle-adapter": "1.7.16",
     "@blocknote/core": "0.57.0",
     "@blocknote/mantine": "0.57.0",
     "@blocknote/react": "0.57.0",
-    "@cloudflare/workers-oauth-provider": "1.2.3",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@fullcalendar/react": "^7.1.3",
     "@mantine/core": "9.7.5",
     "@mantine/hooks": "9.7.5",
-    "@modelcontextprotocol/server": "2.3.1",
     "@tanstack/react-query": "^5.104.3",
     "@tanstack/react-router": "1.170.44",
     "@tanstack/react-start": "1.169.2",
-    "agents": "0.28.1",
     "better-auth": "1.7.16",
     "drizzle-orm": "0.45.4",
     "fast-deep-equal": "3.1.3",
@@ -107,10 +104,8 @@
   },
   "overrides": {
     "@effect/platform-node-shared": "4.1.5",
-    "@hono/node-server": "2.1.6",
     "esbuild": "0.28.2",
     "glob": "14.0.3",
-    "hono": "4.13.16",
     "js-yaml": "4.3.2",
     "lodash": "^4.18.1",
     "miniflare": {
@@ -120,7 +115,6 @@
     "serialize-javascript": "^7.1.3",
     "seroval": "1.6.11",
     "sharp": "^0.35.5",
-    "valibot": "1.5.0",
     "vite": "npm:@voidzero-dev/vite-plus-core@1.3.0",
     "vitest": "5.0.5"
   },
@@ -128,8 +122,5 @@
     "bun": ">=1.4.4",
     "node": ">=24.22.3 <25"
   },
-  "packageManager": "bun@1.4.4",
-  "patchedDependencies": {
-    "@cloudflare/workers-oauth-provider@1.2.3": "patches/@cloudflare%2Fworkers-oauth-provider@1.2.3.patch"
-  }
+  "packageManager": "bun@1.4.4"
 }

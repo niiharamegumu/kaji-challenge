@@ -15,66 +15,23 @@ const productionOrigin = z.url().refine((value) => {
     url.hostname !== "localhost"
   );
 }, "Must be an HTTPS origin without credentials, port, or path");
-export const deploymentSchema = z
-  .object({
-    stage: z.literal("production"),
-    origin: productionOrigin,
-    jobs: booleanSetting,
-    maintenance: booleanSetting,
-    release: z.string().min(1),
-    assistEnabled: booleanSetting.default("false"),
-    mcpEnabled: booleanSetting.default("false"),
-    mcpOrigin: z
-      .union([productionOrigin.transform((value) => new URL(value).origin), z.literal("")])
-      .default(""),
-  })
-  .superRefine((settings, context) => {
-    if (settings.mcpEnabled === "true" && !settings.mcpOrigin) {
-      context.addIssue({
-        code: "custom",
-        path: ["mcpOrigin"],
-        message: "MCP_ORIGIN is required when MCP is enabled",
-      });
-    } else if (
-      settings.mcpOrigin &&
-      new URL(settings.mcpOrigin).origin === new URL(settings.origin).origin
-    ) {
-      context.addIssue({
-        code: "custom",
-        path: ["mcpOrigin"],
-        message: "MCP_ORIGIN must differ from APP_ORIGIN",
-      });
-    }
-  });
+export const deploymentSchema = z.object({
+  stage: z.literal("production"),
+  origin: productionOrigin,
+  jobs: booleanSetting,
+  maintenance: booleanSetting,
+  release: z.string().min(1),
+  migrationsDir: z.string().min(1).default("./migrations"),
+});
 export function deploymentResources(input: unknown) {
   const settings = deploymentSchema.parse(input);
   return {
     settings,
-    assist: {
-      gateway: {
-        id: "kaji-voice",
-        authentication: true,
-        collectLogs: false,
-        cacheTtl: null,
-        rateLimitingInterval: 60,
-        rateLimitingLimit: 24,
-        rateLimitingTechnique: "sliding" as const,
-        spendLimits: {
-          enabled: true,
-          // Per-gateway cost limits use USD; Alchemy forwards limit without conversion.
-          rules: [
-            { limit: 1, limitType: "cost" as const, window: "1 day" as const },
-            { limit: 5, limitType: "cost" as const, window: "30 days" as const },
-          ],
-        },
-      },
-      limiter: { namespaceId: "1001", simple: { limit: 12, period: 60 as const } },
-    },
     database: {
       name: `kaji-${settings.stage}`,
       primaryLocationHint: "apac" as const,
       readReplication: { mode: "disabled" as const },
-      migrations: "./migrations",
+      migrations: settings.migrationsDir,
     },
     worker: {
       // Cloudflare公式Vite pluginが生成したWorkerを再bundleせず配備する。
@@ -94,22 +51,5 @@ export function deploymentResources(input: unknown) {
         runWorkerFirst: ["/api/*", "/_serverFn/*", "/.well-known/*", "/health"],
       },
     },
-    mcp: settings.mcpOrigin
-      ? {
-          oauthKv: { title: `kaji-${settings.stage}-mcp-oauth` },
-          worker:
-            settings.mcpEnabled === "true"
-              ? {
-                  main: "dist/mcp/index.js",
-                  bundle: false,
-                  compatibility: { date: "2026-09-14", flags: ["nodejs_compat"] },
-                  domain: new URL(settings.mcpOrigin).hostname,
-                  workersDev: false,
-                  crons: [],
-                  observability: { enabled: true, headSamplingRate: 1 },
-                }
-              : undefined,
-        }
-      : undefined,
   };
 }
