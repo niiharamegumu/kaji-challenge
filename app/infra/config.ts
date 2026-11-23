@@ -2,7 +2,6 @@ import { z } from "zod";
 import { crons } from "../src/server/application/jobs";
 
 const booleanSetting = z.enum(["true", "false"]);
-export const productionDatabaseName = "kaji-production";
 const productionOrigin = z.url().refine((value) => {
   const url = new URL(value);
   return (
@@ -72,7 +71,7 @@ export function deploymentResources(input: unknown) {
       limiter: { namespaceId: "1001", simple: { limit: 12, period: 60 as const } },
     },
     database: {
-      name: productionDatabaseName,
+      name: `kaji-${settings.stage}`,
       primaryLocationHint: "apac" as const,
       readReplication: { mode: "disabled" as const },
       migrations: "./migrations",

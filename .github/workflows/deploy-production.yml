@@ -90,11 +90,5 @@ jobs:
             if (!result.success) throw new Error("Invalid production origin, release, or boolean setting");
           '
           bun run infra:bootstrap --no-input
-          # Remove after the first successful production deploy using the named store.
-          bun run infra:prepare-state
-          # Recover the MCP OAuth KV reference before updating its Worker binding.
-          if [ -n "$MCP_ORIGIN" ]; then
-            bun run deploy --stage production --include McpOAuthKV --force --yes --no-input
-          fi
           bun run infra:plan --stage production --no-input
           bun run deploy --stage production --yes --no-input
