@@ -221,9 +221,9 @@ it("unions scoped notifications during a save without invalidating identity or s
     execution = mutation.execute(undefined);
   });
   act(() => {
-    Socket.instances[0].message({ type: "team-changed", changes: ["shared-pages"] });
+    Socket.instances[0].message({ type: "team-changed", changes: ["push-subscriptions"] });
     Socket.instances[0].message({ type: "team-changed", changes: ["invite"] });
-    Socket.instances[0].message({ type: "team-changed", changes: ["shared-pages"] });
+    Socket.instances[0].message({ type: "team-changed", changes: ["push-subscriptions"] });
   });
   expect(hook.invalidate).not.toHaveBeenCalled();
   await act(async () => {
@@ -231,7 +231,7 @@ it("unions scoped notifications during a save without invalidating identity or s
     await execution;
   });
   expect(hook.invalidate.mock.calls.map(([arg]) => arg?.queryKey)).toEqual([
-    queryKeys.sharedPages,
+    queryKeys.pushSubscriptions,
     queryKeys.currentInvite,
   ]);
   hook.unmount();
@@ -239,7 +239,7 @@ it("unions scoped notifications during a save without invalidating identity or s
 
 it("lets a reconnect supersede scoped notifications with a full refresh", async () => {
   const hook = mount();
-  act(() => Socket.instances[0].message({ type: "team-changed", changes: ["shared-pages"] }));
+  act(() => Socket.instances[0].message({ type: "team-changed", changes: ["push-subscriptions"] }));
   expect(hook.invalidate).toHaveBeenCalledTimes(1);
   hook.invalidate.mockClear();
   act(() => Socket.instances[0].open());

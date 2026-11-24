@@ -1,14 +1,6 @@
 import { execFileSync } from "node:child_process";
 
-const features = new Set([
-  "home",
-  "penalties",
-  "reminders",
-  "settings",
-  "shared-pages",
-  "summary",
-  "tasks",
-]);
+const features = new Set(["home", "penalties", "reminders", "settings", "summary", "tasks"]);
 const toolingFiles = new Set([
   "Makefile",
   "mise.toml",

@@ -2,7 +2,6 @@ import type { QueryClient } from "@tanstack/react-query";
 import { prefetchHomeData } from "../features/home/preload";
 import { teamMembersQueryOptions } from "../shared/query/teamMembersQuery";
 import { tasksQueryOptions } from "../shared/query/taskQueries";
-import { prefetchSharedPageData } from "../features/shared-pages/preload";
 import { currentInviteQueryOptions } from "../shared/query/currentInviteQuery";
 import {
   reminderCalendarQueryOptions,
@@ -20,12 +19,7 @@ import { dateStringInJST } from "../shared/utils/dates";
 export async function prefetchRouteData(client: QueryClient, destination: string) {
   const url = new URL(destination, "https://kaji.invalid");
   const today = dateStringInJST();
-  if (url.pathname.startsWith("/pages/"))
-    return prefetchSharedPageData(client, url.pathname.slice("/pages/".length));
   switch (url.pathname) {
-    case "/pages":
-      await prefetchSharedPageData(client, "");
-      break;
     case "/":
       await prefetchHomeData(client);
       break;

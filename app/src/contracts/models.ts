@@ -1,15 +1,4 @@
 import type { z } from "zod";
-export type {
-  SharedPage,
-  SharedPageSummary,
-  SharedPageDocument,
-  SharedPageBlock,
-  SharedPageLease,
-  SharedPageLeaseResponse,
-  CreateSharedPageRequest,
-  UpdateSharedPageRequest,
-  DeleteSharedPageRequest,
-} from "./shared-pages";
 import type * as Schemas from "./operations";
 import {
   PushPlatformSchema,

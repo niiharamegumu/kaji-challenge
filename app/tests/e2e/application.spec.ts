@@ -136,19 +136,18 @@ test(
     expect(await response.json()).toBeNull();
   },
 );
-test(
-  "retired TODO pages and OAuth discovery return 404",
-  { tag: ["@smoke"] },
-  async ({ request }) => {
-    for (const path of [
-      "/todos",
-      "/todo-categories",
-      "/.well-known/oauth-authorization-server/api/mcp/oauth",
-    ]) {
-      expect((await request.get(path)).status(), path).toBe(404);
-    }
-  },
-);
+test("retired routes return 404", { tag: ["@smoke"] }, async ({ request }) => {
+  for (const path of [
+    "/todos",
+    "/todo-categories",
+    "/pages",
+    "/pages/new",
+    "/pages/00000000-0000-4000-8000-000000000001",
+    "/.well-known/oauth-authorization-server/api/mcp/oauth",
+  ]) {
+    expect((await request.get(path)).status(), path).toBe(404);
+  }
+});
 test(
   "settings categories keep drafts and fit narrow screens",
   { tag: ["@settings"] },
@@ -1143,7 +1142,7 @@ test(
 for (const colorScheme of ["light", "dark"] as const) {
   test(
     `focus keeps normal borders and shadows without adding a frame in ${colorScheme} mode`,
-    { tag: ["@theme", "@settings", "@auth", "@pages"] },
+    { tag: ["@theme", "@settings", "@auth"] },
     async ({ page, context }, testInfo) => {
       await page.emulateMedia({ colorScheme });
       await page.goto("/");
@@ -1176,24 +1175,6 @@ for (const colorScheme of ["light", "dark"] as const) {
       );
       await expectFocusKeepsFrame(page, selected, selectedSurface);
       await expect(selected).toBeChecked();
-      await page.goto("/pages/new");
-      const editor = page.getByRole("textbox", { name: "ページ本文", exact: true });
-      await expect(editor).toBeVisible();
-      // Check after the lazy-loaded editor stylesheet has entered the cascade.
-      const title = page.getByRole("textbox", { name: "タイトル", exact: true });
-      await title.click();
-      await expect(title).toHaveCSS("outline-style", "none");
-      await expectFocusKeepsFrame(page, title);
-      await expectFocusKeepsFrame(page, editor);
-      await expectFocusKeepsFrame(
-        page,
-        page.getByRole("button", { name: "ブロックを追加", exact: true }),
-      );
-      await page.screenshot({
-        path: testInfo.outputPath(`focus-shared-page-${colorScheme}.png`),
-        animations: "disabled",
-        fullPage: true,
-      });
     },
   );
 }
