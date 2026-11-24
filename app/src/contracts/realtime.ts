@@ -10,7 +10,6 @@ export const teamChangeScopeSchema = z.enum([
   "penalty-rules",
   "month-close",
   "push-subscriptions",
-  "shared-pages",
 ]);
 export type TeamChangeScope = z.infer<typeof teamChangeScopeSchema>;
 

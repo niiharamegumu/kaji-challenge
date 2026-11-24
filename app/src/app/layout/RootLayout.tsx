@@ -27,7 +27,6 @@ import {
   type RootLayoutOutletContext,
 } from "../../shared/router/rootLayoutContext";
 import { statusMessageAtom } from "../../shared/state/status";
-import { sharedPageDraftDirtyAtom } from "../../shared/state/sharedPageDraft";
 import { isLoggedInAtom, sessionAtom } from "../../state/session";
 import { useBootFlow } from "../boot";
 import { AppHeader } from "./AppHeader";
@@ -37,7 +36,6 @@ import {
   preloadSummaryPageChunk,
   preloadTasksPageChunk,
   preloadReminderCalendarPageChunk,
-  preloadSharedPagesPageChunk,
 } from "../route-chunks";
 
 const FloatingNav = lazy(async () => {
@@ -51,7 +49,6 @@ const routePreloaders: Record<string, () => Promise<unknown>> = {
   "/penalties": preloadPenaltiesPageChunk,
   "/settings": preloadSettingsPageChunk,
   "/calendar": preloadReminderCalendarPageChunk,
-  "/pages": preloadSharedPagesPageChunk,
 };
 
 export function RootLayout() {
@@ -60,7 +57,6 @@ export function RootLayout() {
   const queryClient = useQueryClient();
   const setSession = useSetAtom(sessionAtom);
   const [status, setStatus] = useAtom(statusMessageAtom);
-  const hasUnsavedPage = useAtomValue(sharedPageDraftDirtyAtom);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const loggedIn = useAtomValue(isLoggedInAtom);
   const navigate = useNavigate();
@@ -206,9 +202,7 @@ export function RootLayout() {
   }
 
   return (
-    <main
-      className={`ios-safe-main flex min-h-dvh flex-col bg-canvas px-2 py-2.5 pb-36 text-ink md:px-8 md:pt-8 md:pb-44 ${location.pathname.startsWith("/pages/") && location.pathname !== "/pages/" ? "shared-page-focused" : ""}`}
-    >
+    <main className="ios-safe-main flex min-h-dvh flex-col bg-canvas px-2 py-2.5 pb-36 text-ink md:px-8 md:pt-8 md:pb-44">
       <StatusToast
         message={status}
         onDismiss={() => {
@@ -217,17 +211,15 @@ export function RootLayout() {
       />
 
       <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col">
-        <div className="contents" data-shared-page-shell>
-          <AppHeader teamName={currentTeamName} todayLabel={todayLabel}>
-            <ConnectedMembers
-              members={cachedMembersQuery.data ?? []}
-              userIds={realtime.userIds}
-              connected={realtime.connected}
-            />
-          </AppHeader>
+        <AppHeader teamName={currentTeamName} todayLabel={todayLabel}>
+          <ConnectedMembers
+            members={cachedMembersQuery.data ?? []}
+            userIds={realtime.userIds}
+            connected={realtime.connected}
+          />
+        </AppHeader>
 
-          <MonthCloseBanner />
-        </div>
+        <MonthCloseBanner />
 
         <RootLayoutContext value={outletContext}>
           <Outlet key={userTeamKey} />
@@ -235,30 +227,21 @@ export function RootLayout() {
       </div>
 
       {!isInitialBootPending ? (
-        <div className="contents" data-shared-page-shell>
-          <Suspense fallback={null}>
-            <FloatingNav
-              key={userTeamKey}
-              currentUserName={currentUserName}
-              currentUserColorHex={currentUserColorHex}
-              isRefreshing={isRefreshing}
-              onRouteIntent={handleRouteIntent}
-              onLogout={() => {
-                if (
-                  hasUnsavedPage &&
-                  !window.confirm(
-                    "保存していない変更があります。変更を破棄してログアウトしますか？",
-                  )
-                )
-                  return;
-                void logoutAction();
-              }}
-              onRefresh={() => {
-                void refreshTeamState();
-              }}
-            />
-          </Suspense>
-        </div>
+        <Suspense fallback={null}>
+          <FloatingNav
+            key={userTeamKey}
+            currentUserName={currentUserName}
+            currentUserColorHex={currentUserColorHex}
+            isRefreshing={isRefreshing}
+            onRouteIntent={handleRouteIntent}
+            onLogout={() => {
+              void logoutAction();
+            }}
+            onRefresh={() => {
+              void refreshTeamState();
+            }}
+          />
+        </Suspense>
       ) : null}
     </main>
   );

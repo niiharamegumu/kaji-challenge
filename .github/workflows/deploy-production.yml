@@ -95,31 +95,35 @@ jobs:
             if (!Array.isArray(databases) || databases.some(db => typeof db?.name !== "string")) throw new Error("Unexpected D1 list response");
             console.log(databases.some(db => db.name === process.argv[1]));
           ' "$database_name" <<< "$databases")
-          cutover_required=false
+          cutover_before=""
           if [ "$database_exists" = "true" ]; then
-            columns=$(bunx --no-install wrangler d1 execute "$database_name" --remote --json --command 'PRAGMA table_info(teams)')
-            cutover_required=$(bun -e '
+            schema=$(bunx --no-install wrangler d1 execute "$database_name" --remote --json --command "
+              SELECT CASE
+                WHEN EXISTS (SELECT 1 FROM pragma_table_info('teams') WHERE name='todo_categories') THEN '0014_'
+                WHEN EXISTS (SELECT 1 FROM sqlite_schema WHERE type='table' AND name IN ('shared_pages','shared_page_creations')) THEN '0015_'
+                ELSE '' END AS cutoff")
+            cutover_before=$(bun -e '
               const [query] = await Bun.stdin.json();
-              if (query?.success !== true || !Array.isArray(query.results) || query.results.some(column => typeof column?.name !== "string")) throw new Error("Unexpected D1 schema response");
-              console.log(query.results.some(column => column.name === "todo_categories"));
-            ' <<< "$columns")
+              const cutoff = query?.results?.[0]?.cutoff;
+              if (query?.success !== true || !["", "0014_", "0015_"].includes(cutoff)) throw new Error("Unexpected D1 schema response");
+              console.log(cutoff);
+            ' <<< "$schema")
           fi
 
           bun run infra:bootstrap --no-input
-          if [ "$cutover_required" = "true" ]; then
-            # Deploy a schema-compatible Worker before 0014 drops columns used by the old Worker.
+          if [ -n "$cutover_before" ]; then
+            # Switch to the compatible Worker before dropping tables used by the old release.
             migration_prefix=$(mktemp -d)
             trap 'rm -rf -- "$migration_prefix"' EXIT
             for migration in migrations/*.sql; do
-              if [[ "${migration##*/}" < "0014_" ]]; then
+              if [[ "${migration##*/}" < "$cutover_before" ]]; then
                 cp -- "$migration" "$migration_prefix/"
               fi
             done
             D1_MIGRATIONS_DIR="$migration_prefix" bun run infra:plan --stage production --no-input
             D1_MIGRATIONS_DIR="$migration_prefix" bun run deploy --stage production --yes --no-input
             for attempt in {1..12}; do
-              if health=$(curl --fail --silent --show-error --max-time 5 "${APP_ORIGIN%/}/health") &&
-                bun -e 'const health = await Bun.stdin.json(); if (health?.status !== "ok" || health.release !== process.env.APP_RELEASE) process.exit(1)' <<< "$health"; then
+              if node scripts/verify-cutover-release.mjs; then
                 break
               fi
               if [ "$attempt" -eq 12 ]; then

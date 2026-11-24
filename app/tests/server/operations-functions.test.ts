@@ -86,6 +86,7 @@ it.each([
   { operation: "listTodoItems", params: {} },
   { operation: "postTodoCategory", body: { name: "Shopping" } },
   { operation: "getMePreferences" },
+  ...sharedPageRequests,
 ])(
   "rejects malformed inputs and retired operations before opening the runtime: $operation",
   async (data) => {
@@ -97,17 +98,14 @@ it.each([
   },
 );
 
-it.each([...sharedPageRequests, { operation: "getMe" }])(
-  "rejects absent sessions before any business transaction: %j",
-  async (data) => {
-    mocks.session.mockResolvedValue(null);
-    expect(await mocks.handler({ data })).toMatchObject({
-      ok: false,
-      error: { status: 401, code: "unauthorized" },
-    });
-    expect(mocks.session).toHaveBeenCalledWith({ headers: mocks.headers });
-  },
-);
+it("rejects absent sessions before any business transaction", async () => {
+  mocks.session.mockResolvedValue(null);
+  expect(await mocks.handler({ data: { operation: "getMe" } })).toMatchObject({
+    ok: false,
+    error: { status: 401, code: "unauthorized" },
+  });
+  expect(mocks.session).toHaveBeenCalledWith({ headers: mocks.headers });
+});
 
 it.each<Record<string, string>>([
   { origin: "https://other.example.com" },
@@ -124,15 +122,6 @@ it.each<Record<string, string>>([
   });
   expect(mocks.session).not.toHaveBeenCalled();
 });
-
-it.each(sharedPageRequests)(
-  "rejects other-origin shared page operations before authentication: $operation",
-  async (data) => {
-    mocks.headers = new Headers({ origin: "https://other.example.com" });
-    expect(await mocks.handler({ data })).toMatchObject({ ok: false, error: { status: 403 } });
-    expect(mocks.session).not.toHaveBeenCalled();
-  },
-);
 
 describe("transport transaction with D1", () => {
   let connection: Awaited<ReturnType<typeof createTestDatabase>>;

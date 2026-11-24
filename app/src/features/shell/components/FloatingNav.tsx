@@ -3,7 +3,6 @@ import {
   CalendarDays,
   ChartColumn,
   Ellipsis,
-  Files,
   House,
   LogOut,
   RefreshCw,
@@ -119,13 +118,6 @@ export function FloatingNav({
   const userTextColor = getReadableTextColor(userBgColor);
 
   const secondaryItems: SecondaryNavItem[] = [
-    {
-      id: "shared-pages",
-      label: "共有ページ",
-      icon: Files,
-      path: "/pages",
-      intentPath: "/pages",
-    },
     {
       id: "calendar",
       label: "カレンダー",

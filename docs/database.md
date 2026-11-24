@@ -1,6 +1,6 @@
 # データベースの責務
 
-Cloudflare D1に21テーブルを持つ。ユーザー情報の正本はBetter Authの `auth_user`。旧アプリ用 `users` は削除し、メール・表示名・作成日時の二重保存と同期処理をなくした。
+Cloudflare D1に19テーブルを持つ。ユーザー情報の正本はBetter Authの `auth_user`。旧アプリ用 `users` は削除し、メール・表示名・作成日時の二重保存と同期処理をなくした。
 
 | 領域 | テーブル | 残す理由 |
 | --- | --- | --- |
@@ -15,7 +15,6 @@ Cloudflare D1に21テーブルを持つ。ユーザー情報の正本はBetter A
 | 日次完了 | `task_completion_daily` | 1家事・1日に最大1件という制約 |
 | 週次完了 | `task_completion_weekly_entries` | 1週間に複数回の完了・実行者・取り消す順番。日次と制約が異なる |
 | 予定 | `reminders` | チーム共有の単発・繰り返し予定 |
-| 共有ページ | `shared_pages`・`shared_page_creations` | チーム共有文書と作成リクエストの重複防止 |
 | ペナルティ | `penalty_rules` | 適用条件と論理削除 |
 | 月次確定 | `monthly_penalty_summaries`・`monthly_penalty_summary_triggered_rules` | 月次合計・締め状態・締め時点の発動ルールID。現在の定義だけからは確定状態を再現できない |
 | 締め台帳 | `close_runs` | 日次/週次の処理済み期間を記録し、補完・再実行時の二重計上を防止 |
@@ -39,7 +38,7 @@ Better Authの追加項目と入力制御は [公式Databaseガイド](https://b
 
 ## Drizzleによるアクセス
 
-`app/src/server/infrastructure/schema.ts` が業務16テーブル、`auth-schema.ts` が認証5テーブルの実行時定義です。`database.ts` でリクエスト単位のDB handleを作り、Repository・Better Auth・Pushへ渡します。通常のCRUDはquery builder、再帰CTE等はパラメーター化したDrizzle `sql` を使用します。
+`app/src/server/infrastructure/schema.ts` が業務14テーブル、`auth-schema.ts` が認証5テーブルの実行時定義です。`database.ts` でリクエスト単位のDB handleを作り、Repository・Better Auth・Pushへ渡します。通常のCRUDはquery builder、再帰CTE等はパラメーター化したDrizzle `sql` を使用します。
 
 SQL migrationがDDLの正本です。schemaの変更だけではDBは更新されないため、今後の列・制約の変更では新しいmigrationとDrizzle定義を一緒に更新し、`drizzle-schema.test.ts` で照合してください。
 
@@ -64,3 +63,7 @@ SQL migrationがDDLの正本です。schemaの変更だけではDBは更新さ�
 ## ToDo廃止時のデータ移行
 
 `0014_remove_todos.sql` は `todo_items`、`user_preferences`、`mcp_connections`、`mcp_consent_claims`、`assist_usage` と `teams.todo_categories` を削除する。適用済みのmigrationは保持する。既存D1への適用は新Workerへの切り替え後に行う。旧Workerのチーム作成SQLは削除対象の列を参照するため、適用後の復旧には新しいDBスキーマに対応したWorkerを使う。
+
+## 共有ページの廃止
+
+`0015_remove_shared_pages.sql` は共有ページ本文・編集権を持つ `shared_pages` と作成記録を持つ `shared_page_creations` を削除する。既存環境では共有ページを廃止したWorkerへの切り替え後に適用する。

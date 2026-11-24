@@ -1,6 +1,6 @@
 # KajiChalle
 
-家事をチームで分担し、毎日・毎週の達成状況を記録するPWAです。カレンダーの予定、月次ペナルティ集計、共有ページ、Push通知をまとめて利用できます。
+家事をチームで分担し、毎日・毎週の達成状況を記録するPWAです。カレンダーの予定、月次ペナルティ集計、Push通知をまとめて利用できます。
 
 ## 構成
 
@@ -196,9 +196,13 @@ Alchemyはビルド済みの `dist/server/index.js` と `dist/client` を、公�
 
 ### ToDo廃止時の本番リソース撤去
 
-旧カテゴリー列がある環境ではCDが新Workerを先に配備し、`/health` のreleaseが一致してから `0014_remove_todos.sql` を適用します。この移行にはCDを使います。適用後は旧Workerへ戻すとチーム作成に失敗します。MCP専用WorkerとCustom Domainは、Alchemyで管理されていれば配備時に削除されます。
+旧カテゴリー列がある環境ではCDが新Workerを先に配備し、稼働版を確認してから `0014_remove_todos.sql` を適用します。適用後は旧Workerへ戻すとチーム作成に失敗します。MCP専用WorkerとCustom Domainは、Alchemyで管理されていれば配備時に削除されます。
 
 旧構成で保持指定していたOAuth用KV `kaji-production-mcp-oauth` とAI Gateway `kaji-voice` は、残っていれば新Workerの配備後に対象アカウントで削除します。GitHub Environment `production` の旧変数 `MCP_ENABLED`、`MCP_ORIGIN`、`ASSIST_ENABLED` も削除します。[KVの削除](https://developers.cloudflare.com/kv/reference/kv-commands/#kv-namespace-delete)、[AI Gatewayの削除](https://developers.cloudflare.com/api/resources/ai_gateway/methods/delete/)
+
+### 共有ページ廃止時の本番データ削除
+
+CDは共有ページを廃止したWorkerを先に配備し、`0015_remove_shared_pages.sql` で本文・編集権・作成記録をテーブルごと削除します。切り替え時は `/health` のコミットSHAを確認します。実行元が403を受けた場合は、Cloudflare APIで本番ドメインに紐づくWorkerの全トラフィックが対象のSHAに切り替わったことを確認してから削除します。各タブの下書きは新版の起動時に削除します。
 
 ## コードを読む順番
 

@@ -7,8 +7,6 @@ import { clearPWARefresh, notifyPWARefresh } from "./app/pwa";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";
 import { lazy, useState } from "react";
-import { useSetAtom } from "jotai";
-import { sharedPageDraftDirtyAtom } from "./shared/state/sharedPageDraft";
 import { getRouter } from "./router";
 function App() {
   const [router] = useState(getRouter);
@@ -60,8 +58,6 @@ vi.mock("./lib/api/operations", () => ({
   getMe: (...args: unknown[]) => mockGetMe(...args),
   getTeamCurrentMembers: (...args: unknown[]) => mockGetTeamCurrentMembers(...args),
   getTeamCurrentInvite: (...args: unknown[]) => mockGetTeamCurrentInvite(...args),
-  listSharedPages: vi.fn().mockResolvedValue({ data: { items: [] } }),
-  getSharedPage: vi.fn(),
   listReminders: vi.fn(),
   listReminderDefinitions: vi.fn(),
   postReminder: vi.fn(),
@@ -89,15 +85,6 @@ vi.mock("./app/route-chunks", () => ({
   SettingsPage: () => <div>settings page</div>,
   SummaryPage: () => <div>summary page</div>,
   ReminderCalendarPage: () => <div>calendar page</div>,
-  SharedPagesPage: function SharedPagesMock() {
-    const setDirty = useSetAtom(sharedPageDraftDirtyAtom);
-    return (
-      <div>
-        shared pages page<button onClick={() => setDirty(true)}>未保存にする</button>
-      </div>
-    );
-  },
-  preloadSharedPagesPageChunk: vi.fn(),
   preloadTasksPageChunk: (...args: unknown[]) => mockPreloadTasksPageChunk(...args),
   preloadPenaltiesPageChunk: (...args: unknown[]) => mockPreloadPenaltiesPageChunk(...args),
   preloadSettingsPageChunk: (...args: unknown[]) => mockPreloadSettingsPageChunk(...args),
@@ -183,7 +170,7 @@ describe("App", () => {
     });
   });
 
-  it("removes retired preferences from browser storage while preserving the theme", async () => {
+  it("clears retired preferences and page drafts while preserving unrelated storage", async () => {
     const retiredKeys = [
       "kaji:todo-completion-delay-ms:v1",
       "kaji:legacy-preferences-owner:v1",
@@ -193,12 +180,18 @@ describe("App", () => {
     ];
     for (const key of retiredKeys) window.localStorage.setItem(key, "legacy");
     window.localStorage.setItem("kaji:theme:v1", "dark");
+    const draftKeys = ["kaji:shared-page-draft:v1:u1:t1:new", "kaji:shared-page-draft:v1:u2:t2:p"];
+    for (const key of draftKeys) window.sessionStorage.setItem(key, "draft");
+    window.sessionStorage.setItem("other", "keep");
 
     render(<App />);
     await screen.findByRole("button", { name: "Googleでログイン" });
 
     for (const key of retiredKeys) expect(window.localStorage.getItem(key)).toBeNull();
     expect(window.localStorage.getItem("kaji:theme:v1")).toBe("dark");
+    for (const key of draftKeys) expect(window.sessionStorage.getItem(key)).toBeNull();
+    expect(window.sessionStorage.getItem("other")).toBe("keep");
+    window.sessionStorage.removeItem("other");
   });
 
   it("shows progress while preparing an update and allows retry after failure", async () => {
@@ -264,7 +257,7 @@ describe("App", () => {
     await user.click(floatingNav.getByRole("button", { name: "その他" }));
 
     expect(screen.getByRole("button", { name: "カレンダー" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "共有ページ" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "共有ページ" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "タスク" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "設定" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "ログアウト" })).toBeInTheDocument();
@@ -275,7 +268,6 @@ describe("App", () => {
     ["タスク", "/tasks", "tasks page"],
     ["ペナルティ", "/penalties", "penalties page"],
     ["設定", "/settings", "settings page"],
-    ["共有ページ", "/pages", "shared pages page"],
   ])("navigates from %s to %s", async (label, path, page) => {
     mockGetMe.mockResolvedValue({
       data: { user: { id: "u1", displayName: "Owner" }, memberships: [] },
@@ -291,28 +283,6 @@ describe("App", () => {
 
     expect(await screen.findByText(page)).toBeInTheDocument();
     expect(window.location.pathname).toBe(path);
-  });
-
-  it("keeps an unsaved shared-page draft when logout is canceled", async () => {
-    mockGetMe.mockResolvedValue({
-      data: { user: { id: "u1", displayName: "Owner" }, memberships: [] },
-    });
-    window.history.pushState({}, "", "/pages");
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
-    try {
-      const user = userEvent.setup();
-      render(<App />);
-      await user.click(await screen.findByRole("button", { name: "未保存にする" }));
-      const navigation = within(await screen.findByTestId("floating-nav"));
-      await user.click(navigation.getByRole("button", { name: "その他" }));
-      await user.click(navigation.getByRole("button", { name: "ログアウト" }));
-      expect(confirm).toHaveBeenCalledWith(expect.stringContaining("保存していない変更"));
-      expect(mockSignOut).not.toHaveBeenCalled();
-      expect(screen.getByText("shared pages page")).toBeInTheDocument();
-      expect(window.location.pathname).toBe("/pages");
-    } finally {
-      confirm.mockRestore();
-    }
   });
 
   it("shows the home shell while task overview is still loading", async () => {

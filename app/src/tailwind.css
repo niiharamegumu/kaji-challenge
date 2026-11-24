@@ -1,7 +1,7 @@
 /* Keep Workers runtime files outside Tailwind's source watcher, including in Compose. */
 @import "tailwindcss" source(".");
 
-/* Focus never adds a frame, including native controls and lazy-loaded editor UI.
+/* Focus never adds a frame, including native controls.
    Keep ordinary borders, selection rings and elevation shadows; do not reset
    box-shadow globally or add focus-only border/ring utilities in components. */
 :focus,
@@ -50,16 +50,6 @@ body {
   margin: 0;
 }
 
-@media (width < 48rem) {
-  .ios-safe-main.shared-page-focused {
-    /* The document toolbar owns the top safe area, including while it is sticky. */
-    padding: 0 0 env(safe-area-inset-bottom);
-  }
-
-  .shared-page-focused [data-shared-page-shell] {
-    display: none;
-  }
-}
 dialog {
   color: var(--color-ink);
 }
